@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"eluvio/errors"
-	"eluvio/util/maputil"
+	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/util/maputil"
 )
 
 // Flatten converts the given data structure into a list of flattened paths,

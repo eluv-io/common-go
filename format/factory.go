@@ -3,15 +3,15 @@ package format
 import (
 	"crypto/sha256"
 
-	"eluvio/format/codecs"
+	"github.com/qluvio/content-fabric/format/codecs"
 
-	"eluvio/format/hash"
-	"eluvio/format/id"
+	"github.com/qluvio/content-fabric/format/hash"
+	"github.com/qluvio/content-fabric/format/id"
 
 	// types only contains type definitions - no other logic or code
-	. "eluvio/format/types"
+	. "github.com/qluvio/content-fabric/format/types"
 
-	"eluvio/format/token"
+	"github.com/qluvio/content-fabric/format/token"
 
 	mc "github.com/multiformats/go-multicodec"
 )

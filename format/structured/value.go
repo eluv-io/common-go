@@ -1,8 +1,8 @@
 package structured
 
 import (
-	"eluvio/util/codecutil"
-	"eluvio/util/numberutil"
+	"github.com/qluvio/content-fabric/util/codecutil"
+	"github.com/qluvio/content-fabric/util/numberutil"
 )
 
 // Wrap wraps the given data structure as a structured Value object, offering

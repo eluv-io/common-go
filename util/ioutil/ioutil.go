@@ -5,7 +5,7 @@ import (
 	"io/ioutil"
 	"sync"
 
-	"eluvio/errors"
+	"github.com/qluvio/content-fabric/errors"
 )
 
 type ReadSeekCloser interface {

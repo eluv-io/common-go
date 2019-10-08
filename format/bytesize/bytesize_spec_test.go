@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"testing"
 
-	"eluvio/errors"
-	"eluvio/format/bytesize"
+	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/format/bytesize"
 
 	. "github.com/smartystreets/goconvey/convey"
 )

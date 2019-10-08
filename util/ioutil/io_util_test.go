@@ -1,8 +1,8 @@
 package ioutil_test
 
 import (
-	"eluvio/errors"
-	"eluvio/util/ioutil"
+	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/util/ioutil"
 	"io"
 	"math/rand"
 	"testing"

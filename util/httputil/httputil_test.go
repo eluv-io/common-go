@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"eluvio/util/httputil"
+	"github.com/qluvio/content-fabric/util/httputil"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"

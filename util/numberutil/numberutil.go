@@ -5,7 +5,7 @@ import (
 	"math"
 	"strconv"
 
-	"eluvio/errors"
+	"github.com/qluvio/content-fabric/errors"
 )
 
 // AsInt returns the given value as an int.

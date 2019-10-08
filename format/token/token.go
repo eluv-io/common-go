@@ -1,8 +1,8 @@
 package token
 
 import (
-	"eluvio/errors"
-	"eluvio/log"
+	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/log"
 	"fmt"
 
 	"crypto/rand"

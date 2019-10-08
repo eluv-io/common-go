@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	elog "eluvio/log"
+	elog "github.com/qluvio/content-fabric/log"
 )
 
 var log = elog.Get("/eluvio/util/syncutil")

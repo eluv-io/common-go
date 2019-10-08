@@ -1,8 +1,8 @@
 package link
 
 import (
-	"eluvio/format/hash"
-	"eluvio/format/structured"
+	"github.com/qluvio/content-fabric/format/hash"
+	"github.com/qluvio/content-fabric/format/structured"
 )
 
 // NewBuilder creates a link builder that can be used to build a link:

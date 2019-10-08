@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"testing"
 
-	"eluvio/format/hash"
+	"github.com/qluvio/content-fabric/format/hash"
 
-	"eluvio/format/id"
+	"github.com/qluvio/content-fabric/format/id"
 
-	"eluvio/format/token"
+	"github.com/qluvio/content-fabric/format/token"
 
 	"github.com/stretchr/testify/require"
 

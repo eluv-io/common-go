@@ -2,8 +2,8 @@ package sign
 
 import (
 	"bytes"
-	"eluvio/errors"
-	"eluvio/log"
+	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/log"
 	"github.com/mr-tron/base58/base58"
 )
 

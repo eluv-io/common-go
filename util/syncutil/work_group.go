@@ -4,7 +4,7 @@ import (
 	"runtime"
 	"sync"
 
-	"eluvio/errors"
+	"github.com/qluvio/content-fabric/errors"
 )
 
 const queueSize = 1024

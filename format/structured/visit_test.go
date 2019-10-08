@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"eluvio/util/jsonutil"
+	"github.com/qluvio/content-fabric/util/jsonutil"
 
 	"github.com/stretchr/testify/assert"
 )

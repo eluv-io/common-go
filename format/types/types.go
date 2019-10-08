@@ -1,10 +1,10 @@
 package types
 
 import (
-	"eluvio/format/hash"
-	"eluvio/format/id"
-	"eluvio/format/structured"
-	"eluvio/format/token"
+	"github.com/qluvio/content-fabric/format/hash"
+	"github.com/qluvio/content-fabric/format/id"
+	"github.com/qluvio/content-fabric/format/structured"
+	"github.com/qluvio/content-fabric/format/token"
 )
 
 // QSpaceID is the type of content space IDs

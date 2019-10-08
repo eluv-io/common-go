@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"eluvio/constants"
-	"eluvio/errors"
-	"eluvio/format/structured"
-	"eluvio/util/jsonutil"
+	"github.com/qluvio/content-fabric/constants"
+	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/format/structured"
+	"github.com/qluvio/content-fabric/util/jsonutil"
 )
 
 func NewMetaResolver(mp MetaProvider) MetaResolver {

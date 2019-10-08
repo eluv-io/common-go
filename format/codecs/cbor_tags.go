@@ -3,11 +3,11 @@ package codecs
 import (
 	"reflect"
 
-	"eluvio/errors"
-	"eluvio/format/hash"
-	"eluvio/format/id"
-	"eluvio/format/link"
-	"eluvio/format/structured"
+	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/format/hash"
+	"github.com/qluvio/content-fabric/format/id"
+	"github.com/qluvio/content-fabric/format/link"
+	"github.com/qluvio/content-fabric/format/structured"
 )
 
 // HashStringConverter marshals/unmarshals a hash.Hash object to/from a string.

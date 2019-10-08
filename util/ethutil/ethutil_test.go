@@ -1,7 +1,7 @@
 package ethutil
 
 import (
-	"eluvio/format/id"
+	"github.com/qluvio/content-fabric/format/id"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
 	"math/big"

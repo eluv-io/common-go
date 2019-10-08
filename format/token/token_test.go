@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"testing"
 
-	"eluvio/format/token"
+	"github.com/qluvio/content-fabric/format/token"
 
 	"github.com/stretchr/testify/assert"
 )

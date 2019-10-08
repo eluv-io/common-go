@@ -3,7 +3,7 @@ package numberutil_test
 import (
 	"testing"
 
-	"eluvio/util/numberutil"
+	"github.com/qluvio/content-fabric/util/numberutil"
 
 	"github.com/stretchr/testify/require"
 )

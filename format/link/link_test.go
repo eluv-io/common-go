@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"testing"
 
-	"eluvio/format/hash"
-	"eluvio/format/link"
-	"eluvio/format/structured"
-	"eluvio/util/maputil"
+	"github.com/qluvio/content-fabric/format/hash"
+	"github.com/qluvio/content-fabric/format/link"
+	"github.com/qluvio/content-fabric/format/structured"
+	"github.com/qluvio/content-fabric/util/maputil"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

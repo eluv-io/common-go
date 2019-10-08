@@ -8,9 +8,9 @@ import (
 	"hash"
 	"io"
 
-	"eluvio/errors"
-	ei "eluvio/format/id"
-	"eluvio/log"
+	"github.com/qluvio/content-fabric/errors"
+	ei "github.com/qluvio/content-fabric/format/id"
+	"github.com/qluvio/content-fabric/log"
 
 	"github.com/mr-tron/base58/base58"
 )

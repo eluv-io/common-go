@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"eluvio/errors"
+	"github.com/qluvio/content-fabric/errors"
 )
 
 // Spec represents a time duration. It provides marshaling to and from

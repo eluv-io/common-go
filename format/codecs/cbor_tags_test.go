@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"testing"
 
-	"eluvio/format"
-	"eluvio/format/codecs"
-	"eluvio/format/hash"
-	"eluvio/format/link"
-	"eluvio/util/maputil"
+	"github.com/qluvio/content-fabric/format"
+	"github.com/qluvio/content-fabric/format/codecs"
+	"github.com/qluvio/content-fabric/format/hash"
+	"github.com/qluvio/content-fabric/format/link"
+	"github.com/qluvio/content-fabric/util/maputil"
 
 	"github.com/stretchr/testify/require"
 )

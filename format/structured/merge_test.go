@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"eluvio/util/jsonutil"
+	"github.com/qluvio/content-fabric/util/jsonutil"
 
 	"github.com/stretchr/testify/require"
 )

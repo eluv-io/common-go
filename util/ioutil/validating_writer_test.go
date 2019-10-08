@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"eluvio/util/ioutil"
+	"github.com/qluvio/content-fabric/util/ioutil"
 
 	"github.com/stretchr/testify/require"
 )

@@ -3,7 +3,7 @@ package jsonutil
 import (
 	"encoding/json"
 
-	"eluvio/errors"
+	"github.com/qluvio/content-fabric/errors"
 
 	"github.com/davecgh/go-spew/spew"
 )

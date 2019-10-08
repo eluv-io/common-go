@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"eluvio/errors"
+	"github.com/qluvio/content-fabric/errors"
 
 	"github.com/stretchr/testify/require"
 )

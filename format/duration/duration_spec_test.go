@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"eluvio/format/duration"
+	"github.com/qluvio/content-fabric/format/duration"
 
 	"github.com/stretchr/testify/assert"
 )

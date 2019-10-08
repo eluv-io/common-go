@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"eluvio/errors"
+	"github.com/qluvio/content-fabric/errors"
 
 	"github.com/PaesslerAG/gval"
 	"github.com/PaesslerAG/jsonpath"

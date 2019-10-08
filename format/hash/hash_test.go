@@ -8,8 +8,8 @@ import (
 	"math/rand"
 	"testing"
 
-	"eluvio/format/hash"
-	"eluvio/format/id"
+	"github.com/qluvio/content-fabric/format/hash"
+	"github.com/qluvio/content-fabric/format/id"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

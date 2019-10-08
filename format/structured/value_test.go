@@ -4,10 +4,10 @@ import (
 	"io"
 	"testing"
 
-	"eluvio/errors"
-	"eluvio/format/structured"
-	"eluvio/util/jsonutil"
-	"eluvio/util/maputil"
+	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/format/structured"
+	"github.com/qluvio/content-fabric/util/jsonutil"
+	"github.com/qluvio/content-fabric/util/maputil"
 
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/stretchr/testify/require"

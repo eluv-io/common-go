@@ -3,15 +3,15 @@ package ethutil
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"eluvio/format/keys"
-	"eluvio/format/types"
+	"github.com/qluvio/content-fabric/format/keys"
+	"github.com/qluvio/content-fabric/format/types"
 	"encoding/hex"
 	"io/ioutil"
 	"os"
 	"strings"
 
-	"eluvio/errors"
-	"eluvio/format/id"
+	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/format/id"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"

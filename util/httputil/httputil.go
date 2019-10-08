@@ -13,7 +13,7 @@ import (
 	mcjson "github.com/multiformats/go-multicodec/json"
 	mux "github.com/multiformats/go-multicodec/mux"
 
-	"eluvio/errors"
+	"github.com/qluvio/content-fabric/errors"
 )
 
 const customHeaderPrefix = "X-Content-Fabric-"

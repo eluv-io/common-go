@@ -4,7 +4,7 @@ import (
 	"io"
 	"strconv"
 
-	"eluvio/util/maputil"
+	"github.com/qluvio/content-fabric/util/maputil"
 )
 
 // VisitFn is the visitor function. Returns true to continue the visit, false

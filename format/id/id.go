@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"eluvio/errors"
-	"eluvio/log"
+	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/log"
 
 	"github.com/mr-tron/base58/base58"
 	"github.com/satori/go.uuid"

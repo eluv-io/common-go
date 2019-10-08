@@ -8,9 +8,9 @@ import (
 	"io"
 	"reflect"
 
-	"eluvio/format/hash"
-	"eluvio/format/id"
-	"eluvio/format/link"
+	"github.com/qluvio/content-fabric/format/hash"
+	"github.com/qluvio/content-fabric/format/id"
+	"github.com/qluvio/content-fabric/format/link"
 
 	mc "github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-multicodec/base"

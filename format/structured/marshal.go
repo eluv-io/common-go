@@ -7,8 +7,8 @@ import (
 	"io"
 	"strings"
 
-	"eluvio/errors"
-	"eluvio/util/maputil"
+	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/util/maputil"
 
 	"github.com/beevik/etree"
 	"github.com/ghodss/yaml"

@@ -3,8 +3,8 @@ package link
 import (
 	"encoding/base64"
 
-	"eluvio/errors"
-	"eluvio/format/encryption"
+	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/format/encryption"
 )
 
 // NewBlobLink creates a blob link from the given link.

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"eluvio/errors"
+	"github.com/qluvio/content-fabric/errors"
 
 	"github.com/beevik/etree"
 	"github.com/ghodss/yaml"

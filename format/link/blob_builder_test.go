@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"testing"
 
-	"eluvio/format/encryption"
-	"eluvio/format/link"
+	"github.com/qluvio/content-fabric/format/encryption"
+	"github.com/qluvio/content-fabric/format/link"
 
 	"github.com/stretchr/testify/require"
 )

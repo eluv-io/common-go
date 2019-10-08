@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"eluvio/errors"
-	"eluvio/format/hash"
-	"eluvio/format/structured"
-	"eluvio/util/httputil"
+	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/format/hash"
+	"github.com/qluvio/content-fabric/format/structured"
+	"github.com/qluvio/content-fabric/util/httputil"
 )
 
 const ABSOLUTE_LINK_PREFIX = "/qfab/"

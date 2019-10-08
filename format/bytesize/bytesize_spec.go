@@ -1,7 +1,7 @@
 package bytesize
 
 import (
-	"eluvio/errors"
+	"github.com/qluvio/content-fabric/errors"
 	"fmt"
 	"strconv"
 	"strings"

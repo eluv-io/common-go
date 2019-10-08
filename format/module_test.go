@@ -3,7 +3,7 @@ package format
 import (
 	"testing"
 
-	"eluvio/format/hash"
+	"github.com/qluvio/content-fabric/format/hash"
 
 	"github.com/eluv-io/inject-go"
 	"github.com/stretchr/testify/assert"

@@ -3,8 +3,8 @@ package link
 import (
 	"io"
 
-	"eluvio/format/structured"
-	"eluvio/format/types"
+	"github.com/qluvio/content-fabric/format/structured"
+	"github.com/qluvio/content-fabric/format/types"
 )
 
 // ResolverFactory provides implementations for the different resolvers.

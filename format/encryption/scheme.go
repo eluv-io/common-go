@@ -1,8 +1,8 @@
 package encryption
 
 import (
-	"eluvio/errors"
-	"eluvio/format/hash"
+	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/format/hash"
 )
 
 // Scheme is the encryption scheme of a resouce.

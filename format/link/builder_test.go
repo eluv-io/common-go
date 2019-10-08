@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"testing"
 
-	"eluvio/format"
-	"eluvio/format/hash"
-	"eluvio/format/link"
-	"eluvio/format/structured"
-	"eluvio/format/types"
-	"eluvio/util/byteutil"
+	"github.com/qluvio/content-fabric/format"
+	"github.com/qluvio/content-fabric/format/hash"
+	"github.com/qluvio/content-fabric/format/link"
+	"github.com/qluvio/content-fabric/format/structured"
+	"github.com/qluvio/content-fabric/format/types"
+	"github.com/qluvio/content-fabric/util/byteutil"
 
 	"github.com/stretchr/testify/require"
 )

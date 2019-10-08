@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"eluvio/errors"
-	"eluvio/util/stringutil"
+	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/util/stringutil"
 )
 
 // sub is a structure that holds the result of a path resolution action. It

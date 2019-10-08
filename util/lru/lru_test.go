@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"eluvio/log"
-	"eluvio/util/syncutil"
+	"github.com/qluvio/content-fabric/log"
+	"github.com/qluvio/content-fabric/util/syncutil"
 
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/stretchr/testify/require"
