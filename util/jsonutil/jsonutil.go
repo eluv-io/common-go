@@ -2,6 +2,7 @@ package jsonutil
 
 import (
 	"encoding/json"
+	"github.com/qluvio/content-fabric/log"
 
 	"github.com/qluvio/content-fabric/errors"
 
@@ -75,6 +76,13 @@ func UnmarshalToMap(jsonText []byte) map[string]interface{} {
 	if len(jsonText) == 0 {
 		return m
 	}
+
+	log.Debug("=================================================================")
+	log.Debug("")
+	log.Debug(string(jsonText))
+	log.Debug("")
+	log.Debug("=================================================================")
+
 	err := json.Unmarshal(jsonText, &m)
 	if err != nil {
 		err = errors.E("unmarshal json", errors.K.Invalid, err, "json", string(jsonText), "receiver", spew.Sdump(m))
