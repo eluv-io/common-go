@@ -23,6 +23,7 @@ func TestPathParseAndFormat(t *testing.T) {
 	}{
 		{sep: "/", s: "", p: nil, oneway: true},
 		{sep: "/", s: "/", p: Path{}},
+		{sep: "/", s: "//one", p: Path{"", "one"}},
 		{sep: "/", s: "/one", p: Path{"one"}},
 		{sep: "/", s: "/one/", p: Path{"one"}, oneway: true},
 		{sep: "/", s: "/one/two", p: Path{"one", "two"}},
