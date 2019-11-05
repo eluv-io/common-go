@@ -171,6 +171,43 @@ func TestUnmarshalMap(t *testing.T) {
 	})
 }
 
+func TestIsLink(t *testing.T) {
+	aLink := link.NewBuilder().P("other").Selector(link.S.Meta).MustBuild()
+	tests := []struct {
+		name     string
+		val      interface{}
+		wantLink *link.Link
+	}{
+		{
+			name:     "*link",
+			val:      aLink,
+			wantLink: aLink,
+		},
+		{
+			name:     "link",
+			val:      *aLink,
+			wantLink: aLink,
+		},
+		{
+			name:     "no link",
+			val:      "a string",
+			wantLink: nil,
+		},
+		{
+			name:     "nil",
+			val:      nil,
+			wantLink: nil,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			require.Equal(t, test.wantLink != nil, link.IsLink(test.val))
+			require.Equal(t, test.wantLink, link.AsLink(test.val))
+		})
+	}
+
+}
+
 func testStringConversion(t *testing.T, tc testCase) {
 	linkString := tc.lnk.String()
 	assert.Equal(t, tc.str, linkString)

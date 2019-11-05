@@ -11,9 +11,10 @@ import (
 
 func TestResolve(t *testing.T) {
 	tests := []struct {
-		path     string
-		source   interface{}
-		expected interface{}
+		path      string
+		source    interface{}
+		expected  interface{}
+		wantError bool
 	}{
 		{
 			path:     "",
@@ -24,6 +25,17 @@ func TestResolve(t *testing.T) {
 			path:     "/",
 			source:   nil,
 			expected: nil,
+		},
+		{
+			path:      "//",
+			source:    parse(testJson),
+			expected:  nil,
+			wantError: true, // there is no "empty" element in the JSON
+		},
+		{
+			path:     "//",
+			source:   parse(`{"":"value for empty key"}`),
+			expected: "value for empty key",
 		},
 		{
 			path:     "/",
@@ -54,13 +66,21 @@ func TestResolve(t *testing.T) {
 	for _, tt := range tests {
 		t.Run("path["+tt.path+"]", func(t *testing.T) {
 			res, err := Resolve(ParsePath(tt.path, "/"), tt.source)
-			require.NoError(t, err)
-			require.Equal(t, tt.expected, res)
+			if tt.wantError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.expected, res)
+			}
 		})
 		t.Run("pass-as-reference_path["+tt.path+"]", func(t *testing.T) {
 			res, err := Resolve(ParsePath(tt.path, "/"), &tt.source)
-			require.NoError(t, err)
-			require.Equal(t, tt.expected, res)
+			if tt.wantError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.expected, res)
+			}
 		})
 	}
 }

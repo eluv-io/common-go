@@ -330,3 +330,15 @@ func IsLink(val interface{}) bool {
 	}
 	return false
 }
+
+// AsLink returns the given value as *Link if it is a link.
+// Otherwise returns nil.
+func AsLink(val interface{}) *Link {
+	switch l := val.(type) {
+	case *Link:
+		return l
+	case Link:
+		return &l
+	}
+	return nil
+}
