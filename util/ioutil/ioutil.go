@@ -1,6 +1,7 @@
 package ioutil
 
 import (
+	"github.com/qluvio/content-fabric/log"
 	"io"
 	"io/ioutil"
 	"sync"
@@ -47,6 +48,14 @@ func (t *trackedCloser) IsClosed() bool {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	return t.closed
+}
+
+// closeCloser lets us catch close errors when deferred
+func CloseCloser(c io.Closer, l *log.Log) {
+	err := c.Close()
+	if err != nil {
+		l.Error("close error", "err", err)
+	}
 }
 
 // ReadAtAtMin reads from r into buf until it has read at least min bytes.
