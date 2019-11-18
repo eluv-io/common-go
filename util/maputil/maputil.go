@@ -1,8 +1,28 @@
 package maputil
 
 import (
+	"reflect"
 	"sort"
 )
+
+// SortedStringKeys returns a slice with the sorted keys of the given
+// map[string]*. Returns an empty slice if m is not a map.
+func SortedStringKeys(m interface{}) []string {
+	mv := reflect.ValueOf(m)
+	if mv.Kind() != reflect.Map {
+		return []string{}
+	}
+
+	kvs := mv.MapKeys()
+	keys := make([]string, len(kvs))
+	i := 0
+	for _, kv := range kvs {
+		keys[i] = kv.String()
+		i++
+	}
+	sort.Strings(keys)
+	return keys
+}
 
 // SortedKeys returns a slice with the sorted keys of the given map.
 func SortedKeys(m map[string]interface{}) []string {

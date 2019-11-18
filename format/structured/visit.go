@@ -23,7 +23,7 @@ func Visit(target interface{}, orderMaps bool, f VisitFn) {
 		}
 	}
 	path := make(Path, 0, 20)
-	doReplace(path, target, rep, orderMaps)
+	_, _, _ = doReplace(path, target, rep, orderMaps)
 }
 
 // ReplaceFn is the visitor function called for each element in the target
@@ -39,14 +39,13 @@ func Replace(target interface{}, f ReplaceFn) (interface{}, error) {
 }
 
 func doReplace(path Path, target interface{}, f ReplaceFn, orderMaps bool) (bool, interface{}, error) {
-	node := dereference(target)
-
-	if replace, n, err := f(path, node); err != nil {
+	if replace, n, err := f(path, target); err != nil {
 		return false, nil, err
 	} else if replace {
 		return true, n, nil
 	}
 
+	node := dereference(target)
 	switch t := node.(type) {
 	case map[string]interface{}:
 		if orderMaps {
