@@ -1,17 +1,18 @@
-package link_test
+package resolvers_test
 
 import (
+	"bytes"
 	"fmt"
 	"testing"
 	"time"
 
-	"github.com/qluvio/content-fabric/format/hash"
+	"github.com/qluvio/content-fabric/format/codecs"
 	"github.com/qluvio/content-fabric/format/link"
+	"github.com/qluvio/content-fabric/format/link/resolvers"
 	"github.com/qluvio/content-fabric/format/structured"
 	"github.com/qluvio/content-fabric/util/jsonutil"
 	"github.com/qluvio/content-fabric/util/maputil"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,10 +20,11 @@ type mss = map[string]string
 
 func TestResolveMeta(t *testing.T) {
 	tests := []struct {
-		name string
-		src  string
-		exp  string
-		abs  map[string]string // absolute links: qhash -> metadata
+		name         string
+		src          string
+		exp          string
+		expContainer map[string]string // meta path -> container qhash
+		abs          map[string]string // absolute links: qhash -> metadata
 	}{
 		{
 			name: "rel link to string value",
@@ -86,23 +88,64 @@ func TestResolveMeta(t *testing.T) {
 			exp:  `{"a":"holdrio","b":{"c":"holdrio","d":"vd"}}`,
 			abs:  mss{"hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7": `{"a":{"b":{"c":"holdrio"}}}`},
 		},
+		{
+			name:         "absolute meta link to rel file link",
+			src:          `{"poster":{"/":"/qfab/hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7/meta/poster"}}`,
+			exp:          `{"poster":{"/":"./files/poster.jpg"}}`,
+			expContainer: map[string]string{"poster": "hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7"},
+			abs:          mss{"hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7": `{"poster":{"/":"./files/poster.jpg"}}`},
+		},
+		{
+			name:         "absolute meta link to rel meta link to relative file link",
+			src:          `{"franchise_poster":{"/":"/qfab/hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7/meta/poster"}}`,
+			exp:          `{"franchise_poster":{"/":"./files/poster_en.jpg"}}`,
+			expContainer: map[string]string{"franchise_poster": "hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7"},
+			abs: mss{
+				"hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7": `{"poster":{"/":"./meta/poster_default"},"poster_default":{"/":"./files/poster_en.jpg"}}`,
+			},
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			mp := newTestMetaProvider(test.abs)
-			resolver := link.NewMetaResolver(mp)
+			resolver := resolvers.NewMetaResolver(mp)
 
 			src := jsonutil.UnmarshalStringToAny(test.src)
-			exp := jsonutil.UnmarshalStringToAny(test.exp)
 
-			src, err := link.ConvertLinks(src)
-			assert.NoError(t, err)
-			res, err := resolver.ResolveMeta(src, false)
-			assert.NoError(t, err)
-			assert.EqualValues(t, exp, res)
+			var err error
+			src, err = link.ConvertLinks(src)
+			require.NoError(t, err)
+
+			src = cbor(t, src)
+
+			res, err := resolver.Transform(src)
+			require.NoError(t, err)
+			require.EqualValues(t, test.exp, jsonutil.MarshalCompactString(res))
+
+			for path, container := range test.expContainer {
+				val, err := structured.Resolve(structured.ParsePath(path), res)
+				require.NoError(t, err)
+				require.NotNil(t, val)
+				require.True(t, link.IsLink(val))
+				lnk := link.AsLink(val)
+				require.NotNil(t, lnk.Container)
+				require.Equal(t, container, lnk.Container.String())
+			}
 		})
 	}
+}
+
+func cbor(t *testing.T, src interface{}) interface{} {
+	codec := codecs.NewCborCodec()
+	buf := &bytes.Buffer{}
+	err := codec.Encoder(buf).Encode(src)
+	require.NoError(t, err)
+
+	var decoded interface{}
+	err = codec.Decoder(buf).Decode(&decoded)
+	require.NoError(t, err)
+	return &decoded
 }
 
 func TestResolveMetaErrors(t *testing.T) {
@@ -163,15 +206,15 @@ func TestResolveMetaErrors(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			mp := newTestMetaProvider(test.abs)
-			resolver := link.NewMetaResolver(mp)
+			resolver := resolvers.NewMetaResolver(mp)
 
 			src := jsonutil.UnmarshalStringToAny(test.src)
 
 			src, err := link.ConvertLinks(src)
-			assert.NoError(t, err)
-			res, err := resolver.ResolveMeta(src, false)
-			assert.Error(t, err)
-			assert.Nil(t, res)
+			require.NoError(t, err)
+			res, err := resolver.Transform(src)
+			require.Error(t, err)
+			require.Nil(t, res)
 			fmt.Println(err)
 		})
 	}
@@ -194,7 +237,7 @@ func runLinkResolutionBenchmark(b *testing.B, count, depth int) {
 		{createStruct3(b, count, depth, false)},
 	}
 	for _, bm := range benchmarks {
-		b.Run(bm.target.(jm)["name"].(string), func(b *testing.B) {
+		b.Run(bm.target.(map[string]interface{})["name"].(string), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				// b.StopTimer()
 				target := deepCopy(bm.target)
@@ -202,10 +245,10 @@ func runLinkResolutionBenchmark(b *testing.B, count, depth int) {
 				require.NoError(b, err)
 
 				mp := newTestMetaProvider(nil)
-				resolver := link.NewMetaResolver(mp)
+				resolver := resolvers.NewMetaResolver(mp)
 
 				// b.StartTimer()
-				target, err = resolver.ResolveMeta(target, false)
+				target, err = resolver.Transform(target)
 				require.NoError(b, err)
 			}
 		})
@@ -232,7 +275,7 @@ func TestLargeStructure(t *testing.T) {
 	}
 
 	for _, target := range targets {
-		t.Run(fmt.Sprintf("%s_%d_%d", target.(jm)["name"], count, depth), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s_%d_%d", target.(map[string]interface{})["name"], count, depth), func(t *testing.T) {
 
 			if debug {
 				fmt.Println(jsonutil.MarshalString(target))
@@ -244,10 +287,10 @@ func TestLargeStructure(t *testing.T) {
 			})
 
 			mp := newTestMetaProvider(nil)
-			resolver := link.NewMetaResolver(mp)
+			resolver := resolvers.NewMetaResolver(mp)
 
 			measure("resolve links", func() {
-				target, err = resolver.ResolveMeta(target, false)
+				target, err = resolver.Transform(target)
 				require.NoError(t, err)
 				if debug {
 					fmt.Println(jsonutil.MarshalString(target))
@@ -348,7 +391,7 @@ type testMetaProvider struct {
 	meta map[string]interface{}
 }
 
-func newTestMetaProvider(other map[string]string) link.MetaProvider {
+func newTestMetaProvider(other map[string]string) resolvers.MetaProvider {
 	meta := make(map[string]interface{})
 	for key, val := range other {
 		conv, err := link.ConvertLinks(jsonutil.UnmarshalStringToAny(val))
@@ -362,7 +405,7 @@ func newTestMetaProvider(other map[string]string) link.MetaProvider {
 	}
 }
 
-func (t *testMetaProvider) Meta(qhash *hash.Hash, path structured.Path) (interface{}, error) {
-	meta := t.meta[qhash.String()]
+func (t *testMetaProvider) Meta(qhash string, path structured.Path) (interface{}, error) {
+	meta := t.meta[qhash]
 	return structured.Resolve(path, meta)
 }

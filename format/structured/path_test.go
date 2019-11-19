@@ -90,6 +90,8 @@ func TestPathContains(t *testing.T) {
 		{"/a", "/foo", false},
 		{"/a/b", "/foo", false},
 		{"/a/b/c", "/b/c", false},
+		{"/a", "/a_b", false},
+		{"/a_b", "/a", false},
 	}
 	for _, test := range tests {
 		t.Run("["+test.target+"].contains["+test.contains+"]", func(t *testing.T) {

@@ -23,7 +23,7 @@ func (x *HashConverter) ConvertExt(v interface{}) interface{} {
 
 func (x *HashConverter) UpdateExt(dest interface{}, v interface{}) {
 	dst := dest.(*hash.Hash)
-	switch t := derefence(v).Interface().(type) {
+	switch t := dereference(v).Interface().(type) {
 	case []byte:
 		err := dst.UnmarshalText(t)
 		if err != nil {
@@ -47,7 +47,7 @@ func (x *IDConverter) ConvertExt(v interface{}) interface{} {
 
 func (x *IDConverter) UpdateExt(dest interface{}, v interface{}) {
 	dst := dest.(*id.ID)
-	switch t := derefence(v).Interface().(type) {
+	switch t := dereference(v).Interface().(type) {
 	case []byte:
 		*dst = t
 	default:
@@ -88,7 +88,7 @@ func (x *LinkConverter) ConvertExt(v interface{}) interface{} {
 
 func (x *LinkConverter) UpdateExt(dest interface{}, v interface{}) {
 	dst := dest.(*link.Link)
-	switch t := derefence(v).Interface().(type) {
+	switch t := dereference(v).Interface().(type) {
 	case map[string]interface{}:
 		var e interface{}
 		var ok bool
@@ -132,7 +132,7 @@ func (x *LinkStringConverter) ConvertExt(v interface{}) interface{} {
 
 func (x *LinkStringConverter) UpdateExt(dest interface{}, v interface{}) {
 	dst := dest.(*link.Link)
-	switch t := derefence(v).Interface().(type) {
+	switch t := dereference(v).Interface().(type) {
 	case string:
 		l, err := link.FromString(t)
 		if err != nil {
@@ -148,9 +148,9 @@ func (x *LinkStringConverter) UpdateExt(dest interface{}, v interface{}) {
 
 // ===== Helper functions ======================================================
 
-// derefence converts the given value to a reflect.Value, de-referencing any
+// dereference converts the given value to a reflect.Value, de-referencing any
 // pointer indirections.
-func derefence(v interface{}) reflect.Value {
+func dereference(v interface{}) reflect.Value {
 	rv := reflect.ValueOf(v)
 	for rv.Kind() == reflect.Ptr {
 		rv = rv.Elem()

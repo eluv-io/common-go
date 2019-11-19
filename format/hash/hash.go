@@ -1,7 +1,6 @@
 package hash
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
@@ -117,7 +116,6 @@ type Hash struct {
 	Type   Type
 	Digest []byte
 	Size   int64
-	Num    int64
 	ID     ei.ID
 	s      string
 }
@@ -332,7 +330,7 @@ func (h *Hash) Equal(h2 *Hash) bool {
 	} else if h == nil || h2 == nil {
 		return false
 	}
-	return h.Type == h2.Type && bytes.Equal(h.Digest, h2.Digest) && h.Size == h2.Size && bytes.Equal(h.ID, h2.ID)
+	return h.String() == h2.String()
 }
 
 ///////////////////////////////////////////////////////////////////////////////

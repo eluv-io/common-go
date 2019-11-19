@@ -8,11 +8,11 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/qluvio/content-fabric/format/hash"
-	"github.com/qluvio/content-fabric/format/id"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/qluvio/content-fabric/format/hash"
+	"github.com/qluvio/content-fabric/format/id"
 )
 
 var hsh *hash.Hash

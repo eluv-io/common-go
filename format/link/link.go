@@ -68,6 +68,10 @@ type Link struct {
 	Off      int64
 	Len      int64
 	Props    map[string]interface{}
+	// The hash of the content object in which a relative link is defined.
+	// This is a temporary attribute used in link resolution and is not
+	// marshalled.
+	Container *hash.Hash
 }
 
 // String returns the Link as a string.
