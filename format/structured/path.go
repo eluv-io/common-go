@@ -100,6 +100,12 @@ func (p *Path) UnmarshalText(text []byte) error {
 	return nil
 }
 
+// Equals returns true if this path is identical to the given path, false
+// otherwise.
+func (p Path) Equals(other Path) bool {
+	return len(p) == len(other) && p.Contains(other)
+}
+
 // StartsWith returns true if p starts with the given path, false otherwise.
 // It's an alias to Contains().
 func (p Path) StartsWith(other Path) bool {

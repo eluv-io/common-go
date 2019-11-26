@@ -68,10 +68,10 @@ type Link struct {
 	Off      int64
 	Len      int64
 	Props    map[string]interface{}
-	// The hash of the content object in which a relative link is defined.
-	// This is a temporary attribute used in link resolution and is not
-	// marshalled.
-	Container *hash.Hash
+	// The hash or write token of the content object in which a relative link is
+	// defined. This is a temporary attribute used in link resolution, but is
+	// also marshalled when set.
+	Container string
 }
 
 // String returns the Link as a string.
@@ -123,6 +123,9 @@ func (l Link) String() string {
 func (l Link) MarshalJSON() ([]byte, error) {
 	m := make(map[string]interface{})
 	m["/"] = l.String()
+	if l.Container != "" {
+		m["container"] = l.Container
+	}
 	for key, val := range l.Props {
 		if key != "/" {
 			m[key] = val
