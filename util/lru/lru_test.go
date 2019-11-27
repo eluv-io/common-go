@@ -2,12 +2,11 @@ package lru
 
 import (
 	"fmt"
-	"sync"
+	"math/rand"
 	"testing"
 	"time"
 
-	"github.com/qluvio/content-fabric/log"
-	"github.com/qluvio/content-fabric/util/syncutil"
+	"github.com/qluvio/content-fabric/format/duration"
 
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/stretchr/testify/require"
@@ -23,7 +22,7 @@ func TestGetOrCreate(t *testing.T) {
 		Convey("GetOrCreate() creates and returns the correct value and evicted flag", func() {
 			for i := 0; i < 10; i++ {
 				key := fmt.Sprintf("k%d", i)
-				val, evicted, err := lru.GetOrCreate(key, createConstructor(key))
+				val, evicted, err := lru.GetOrCreate(key, constructor(key, 0))
 				So(err, ShouldBeNil)
 				So(val, ShouldEqual, key)
 				if i < 2 {
@@ -63,7 +62,7 @@ func TestNilCache(t *testing.T) {
 		Convey("GetOrCreate() creates and returns the correct value and evicted flag", func() {
 			for i := 0; i < 10; i++ {
 				key := fmt.Sprintf("k%d", i)
-				val, evicted, err := lru.GetOrCreate(key, createConstructor(key))
+				val, evicted, err := lru.GetOrCreate(key, constructor(key, 0))
 				So(err, ShouldBeNil)
 				So(val, ShouldEqual, key)
 				So(evicted, ShouldBeFalse)
@@ -109,36 +108,77 @@ func TestNilCache(t *testing.T) {
 	})
 }
 
-func TestGetOrCreateConcurrent(t *testing.T) {
+func TestGetOrCreateStress(t *testing.T) {
 	// log.Get("/").SetDebug()
+	modes := []constructionMode{Modes.Blocking, Modes.Concurrent, Modes.Decoupled}
 
-	evictedCount := 0
-	lru := NewWithEvict(2, func(key interface{}, value interface{}) {
-		evictedCount++
-	})
+	const (
+		workers           = 20
+		cacheSize         = 10
+		keyRange          = 20
+		runTime           = "2s"
+		constructionDelay = "5ms"
+	)
+	runDuration := duration.MustParse(runTime).Duration()
+	constDelay := duration.MustParse(constructionDelay).Duration()
 
-	for i := 0; i < 10000; i++ {
-		key := fmt.Sprintf("k%d", i)
+	for _, mode := range modes {
+		t.Run(fmt.Sprintf("%s-mode", mode), func(t *testing.T) {
+			lru := New(cacheSize)
+			lru.Mode = mode
 
-		wg := &sync.WaitGroup{}
-		for j := 0; j < 20; j++ {
-			msg := fmt.Sprintf("i=%d, j=%d", i, j)
-			wg.Add(1)
-			go func() {
-				log.Debug("loop", "counters", msg)
-				val, _, err := lru.GetOrCreate(key, createConstructor(key))
-				require.NoError(t, err)
-				require.Equal(t, key, val)
-				wg.Done()
-			}()
-		}
-		syncutil.WaitTimeout(wg, time.Second*2)
+			keys := make([]string, keyRange)
+			for i := 0; i < keyRange; i++ {
+				keys[i] = fmt.Sprintf("k%.2d", i)
+			}
+
+			stopChan := make(chan bool)
+			resChan := make(chan [2]int)
+			for j := 0; j < workers; j++ {
+				go func() {
+					var count, evictedCount int
+					for {
+						select {
+						case <-stopChan:
+							resChan <- [2]int{count, evictedCount}
+							return
+						default:
+							break
+						}
+						key := keys[rand.Intn(keyRange)]
+						val, evicted, err := lru.GetOrCreate(key, constructor(key, constDelay))
+						require.NoError(t, err)
+						require.Equal(t, key, val)
+						count++
+						if evicted {
+							evictedCount++
+						}
+					}
+				}()
+			}
+			time.Sleep(runDuration)
+			close(stopChan)
+
+			var totalCount, evictedCount int
+			for j := 0; j < workers; j++ {
+				res := <-resChan
+				totalCount += res[0]
+				evictedCount += res[1]
+			}
+
+			fmt.Println("total", totalCount, "evicted", evictedCount)
+
+			require.Empty(t, lru.createLocks)
+		})
 	}
 
 }
 
-func createConstructor(key string) func() (interface{}, error) {
+func constructor(key string, sleep time.Duration) func() (interface{}, error) {
 	return func() (interface{}, error) {
+		if sleep > 0 {
+			time.Sleep(sleep)
+		}
 		return key, nil
 	}
 }
