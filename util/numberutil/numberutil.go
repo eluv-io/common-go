@@ -43,6 +43,16 @@ func AsInt64Err(val interface{}) (int64, error) {
 		result = int64(x)
 	case int64:
 		result = int64(x)
+	case uint:
+		result = int64(x)
+	case uint8:
+		result = int64(x)
+	case uint16:
+		result = int64(x)
+	case uint32:
+		result = int64(x)
+	case uint64:
+		result = int64(x)
 	case float32:
 		result = int64(math.Round(float64(x)))
 	case float64:
