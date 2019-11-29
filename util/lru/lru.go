@@ -9,6 +9,8 @@ import (
 
 	"github.com/hashicorp/golang-lru/simplelru"
 
+	"github.com/qluvio/content-fabric/util/syncutil"
+
 	"github.com/qluvio/content-fabric/errors"
 )
 
@@ -42,11 +44,10 @@ var Modes = struct {
 
 // Cache is a thread-safe fixed size LRU cache.
 type Cache struct {
-	lru         *simplelru.LRU
-	lock        sync.RWMutex
-	Mode        constructionMode // defaults to Blocking...
-	createLock  sync.Mutex
-	createLocks map[interface{}]*sync.Mutex
+	lru        *simplelru.LRU
+	lock       sync.RWMutex
+	Mode       constructionMode // defaults to Blocking...
+	namedLocks syncutil.NamedLocks
 }
 
 // Nil creates a cache that doesn't cache anything at all.
@@ -159,25 +160,8 @@ func (c *Cache) getOrCreateDecoupled(key interface{}, constructor func() (interf
 	}
 
 	// get the creation mutex for this key
-	c.createLock.Lock()
-	if c.createLocks == nil {
-		c.createLocks = make(map[interface{}]*sync.Mutex)
-	}
-	keyMutex, ok := c.createLocks[key]
-	if !ok {
-		keyMutex = &sync.Mutex{}
-		c.createLocks[key] = keyMutex
-	}
-	c.createLock.Unlock()
-
-	// lock it
-	keyMutex.Lock()
-	defer func() {
-		keyMutex.Unlock()
-		c.createLock.Lock()
-		delete(c.createLocks, key)
-		c.createLock.Unlock()
-	}()
+	keyMutex := c.namedLocks.Lock(key)
+	defer keyMutex.Unlock()
 
 	// try getting the value again - it might have been created in the meantime
 	val, ok = c.Get(key)

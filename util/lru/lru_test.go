@@ -167,8 +167,6 @@ func TestGetOrCreateStress(t *testing.T) {
 			}
 
 			fmt.Println("total", totalCount, "evicted", evictedCount)
-
-			require.Empty(t, lru.createLocks)
 		})
 	}
 
