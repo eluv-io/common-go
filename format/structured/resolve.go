@@ -78,7 +78,7 @@ func (s *subArr) Root() interface{} { return s.root }
 //
 // Path resolution can be stopped by the transformer function by returning false
 // in the continuation flag. The returned data element will be passed back as
-// as the final result of the path resolution call.
+// the final result of the path resolution call.
 //
 // Any non-nil error return will fail the path resolution immediately.
 //
@@ -88,7 +88,7 @@ func (s *subArr) Root() interface{} { return s.root }
 //  * fullPath: the full path being resolved
 //
 // Returns
-//  * trans: the tranformed data element
+//  * trans: the transformed data element
 //  * cont:  true to continue resolution, false otherwise
 //  * err:   fails path resolution immediately if non-nil
 type TransformerFn func(elem interface{}, path Path, fullPath Path) (trans interface{}, cont bool, err error)
@@ -241,11 +241,7 @@ func StringSliceAt(target interface{}, path ...string) []string {
 	return stringutil.ToSlice(is)
 }
 
-func resolveSub(path Path, target interface{}, create bool) (sub, error) {
-	return resolveSubEH(path, target, create)
-}
-
-// resolveSubEH resolves a path on the given target structure and returns a
+// resolveSub resolves a path on the given target structure and returns a
 // subtree object.
 //
 // params:
@@ -262,7 +258,7 @@ func resolveSub(path Path, target interface{}, create bool) (sub, error) {
 //    set to true. In the latter case, the given path is created in the target
 //    structure by creating any missing maps and map entries, setting the final
 //    path segment's value to an empty map.
-func resolveSubEH(path Path, target interface{}, create bool) (sub, error) {
+func resolveSub(path Path, target interface{}, create bool) (sub, error) {
 	e := errors.Template("Resolve", "full_path", path)
 
 	node := dereference(target)
