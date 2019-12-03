@@ -71,7 +71,33 @@ func (s *subArr) Set(val interface{}) {
 }
 func (s *subArr) Root() interface{} { return s.root }
 
-type ResolveErrorHandler func(val interface{}, path Path)
+// TransformerFn is a transformation function for data items encountered when
+// resolving a path. Each data element on the path is passed to this function
+// and continues with the returned element. If no transformation is needed,
+// return the passed-in element unchanged.
+//
+// Path resolution can be stopped by the transformer function by returning false
+// in the continuation flag. The returned data element will be passed back as
+// the final result of the path resolution call.
+//
+// Any non-nil error return will fail the path resolution immediately.
+//
+// Params
+//  * elem:     the data element
+//  * path:     the path at which this element is located
+//  * fullPath: the full path being resolved
+//
+// Returns
+//  * trans: the transformed data element
+//  * cont:  true to continue resolution, false otherwise
+//  * err:   fails path resolution immediately if non-nil
+type TransformerFn func(elem interface{}, path Path, fullPath Path) (trans interface{}, cont bool, err error)
+
+// noopTransformerFn is a transformer function that returns the element
+// unchanged.
+var noopTransformerFn TransformerFn = func(elem interface{}, path Path, fullPath Path) (interface{}, bool, error) {
+	return elem, true, nil
+}
 
 // Get returns the element at the given path in the target data structure.
 // It's an alias for Resolve()
@@ -79,18 +105,14 @@ func Get(path Path, target interface{}) (interface{}, error) {
 	return Resolve(path, target)
 }
 
-// Resolve resolves a path on the given target structure and returns a
-// pointer to the subtree.
-func Resolve(path Path, target interface{}, errHandler ...ResolveErrorHandler) (interface{}, error) {
-	eh := func(val interface{}, path Path) {}
-	if len(errHandler) > 0 {
-		eh = errHandler[0]
+// Resolve resolves a path on the given target structure and returns the
+// corresponding sub-structure.
+func Resolve(path Path, target interface{}, transformerFns ...TransformerFn) (interface{}, error) {
+	transformer := noopTransformerFn
+	if len(transformerFns) > 0 {
+		transformer = transformerFns[0]
 	}
-	res, err := resolveSubEH(path, target, false, eh)
-	if err != nil {
-		return nil, err
-	}
-	return res.Get(), nil
+	return resolveTransform(path, target, transformer)
 }
 
 // StringAt returns the string value at the given path in the given target
@@ -219,18 +241,13 @@ func StringSliceAt(target interface{}, path ...string) []string {
 	return stringutil.ToSlice(is)
 }
 
-func resolveSub(path Path, target interface{}, create bool) (sub, error) {
-	return resolveSubEH(path, target, create, func(val interface{}, path Path) {})
-}
-
-// resolveSubEH resolves a path on the given target structure and returns a
+// resolveSub resolves a path on the given target structure and returns a
 // subtree object.
 //
 // params:
 //  * path      : the path to resolve
 //  * target    : the data structure to analyze
 //  * create    : missing path segments are created if true, generate an error otherwise
-//  * errHandler: a function that gets called when an error occurs
 //
 // return:
 //  * a subtree object representing the value at path.
@@ -241,7 +258,9 @@ func resolveSub(path Path, target interface{}, create bool) (sub, error) {
 //    set to true. In the latter case, the given path is created in the target
 //    structure by creating any missing maps and map entries, setting the final
 //    path segment's value to an empty map.
-func resolveSubEH(path Path, target interface{}, create bool, errHandler ResolveErrorHandler) (sub, error) {
+func resolveSub(path Path, target interface{}, create bool) (sub, error) {
+	e := errors.Template("Resolve", "full_path", path)
+
 	node := dereference(target)
 	root := node
 
@@ -262,17 +281,13 @@ func resolveSubEH(path Path, target interface{}, create bool, errHandler Resolve
 	var parentIdx int
 
 	for idx := 0; ; idx++ {
-		mkerr := func() *errors.Error {
-			return errors.E("resolve", "path", path[:idx+1], "full_path", path)
-		}
 		lastPathSegment := idx+1 >= len(path)
 		switch t := node.(type) {
 		case map[string]interface{}:
 			v, found := t[path[idx]]
 			if !found {
 				if !create {
-					errHandler(t, path[:idx])
-					return nil, mkerr().Kind(errors.K.NotExist)
+					return nil, e(errors.K.NotExist, "path", path[:idx+1])
 				}
 				if lastPathSegment {
 					v = nil
@@ -290,13 +305,11 @@ func resolveSubEH(path Path, target interface{}, create bool, errHandler Resolve
 		case []interface{}:
 			i, err := strconv.ParseInt(path[idx], 10, 32)
 			if err != nil {
-				errHandler(t, path[:idx])
-				return nil, mkerr().Kind(errors.K.Invalid).With("reason", "invalid array index")
+				return nil, e(errors.K.Invalid, "reason", "invalid array index", "path", path[:idx+1])
 			}
 			aidx := int(i)
 			if aidx >= len(t) || aidx < 0 {
-				errHandler(t, path[:idx])
-				return nil, mkerr().Kind(errors.K.NotExist).With("reason", "array index out of range")
+				return nil, e(errors.K.NotExist, "reason", "array index out of range", "path", path[:idx+1])
 			}
 			if lastPathSegment {
 				var p sub
@@ -314,11 +327,63 @@ func resolveSubEH(path Path, target interface{}, create bool, errHandler Resolve
 			parentIdx = aidx
 			node = t[aidx]
 		case nil:
-			errHandler(t, path[:idx])
-			return nil, mkerr().Kind(errors.K.NotExist).With("reason", "element is nil")
+			return nil, e(errors.K.NotExist, "reason", "element is nil", "path", path[:idx+1])
 		default:
-			errHandler(t, path[:idx])
-			return nil, mkerr().Kind(errors.K.Invalid).With("reason", "element is leaf")
+			return nil, e(errors.K.Invalid, "reason", "element is leaf", "path", path[:idx+1])
+		}
+	}
+}
+
+func resolveTransform(path Path, target interface{}, transform TransformerFn) (interface{}, error) {
+	var err error
+	e := errors.Template("Resolve", "full_path", path)
+	if transform == nil {
+		transform = noopTransformerFn
+	}
+
+	node := dereference(target)
+
+	if path == nil {
+		path = Path{}
+	}
+	//if len(path) == 0 {
+	//	node, _, err = transform(node, path, path)
+	//	return node, e.IfNotNil(err, "path", path)
+	//}
+
+	for idx := 0; ; idx++ {
+		var cont bool
+		node, cont, err = transform(node, path[:idx], path)
+		if err != nil {
+			return nil, e(err, "path", path[:idx])
+		}
+		if !cont {
+			return node, nil
+		}
+		if idx+1 > len(path) {
+			return node, nil
+		}
+		switch t := node.(type) {
+		case map[string]interface{}:
+			v, found := t[path[idx]]
+			if !found {
+				return nil, e(errors.K.NotExist, "path", path[:idx+1])
+			}
+			node = v
+		case []interface{}:
+			i, err := strconv.ParseInt(path[idx], 10, 32)
+			if err != nil {
+				return nil, e(errors.K.Invalid, "reason", "invalid array index", "path", path[:idx+1])
+			}
+			aidx := int(i)
+			if aidx >= len(t) || aidx < 0 {
+				return nil, e(errors.K.NotExist, "reason", "array index out of range", "path", path[:idx+1])
+			}
+			node = t[aidx]
+		case nil:
+			return nil, e(errors.K.NotExist, "reason", "element is nil", "path", path[:idx])
+		default:
+			return nil, e(errors.K.Invalid, "reason", "element is leaf", "path", path[:idx])
 		}
 	}
 }

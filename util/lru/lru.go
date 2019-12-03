@@ -8,12 +8,46 @@ import (
 	"sync"
 
 	"github.com/hashicorp/golang-lru/simplelru"
+
+	"github.com/qluvio/content-fabric/util/syncutil"
+
+	"github.com/qluvio/content-fabric/errors"
 )
+
+type constructionMode string
+
+// Modes defines the different construction modes that can be used with the LRU
+// cache. The mode affects the synchronization in calls to the GetOrCreate(key)
+// method.
+//
+// * Blocking: the write lock of the cache is held during the entire lookup and
+// creation phase. This means that calls to the constructor are mutually
+// exclusive and block all operations of the cache until completed.
+//
+// * Concurrent: the write lock of the cache is released before the constructor
+// is called. It is therefore possible that the constructor for the same key is
+// called concurrently. This mode provides maximum concurrency.
+//
+// * Decoupled: the write lock of the cache is released before the constructor
+// is called. However, concurrent calls to the constructor with the same key are
+// prevented by acquiring key-specific locks. This mode provides concurrency
+// among different keys, but prevents it for a given key.
+var Modes = struct {
+	Blocking   constructionMode
+	Concurrent constructionMode
+	Decoupled  constructionMode
+}{
+	Blocking:   "blocking",
+	Concurrent: "concurrent",
+	Decoupled:  "decoupled",
+}
 
 // Cache is a thread-safe fixed size LRU cache.
 type Cache struct {
-	lru  *simplelru.LRU
-	lock sync.RWMutex
+	lru        *simplelru.LRU
+	lock       sync.RWMutex
+	Mode       constructionMode // defaults to Blocking...
+	namedLocks syncutil.NamedLocks
 }
 
 // Nil creates a cache that doesn't cache anything at all.
@@ -34,7 +68,8 @@ func NewWithEvict(size int, onEvicted func(key interface{}, value interface{})) 
 	}
 	lru, _ := simplelru.NewLRU(size, simplelru.EvictCallback(onEvicted))
 	c := &Cache{
-		lru: lru,
+		lru:  lru,
+		Mode: Modes.Blocking,
 	}
 	return c
 }
@@ -64,6 +99,8 @@ func (c *Cache) Get(key interface{}) (interface{}, bool) {
 	if c == nil {
 		return nil, false
 	}
+	// need the write lock, since this updates the recently-used list in
+	// simple.LRU!
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	return c.lru.Get(key)
@@ -78,22 +115,88 @@ func (c *Cache) Get(key interface{}) (interface{}, bool) {
 func (c *Cache) GetOrCreate(key interface{}, constructor func() (interface{}, error)) (val interface{}, evicted bool, err error) {
 	if c == nil {
 		val, err = constructor()
-		return
+		return val, false, err
 	}
+
+	switch c.Mode {
+	case Modes.Blocking:
+		return c.getOrCreateBlocking(key, constructor)
+	case Modes.Decoupled:
+		return c.getOrCreateDecoupled(key, constructor)
+	case Modes.Concurrent:
+		return c.getOrCreateConcurrent(key, constructor)
+	}
+
+	// should never get here!
+	return nil, false, errors.E("cache.GetOrCreate", errors.K.Invalid, "reason", "invalid construction mode", "mode", c.Mode)
+}
+
+func (c *Cache) getOrCreateBlocking(key interface{}, constructor func() (interface{}, error)) (val interface{}, evicted bool, err error) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	val, ok := c.lru.Get(key)
+	var ok bool
+	val, ok = c.lru.Get(key)
 	if ok {
-		return
+		return val, false, nil
 	}
 
+	// create the value - holding the write lock (and blocking any other call...)
 	val, err = constructor()
 	if err != nil {
-		return
+		return nil, false, err
 	}
 	evicted = c.lru.Add(key, val)
-	return
+	return val, evicted, err
+}
+
+func (c *Cache) getOrCreateDecoupled(key interface{}, constructor func() (interface{}, error)) (val interface{}, evicted bool, err error) {
+
+	// try to get the value with regular rw lock
+	var ok bool
+	val, ok = c.Get(key)
+	if ok {
+		return val, false, err
+	}
+
+	// get the creation mutex for this key
+	keyMutex := c.namedLocks.Lock(key)
+	defer keyMutex.Unlock()
+
+	// try getting the value again - it might have been created in the meantime
+	val, ok = c.Get(key)
+	if ok {
+		return val, false, nil
+	}
+
+	// create the value
+	val, err = constructor()
+	if err != nil {
+		return nil, false, err
+	}
+
+	// add it to the cache
+	evicted = c.Add(key, val)
+	return val, evicted, nil
+}
+
+func (c *Cache) getOrCreateConcurrent(key interface{}, constructor func() (interface{}, error)) (val interface{}, evicted bool, err error) {
+	// try to get the value with regular rw lock
+	var ok bool
+	val, ok = c.Get(key)
+	if ok {
+		return val, false, err
+	}
+
+	// create the value - holding no lock at all
+	val, err = constructor()
+	if err != nil {
+		return nil, false, err
+	}
+
+	// add it to the cache
+	evicted = c.Add(key, val)
+	return val, evicted, err
 }
 
 // Check if a key is in the cache, without updating the recent-ness

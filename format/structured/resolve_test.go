@@ -2,9 +2,11 @@ package structured
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/util/maputil"
 
 	"github.com/stretchr/testify/require"
 )
@@ -103,7 +105,7 @@ func TestResolveErrors(t *testing.T) {
 			source: parse(testJson),
 			contains: jm{
 				"kind":   errors.K.Invalid,
-				"path":   "/expensive/does-not-exist",
+				"path":   "/expensive",
 				"reason": "element is leaf",
 			},
 		},
@@ -211,6 +213,86 @@ func TestResolveSubCreate(t *testing.T) {
 				sub, err := resolveSub(ParsePath(tt.path), src, false)
 				require.NoError(t, err)
 				require.IsType(t, (*subMap)(nil), sub)
+			}
+		})
+	}
+}
+
+func TestResolveTransform(t *testing.T) {
+	transErr := errors.Str("transformer error")
+	tests := []struct {
+		path      string
+		source    interface{}
+		trans     TransformerFn
+		want      interface{}
+		wantError bool
+	}{
+		{
+			path:   "",
+			source: nil,
+			trans: func(elem interface{}, path Path, fullPath Path) (interface{}, bool, error) {
+				return "transformed!", true, nil
+			},
+			want: "transformed!",
+		},
+		{
+			path:   "",
+			source: nil,
+			trans: func(elem interface{}, path Path, fullPath Path) (interface{}, bool, error) {
+				return nil, true, transErr
+			},
+			wantError: true,
+		},
+		{
+			path:   "/a/b/c/d",
+			source: parse(`{"a":{"b":"c"}}`),
+			trans: func(elem interface{}, path Path, fullPath Path) (interface{}, bool, error) {
+				if path.Equals(Path{"a", "b"}) {
+					return parse(`{"c":{"d":"e"}}`), true, nil
+				}
+				return elem, true, nil
+			},
+			want: "e",
+		},
+		{
+			path:   "/a/a/a/a",
+			source: nil,
+			trans: func(elem interface{}, path Path, fullPath Path) (interface{}, bool, error) {
+				if len(path) < 4 {
+					fmt.Println("path: ", path, "returning a->b")
+					return maputil.From("a", "b"), true, nil
+				}
+				fmt.Println("path: ", path, "returning c")
+				return "c", true, nil
+			},
+			want: "c",
+		},
+		{ // same as above, but stopping resolution immediately
+			path:   "/a/a/a/a",
+			source: nil,
+			trans: func(elem interface{}, path Path, fullPath Path) (interface{}, bool, error) {
+				return "c", false, nil
+			},
+			want: "c",
+		},
+	}
+	for _, tt := range tests {
+		t.Run("path["+tt.path+"]", func(t *testing.T) {
+			res, err := Resolve(ParsePath(tt.path, "/"), tt.source, tt.trans)
+			if tt.wantError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.want, res)
+			}
+		})
+		t.Run("pass-as-reference_path["+tt.path+"]", func(t *testing.T) {
+			res, err := Resolve(ParsePath(tt.path, "/"), &tt.source, tt.trans)
+			if tt.wantError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.want, res)
 			}
 		})
 	}

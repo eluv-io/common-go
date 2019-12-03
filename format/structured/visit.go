@@ -32,6 +32,8 @@ func Visit(target interface{}, orderMaps bool, f VisitFn) {
 // cancelled immediately.
 type ReplaceFn func(path Path, val interface{}) (replace bool, newVal interface{}, err error)
 
+// Replace visits every element in the given target structure and calls the
+// provided replacement function with it.
 func Replace(target interface{}, f ReplaceFn) (interface{}, error) {
 	path := make(Path, 0, 20)
 	_, val, err := doReplace(path, target, f, false)
