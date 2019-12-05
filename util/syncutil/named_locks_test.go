@@ -59,7 +59,7 @@ func TestNamedLocksSingle(t *testing.T) {
 	require.Equal(t, int64(0), counter.Load())
 	l.Unlock()
 
-	require.False(t, WaitTimeout(wg, time.Second))
+	require.False(t, WaitTimeout(wg, time.Minute))
 	require.Equal(t, int64(10), counter.Load())
 	require.Empty(t, nl.named)
 }
@@ -118,7 +118,7 @@ func TestNamedLocksConcurrent(t *testing.T) {
 		time.Sleep(2 * time.Millisecond)
 	}
 
-	require.False(t, WaitTimeout(wg, time.Second))
+	require.False(t, WaitTimeout(wg, time.Minute))
 	for i := 0; i < numAcquire; i++ {
 		require.Equal(t, int64(4), counters[i].Load())
 	}
