@@ -40,27 +40,26 @@ func TestNamedLocksBasic(t *testing.T) {
 
 func TestNamedLocksSingle(t *testing.T) {
 	nl := NamedLocks{}
-	counter := atomic.NewInt64(0)
+	counter := 0
 	wg := &sync.WaitGroup{}
 
 	l := nl.Lock("l1")
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 100; i++ {
 		wg.Add(1)
 		go func() {
 			pl := nl.Lock("l1")
-			require.True(t, l == pl)
-			counter.Add(1)
+			counter++
 			pl.Unlock()
 			wg.Done()
 		}()
 	}
 
-	require.Equal(t, int64(0), counter.Load())
+	require.Equal(t, 0, counter)
 	l.Unlock()
 
 	require.False(t, WaitTimeout(wg, time.Minute))
-	require.Equal(t, int64(10), counter.Load())
+	require.Equal(t, 100, counter)
 	require.Empty(t, nl.named)
 }
 
