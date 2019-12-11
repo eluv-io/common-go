@@ -7,7 +7,6 @@ import (
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/id"
 	"github.com/qluvio/content-fabric/format/link"
-	"github.com/qluvio/content-fabric/format/structured"
 )
 
 // HashStringConverter marshals/unmarshals a hash.Hash object to/from a string.
@@ -64,55 +63,14 @@ type LinkConverter struct{}
 
 func (x *LinkConverter) ConvertExt(v interface{}) interface{} {
 	l := v.(*link.Link)
-	m := make(map[string]interface{})
-	if !l.Target.IsNil() {
-		m["Target"] = l.Target
-	}
-	if len(l.Selector) > 0 {
-		m["Selector"] = l.Selector
-	}
-	if len(l.Path) > 0 {
-		m["Path"] = l.Path
-	}
-	if l.Off > 0 {
-		m["Off"] = l.Off
-	}
-	if l.Len > 0 {
-		m["Len"] = l.Len
-	}
-	if len(l.Props) > 0 {
-		m["Props"] = l.Props
-	}
-	return m
+	return l.MarshalCBOR()
 }
 
 func (x *LinkConverter) UpdateExt(dest interface{}, v interface{}) {
 	dst := dest.(*link.Link)
 	switch t := dereference(v).Interface().(type) {
 	case map[string]interface{}:
-		var e interface{}
-		var ok bool
-		if e, ok = t["Target"]; ok {
-			h := e.(hash.Hash)
-			dst.Target = &h
-		}
-		if e, ok = t["Selector"]; ok {
-			dst.Selector = link.Selector(e.(string))
-		}
-		if e, ok = t["Path"]; ok {
-			dst.Path = toPath(e.([]interface{}))
-		}
-		if e, ok = t["Off"]; ok {
-			dst.Off = toInt64(e)
-		}
-		if e, ok = t["Len"]; ok {
-			dst.Len = toInt64(e)
-		} else {
-			dst.Len = -1
-		}
-		if e, ok = t["Props"]; ok {
-			dst.Props = e.(map[string]interface{})
-		}
+		dst.UnmarshalCBOR(t)
 	default:
 		panic(errors.E("LinkConverter.UpdateExt", errors.K.Invalid,
 			"expected_types", []string{"map[string]interface{}"},
@@ -156,42 +114,4 @@ func dereference(v interface{}) reflect.Value {
 		rv = rv.Elem()
 	}
 	return rv
-}
-
-// Converts the given value to an int64 if it is any of the possible Go integer
-// types. Returns 0 otherwise.
-func toInt64(v interface{}) int64 {
-	switch t := v.(type) {
-	// signed
-	case int:
-		return int64(t)
-	case int64:
-		return t
-	case int32:
-		return int64(t)
-	case int16:
-		return int64(t)
-	case int8:
-		return int64(t)
-	// unsigned
-	case uint:
-		return int64(t)
-	case uint64:
-		return int64(t)
-	case uint32:
-		return int64(t)
-	case uint16:
-		return int64(t)
-	case uint8:
-		return int64(t)
-	}
-	return 0
-}
-
-func toPath(p []interface{}) structured.Path {
-	s := make([]string, len(p))
-	for idx, val := range p {
-		s[idx] = val.(string)
-	}
-	return s
 }

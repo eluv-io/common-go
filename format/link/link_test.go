@@ -1,13 +1,17 @@
 package link_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
+	"github.com/qluvio/content-fabric/format/codecs"
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/link"
 	"github.com/qluvio/content-fabric/format/structured"
+	"github.com/qluvio/content-fabric/util/jsonutil"
 	"github.com/qluvio/content-fabric/util/maputil"
 
 	"github.com/stretchr/testify/assert"
@@ -128,7 +132,7 @@ func TestLinkProperties(t *testing.T) {
 	for _, test := range linkTests {
 		// create a copy of the link
 		lnk := *(test.lnk)
-		lnk.Props = maputil.From("k1", "v1", "k2", "v2")
+		lnk.Props = maputil.From("k1", "v1", "k2", "v2", ".", maputil.From("k3", "v3"))
 		// create a copy of the test case
 		tc := test
 		tc.lnk = &lnk
@@ -141,7 +145,7 @@ func TestLinkProperties(t *testing.T) {
 			// })
 
 			t.Run("json", func(t *testing.T) {
-				testJSON(t, tc.lnk, fmt.Sprintf(`{"/":"%s","k1":"v1","k2":"v2"}`, test.str))
+				testJSON(t, tc.lnk, fmt.Sprintf(`{".":{"k3":"v3"},"/":"%s","k1":"v1","k2":"v2"}`, test.str))
 			})
 			t.Run("wrapped-json", func(t *testing.T) {
 				testWrappedJSON(t, tc)
@@ -205,7 +209,127 @@ func TestIsLink(t *testing.T) {
 			require.Equal(t, test.wantLink, link.AsLink(test.val))
 		})
 	}
+}
 
+const (
+	QHASH1 = "hq__GjqahYm1jem5QPmrCh6xKDnrN67wpf4P8HkVw1Yn9zS7w8icC9buY7SrNVEopBqNTf3Re4B896"
+	QHASH2 = "hq__2uQvLp79GTmbV1YYT3JyfpQJ3uoTnxSnFFUAzrsDjvaW5FofMAyzwCEaejgM6FFAj9j9xJsSwX"
+)
+
+func TestAutoUpdate(t *testing.T) {
+	qhash1, err := hash.FromString(QHASH1)
+	require.NoError(t, err)
+
+	builder := func() *link.Builder {
+		return link.NewBuilder().Target(qhash1).Selector(link.S.Meta).P("a")
+	}
+
+	tests := []struct {
+		json     string
+		wantLink *link.Link
+	}{
+		{
+			json:     `{"/":"/qfab/QHASH1/meta/a"}`,
+			wantLink: builder().MustBuild(),
+		},
+		{
+			json:     `{"/":"/qfab/QHASH1/meta/a",".":{"container":"QHASH2"}}`,
+			wantLink: builder().MustBuild(),
+		},
+		{
+			json:     `{"/":"/qfab/QHASH1/meta/a",".":{"auto_update":{}}}`,
+			wantLink: builder().AutoUpdate("").MustBuild(),
+		},
+		{
+			json:     `{"/":"/qfab/QHASH1/meta/a",".":{"auto_update":{"tag":"latest"}}}`,
+			wantLink: builder().AutoUpdate("latest").MustBuild(),
+		},
+		{
+			json:     `{"/":"/qfab/QHASH1/meta/a",".":{"auto_update":{"tag":"custom"}}}`,
+			wantLink: builder().AutoUpdate("custom").MustBuild(),
+		},
+		{
+			json:     `{"/":"/qfab/QHASH1/meta/a",".":{"auto_update":{"tag":"custom"},"container":"QHASH2"}}`,
+			wantLink: builder().AutoUpdate("custom").MustBuild(),
+		},
+		{ // additional props in "." are retained
+			json:     `{"/":"/qfab/QHASH1/meta/a",".":{"auto_update":{},"k1":"v1","k2":"v2"}}`,
+			wantLink: builder().AutoUpdate("").AddProp(".", maputil.From("k1", "v1", "k2", "v2")).MustBuild(),
+		},
+		{ // regular link props are retained
+			json:     `{"/":"/qfab/QHASH1/meta/a",".":{"auto_update":{}},"k1":"v1","k2":"v2"}`,
+			wantLink: builder().AutoUpdate("").AddProp("k1", "v1").AddProp("k2", "v2").MustBuild(),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.json, func(t *testing.T) {
+
+			// ensure JSON unmarshaling into link object works
+			var lnk link.Link
+			jsn := replaceHashes(test.json)
+			err := json.Unmarshal([]byte(jsn), &lnk)
+			require.NoError(t, err)
+			require.Equal(t, test.wantLink, &lnk)
+
+			// make sure generic unmarshal followed by ConvertLinks works as
+			// well
+			conv, err := link.ConvertLinks(jsonutil.UnmarshalStringToAny(jsn))
+			require.NoError(t, err)
+			require.Equal(t, test.wantLink, conv)
+
+			// ensure converting to CBOR and back works, too
+			newLnk := cbor(t, test.wantLink).(link.Link)
+			require.Equal(t, test.wantLink, &newLnk)
+
+			require.Equal(t, jsonutil.MarshalString(&newLnk), jsonutil.MarshalString(test.wantLink))
+		})
+	}
+}
+
+func TestContainer(t *testing.T) {
+	qhash1, err := hash.FromString(QHASH1)
+	require.NoError(t, err)
+
+	builder := func() *link.Builder {
+		return link.NewBuilder().Target(qhash1).Selector(link.S.Meta).P("a")
+	}
+
+	tests := []struct {
+		wantJson string
+		link     *link.Link
+	}{
+		{
+			link:     builder().MustBuild(),
+			wantJson: `{"/":"/qfab/QHASH1/meta/a"}`,
+		},
+		{
+			wantJson: `{"/":"/qfab/QHASH1/meta/a",".":{"container":"QHASH2"}}`,
+			link:     builder().Container(QHASH2).MustBuild(),
+		},
+		{
+			wantJson: `{"/":"/qfab/QHASH1/meta/a",".":{"auto_update":{"tag":"custom"},"container":"QHASH2"}}`,
+			link:     builder().AutoUpdate("custom").Container(QHASH2).MustBuild(),
+		},
+		{ // additional props in "." are retained
+			wantJson: `{"/":"/qfab/QHASH1/meta/a",".":{"auto_update":{},"container":"QHASH2","k1":"v1","k2":"v2"}}`,
+			link:     builder().AutoUpdate("").Container(QHASH2).AddProp(".", maputil.From("k1", "v1", "k2", "v2")).MustBuild(),
+		},
+		{ // regular link props are retained
+			wantJson: `{"/":"/qfab/QHASH1/meta/a",".":{"auto_update":{},"container":"QHASH2"},"k1":"v1","k2":"v2"}`,
+			link:     builder().AutoUpdate("").Container(QHASH2).AddProp("k1", "v1").AddProp("k2", "v2").MustBuild(),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.wantJson, func(t *testing.T) {
+			require.Equal(t,
+				jsonutil.UnmarshalStringToAny(jsonutil.MarshalString(test.link)),
+				jsonutil.UnmarshalStringToAny(replaceHashes(test.wantJson)))
+
+			// ensure container is not stored
+			newLnk := cbor(t, test.link).(link.Link)
+			require.Empty(t, newLnk.Extra.Container)
+		})
+	}
 }
 
 func testStringConversion(t *testing.T, tc testCase) {
@@ -263,4 +387,22 @@ func create(target *hash.Hash, sel link.Selector, path structured.Path, offAndLe
 		panic(err)
 	}
 	return l
+}
+
+func replaceHashes(s string) string {
+	s = strings.ReplaceAll(s, "QHASH1", QHASH1)
+	s = strings.ReplaceAll(s, "QHASH2", QHASH2)
+	return s
+}
+
+func cbor(t *testing.T, src interface{}) interface{} {
+	codec := codecs.NewCborCodec()
+	buf := &bytes.Buffer{}
+	err := codec.Encoder(buf).Encode(src)
+	require.NoError(t, err)
+
+	var decoded interface{}
+	err = codec.Decoder(buf).Decode(&decoded)
+	require.NoError(t, err)
+	return decoded
 }

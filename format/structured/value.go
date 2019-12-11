@@ -67,8 +67,11 @@ func (v *Value) Merge(path Path, data interface{}) error {
 	return nil
 }
 
-func (v *Value) Delete(path ...string) error {
-	return v.Set(path, nil)
+// Delete deletes the element at the given path and returns true if the element
+// existed and was therefore deleted, false otherwise.
+func (v *Value) Delete(path ...string) (deleted bool) {
+	v.Data, deleted = Delete(v.Data, path)
+	return deleted
 }
 
 func (v *Value) Get(path ...string) *Value {

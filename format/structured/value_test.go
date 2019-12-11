@@ -36,13 +36,15 @@ func TestValue_Manip(t *testing.T) {
 	Convey("After wrapping a data structure in a Value", t, func() {
 		var err error
 		data := maputil.From("a", "one", "b", "two")
-		sd := structured.Wrap(data)
+		// wrap an equivalent structure - keep it separate because otherwise
+		// the reference struct will be modified as well!
+		sd := structured.Wrap(maputil.From("a", "one", "b", "two"))
 
 		Convey("Get returns the structure", func() {
 			val = sd.Get()
 			So(val.IsError(), ShouldBeFalse)
-			So(val.Map(), ShouldEqual, data)
-			So(sd.Data, ShouldEqual, data)
+			So(val.Map(), ShouldResemble, data)
+			So(sd.Data, ShouldResemble, data)
 
 			Convey("Get with a path returns a subtree of the structure", func() {
 				val = sd.Get("a")
@@ -75,20 +77,26 @@ func TestValue_Manip(t *testing.T) {
 		})
 
 		Convey("Delete removes subtrees", func() {
-			err = sd.Delete("a")
-			So(err, ShouldBeNil)
+			deleted := sd.Delete("a")
+			So(deleted, ShouldBeTrue)
 			So(sd.Get().Value(), ShouldResemble, maputil.From("b", "two"))
 
-			err = sd.Delete("b")
-			So(err, ShouldBeNil)
+			deleted = sd.Delete("b")
+			So(deleted, ShouldBeTrue)
 			val = sd.Get()
 			So(val.IsError(), ShouldBeFalse)
 			So(val.Value(), ShouldResemble, map[string]interface{}{})
 		})
 
+		Convey("Deleting inexistent paths does nothing", func() {
+			deleted := sd.Delete("c", "d", "e")
+			So(deleted, ShouldBeFalse)
+			So(sd.Get().Value(), ShouldResemble, data)
+		})
+
 		Convey("Delete with the root path removes all data", func() {
-			err = sd.Delete()
-			So(err, ShouldBeNil)
+			deleted := sd.Delete()
+			So(deleted, ShouldBeTrue)
 			val = sd.Get()
 			So(val.IsError(), ShouldBeFalse)
 			So(val.Value(), ShouldBeNil)

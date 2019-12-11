@@ -20,7 +20,7 @@ func NewUnmarshaler() *Unmarshaler {
 			parseNumbersInAttributes:  true,
 			useNumber:                 false,
 			detectSingleElementArrays: true,
-			keyReplacements:           [][2]string{{"/", "__link__"}},
+			keyReplacements:           [][2]string{{"/", "__link__"}, {".", "__link_extra__"}},
 		}}
 }
 

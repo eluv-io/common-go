@@ -69,6 +69,16 @@ func (b *Builder) AddProp(key string, val interface{}) *Builder {
 	return b
 }
 
+func (b *Builder) Container(qhot string) *Builder {
+	b.l.Extra.Container = qhot
+	return b
+}
+
+func (b *Builder) AutoUpdate(tag string) *Builder {
+	b.l.Extra.AutoUpdate = &AutoUpdate{Tag: tag}
+	return b
+}
+
 func (b *Builder) Build() (*Link, error) {
 	err := b.l.Validate(true)
 	if err != nil {
