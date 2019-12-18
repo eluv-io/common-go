@@ -3,8 +3,6 @@ package ethutil
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"github.com/qluvio/content-fabric/format/keys"
-	"github.com/qluvio/content-fabric/format/types"
 	"encoding/hex"
 	"io/ioutil"
 	"os"
@@ -12,6 +10,8 @@ import (
 
 	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/id"
+	"github.com/qluvio/content-fabric/format/keys"
+	"github.com/qluvio/content-fabric/format/types"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
@@ -29,7 +29,9 @@ func HashFromHex(hash string) (*common.Hash, error) {
 
 	if length := len(hash); length != 2*common.HashLength {
 		return nil, errors.E("HashFromHex", errors.K.Invalid,
-			"reason", "invalid hash hex length", length, 2*common.HashLength)
+			"reason", "invalid hash hex length",
+			"length", length,
+			"expected_length", 2*common.HashLength)
 	}
 
 	bin, err := hex.DecodeString(hash)
@@ -171,10 +173,23 @@ func RecryptKeyFile(keyfile string, password string, scryptN int) error {
 // ToNodePublicKey returns the public key of the given key in keys.KID format
 // as well as as an address in id format. All returns use node prefixes.
 func ToNodePublicKey(privateKey *ecdsa.PrivateKey) (keys.KID, types.QNodeID) {
-	pubKey := keys.NewKID(keys.FabricNodePublicKey,
-		crypto.CompressPubkey(&privateKey.PublicKey))
-	nid := AddressToID(
-		crypto.PubkeyToAddress(privateKey.PublicKey),
-		id.QNode)
-	return pubKey, nid
+	return ToPublicKeyAndID(privateKey, id.QNode)
 }
+
+func ToUserPublicKey(privateKey *ecdsa.PrivateKey) (keys.KID, types.UserID) {
+	return ToPublicKeyAndID(privateKey, id.User)
+}
+
+func ToPublicKeyAndID(privateKey *ecdsa.PrivateKey, c id.Code) (keys.KID, id.ID) {
+	var keyCode keys.KeyCode = keys.KUNKNOWN
+	switch c {
+	case id.QNode:
+		keyCode = keys.FabricNodePublicKey
+	case id.User:
+		keyCode = keys.UserPublicKey
+	}
+	return keys.NewKID(keyCode, crypto.CompressPubkey(&privateKey.PublicKey)),
+		AddressToID(crypto.PubkeyToAddress(privateKey.PublicKey), c)
+}
+
+//UserPublicKey

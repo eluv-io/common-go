@@ -38,6 +38,7 @@ const (
 	EthPublicKey
 	EthPrivateKey
 	FabricNodePublicKey
+	UserPublicKey
 )
 
 const codeLen = 1
@@ -61,6 +62,7 @@ var keyPrefixToCode = map[string]KeyCode{
 	"kepk": EthPublicKey,        // ethereum public key - may or many not be compressed
 	"kesk": EthPrivateKey,       //
 	"knod": FabricNodePublicKey, // fabric node public key
+	"kupk": UserPublicKey,       // key user public key
 }
 
 func init() {
