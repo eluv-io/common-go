@@ -68,10 +68,7 @@ type Link struct {
 	Off      int64
 	Len      int64
 	Props    map[string]interface{}
-	// The hash or write token of the content object in which a relative link is
-	// defined. This is a temporary attribute used in link resolution, but is
-	// also marshalled when set.
-	Container string
+	Extra    Extra
 }
 
 // String returns the Link as a string.
@@ -122,14 +119,12 @@ func (l Link) String() string {
 
 func (l Link) MarshalJSON() ([]byte, error) {
 	m := make(map[string]interface{})
-	m["/"] = l.String()
-	if l.Container != "" {
-		m["container"] = l.Container
-	}
 	for key, val := range l.Props {
-		if key != "/" {
-			m[key] = val
-		}
+		m[key] = val
+	}
+	m["/"] = l.String()
+	if !l.Extra.IsEmpty() {
+		structured.Merge(m, structured.Path{"."}, l.Extra.MarshalMap())
 	}
 	return json.Marshal(m)
 }
@@ -144,14 +139,32 @@ func (l *Link) UnmarshalJSON(data []byte) error {
 }
 
 func (l *Link) UnmarshalMap(m map[string]interface{}) error {
-	linkText := structured.Wrap(m).Get("/").String()
+	val := structured.Wrap(m)
+
+	linkText := val.Get("/").String()
 	if linkText == "" {
 		return errors.E("link.UnmarshalMap", errors.K.Invalid, "reason", "not a link", "map", m)
 	}
-	delete(m, "/")
-	if len(m) > 0 {
-		l.Props = m
+	val.Delete("/")
+
+	if extra := val.Get("."); !extra.IsError() {
+		err := extra.Decode(&l.Extra)
+		if err != nil {
+			return err
+		}
+		extra.Delete("auto_update")
+		extra.Delete("container")
+		if len(extra.Map()) == 0 {
+			val.Delete(".")
+		}
 	}
+	l.Extra.Container = "" // ignore container
+
+	l.Props = val.Map()
+	if len(l.Props) == 0 {
+		l.Props = nil
+	}
+
 	err := l.UnmarshalText([]byte(linkText))
 	if err == nil {
 		err = l.Validate(true)
@@ -160,6 +173,65 @@ func (l *Link) UnmarshalMap(m map[string]interface{}) error {
 		return err
 	}
 	return nil
+}
+
+// MarshalCBOR converts this link to a generic map structure, suitable for
+// encoding in CBOR.
+func (l *Link) MarshalCBOR() map[string]interface{} {
+	m := make(map[string]interface{})
+	if !l.Target.IsNil() {
+		m["Target"] = l.Target
+	}
+	if len(l.Selector) > 0 {
+		m["Selector"] = l.Selector
+	}
+	if len(l.Path) > 0 {
+		m["Path"] = l.Path
+	}
+	if l.Off > 0 {
+		m["Off"] = l.Off
+	}
+	if l.Len > 0 {
+		m["Len"] = l.Len
+	}
+	extra := l.Extra.MarshalMap()
+	if len(extra) > 0 {
+		m["Extra"] = extra
+	}
+	l.cleanupProps()
+	if len(l.Props) > 0 {
+		m["Props"] = l.Props
+	}
+	return m
+}
+
+func (l *Link) UnmarshalCBOR(t map[string]interface{}) {
+	var e interface{}
+	var ok bool
+	if e, ok = t["Target"]; ok {
+		h := e.(hash.Hash)
+		l.Target = &h
+	}
+	if e, ok = t["Selector"]; ok {
+		l.Selector = Selector(e.(string))
+	}
+	if e, ok = t["Path"]; ok {
+		l.Path = toPath(e.([]interface{}))
+	}
+	if e, ok = t["Off"]; ok {
+		l.Off = toInt64(e)
+	}
+	if e, ok = t["Len"]; ok {
+		l.Len = toInt64(e)
+	} else {
+		l.Len = -1
+	}
+	if e, ok = t["Extra"]; ok {
+		l.Extra.UnmarshalMap(e.(map[string]interface{}))
+	}
+	if e, ok = t["Props"]; ok {
+		l.Props = e.(map[string]interface{})
+	}
 }
 
 // MarshalText implements custom marshaling using the string representation.
@@ -316,6 +388,10 @@ func (l *Link) AsBlob() (*BlobLink, error) {
 	return NewBlobLink(l)
 }
 
+func (l Link) cleanupProps() {
+	delete(l.Props, "/")
+}
+
 // FromString parses the given string and converts it to a Link.
 // See Link.String()
 func FromString(s string) (*Link, error) {
@@ -348,4 +424,42 @@ func AsLink(val interface{}) *Link {
 		return &l
 	}
 	return nil
+}
+
+// Converts the given value to an int64 if it is any of the possible Go integer
+// types. Returns 0 otherwise.
+func toInt64(v interface{}) int64 {
+	switch t := v.(type) {
+	// signed
+	case int:
+		return int64(t)
+	case int64:
+		return t
+	case int32:
+		return int64(t)
+	case int16:
+		return int64(t)
+	case int8:
+		return int64(t)
+	// unsigned
+	case uint:
+		return int64(t)
+	case uint64:
+		return int64(t)
+	case uint32:
+		return int64(t)
+	case uint16:
+		return int64(t)
+	case uint8:
+		return int64(t)
+	}
+	return 0
+}
+
+func toPath(p []interface{}) structured.Path {
+	s := make([]string, len(p))
+	for idx, val := range p {
+		s[idx] = val.(string)
+	}
+	return s
 }

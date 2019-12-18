@@ -10,14 +10,10 @@ func ConvertLinks(target interface{}) (interface{}, error) {
 		case map[string]interface{}:
 			lo, found := t["/"]
 			if found {
-				if ls, ok := lo.(string); ok {
-					var l *Link
-					l, err = FromString(ls)
+				if _, ok := lo.(string); ok {
+					l := &Link{}
+					err = l.UnmarshalMap(t)
 					if err == nil {
-						delete(t, "/")
-						if len(t) > 0 {
-							l.Props = t
-						}
 						return true, l, nil
 					} else {
 						return false, nil, err

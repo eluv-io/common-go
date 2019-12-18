@@ -22,7 +22,7 @@ func NewMarshaler() *Marshaler {
 			rootElement:             "root",
 			indent:                  2,
 			defaultArrayElementName: "el",
-			keyReplacements:         [][2]string{{"/", "__link__"}},
+			keyReplacements:         [][2]string{{"/", "__link__"}, {".", "__link_extra__"}},
 		},
 	}
 }
