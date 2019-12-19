@@ -10,7 +10,7 @@ import (
 	"github.com/qluvio/content-fabric/log"
 
 	"github.com/mr-tron/base58/base58"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 )
 
 // Code is the type of an ID

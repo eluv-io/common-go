@@ -1,12 +1,12 @@
 package token
 
 import (
+	"crypto/rand"
+	"fmt"
+	mrand "math/rand"
+
 	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/log"
-	"fmt"
-
-	"crypto/rand"
-	mrand "math/rand"
 
 	"github.com/mr-tron/base58/base58"
 )
@@ -28,7 +28,11 @@ func (c Code) FromString(s string) (Token, error) {
 		}
 		return nil, errors.E("parse Token", err, "expected_type", n)
 	}
-	return id, id.AssertCode(c)
+	err = id.AssertCode(c)
+	if err != nil {
+		return nil, err
+	}
+	return id, nil
 }
 
 // lint off

@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/qluvio/content-fabric/util/jsonutil"
 )
 
 func TestFilter_slashToDot(t *testing.T) {
@@ -68,6 +70,107 @@ func TestFilter_slashToDot2(t *testing.T) {
 		t.Run(tt.query, func(t *testing.T) {
 			r := slashToDot2(tt.query)
 			require.Equal(t, tt.exp, r)
+		})
+	}
+}
+
+func TestFilter_Apply(t *testing.T) {
+	tests := []struct {
+		query string
+		json  interface{}
+		exp   string
+	}{
+		{
+			query: "/",
+			json:  parse(testJson),
+			exp:   compact(testJson),
+		},
+		{
+			query: "/expensive",
+			json:  parse(testJson),
+			exp:   `10`,
+		},
+		{
+			query: "$.expensive",
+			json:  parse(testJson),
+			exp:   `10`,
+		},
+		{
+			query: "/store/bicycle",
+			json:  parse(testJson),
+			exp:   `{"color":"red","price":19.95}`,
+		},
+		{
+			query: "$.store.bicycle",
+			json:  parse(testJson),
+			exp:   `{"color":"red","price":19.95}`,
+		},
+		{
+			query: "/store/books[0]",
+			json:  parse(testJson),
+			exp:   `{"author":"Nigel Rees","category":"reference","price":8.95,"title":"Sayings of the Century"}`,
+		},
+		{
+			query: "/store/books/3/price",
+			json:  parse(testJson),
+			exp:   `22.99`,
+		},
+		{
+			query: "/store/books[3]/price",
+			json:  parse(testJson),
+			exp:   `22.99`,
+		},
+		{
+			query: "/store/books[0:2]/price",
+			json:  parse(testJson),
+			exp:   `[8.95,12.99]`,
+		},
+		{
+			query: `/store/books[?(@.category=="reference")]/title`,
+			json:  parse(testJson),
+			exp:   `["Sayings of the Century"]`,
+		},
+		{
+			query: `/store/books[?(@.price > 10)]/title`,
+			json:  parseFloat64(testJson),
+			exp:   `["Sword of Honour","The Lord of the Rings"]`,
+		},
+		{
+			query: `/store/books/*/title`,
+			json:  parse(testJson),
+			exp:   `["Sayings of the Century","Sword of Honour","Moby Dick","The Lord of the Rings"]`,
+		},
+		{
+			query: `/store//title`,
+			json:  parse(testJson),
+			exp:   `["Sayings of the Century","Sword of Honour","Moby Dick","The Lord of the Rings"]`,
+		},
+		// this test does not work reliably because the used jsonpath lib returns items in arbitrary oder...
+		//{
+		//	query: `//price`,
+		//	json:  parse(testJson),
+		//	exp: [][3]string{
+		//		{"/", "[]", "array"},
+		//		{"/0", "8.95", "number"},
+		//		{"/1", "12.99", "number"},
+		//		{"/2", "8.99", "number"},
+		//		{"/3", "22.99", "number"},
+		//		{"/4", "19.95", "number"},
+		//	},
+		//},
+	}
+
+	for idx, test := range tests {
+		t.Run(fmt.Sprintf("%.2d%s", idx, test.query), func(t *testing.T) {
+			f, err := NewFilter(test.query)
+			require.NoError(t, err)
+			res, err := f.Apply(test.json)
+			require.NoError(t, err)
+
+			fmt.Println("query:", test.query)
+			fmt.Println(jsonutil.MarshalString(res))
+
+			assert.Equal(t, test.exp, jsonutil.MarshalCompactString(res), "query [%s] native [%s]", test.query, f.Query())
 		})
 	}
 }
