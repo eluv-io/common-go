@@ -3,6 +3,8 @@ package structured
 import (
 	"encoding/json"
 	"strings"
+
+	"github.com/qluvio/content-fabric/util/jsonutil"
 )
 
 type jm = map[string]interface{}
@@ -56,6 +58,10 @@ func parse(jsn string) interface{} {
 		panic(err)
 	}
 	return unmarshalled
+}
+
+func compact(jsn string) string {
+	return jsonutil.MarshalCompactString(jsonutil.UnmarshalStringToAny(jsn))
 }
 
 func parseFloat64(jsn string) interface{} {

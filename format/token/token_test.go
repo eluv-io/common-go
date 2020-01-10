@@ -3,12 +3,12 @@ package token_test
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"testing"
 
 	"github.com/qluvio/content-fabric/format/token"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var tid = token.Token(append([]byte{1}, []byte{0, 1, 2, 3, 4, 5, 6}...))
@@ -62,6 +62,27 @@ func TestInvalidStringConversions(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.tok, func(t *testing.T) {
 			tok, err := token.FromString(test.tok)
+			assert.Error(t, err)
+			assert.Nil(t, tok)
+		})
+	}
+}
+
+func TestInvalidStringConversions2(t *testing.T) {
+	tests := []struct {
+		tok string
+	}{
+		{tok: ""},
+		{tok: "blub"},
+		{tok: "qwt_"},
+		{tok: "qwt_00001111"},
+		{tok: "qwt "},
+		{tok: "tqw_1W7LcTy70"},
+		{tok: token.Generate(token.QPartWrite).String()},
+	}
+	for _, test := range tests {
+		t.Run(test.tok, func(t *testing.T) {
+			tok, err := token.QWrite.FromString(test.tok)
 			assert.Error(t, err)
 			assert.Nil(t, tok)
 		})
