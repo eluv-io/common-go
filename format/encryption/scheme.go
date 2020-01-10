@@ -5,7 +5,7 @@ import (
 	"github.com/qluvio/content-fabric/format/hash"
 )
 
-// Scheme is the encryption scheme of a resouce.
+// Scheme is the encryption scheme of a resource.
 type Scheme uint
 
 const (
