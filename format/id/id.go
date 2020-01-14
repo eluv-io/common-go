@@ -170,6 +170,10 @@ func (id ID) Is(s string) bool {
 	return bytes.Equal(id, sID)
 }
 
+func (id ID) Equal(other ID) bool {
+	return bytes.Equal(id, other)
+}
+
 // Generate creates a random ID for the given ID type.
 func Generate(code Code) ID {
 	return ID(append([]byte{byte(code)}, uuid.NewV4().Bytes()...))
