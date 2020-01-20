@@ -17,7 +17,7 @@ const (
 var schemeToName = map[Scheme]string{
 	UNKNOWN:   "",
 	None:      "none",
-	ClientGen: "cgck",
+	ClientGen: "cgck", //NOTE: 'cgck' scheme means encryption keys used with clear block of 1000000 bytes
 }
 var nameToScheme = map[string]Scheme{}
 
