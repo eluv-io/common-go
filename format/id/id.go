@@ -124,6 +124,9 @@ func (id ID) prefix() string {
 }
 
 func (id ID) code() Code {
+	if id == nil {
+		return UNKNOWN
+	}
 	return Code(id[0])
 }
 

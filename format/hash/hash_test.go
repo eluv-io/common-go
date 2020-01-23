@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/qluvio/content-fabric/errors"
+
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/id"
 )
@@ -54,6 +56,13 @@ func TestHashCtorError(t *testing.T) {
 		digest,
 		1234,
 		idx)
+	require.Error(t, err)
+
+	_, err = hash.New(
+		hash.Type{Code: hash.Q, Format: hash.Unencrypted},
+		digest,
+		1234,
+		nil)
 	require.Error(t, err)
 
 	_, err = hash.New(
@@ -253,4 +262,40 @@ func TestEqual(t *testing.T) {
 	var nilHash *hash.Hash
 	require.False(t, nilHash.Equal(hsh))
 	require.True(t, nilHash.Equal(nil))
+}
+
+func TestAssertEqual(t *testing.T) {
+	require.NoError(t, hsh.AssertEqual(hsh))
+
+	other, err := hash.FromString(hsh.String())
+	require.NoError(t, err)
+	require.NoError(t, hsh.AssertEqual(other))
+	require.NoError(t, other.AssertEqual(hsh))
+
+	assert := func(other *hash.Hash, err error) {
+		ae := hsh.AssertEqual(other)
+		fmt.Println(ae)
+		require.True(t, errors.Match(err, ae), ae)
+	}
+
+	other, err = hash.New(hsh.Type, hsh.Digest, hsh.Size+10, hsh.ID)
+	require.NoError(t, err)
+	assert(other, errors.E().With("reason", "size differs"))
+
+	other, err = hash.New(hash.Type{Code: hash.QPart, Format: hash.AES128AFGH}, hsh.Digest, hsh.Size, nil)
+	require.NoError(t, err)
+	assert(other, errors.E().With("reason", "type differs"))
+
+	dig := make([]byte, sha256.Size)
+	other, err = hash.New(hsh.Type, dig, hsh.Size, hsh.ID)
+	require.NoError(t, err)
+	assert(other, errors.E().With("reason", "digest differs"))
+
+	id2, _ := id.FromString("iq__1Bhh3pU9gLXZiNDL6PEZuEP5ri")
+	other, _ = hash.New(hsh.Type, hsh.Digest, hsh.Size, id2)
+	assert(other, errors.E().With("reason", "ID differs"))
+
+	var nilHash *hash.Hash
+	require.Error(t, nilHash.AssertEqual(hsh))
+	require.NoError(t, nilHash.AssertEqual(nil))
 }
