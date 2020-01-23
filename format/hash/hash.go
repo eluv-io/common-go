@@ -1,8 +1,10 @@
 package hash
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"hash"
 	"io"
@@ -331,6 +333,32 @@ func (h *Hash) Equal(h2 *Hash) bool {
 		return false
 	}
 	return h.String() == h2.String()
+}
+
+// AssertEqual returns nil if this hash is equal to the provided hash, an error
+// with detailed reason otherwise.
+func (h *Hash) AssertEqual(h2 *Hash) error {
+	e := errors.Template("hash.assert-equal", errors.K.Invalid, "expected", h, "actual", h2)
+	if h == h2 {
+		return nil
+	} else if h == nil || h2 == nil {
+		return e()
+	}
+	if h.Type != h2.Type {
+		return e("reason", "type differs")
+	}
+	if h.Size != h2.Size {
+		return e("reason", "size differs", "expected_size", h.Size, "actual_size", h2.Size)
+	}
+	if h.ID.String() != h2.ID.String() {
+		return e("reason", "ID differs", "expected_id", h.ID, "actual_id", h2.ID)
+	}
+	if !bytes.Equal(h.Digest, h2.Digest) {
+		return e("reason", "digest differs",
+			"expected_digest", hex.EncodeToString(h.Digest),
+			"actual_digest", hex.EncodeToString(h2.Digest))
+	}
+	return nil
 }
 
 ///////////////////////////////////////////////////////////////////////////////
