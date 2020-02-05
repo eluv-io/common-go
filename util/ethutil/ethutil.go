@@ -3,8 +3,6 @@ package ethutil
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"github.com/qluvio/content-fabric/format/keys"
-	"github.com/qluvio/content-fabric/format/types"
 	"encoding/hex"
 	"io/ioutil"
 	"os"
@@ -12,6 +10,8 @@ import (
 
 	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/id"
+	"github.com/qluvio/content-fabric/format/keys"
+	"github.com/qluvio/content-fabric/format/types"
 
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
