@@ -361,6 +361,13 @@ func (h *Hash) AssertEqual(h2 *Hash) error {
 	return nil
 }
 
+func (h *Hash) Bytes() []byte {
+	if h.IsNil() {
+		return nil
+	}
+	return h.Digest
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 // Digest encapsulates a message digest function which produces a specific type

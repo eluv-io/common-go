@@ -136,6 +136,9 @@ func (id ID) MarshalText() ([]byte, error) {
 }
 
 func (id ID) Bytes() []byte {
+	if id.IsNil() {
+		return nil
+	}
 	return id[1:]
 }
 
