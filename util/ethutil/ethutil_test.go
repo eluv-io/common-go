@@ -1,8 +1,8 @@
 package ethutil
 
 import (
-	"github.com/qluvio/content-fabric/format/id"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/qluvio/content-fabric/format/id"
 	"github.com/stretchr/testify/require"
 	"math/big"
 	"math/rand"

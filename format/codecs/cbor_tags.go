@@ -7,6 +7,7 @@ import (
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/id"
 	"github.com/qluvio/content-fabric/format/link"
+	"github.com/qluvio/content-fabric/format/utc"
 )
 
 // HashStringConverter marshals/unmarshals a hash.Hash object to/from a string.
@@ -100,6 +101,35 @@ func (x *LinkStringConverter) UpdateExt(dest interface{}, v interface{}) {
 	default:
 		panic(errors.E("LinkStringConverter.UpdateExt", errors.K.Invalid,
 			"expected_types", []string{"string"},
+			"actual_type", reflect.ValueOf(t).String()))
+	}
+}
+
+// ===== UTC Converter =========================================================
+
+// UTCConverter marshals/unmarshals a utc.UTC object to/from binary format of
+// time.Time.
+type UTCConverter struct{}
+
+func (x *UTCConverter) ConvertExt(v interface{}) interface{} {
+	b, err := v.(*utc.UTC).MarshalBinary()
+	if err != nil {
+		panic(errors.E("UTCConverter.ConvertExt", err))
+	}
+	return b
+}
+
+func (x *UTCConverter) UpdateExt(dest interface{}, v interface{}) {
+	dst := dest.(*utc.UTC)
+	switch t := dereference(v).Interface().(type) {
+	case []byte:
+		err := dst.UnmarshalBinary(t)
+		if err != nil {
+			panic(errors.E("UTCConverter.UpdateExt", err))
+		}
+	default:
+		panic(errors.E("UTCConverter.UpdateExt", errors.K.Invalid,
+			"expected_types", []string{"[]byte"},
 			"actual_type", reflect.ValueOf(t).String()))
 	}
 }

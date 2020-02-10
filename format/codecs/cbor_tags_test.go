@@ -5,11 +5,13 @@ import (
 	"encoding/hex"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/qluvio/content-fabric/format"
 	"github.com/qluvio/content-fabric/format/codecs"
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/link"
+	"github.com/qluvio/content-fabric/format/utc"
 	"github.com/qluvio/content-fabric/util/maputil"
 
 	"github.com/stretchr/testify/require"
@@ -55,6 +57,13 @@ func TestLinkTag(t *testing.T) {
 	})
 }
 
+func TestUTCTag(t *testing.T) {
+	val := utc.Now()
+	runTests(t, val)
+	runTests(t, utc.New(time.Date(9999, 12, 12, 23, 59, 59, 999999999, time.UTC)))
+	runTests(t, utc.New(time.Date(0, 1, 1, 0, 0, 0, 0, time.UTC)))
+}
+
 func newLink(t *testing.T, linkString string) *link.Link {
 	val, err := link.FromString(linkString)
 	require.NoError(t, err)
@@ -64,7 +73,7 @@ func newLink(t *testing.T, linkString string) *link.Link {
 func runTests(t *testing.T, val interface{}) {
 	{ // simple
 		res := encodeDecode(val, t)
-		require.EqualValues(t, val, res)
+		require.EqualValues(t, val, res, "expected %s actual %s", val, res)
 	}
 
 	{ // wrapped

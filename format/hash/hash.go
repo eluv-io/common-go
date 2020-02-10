@@ -361,7 +361,7 @@ func (h *Hash) AssertEqual(h2 *Hash) error {
 	return nil
 }
 
-func (h *Hash) Bytes() []byte {
+func (h *Hash) DigestBytes() []byte {
 	if h.IsNil() {
 		return nil
 	}
