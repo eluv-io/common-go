@@ -90,7 +90,7 @@ func (id KID) String() string {
 
 // AssertCode checks whether the ID's Code equals the provided Code
 func (id KID) AssertCode(c KeyCode) error {
-	if id.Code() != c {
+	if len(id) < codeLen || id.Code() != c {
 		return errors.E("ID Code check", errors.K.Invalid,
 			"expected", keyCodeToPrefix[c],
 			"actual", id.prefix())
