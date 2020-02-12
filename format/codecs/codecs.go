@@ -11,6 +11,7 @@ import (
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/id"
 	"github.com/qluvio/content-fabric/format/link"
+	"github.com/qluvio/content-fabric/format/utc"
 
 	mc "github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-multicodec/base"
@@ -219,8 +220,11 @@ type cborConverter struct {
 	c cd.InterfaceExt
 }
 
+// NOTE: do not remove or re-order the converters, since their position
+//       determines the CBOR tag ID! Only append to the end!
 var cborConverters = []cborConverter{
 	{reflect.TypeOf((*id.ID)(nil)), &IDConverter{}},
 	{reflect.TypeOf((*hash.Hash)(nil)), &HashConverter{}},
 	{reflect.TypeOf((*link.Link)(nil)), &LinkConverter{}},
+	{reflect.TypeOf((*utc.UTC)(nil)), &UTCConverter{}},
 }

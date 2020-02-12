@@ -1,8 +1,8 @@
 package bytesize
 
 import (
-	"github.com/qluvio/content-fabric/errors"
 	"fmt"
+	"github.com/qluvio/content-fabric/errors"
 	"strconv"
 	"strings"
 )

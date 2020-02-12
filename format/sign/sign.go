@@ -2,9 +2,9 @@ package sign
 
 import (
 	"bytes"
+	"github.com/mr-tron/base58/base58"
 	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/log"
-	"github.com/mr-tron/base58/base58"
 )
 
 // SigCode is the type of an Sig
