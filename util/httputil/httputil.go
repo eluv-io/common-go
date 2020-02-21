@@ -171,3 +171,19 @@ func NormalizeURL(rawURL string, defaultScheme string, defaultPort string) (stri
 	}
 	return strings.TrimSuffix(u.String(), "/"), nil
 }
+
+func SetRedirectedQuery(u *url.URL, v bool) {
+	q := u.Query()
+	s := "false"
+	if v {
+		s = "true"
+	}
+	q.Set("redirected", s)
+	u.RawQuery = q.Encode()
+}
+
+func RemoveRedirectedQuery(u *url.URL) {
+	q := u.Query()
+	q.Del("redirected")
+	u.RawQuery = q.Encode()
+}
