@@ -98,14 +98,14 @@ func TestResolveErrors(t *testing.T) {
 			source: parse(testJson),
 			contains: jm{
 				"kind": errors.K.NotExist,
-				"path": "/does-not-exist"},
+				"path": ParsePath("/does-not-exist")},
 		},
 		{
 			path:   "/expensive/does-not-exist",
 			source: parse(testJson),
 			contains: jm{
 				"kind":   errors.K.Invalid,
-				"path":   "/expensive",
+				"path":   ParsePath("/expensive"),
 				"reason": "element is leaf",
 			},
 		},
@@ -114,8 +114,8 @@ func TestResolveErrors(t *testing.T) {
 			source: parse(testJson),
 			contains: jm{
 				"kind":      errors.K.NotExist,
-				"path":      "/store/does-not-exist",
-				"full_path": "/store/does-not-exist/a/b/c",
+				"path":      ParsePath("/store/does-not-exist"),
+				"full_path": ParsePath("/store/does-not-exist/a/b/c"),
 			},
 		},
 		{
@@ -123,7 +123,7 @@ func TestResolveErrors(t *testing.T) {
 			source: parse(testJson),
 			contains: jm{
 				"kind":   errors.K.Invalid,
-				"path":   "/store/books/dummy",
+				"path":   ParsePath("/store/books/dummy"),
 				"reason": "invalid array index",
 			},
 		},
@@ -132,7 +132,7 @@ func TestResolveErrors(t *testing.T) {
 			source: parse(testJson),
 			contains: jm{
 				"kind":   errors.K.NotExist,
-				"path":   "/store/books/77",
+				"path":   ParsePath("/store/books/77"),
 				"reason": "array index out of range",
 			},
 		},
@@ -141,7 +141,7 @@ func TestResolveErrors(t *testing.T) {
 			source: parse(testJson),
 			contains: jm{
 				"kind":   errors.K.NotExist,
-				"path":   "/store/books/-1",
+				"path":   ParsePath("/store/books/-1"),
 				"reason": "array index out of range",
 			},
 		},
