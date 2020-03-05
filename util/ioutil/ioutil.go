@@ -96,6 +96,10 @@ func ReadAtFull(r io.ReaderAt, off int64, buf []byte) (n int, err error) {
 // Consume discards the rest of the reader and closes it.
 // http.Client requires each response body to be fully read before closing.
 func Consume(r io.ReadCloser) error {
+	if r == nil {
+		return nil
+	}
+
 	_, err := io.Copy(ioutil.Discard, r)
 	if err == nil {
 		err = r.Close()
