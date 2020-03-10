@@ -30,6 +30,17 @@ func init() {
 	hsh = &hash.Hash{Type: htype, Digest: digest, Size: size, ID: idx}
 }
 
+func TestEmptyHash(t *testing.T) {
+	h := &hash.Hash{
+		Type: hash.Type{
+			Code: hash.Q,
+		},
+	}
+	require.False(t, h.IsNil())
+	// PENDING(GIL): shouldn't we have a IsValid() function ?
+	require.Equal(t, "", h.String())
+}
+
 func TestHashCtorError(t *testing.T) {
 	idx := id.NewID(id.Q, []byte{1, 2, 3, 4})
 	digest := make([]byte, sha256.Size)

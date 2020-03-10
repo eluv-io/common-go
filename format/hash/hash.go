@@ -215,7 +215,7 @@ func (h *Hash) String() string {
 		return ""
 	}
 
-	if h.s == "" {
+	if h.s == "" && len(h.Digest) > 0 {
 		b := make([]byte, len(h.Digest))
 		copy(b, h.Digest)
 
@@ -224,7 +224,7 @@ func (h *Hash) String() string {
 			n := binary.PutUvarint(s, uint64(h.Size))
 			b = append(b, s[:n]...)
 
-			if h.Type.Code == Q {
+			if h.Type.Code == Q && h.ID.IsValid() {
 				b = append(b, h.ID.Bytes()...)
 			}
 		}
