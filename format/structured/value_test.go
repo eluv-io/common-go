@@ -185,6 +185,54 @@ func TestValueSD(t *testing.T) {
 	require.Equal(t, 23, structured.Wrap(23).Int())
 }
 
+func TestGet(t *testing.T) {
+	val := structured.Wrap(jsonutil.UnmarshalStringToAny(`
+{
+  "glossary": {
+    "title": "example glossary",
+    "div": {
+      "title": "S",
+      "list": {
+        "entry": {
+          "id": "SGML",
+          "sort_as": "SGML",
+          "term": "Standard Generalized Markup Language",
+          "acronym": "SGML",
+          "abbrev": "ISO 8879:1986",
+          "def": {
+            "para": "A meta-markup language, used to create markup languages such as DocBook.",
+            "see_also": [
+              "GML",
+              "XML"
+            ]
+          },
+          "see": "markup"
+        }
+      }
+    }
+  }
+}`))
+	tests := []struct {
+		path string
+		want interface{}
+	}{
+		{
+			path: "/glossary/title",
+			want: "example glossary",
+		},
+		{
+			path: "/glossary/div/list/entry/acronym",
+			want: "SGML",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.path, func(t *testing.T) {
+			require.Equal(t, test.want, val.GetP(test.path).Value())
+			require.Equal(t, test.want, val.Get(structured.ParsePath(test.path)...).Value())
+		})
+	}
+}
+
 func TestValue_Decode(t *testing.T) {
 	type jm = map[string]interface{}
 	type TStruct struct {

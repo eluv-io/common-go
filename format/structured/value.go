@@ -74,8 +74,16 @@ func (v *Value) Delete(path ...string) (deleted bool) {
 	return deleted
 }
 
+// Get returns the value at the given path, specified as string slice, e.g.
+// 	Get("path", "to", "value")
 func (v *Value) Get(path ...string) *Value {
 	return NewValue(Resolve(path, v.Data))
+}
+
+// GetP returns the value at the given path, specified as a single string, e.g.
+// 	GetP("/path/to/value")
+func (v *Value) GetP(path string) *Value {
+	return NewValue(Resolve(ParsePath(path), v.Data))
 }
 
 func (v *Value) Query(query string) *Value {
