@@ -74,6 +74,13 @@ func NewWithEvict(size int, onEvicted func(key interface{}, value interface{})) 
 	return c
 }
 
+// WithMode set's the cache's construction mode and returns itself for call
+// chaining.
+func (c *Cache) WithMode(mode constructionMode) *Cache {
+	c.Mode = mode
+	return c
+}
+
 // Purge is used to completely clear the cache
 func (c *Cache) Purge() {
 	if c == nil {
