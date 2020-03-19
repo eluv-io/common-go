@@ -98,6 +98,10 @@ func (u UTC) String() string {
 	return string(s)
 }
 
+func (u UTC) UnixMilli() int64 {
+	return u.UnixNano() / 1000000
+}
+
 func (u UTC) Add(d time.Duration) UTC {
 	return New(u.Time.Add(d))
 }
