@@ -52,9 +52,11 @@ func (t *trackedCloser) IsClosed() bool {
 
 // closeCloser lets us catch close errors when deferred
 func CloseCloser(c io.Closer, l *log.Log) {
-	err := c.Close()
-	if err != nil {
-		l.Error("close error", "err", err)
+	if c != nil {
+		err := c.Close()
+		if err != nil && l != nil {
+			l.Error("close error", "err", err)
+		}
 	}
 }
 

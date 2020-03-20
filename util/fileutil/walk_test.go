@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/qluvio/content-fabric/test"
 	"github.com/qluvio/content-fabric/util/fileutil"
+	"github.com/qluvio/content-fabric/util/testutil"
 
 	"github.com/stretchr/testify/require"
 )
@@ -27,7 +27,7 @@ import (
 //  + t2
 //     + -- f --> folder
 func testFolder(t *testing.T, dirPrefix string) (string, func()) {
-	dir, cleanup := test.TestDir(dirPrefix)
+	dir, cleanup := testutil.TestDir(dirPrefix)
 
 	t1 := filepath.Join(dir, "t1")
 	t2 := filepath.Join(dir, "t2")
