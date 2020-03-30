@@ -1,6 +1,7 @@
 package numberutil_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/qluvio/content-fabric/util/numberutil"
@@ -40,4 +41,30 @@ func TestAsInt64(t *testing.T) {
 	assertAsInt64(t, 13, 12.5)
 	assertAsInt64(t, 12, float32(12.3))
 	assertAsInt64(t, 13, float32(12.5))
+}
+
+func TestLessInt(t *testing.T) {
+	tests := []struct {
+		ascending bool
+		i1        int
+		i2        int
+		tie       func() bool
+		wantLess  bool
+	}{
+		{true, 0, 1, nil, true},
+		{true, 0, 0, nil, true},
+		{true, 1, 0, nil, false},
+		{false, 0, 1, nil, false},
+		{false, 0, 0, nil, false},
+		{false, 1, 0, nil, true},
+		{true, 0, 0, func() bool { return true }, true},
+		{true, 0, 0, func() bool { return false }, false},
+		{false, 0, 0, func() bool { return true }, true},
+		{false, 0, 0, func() bool { return false }, false},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("ascending=%t,i1=%d,i2=%d,tie=%t", tt.ascending, tt.i1, tt.i2, tt.tie != nil), func(t *testing.T) {
+			require.Equal(t, tt.wantLess, numberutil.LessInt(tt.ascending, tt.i1, tt.i2, tt.tie))
+		})
+	}
 }

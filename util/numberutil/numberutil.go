@@ -83,3 +83,22 @@ func MaxInt(a, b int) int {
 	}
 	return b
 }
+
+// LessInt compares two integer values and returns
+//	* true  if i1 < i2
+//	* false if i1 > i2
+// 	* true or the result of the tie function if i1 == i2
+// If ascending is false, the sense of the comparison is inverted, effectively
+// returning the result for "more".
+func LessInt(ascending bool, i1 int, i2 int, tie ...func() bool) (less bool) {
+	if i1 < i2 {
+		return ascending
+	}
+	if i1 > i2 {
+		return !ascending
+	}
+	if len(tie) == 0 || tie[0] == nil {
+		return ascending
+	}
+	return tie[0]()
+}
