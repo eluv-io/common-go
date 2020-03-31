@@ -8,6 +8,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/accounts"
+
 	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/id"
 	"github.com/qluvio/content-fabric/format/keys"
@@ -138,7 +140,7 @@ func DecryptKeyFileJSON(keyfile string, password string) (*keystore.Key, error) 
 	return keystore.DecryptKey(keyBytes, password)
 }
 
-func RecryptKeyFile(keyfile string, password string, scryptN int) error {
+func RecryptKeyFile(keyfile string, password string, newpassword string, scryptN int) error {
 
 	fileInfo, err := os.Stat(keyfile)
 	if err != nil {
@@ -155,6 +157,11 @@ func RecryptKeyFile(keyfile string, password string, scryptN int) error {
 		return err
 	}
 
+	// if newpassword is provided, encrypt keyfile with it.
+	if newpassword != "" {
+		password = newpassword
+	}
+
 	newKeyBytes, err := keystore.EncryptKey(privKey, password, scryptN, 1)
 	if err != nil {
 		return err
@@ -166,6 +173,15 @@ func RecryptKeyFile(keyfile string, password string, scryptN int) error {
 	}
 
 	return nil
+}
+
+func NewKeyFile(keystoreDir, password string) (common.Address, accounts.URL, error) {
+	ks := keystore.NewKeyStore(keystoreDir, keystore.StandardScryptN, keystore.StandardScryptP)
+	acct, err := ks.NewAccount(password)
+	if err != nil {
+		return common.Address{}, accounts.URL{}, err
+	}
+	return acct.Address, acct.URL, nil
 }
 
 // ToNodePublicKey returns the public key of the given key in keys.KID format
