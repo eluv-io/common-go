@@ -79,6 +79,11 @@ func (b *Builder) AutoUpdate(tag string) *Builder {
 	return b
 }
 
+func (b *Builder) ResolutionError(err error) *Builder {
+	b.l.Extra.ResolutionError = err
+	return b
+}
+
 func (b *Builder) Build() (*Link, error) {
 	err := b.l.Validate(true)
 	if err != nil {

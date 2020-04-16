@@ -22,6 +22,9 @@ type Extra struct {
 	// defined. This is a temporary attribute used in link resolution, but is
 	// also marshalled when set.
 	Container string `json:"container,omitempty"`
+	// An error if this link could not be resolved during link resolution. This
+	// a temporary attribute, but is also marshalled when set.
+	ResolutionError error `json:"resolution_error,omitempty"`
 }
 
 func (e *Extra) MarshalMap() map[string]interface{} {
@@ -35,11 +38,14 @@ func (e *Extra) MarshalMap() map[string]interface{} {
 	if e.Container != "" {
 		m["container"] = e.Container
 	}
+	if e.ResolutionError != nil {
+		m["resolution_error"] = e.ResolutionError
+	}
 	return m
 }
 
 func (e *Extra) IsEmpty() bool {
-	return e == nil || e.Container == "" && e.AutoUpdate == nil
+	return e == nil || e.Container == "" && e.AutoUpdate == nil && e.ResolutionError == nil
 }
 
 func (e *Extra) UnmarshalMap(m map[string]interface{}) {

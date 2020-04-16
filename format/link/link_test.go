@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/codecs"
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/link"
@@ -286,7 +287,7 @@ func TestAutoUpdate(t *testing.T) {
 	}
 }
 
-func TestContainer(t *testing.T) {
+func TestExtra(t *testing.T) {
 	qhash1, err := hash.FromString(QHASH1)
 	require.NoError(t, err)
 
@@ -318,6 +319,12 @@ func TestContainer(t *testing.T) {
 			wantJson: `{"/":"/qfab/QHASH1/meta/a",".":{"auto_update":{},"container":"QHASH2"},"k1":"v1","k2":"v2"}`,
 			link:     builder().AutoUpdate("").Container(QHASH2).AddProp("k1", "v1").AddProp("k2", "v2").MustBuild(),
 		},
+		{ // resolution error & regular link props are retained
+			wantJson: `{"/":"/qfab/QHASH1/meta/a",".":{"auto_update":{},"container":"QHASH2","resolution_error":{"op":"resolve","kind":"item does not exist"}},"k1":"v1","k2":"v2"}`,
+			link: builder().AutoUpdate("").Container(QHASH2).
+				ResolutionError(errors.E("resolve", errors.K.NotExist).ClearStacktrace()).
+				AddProp("k1", "v1").AddProp("k2", "v2").MustBuild(),
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.wantJson, func(t *testing.T) {
@@ -325,9 +332,10 @@ func TestContainer(t *testing.T) {
 				jsonutil.UnmarshalStringToAny(jsonutil.MarshalString(test.link)),
 				jsonutil.UnmarshalStringToAny(replaceHashes(test.wantJson)))
 
-			// ensure container is not stored
+			// ensure container and resolution error are not stored
 			newLnk := cbor(t, test.link).(link.Link)
 			require.Empty(t, newLnk.Extra.Container)
+			require.Empty(t, newLnk.Extra.ResolutionError)
 		})
 	}
 }
