@@ -45,6 +45,7 @@ const (
 	Network
 	KMS
 	CachedResultSet
+	Tenant
 )
 
 const codeLen = 1
@@ -65,6 +66,7 @@ var prefixToCode = map[string]Code{
 	"inet": Network,
 	"ikms": KMS,
 	"icrs": CachedResultSet,
+	"iten": Tenant,
 }
 var codeToName = map[Code]string{
 	UNKNOWN:         "unknown",
@@ -80,6 +82,7 @@ var codeToName = map[Code]string{
 	Network:         "network",
 	KMS:             "KMS",
 	CachedResultSet: "cached result set",
+	Tenant:          "tenant",
 }
 
 func init() {
