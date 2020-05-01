@@ -110,7 +110,7 @@ func (id ID) String() string {
 
 // AssertCode checks whether the ID's code equals the provided code
 func (id ID) AssertCode(c Code) error {
-	if id == nil || id.code() != c {
+	if id == nil || id.Code() != c {
 		return errors.E("ID code check", errors.K.Invalid,
 			"expected", codeToPrefix[c],
 			"actual", id.prefix())
@@ -119,14 +119,14 @@ func (id ID) AssertCode(c Code) error {
 }
 
 func (id ID) prefix() string {
-	p, found := codeToPrefix[id.code()]
+	p, found := codeToPrefix[id.Code()]
 	if !found {
 		return codeToPrefix[UNKNOWN]
 	}
 	return p
 }
 
-func (id ID) code() Code {
+func (id ID) Code() Code {
 	if id == nil {
 		return UNKNOWN
 	}
