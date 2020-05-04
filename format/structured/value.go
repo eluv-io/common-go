@@ -1,6 +1,8 @@
 package structured
 
 import (
+	"encoding/json"
+
 	"github.com/qluvio/content-fabric/util/codecutil"
 	"github.com/qluvio/content-fabric/util/numberutil"
 )
@@ -28,6 +30,13 @@ func NewValue(val interface{}, err error) *Value {
 		Data: val,
 		err:  err,
 	}
+}
+
+// WrapJson parses the given JSON document and returns the result as Value.
+func WrapJson(jsonDoc string) *Value {
+	val := &Value{}
+	val.err = json.Unmarshal([]byte(jsonDoc), &val.Data)
+	return val
 }
 
 // Value is a wrapper around structured data or the result of a structured data
