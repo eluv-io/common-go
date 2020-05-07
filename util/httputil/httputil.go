@@ -2,9 +2,12 @@ package httputil
 
 import (
 	"bytes"
+	"context"
+	"crypto/x509"
 	"encoding/base64"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -19,7 +22,18 @@ import (
 const customHeaderPrefix = "X-Content-Fabric-"
 const customHeaderMultiCodecPrefix = "X-Content-Fabric-Mc-"
 
-var customHeaderMultiCodec *mux.Multicodec
+var (
+	// codec used for custom headers
+	customHeaderMultiCodec *mux.Multicodec
+	// A regular expression to match the error returned by net/http when the
+	// configured number of redirects is exhausted. This error isn't typed
+	// specifically so we resort to matching on the error string.
+	redirectsErrorRe = regexp.MustCompile(`stopped after \d+ redirects\z`)
+	// A regular expression to match the error returned by net/http when the
+	// scheme specified in the URL is invalid. This error isn't typed
+	// specifically so we resort to matching on the error string.
+	schemeErrorRe = regexp.MustCompile(`unsupported protocol scheme`)
+)
 
 func init() {
 	customHeaderMultiCodec = mux.MuxMulticodec([]mc.Multicodec{
@@ -186,4 +200,52 @@ func RemoveRedirectedQuery(u *url.URL) {
 	q := u.Query()
 	q.Del("redirected")
 	u.RawQuery = q.Encode()
+}
+
+// ShouldRetry returns true if a failed HTTP request should be retried, false
+// otherwise.
+// Adapted from DefaultRetryPolicy in github.com/hashicorp/go-retryablehttp.
+//
+// Params
+//  * ctx: the context used in the request (or nil)
+//  * statusCode: the returned HTTP status if available (if err != nil)
+//  * err:        the error returned by httpClient.Do() or Get() or similar
+func ShouldRetry(ctx context.Context, statusCode int, err error) bool {
+	// do not retry on context.Canceled or context.DeadlineExceeded
+	if ctx != nil && ctx.Err() != nil {
+		return false
+	}
+
+	if err != nil {
+		err = errors.GetRootCause(err)
+		if v, ok := err.(*url.Error); ok {
+			// Don't retry if the error was due to too many redirects.
+			if redirectsErrorRe.MatchString(v.Error()) {
+				return false
+			}
+
+			// Don't retry if the error was due to an invalid protocol scheme.
+			if schemeErrorRe.MatchString(v.Error()) {
+				return false
+			}
+
+			// Don't retry if the error was due to TLS cert verification failure.
+			if _, ok := v.Err.(x509.UnknownAuthorityError); ok {
+				return false
+			}
+		}
+
+		// The error is likely recoverable so retry.
+		return true
+	}
+
+	// Check the response code. We retry on 500-range responses to allow
+	// the server time to recover, as 500's are typically not permanent
+	// errors and may relate to outages on the server side. This will catch
+	// invalid response codes as well, like 0 and 999.
+	if statusCode == 0 || (statusCode >= 500 && statusCode != 501) {
+		return true
+	}
+
+	return false
 }
