@@ -1,12 +1,12 @@
 package ioutil
 
 import (
-	"github.com/qluvio/content-fabric/log"
 	"io"
 	"io/ioutil"
 	"sync"
 
 	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/log"
 )
 
 type ReadSeekCloser interface {

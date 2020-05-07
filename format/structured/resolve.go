@@ -259,7 +259,7 @@ func StringSliceAt(target interface{}, path ...string) []string {
 //    structure by creating any missing maps and map entries, setting the final
 //    path segment's value to an empty map.
 func resolveSub(path Path, target interface{}, create bool) (sub, error) {
-	e := errors.Template("Resolve", "full_path", path)
+	e := errors.Template("resolve", "full_path", path)
 
 	node := dereference(target)
 	root := node
@@ -336,7 +336,7 @@ func resolveSub(path Path, target interface{}, create bool) (sub, error) {
 
 func resolveTransform(path Path, target interface{}, transform TransformerFn) (interface{}, error) {
 	var err error
-	e := errors.Template("Resolve", "full_path", path)
+	e := errors.Template("resolveTransform", "full_path", path)
 	if transform == nil {
 		transform = noopTransformerFn
 	}

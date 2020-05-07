@@ -10,6 +10,9 @@ import (
 // QSpaceID is the type of content space IDs
 type QSpaceID = id.ID
 
+// TenantID is the type of tenant IDs
+type TenantID = id.ID
+
 // AccountID is the type of account IDs
 type AccountID = id.ID
 
