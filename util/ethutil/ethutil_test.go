@@ -52,6 +52,8 @@ func TestAddrToFromID(t *testing.T) {
 	id2 := AddressToID(addr, id.QSpace)
 	require.Equal(t, ispcId, id2)
 
+	addr = IDToAddress(nil)
+	require.Equal(t, common.Address{}, addr)
 }
 
 func TestNullKMDAddress(t *testing.T) {
