@@ -8,13 +8,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/accounts"
-
 	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/id"
 	"github.com/qluvio/content-fabric/format/keys"
 	"github.com/qluvio/content-fabric/format/types"
 
+	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
