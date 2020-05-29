@@ -64,3 +64,16 @@ func TestSplitToLines(t *testing.T) {
 	ss := SplitToLines([]byte(s))
 	require.Equal(t, expected, ss)
 }
+
+func TestStringSlice(t *testing.T) {
+	s1 := []string{"a", "b"}
+	require.Equal(t, s1, StringSlice(s1))
+
+	require.Nil(t, StringSlice(nil))
+
+	s2 := []interface{}{"a", 8, "b"}
+	require.Nil(t, StringSlice(s2))
+
+	s3 := []interface{}{"a", "b"}
+	require.Equal(t, s1, StringSlice(s3))
+}
