@@ -298,6 +298,10 @@ func (h *Hash) UnmarshalText(text []byte) error {
 	if err != nil {
 		return errors.E("unmarshal hash", err)
 	}
+	if parsed == nil {
+		// empty string parses to nil hash... best we can do is ignore it...
+		return nil
+	}
 	*h = *parsed
 	return nil
 }
@@ -310,18 +314,18 @@ func (h *Hash) As(c Code, id ei.ID) (*Hash, error) {
 	} else if _, ok := typeToPrefix[Type{c, h.Type.Format}]; !ok {
 		return nil, errors.E("convert hash", errors.K.Invalid, "reason", "invaid type", "code", c, "format", h.Type.Format)
 	}
-	var new Hash = *h
-	new.Type.Code = c
-	new.s = ""
+	var res Hash = *h
+	res.Type.Code = c
+	res.s = ""
 	if c != Q {
-		new.ID = nil
+		res.ID = nil
 	} else if id != nil && id.AssertCode(ei.Q) == nil {
-		new.ID = id
+		res.ID = id
 	} else {
 		return nil, errors.E("convert hash", errors.K.Invalid, "reason", "invalid id", "id", id)
 	}
-	new.s = new.String()
-	return &new, nil
+	res.s = res.String()
+	return &res, nil
 }
 
 // Equal returns true if this hash is equal to the provided hash, false

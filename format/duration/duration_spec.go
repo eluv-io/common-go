@@ -51,6 +51,51 @@ func (s Spec) Duration() time.Duration {
 	return time.Duration(s)
 }
 
+// Round rounds the duration to a value that produces a sensitive and human
+// readable form that removes insignificant information with theses rules:
+//	* nanos  are capped if d > 1 millisecond: 1.123444ms -> 1.123ms
+//	* micros are capped if d > 1 second:      1.123555s  -> 1.124s
+//	* millis are capped if d > 1 minute:      1m10s444ms -> 1m10s
+func (s Spec) Round() Spec {
+	return s.RoundTo(3)
+}
+
+// RoundTo rounds the duration to a "reasonable" value like Round, but also
+// allows to choose the number of decimals [0-3] that are retained:
+//	* 766.123µs, 2 decimals: 766.12µs
+//	* 1.123444ms, 1 decimal:   1.1ms
+//	* 1.123444s, 0 decimals:   1s
+func (s Spec) RoundTo(decimals int) Spec {
+	if decimals > 3 {
+		decimals = 3
+	}
+	if decimals < 0 {
+		decimals = 0
+	}
+
+	var to time.Duration
+	d := time.Duration(s)
+	switch {
+	case d > time.Minute:
+		return Spec(d.Round(time.Second))
+	case d > time.Second:
+		to = time.Millisecond
+	case d > time.Millisecond:
+		to = time.Microsecond
+	case d > time.Microsecond:
+		to = time.Nanosecond
+	default:
+		return s
+	}
+
+	factor := time.Duration(1)
+	for i := 0; i < 3-decimals; i++ {
+		factor *= 10
+	}
+
+	return Spec(d.Round(to * factor))
+}
+
 // FromString parses the given duration string into a duration spec.
 func FromString(s string) (Spec, error) {
 	d, err := time.ParseDuration(s)

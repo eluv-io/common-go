@@ -1,7 +1,9 @@
 package jsonutil
 
 import (
+	"bytes"
 	"encoding/json"
+
 	"github.com/qluvio/content-fabric/log"
 
 	"github.com/qluvio/content-fabric/errors"
@@ -152,4 +154,25 @@ func IsJson(buf []byte, partial bool) bool {
 		}
 	}
 	return false
+}
+
+// Pretty parses the given json string and re-marshals it in "pretty" format
+// with line breaks and 2-space indentation.
+func Pretty(js string) (string, error) {
+	var out bytes.Buffer
+	err := json.Indent(&out, []byte(js), "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return out.String(), nil
+}
+
+// MustPretty parses the given json string and re-marshals it in "pretty" format
+// with line breaks and indentation. Panics if the json cannot be parsed.
+func MustPretty(js string) string {
+	out, err := Pretty(js)
+	if err != nil {
+		panic(errors.E("failed to pretty print", err, "json", js))
+	}
+	return out
 }
