@@ -27,9 +27,15 @@ var schemeToFormat = map[Scheme]hash.Format{
 	ClientGen: hash.AES128AFGH,
 }
 
+// In the case of multiple schemes mapping to a single format, the last scheme is used for formatToScheme
+var formatToScheme = map[hash.Format]Scheme{}
+
 func init() {
 	for scheme, name := range schemeToName {
 		nameToScheme[name] = scheme
+	}
+	for scheme, format := range schemeToFormat {
+		formatToScheme[format] = scheme
 	}
 }
 
@@ -37,6 +43,14 @@ func FromString(str string) (Scheme, error) {
 	s, ok := nameToScheme[str]
 	if !ok {
 		return 0, errors.E("parse scheme", errors.K.Invalid, "reason", "invalid scheme", "scheme", str)
+	}
+	return s, nil
+}
+
+func FromHashFormat(format hash.Format) (Scheme, error) {
+	s, ok := formatToScheme[format]
+	if !ok {
+		return 0, errors.E("parse scheme", errors.K.Invalid, "reason", "invalid hash_format", "hash_format", format)
 	}
 	return s, nil
 }
