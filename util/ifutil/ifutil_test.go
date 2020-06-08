@@ -1,6 +1,7 @@
 package ifutil
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -48,4 +49,32 @@ func TestIsNil(t *testing.T) {
 	req.False(IsNil(make(chan bool)))
 	req.False(IsNil(make(map[string]bool)))
 	req.False(IsNil(make([]string, 0)))
+}
+
+func ExampleDiff() {
+	fmt.Println(Diff("string A", "string a", "string B", "string b"))
+	fmt.Println(Diff("int A", 1, "int B", 2))
+	fmt.Println(Diff("float A", 1.1, "float B", 2.1))
+	fmt.Println(Diff("same", "", "same", ""))
+	fmt.Println(Diff("same", nil, "same", nil))
+
+	// Output:
+	//
+	// --- string A
+	// +++ string B
+	// @@ -1,2 +1,2 @@
+	// -(string) (len=8) "string a"
+	// +(string) (len=8) "string b"
+	//
+	// --- int A
+	// +++ int B
+	// @@ -1,2 +1,2 @@
+	// -(int) 1
+	// +(int) 2
+	//
+	// --- float A
+	// +++ float B
+	// @@ -1,2 +1,2 @@
+	// -(float64) 1.1
+	// +(float64) 2.1
 }
