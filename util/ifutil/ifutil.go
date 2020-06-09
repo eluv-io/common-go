@@ -2,6 +2,9 @@ package ifutil
 
 import (
 	"reflect"
+
+	"github.com/davecgh/go-spew/spew"
+	"github.com/pmezard/go-difflib/difflib"
 )
 
 var nillableKinds = []reflect.Kind{
@@ -25,4 +28,32 @@ func IsNil(obj interface{}) bool {
 	}
 
 	return false
+}
+
+var spewConfig = spew.ConfigState{
+	Indent:                  " ",
+	DisablePointerAddresses: true,
+	DisableCapacities:       true,
+	SortKeys:                true,
+}
+
+// Diff returns the difference of two objects in "unified diff" format. It first
+// converts each object to text using spew.Sdump, then calculates and returns
+// the diff.
+func Diff(labelA string, a interface{}, labelB string, b interface{}) string {
+	old := spewConfig.Sdump(a)
+	cur := spewConfig.Sdump(b)
+	diff, _ := difflib.GetUnifiedDiffString(difflib.UnifiedDiff{
+		A:        difflib.SplitLines(old),
+		B:        difflib.SplitLines(cur),
+		FromFile: labelA,
+		FromDate: "",
+		ToFile:   labelB,
+		ToDate:   "",
+		Context:  1,
+	})
+	if len(diff) < 2 {
+		return diff
+	}
+	return diff[:len(diff)-2]
 }

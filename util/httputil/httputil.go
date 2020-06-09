@@ -17,6 +17,7 @@ import (
 	mux "github.com/multiformats/go-multicodec/mux"
 
 	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/format/id"
 )
 
 const customHeaderPrefix = "X-Content-Fabric-"
@@ -248,4 +249,40 @@ func ShouldRetry(ctx context.Context, statusCode int, err error) bool {
 	}
 
 	return false
+}
+
+func GetReqNodes(headers http.Header) (map[string]bool, error) {
+	reqNodes := make(map[string]bool)
+
+	reqNodesStr, err := GetCustomHeader(headers, "Requested-Nodes")
+	if err != nil {
+		return nil, errors.E("invalid requested_nodes", errors.K.Invalid, err)
+	}
+
+	for _, nid := range strings.Split(reqNodesStr, ",") {
+		if nid == "" {
+			continue
+		}
+		_, err := id.QNode.FromString(nid)
+		if err != nil {
+			return nil, errors.E("invalid requested_nodes", errors.K.Invalid, err, "requested_nodes", reqNodesStr)
+		}
+		reqNodes[nid] = true
+	}
+
+	return reqNodes, nil
+}
+
+func SetReqNodes(headers http.Header, reqNodes map[string]bool) {
+	rnHeader := ""
+	for nid, _ := range reqNodes {
+		if rnHeader != "" {
+			rnHeader += ","
+		}
+		rnHeader += nid
+	}
+
+	if rnHeader != "" {
+		SetCustomHeader(headers, "Requested-Nodes", rnHeader)
+	}
 }

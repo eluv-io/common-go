@@ -35,6 +35,11 @@ func TestToString(t *testing.T) {
 	require.Equal(t, "string", ToString("string"))
 }
 
+func TestToPrintString(t *testing.T) {
+	require.Equal(t, "", ToPrintString(""))
+	require.Equal(t, "Fran & Freddie's Diner\t\\u263a\r\n", ToPrintString("Fran & Freddie's Diner\t\u263a\r\n"))
+}
+
 func TestFirst(t *testing.T) {
 	require.Empty(t, First())
 	require.Empty(t, First(""))

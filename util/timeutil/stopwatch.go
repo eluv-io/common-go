@@ -22,6 +22,11 @@ func StartWatch() *StopWatch {
 	return &StopWatch{startTime: utc.Now()}
 }
 
+// Reset resets the stopwatch by re-recording the start time.
+func (w *StopWatch) Reset() {
+	w.startTime = utc.Now()
+}
+
 // Stop stops the stopwatch by recording the stop time. The stopwatch may be
 // stopped multiple times, but only the last stop time is retained.
 func (w *StopWatch) Stop() {

@@ -3,8 +3,11 @@ package duration_test
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/qluvio/content-fabric/format/duration"
 
@@ -123,4 +126,86 @@ func from(s string) duration.Spec {
 		panic(err)
 	}
 	return d
+}
+
+func TestRound(t *testing.T) {
+	tests := []struct {
+		spec string
+		want string
+	}{
+		{"1ns", "1ns"},
+		{"1µs", "1µs"},
+		{"1ms", "1ms"},
+		{"1s", "1s"},
+		{"1m", "1m"},
+		{"1h", "1h"},
+		{"1.000444ms", "1ms"},
+		{"1.000555ms", "1.001ms"},
+		{"1.000444s", "1s"},
+		{"1.000555s", "1.001s"},
+		{"1m10s444ms", "1m10s"},
+		{"1m10s555ms", "1m11s"},
+		{"1h1m10s444ms", "1h1m10s"},
+		{"1h1m10s555ms", "1h1m11s"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.spec+"->"+tt.want, func(t *testing.T) {
+			spec := duration.MustParse(tt.spec)
+			require.Equal(t, tt.want, spec.Round().String())
+		})
+	}
+}
+
+func TestRoundTo(t *testing.T) {
+	tests := []struct {
+		spec     string
+		want     string
+		decimals int
+	}{
+		{"1ns", "1ns", 0},
+		{"1ns", "1ns", 5},
+		{"1ns", "1ns", -2},
+		{"1µs", "1µs", 1},
+		{"1ms", "1ms", 2},
+		{"1s", "1s", 3},
+		{"1m", "1m", 0},
+		{"1h", "1h", 1},
+		{"766.123µs", "766.12µs", 2},
+		{"766.123µs", "766.1µs", 1},
+		{"766.123µs", "766µs", 0},
+		{"766.962µs", "766.96µs", 2},
+		{"766.962µs", "767µs", 1},
+		{"766.962µs", "767µs", 0},
+		{"1.123444ms", "1.123ms", 3},
+		{"1.123444ms", "1.12ms", 2},
+		{"1.123444ms", "1.1ms", 1},
+		{"1.123444ms", "1ms", 0},
+		{"1.123555ms", "1.124ms", 3},
+		{"1.123555ms", "1.12ms", 2},
+		{"1.123555ms", "1.1ms", 1},
+		{"1.123555ms", "1ms", 0},
+		{"1.123444s", "1.123s", 3},
+		{"1.123444s", "1.12s", 2},
+		{"1.123444s", "1.1s", 1},
+		{"1.123444s", "1s", 0},
+		{"1.123555s", "1.124s", 3},
+		{"1.123555s", "1.12s", 2},
+		{"1.123555s", "1.1s", 1},
+		{"1.123555s", "1s", 0},
+		{"1m10s444ms", "1m10s", 2},
+		{"1m10s444ms", "1m10s", 1},
+		{"1m10s444ms", "1m10s", 0},
+		{"1m10s555ms", "1m11s", 2},
+		{"1m10s555ms", "1m11s", 1},
+		{"1m10s555ms", "1m11s", 0},
+		{"1h1m10s444ms", "1h1m10s", 2},
+		{"1h1m10s444ms", "1h1m10s", 1},
+		{"1h1m10s444ms", "1h1m10s", 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.spec+","+strconv.Itoa(tt.decimals)+"->"+tt.want, func(t *testing.T) {
+			spec := duration.MustParse(tt.spec)
+			require.Equal(t, tt.want, spec.RoundTo(tt.decimals).String())
+		})
+	}
 }

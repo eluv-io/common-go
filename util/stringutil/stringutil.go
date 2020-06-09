@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"math/rand"
 	"reflect"
+	"strconv"
 	"strings"
+	"unicode"
 )
 
 // StripFunc removes all runes from the given string that match the given filter
@@ -42,6 +44,22 @@ func ToString(val interface{}) string {
 		return s
 	}
 	return fmt.Sprint(val)
+}
+
+// ToPrintString escapes non-ASCII characters and ASCII characters that are not
+// printable and not whitespace.
+func ToPrintString(s string) string {
+	res := ""
+	for _, r := range s {
+		if r > unicode.MaxASCII || (!unicode.IsSpace(r) && !unicode.IsPrint(r)) {
+			// Escape character
+			res += strings.Trim(strconv.QuoteRuneToASCII(r), "'")
+		} else {
+			// Leave character untouched
+			res += string(r)
+		}
+	}
+	return res
 }
 
 // First returns the first non-empty string. Returns an empty string if all
