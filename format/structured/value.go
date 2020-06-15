@@ -2,7 +2,9 @@ package structured
 
 import (
 	"encoding/json"
+	"time"
 
+	"github.com/qluvio/content-fabric/format/utc"
 	"github.com/qluvio/content-fabric/util/codecutil"
 	"github.com/qluvio/content-fabric/util/numberutil"
 )
@@ -84,14 +86,21 @@ func (v *Value) Delete(path ...string) (deleted bool) {
 }
 
 // Get returns the value at the given path, specified as string slice, e.g.
-// 	Get("path", "to", "value")
+// 	val.Get("path", "to", "value")
 func (v *Value) Get(path ...string) *Value {
 	return NewValue(Resolve(path, v.Data))
 }
 
 // GetP returns the value at the given path, specified as a single string, e.g.
-// 	GetP("/path/to/value")
+// 	val.GetP("/path/to/value")
+// Alias of At()
 func (v *Value) GetP(path string) *Value {
+	return v.At(path)
+}
+
+// At returns the value at the given path, specified as a single string, e.g.
+// 	val.At("/path/to/value")
+func (v *Value) At(path string) *Value {
 	return NewValue(Resolve(ParsePath(path), v.Data))
 }
 
@@ -201,8 +210,8 @@ func (v *Value) Map(def ...map[string]interface{}) map[string]interface{} {
 	return make(map[string]interface{})
 }
 
-// String returns the value as a string. If the value wraps an error, returns
-// the optional default value def if specified, or "".
+// Bool returns the value as a string. If the value wraps an error, returns
+// the optional default value def if specified, or false.
 func (v *Value) Bool(def ...bool) bool {
 	if v.err == nil && v.Data != nil {
 		if t, ok := v.Data.(bool); ok {
@@ -213,6 +222,29 @@ func (v *Value) Bool(def ...bool) bool {
 		return def[0]
 	}
 	return false
+}
+
+// UTC returns the value as a UTC instance. If the value is a string, it
+// attempts to parse it as a UTC time. If the value wraps an error, returns the
+// optional default value def if specified, or utc.Zero.
+func (v *Value) UTC(def ...utc.UTC) utc.UTC {
+	if v.err == nil && v.Data != nil {
+		switch t := v.Data.(type) {
+		case utc.UTC:
+			return t
+		case time.Time:
+			return utc.New(t)
+		case string:
+			res, err := utc.FromString(t)
+			if err == nil {
+				return res
+			}
+		}
+	}
+	if len(def) > 0 {
+		return def[0]
+	}
+	return utc.Zero
 }
 
 // Decode decodes this Value into the given target object, which is assumed
