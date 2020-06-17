@@ -1,6 +1,7 @@
 package utc
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/qluvio/content-fabric/errors"
@@ -151,6 +152,24 @@ func (u UTC) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + u.String() + `"`), nil
 }
 
+func (u *UTC) UnmarshalJSON(data []byte) error {
+	var s string
+	err := json.Unmarshal(data, &s)
+	if err != nil {
+		return err
+	}
+	return u.UnmarshalText([]byte(s))
+}
+
+func (u *UTC) UnmarshalText(data []byte) error {
+	utc, err := FromString(string(data))
+	if err != nil {
+		return err
+	}
+	*(&u.Time) = utc.Time
+	return nil
+}
+
 // MarshalText implements the encoding.TextMarshaler interface.
 // Contrary to time.Time, it always marshals milliseconds, even if they are all
 // zeros (i.e. 2006-01-02T15:04:05.000Z instead of 2006-01-02T15:04:05Z)
@@ -241,7 +260,7 @@ func FromString(s string) (UTC, error) {
 			return UTC{t}, nil
 		}
 	}
-	return Zero, errors.E("parse", err, "duration_spec", s)
+	return Zero, errors.E("parse", err, "utc", s)
 }
 
 // MustParse parses the given time string according to ISO 8601 format,

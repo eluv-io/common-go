@@ -61,11 +61,29 @@ func TestJSON(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "\""+oneBillionString+"\"", string(b))
 
-	var unmarshalled utc.UTC
-	err = json.Unmarshal(b, &unmarshalled)
-	assert.NoError(t, err)
-	assert.Equal(t, ut, unmarshalled)
-	assertTimezone(t, unmarshalled)
+	tests := []struct {
+		s       string
+		want    time.Time
+		wantErr bool
+	}{
+		{oneBillionString, oneBillion, false},
+		{"2001-09-09Z", oneBillion.Truncate(24 * time.Hour), false},
+		{"2001-09-09T01:46:40Z", oneBillion.Truncate(time.Second), false},
+		{"2001-09-09T01:46Z", oneBillion.Truncate(time.Minute), false},
+		{"2001-09-09", time.Time{}, true},
+	}
+
+	for _, test := range tests {
+		var unmarshalled utc.UTC
+		err = json.Unmarshal([]byte(`"`+test.s+`"`), &unmarshalled)
+		if test.wantErr {
+			assert.Error(t, err)
+		} else {
+			assert.NoError(t, err)
+			assert.Equal(t, utc.New(test.want), unmarshalled)
+			assertTimezone(t, unmarshalled)
+		}
+	}
 }
 
 type Wrapper struct {

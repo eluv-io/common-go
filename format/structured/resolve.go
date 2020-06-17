@@ -2,11 +2,15 @@ package structured
 
 import (
 	"encoding/json"
+	"reflect"
 	"strconv"
+	"strings"
 
 	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/util/stringutil"
 )
+
+var stringType = reflect.TypeOf("")
 
 // sub is a structure that holds the result of a path resolution action. It
 // allows to
@@ -383,7 +387,79 @@ func resolveTransform(path Path, target interface{}, transform TransformerFn) (i
 		case nil:
 			return nil, e(errors.K.NotExist, "reason", "element is nil", "path", path[:idx])
 		default:
-			return nil, e(errors.K.Invalid, "reason", "element is leaf", "path", path[:idx])
+			typ := reflect.TypeOf(node)
+			val := reflect.ValueOf(node)
+
+			if typ.Kind() == reflect.Ptr {
+				// dereference pointer
+				typ = typ.Elem()
+				val = val.Elem()
+			}
+
+			if typ.Kind() == reflect.Map && typ.Key() == stringType {
+				// MAP
+				vv := val.MapIndex(reflect.ValueOf(path[idx]))
+				if vv.IsZero() {
+					return nil, e(errors.K.NotExist,
+						"reason", "map field not found",
+						"path", path[:idx+1])
+				}
+				node = vv.Interface()
+			} else if typ.Kind() == reflect.Slice || typ.Kind() == reflect.Array {
+				// SLICE or ARRAY
+				i, err := strconv.ParseInt(path[idx], 10, 32)
+				if err != nil {
+					return nil, e(errors.K.Invalid,
+						"reason", "invalid array index",
+						"path", path[:idx+1])
+				}
+				aidx := int(i)
+				if aidx >= val.Len() || aidx < 0 {
+					return nil, e(errors.K.NotExist,
+						"reason", "array index out of range",
+						"path", path[:idx+1])
+				}
+				node = val.Index(aidx).Interface()
+			} else if typ.Kind() == reflect.Struct {
+				// STRUCT
+				if field, ok := typ.FieldByName(path[idx]); ok && (field.Tag == "" || tagMatches(field.Tag, path[idx])) {
+					node = val.FieldByIndex(field.Index).Interface()
+				} else {
+					found := false
+					for i := 0; i < typ.NumField(); i++ {
+						field := typ.Field(i)
+						if tagMatches(field.Tag, path[idx]) {
+							node = val.FieldByIndex(field.Index).Interface()
+							found = true
+							break
+						}
+					}
+					if !found {
+						return nil, e(errors.K.Invalid,
+							"reason", "struct field not found",
+							"path", path[:idx])
+					}
+				}
+			} else {
+				return nil, e(errors.K.Invalid,
+					"reason", "element is leaf",
+					"path", path[:idx],
+					"node_type", typ)
+			}
 		}
 	}
+}
+
+func tagMatches(tag reflect.StructTag, name string) bool {
+	if tag == "" {
+		return false
+	}
+
+	jsn, ok := tag.Lookup("json")
+	if !ok {
+		return false
+	}
+
+	split := strings.Split(jsn, ",")
+	return len(split) > 0 && split[0] == name
 }
