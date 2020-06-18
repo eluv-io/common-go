@@ -16,6 +16,7 @@ import (
 	mcjson "github.com/multiformats/go-multicodec/json"
 	mux "github.com/multiformats/go-multicodec/mux"
 
+	"github.com/qluvio/content-fabric/constants"
 	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/id"
 )
@@ -285,4 +286,60 @@ func SetReqNodes(headers http.Header, reqNodes map[string]bool) {
 	if rnHeader != "" {
 		SetCustomHeader(headers, "Requested-Nodes", rnHeader)
 	}
+}
+
+// GetCombinedHeader returns all values of all header names as a single string,
+// individual header values separated by ",".
+func GetCombinedHeader(header http.Header, query url.Values, headers ...string) string {
+	res := make([]string, 0)
+	for _, h := range headers {
+		if v, ok := header[http.CanonicalHeaderKey(h)]; ok {
+			for _, s := range v {
+				res = append(res, s)
+			}
+		}
+		if v, ok := query["header-"+
+			strings.ReplaceAll(strings.ToLower(h), "-", "_")]; ok {
+			for _, s := range v {
+				res = append(res, s)
+			}
+		}
+	}
+	return strings.Join(res, ",")
+}
+
+// GetDecryptionMode extracts the decryption mode from an
+// X-Content-Fabric-Decryption-Mode header or the header-x_decryption_mode query
+// parameter. The decryption mode is treated as string to prevent import cycles
+// with simple.
+// PENDING(LUK): move simple.DecryptionMode to format/encryption
+func GetDecryptionMode(header http.Header, query url.Values, def string) (string, error) {
+	res := make([]string, 0)
+	if v, ok := header[http.CanonicalHeaderKey(constants.DecryptModeHeader)]; ok {
+		for _, s := range v {
+			res = append(res, s)
+		}
+	}
+	if v, ok := query["header-x_decryption_mode"]; ok {
+		for _, s := range v {
+			res = append(res, s)
+		}
+	}
+	dec := strings.Join(res, ",")
+	if dec == "" {
+		return def, nil
+	}
+	decs := strings.Split(dec, ",")
+	if len(decs) > 1 {
+		for _, s := range decs[1:] {
+			if s != decs[0] {
+				return "", errors.E("GetDecryptionMode",
+					errors.K.Invalid,
+					"reason", "multiple values (inconsistent)",
+					"values", dec)
+			}
+		}
+	}
+
+	return decs[0], nil
 }
