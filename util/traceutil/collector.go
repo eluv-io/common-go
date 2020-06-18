@@ -157,7 +157,7 @@ func (s *SpanInfo) MarshalJSON() ([]byte, error) {
 
 	out := &data{
 		Name:                     s.Name,
-		Duration:                 duration.Spec(s.EndTime.Sub(s.StartTime)).RoundTo(0),
+		Duration:                 duration.Spec(s.EndTime.Sub(s.StartTime)).RoundTo(1),
 		Attributes:               s.SimplifiedAttributes(),
 		MessageEvents:            s.MessageEvents,
 		Links:                    s.Links,
