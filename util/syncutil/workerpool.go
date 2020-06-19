@@ -2,8 +2,7 @@ package syncutil
 
 import (
 	"runtime"
-
-	"github.com/gammazero/workerpool"
+	"time"
 
 	"github.com/qluvio/content-fabric/util/multiqueue"
 )
@@ -13,9 +12,11 @@ import (
 //  * maxWorkers:      the maximum number of worker goroutines that will be used
 //                     to execute tasks concurrently. If <=0 maxWokers is set to
 //                     runtime.NumPCU()
+//  * idleTimeout:     the time to hold on to idle workers. After this duration,
+//                     idle workers are shutdown.
 //  * defaultQueueCap: the default capacity to use when creating new
 //                     WorkerQueues. If <=0 the default queue cap is set to 16.
-func NewWorkerPool(maxWorkers, defaultQueueCap int) WorkerPool {
+func NewWorkerPool(maxWorkers int, idleTimeout time.Duration, defaultQueueCap int) WorkerPool {
 	if defaultQueueCap <= 0 {
 		defaultQueueCap = 16
 	}
@@ -26,7 +27,7 @@ func NewWorkerPool(maxWorkers, defaultQueueCap int) WorkerPool {
 	dp := &workerPool{
 		defaultQueueCap: defaultQueueCap,
 		in:              multiqueue.New(),
-		pool:            workerpool.New(maxWorkers),
+		pool:            NewSimpleWorkerPool(maxWorkers, idleTimeout),
 	}
 	dp.start()
 
@@ -43,32 +44,27 @@ func NewWorkerPool(maxWorkers, defaultQueueCap int) WorkerPool {
 //
 // The pool guarantees fairness between multiple task queues by employing a
 // MultiQueue that services the different queues in a round-robin fashion.
-//
-// The management of the worker go-routines is outsourced to a gammazero
-// worker pool. It creates new worker go-routines as needed, with a configured
-// maximum limit. When workers are no longer needed, they are gradually removed
-// (one worker every 5 seconds). See github.com/gammazero/workerpool for more
-// information.
 type WorkerPool interface {
-	NewTaskQueue(cap int) TaskQueue
+	NewTaskQueue(cap ...int) TaskQueue
 }
 
 type workerPool struct {
 	defaultQueueCap int
 	in              multiqueue.MultiQueue
-	pool            *workerpool.WorkerPool
+	pool            *SimpleWorkerPool
 }
 
 // NewTaskQueue creates a new input queue for task submission. Submitting tasks
 // to the task queue block when the queue reaches its capacity.
 //
-//  * cap: the capacity of the task queue. If <= 0 the default task queue cap of
-//         the WorkerPool is used.
-func (p *workerPool) NewTaskQueue(cap int) TaskQueue {
-	if cap <= 0 {
-		cap = p.defaultQueueCap
+//  * cap: the optional capacity of the task queue. If not specified or <= 0,
+//         the default task queue cap of the WorkerPool is used.
+func (p *workerPool) NewTaskQueue(cap ...int) TaskQueue {
+	c := p.defaultQueueCap
+	if len(cap) > 0 && cap[0] > 0 {
+		c = cap[0]
 	}
-	return &inputAdapter{p.in.NewInput(cap)}
+	return &inputAdapter{p.in.NewInput(c)}
 }
 
 // TaskQueue is the interface for an input queue which is used to submit tasks
@@ -93,7 +89,6 @@ func (p *workerPool) start() {
 		for {
 			res, closed := p.in.Pop()
 			if closed {
-				p.pool.StopWait()
 				return
 			}
 			p.pool.Submit(res.(func()))

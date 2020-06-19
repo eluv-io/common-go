@@ -16,14 +16,14 @@ const expIDString = "iacc1W7LcTy7"
 
 func TestGenerate(t *testing.T) {
 	generated := Generate(User)
-	generated.AssertCode(User)
+	assert.NoError(t, generated.AssertCode(User))
 
 	idString := generated.String()
 	assert.Equal(t, "iusr", idString[:4])
 
 	idFromString, err := FromString(idString)
 	assert.NoError(t, err)
-	idFromString.AssertCode(User)
+	assert.NoError(t, idFromString.AssertCode(User))
 
 	assert.Equal(t, generated, idFromString)
 
@@ -40,7 +40,7 @@ func TestStringConversion(t *testing.T) {
 
 	idFromString, err := FromString(idString)
 	assert.NoError(t, err)
-	idFromString.AssertCode(Account)
+	assert.NoError(t, idFromString.AssertCode(Account))
 
 	assert.Equal(t, tid, idFromString)
 	assert.Equal(t, idString, fmt.Sprint(tid))

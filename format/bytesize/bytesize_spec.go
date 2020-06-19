@@ -2,9 +2,10 @@ package bytesize
 
 import (
 	"fmt"
-	"github.com/qluvio/content-fabric/errors"
 	"strconv"
 	"strings"
+
+	"github.com/qluvio/content-fabric/errors"
 )
 
 // Spec is a bytesize specification representing a size in bytes. It can
