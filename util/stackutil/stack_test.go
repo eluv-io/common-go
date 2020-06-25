@@ -1,6 +1,7 @@
 package stackutil_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -54,4 +55,22 @@ func functionB(stackDepth int, sig chan<- bool, stop <-chan bool, count int) {
 
 func functionC(stackDepth int, sig chan<- bool, stop <-chan bool, count int) {
 	functionA(stackDepth, sig, stop, count)
+}
+
+func doSomething() string {
+	return stackutil.Caller(1)
+}
+
+func TestCaller(t *testing.T) {
+	s := doSomething()
+	//fmt.Println(s)
+	//stackutil_test.TestCaller (stack_test.go:66)
+	require.True(t, strings.HasPrefix(s, "stackutil_test.TestCaller"))
+}
+
+// BenchmarkCaller-8   	 1093274	      1053 ns/op
+func BenchmarkCaller(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		stackutil.Caller(1)
+	}
 }
