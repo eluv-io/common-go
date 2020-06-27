@@ -179,6 +179,20 @@ func (v *Value) StringSlice(def ...string) []string {
 	return make([]string, 0)
 }
 
+// Slice returns the value as a generic slice. If the value wraps an
+// error, returns the optional default slice def if specified, or an empty slice.
+func (v *Value) Slice(def ...interface{}) []interface{} {
+	if v.err == nil && v.Data != nil {
+		if t, ok := v.Data.([]interface{}); ok {
+			return t
+		}
+	}
+	if len(def) > 0 {
+		return def
+	}
+	return make([]interface{}, 0)
+}
+
 // Map returns the value as a map. If the value wraps an error, returns
 // the optional default value def if specified, or an empty map.
 func (v *Value) Map(def ...map[string]interface{}) map[string]interface{} {
