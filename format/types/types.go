@@ -19,6 +19,9 @@ type AccountID = id.ID
 // UserID is the type of user IDs
 type UserID = id.ID
 
+// GroupID is the type of group IDs
+type GroupID = id.ID
+
 // QLibID is the type of content library IDs
 type QLibID = id.ID
 
