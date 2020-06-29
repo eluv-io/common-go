@@ -20,7 +20,6 @@ func assertAsInt64(t *testing.T, expected int64, v interface{}) {
 }
 
 func TestAsInt(t *testing.T) {
-
 	assertAsInt(t, 0, "mlp")
 	assertAsInt(t, 8, 8)
 	assertAsInt(t, 123, int64(123))
@@ -32,7 +31,6 @@ func TestAsInt(t *testing.T) {
 }
 
 func TestAsInt64(t *testing.T) {
-
 	assertAsInt64(t, 0, "mlp")
 	assertAsInt64(t, 8, 8)
 	assertAsInt64(t, 123, int64(123))
@@ -67,4 +65,21 @@ func TestLessInt(t *testing.T) {
 			require.Equal(t, tt.wantLess, numberutil.LessInt(tt.ascending, tt.i1, tt.i2, tt.tie))
 		})
 	}
+}
+
+func assertAsFloat64(t *testing.T, expected float64, v interface{}) {
+	actual := numberutil.AsFloat64(v)
+	require.Equal(t, expected, actual)
+}
+
+func TestAsFloat64(t *testing.T) {
+	assertAsFloat64(t, 0, "mlp")
+	assertAsFloat64(t, 8, 8)
+	assertAsFloat64(t, 123, int64(123))
+	assertAsFloat64(t, 456, "456")
+	assertAsFloat64(t, 456.789, "456.789")
+	assertAsFloat64(t, 12.3, 12.3)
+	assertAsFloat64(t, 12.5, 12.5)
+	assertAsFloat64(t, 12.0, float32(12.0))
+	assertAsFloat64(t, 12.5, float32(12.5))
 }

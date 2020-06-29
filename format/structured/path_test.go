@@ -148,3 +148,26 @@ func equalArrays(t *testing.T, actual, expected interface{}) {
 		return
 	}
 }
+
+func TestEscapeSeparators(t *testing.T) {
+	tests := []struct {
+		path string
+		sep  []string
+		want string
+	}{
+		{"abcd", nil, "abcd"},
+		{"/a/b", nil, "~1a~1b"},
+		{"/a/b", []string{"/"}, "~1a~1b"},
+		{"/a/b", []string{"."}, "/a/b"},
+		{".a.b", []string{"."}, "~1a~1b"},
+	}
+	for _, test := range tests {
+		t.Run(test.path, func(t *testing.T) {
+			if test.sep == nil {
+				require.Equal(t, test.want, EscapeSeparators(test.path))
+			} else {
+				require.Equal(t, test.want, EscapeSeparators(test.path, test.sep...))
+			}
+		})
+	}
+}

@@ -153,11 +153,26 @@ func (v *Value) Int(def ...int) int {
 	return int(v.Int64())
 }
 
-// Int returns the value as an int. If the value wraps an error, returns
+// Int64 returns the value as an int. If the value wraps an error, returns
 // the optional default value def if specified, or 0.
 func (v *Value) Int64(def ...int64) int64 {
 	if v.err == nil && v.Data != nil {
 		res, err := numberutil.AsInt64Err(v.Data)
+		if err == nil {
+			return res
+		}
+	}
+	if len(def) > 0 {
+		return def[0]
+	}
+	return 0
+}
+
+// Float64 returns the value as a float64. If the value wraps an error, returns
+// the optional default value def if specified, or 0.
+func (v *Value) Float64(def ...float64) float64 {
+	if v.err == nil && v.Data != nil {
+		res, err := numberutil.AsFloat64Err(v.Data)
 		if err == nil {
 			return res
 		}
@@ -208,6 +223,20 @@ func (v *Value) Map(def ...map[string]interface{}) map[string]interface{} {
 		return def[0]
 	}
 	return make(map[string]interface{})
+}
+
+// Slice returns the value as an []interface{}. If the value wraps an error,
+// returns the optional default slice def if specified, or an empty slice.
+func (v *Value) Slice(def ...interface{}) []interface{} {
+	if v.err == nil && v.Data != nil {
+		if t, ok := v.Data.([]interface{}); ok {
+			return t
+		}
+	}
+	if len(def) > 0 {
+		return def
+	}
+	return make([]interface{}, 0)
 }
 
 // Bool returns the value as a string. If the value wraps an error, returns

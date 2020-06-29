@@ -399,7 +399,7 @@ func resolveTransform(path Path, target interface{}, transform TransformerFn) (i
 			if typ.Kind() == reflect.Map && typ.Key() == stringType {
 				// MAP
 				vv := val.MapIndex(reflect.ValueOf(path[idx]))
-				if vv.IsZero() {
+				if !vv.IsValid() {
 					return nil, e(errors.K.NotExist,
 						"reason", "map field not found",
 						"path", path[:idx+1])
@@ -423,7 +423,13 @@ func resolveTransform(path Path, target interface{}, transform TransformerFn) (i
 			} else if typ.Kind() == reflect.Struct {
 				// STRUCT
 				if field, ok := typ.FieldByName(path[idx]); ok && (field.Tag == "" || tagMatches(field.Tag, path[idx])) {
-					node = val.FieldByIndex(field.Index).Interface()
+					f := val.FieldByIndex(field.Index)
+					if !f.CanInterface() {
+						return nil, e(errors.K.Invalid,
+							"reason", "struct field is not accessible",
+							"path", path[:idx])
+					}
+					node = f.Interface()
 				} else {
 					found := false
 					for i := 0; i < typ.NumField(); i++ {
