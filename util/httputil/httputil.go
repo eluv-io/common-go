@@ -343,3 +343,45 @@ func GetDecryptionMode(header http.Header, query url.Values, def string) (string
 
 	return decs[0], nil
 }
+
+func GetRequestSetContentDisposition(r *http.Request) (string, error) {
+	if r == nil {
+		return "",
+			errors.E("GetRequestSetContentDisposition", errors.K.Invalid, "reason", "request is nil)")
+	}
+	return GetSetContentDisposition(r.Header, r.URL.Query(), "")
+}
+
+// GetSetContentDisposition extracts the 'set-content-disposition' directive from
+// X-Content-Fabric-Set-Content-Disposition header or the header-x_set_content_disposition query
+// parameter.
+func GetSetContentDisposition(header http.Header, query url.Values, def string) (string, error) {
+	res := make([]string, 0)
+	if v, ok := header[http.CanonicalHeaderKey(constants.SetContentDispositionHeader)]; ok {
+		for _, s := range v {
+			res = append(res, s)
+		}
+	}
+	if v, ok := query["header-x_set_content_disposition"]; ok {
+		for _, s := range v {
+			res = append(res, s)
+		}
+	}
+	dec := strings.Join(res, ",")
+	if dec == "" {
+		return def, nil
+	}
+	decs := strings.Split(dec, ",")
+	if len(decs) > 1 {
+		for _, s := range decs[1:] {
+			if s != decs[0] {
+				return "", errors.E("GetSetContentDisposition",
+					errors.K.Invalid,
+					"reason", "multiple values (inconsistent)",
+					"values", dec)
+			}
+		}
+	}
+
+	return decs[0], nil
+}
