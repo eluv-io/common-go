@@ -275,6 +275,84 @@ func TestResolveTransform(t *testing.T) {
 			},
 			want: "c",
 		},
+		{ // resolve works with an inner map[string]string
+			path: "/a/b",
+			source: map[string]interface{}{
+				"a": map[string]string{
+					"b": "c",
+				},
+			},
+			want: "c",
+		},
+		{ // resolve works with an inner []string
+			path: "/a/b/0",
+			source: map[string]interface{}{
+				"a": map[string][]string{
+					"b": {"c"},
+				},
+			},
+			want: "c",
+		},
+		{ // resolve works with an inner map[string][]map[string]string
+			path: "/a/b/0/c",
+			source: map[string]interface{}{
+				"a": map[string][]map[string]string{
+					"b": {map[string]string{"c": "d"}},
+				},
+			},
+			want: "d",
+		},
+		{ // resolve works with a struct
+			path: "/Name",
+			source: &testStruct{
+				Name:        "James Bond",
+				Description: "desc",
+			},
+			want: "James Bond",
+		},
+		{ // invalid struct field name
+			path: "/Unknown",
+			source: &testStruct{
+				Name:        "James Bond",
+				Description: "desc",
+			},
+			wantError: true,
+		},
+		{ // struct & struct tags
+			path: "/name",
+			source: &testStructWithTags{
+				Name:        "James Bond",
+				Description: "desc",
+			},
+			want: "James Bond",
+		},
+		{ // invalid struct & struct tags (tag overrides struct field name)
+			path: "/Name",
+			source: &testStructWithTags{
+				Name:        "James Bond",
+				Description: "desc",
+			},
+			wantError: true,
+		},
+		{ // struct & struct tags (tag same as field name)
+			path: "/Description",
+			source: &testStructWithTags{
+				Name:        "James Bond",
+				Description: "desc",
+			},
+			want: "desc",
+		},
+		{ // nested structs
+			path: "/nested/name",
+			source: &nestedStruct{
+				Type: "nested",
+				Nested: testStructWithTags{
+					Name:        "James Bond",
+					Description: "desc",
+				},
+			},
+			want: "James Bond",
+		},
 	}
 	for _, tt := range tests {
 		t.Run("path["+tt.path+"]", func(t *testing.T) {
@@ -296,4 +374,19 @@ func TestResolveTransform(t *testing.T) {
 			}
 		})
 	}
+}
+
+type testStruct struct {
+	Name        string
+	Description string
+}
+
+type testStructWithTags struct {
+	Name        string `json:"name,omitempty"`
+	Description string `json:"Description"`
+}
+
+type nestedStruct struct {
+	Type   string             `json:"type"`
+	Nested testStructWithTags `json:"nested"`
 }
