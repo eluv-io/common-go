@@ -20,8 +20,9 @@ const textTmpl = `
 
 ** Aggregate Stacktrace **
 
-Generated on {{.Now.String}}
-{{.GoroutineCount}} goroutines
+generated on:     {{.Now.String}}
+aggregation mode: {{.Similarity}}
+go-routines:      {{.GoroutineCount}}
 
 {{range .Buckets}}
 	{{- len .IDs}}: {{.State}}
@@ -55,7 +56,8 @@ func (a *AggregateStack) writeAsText(out io.Writer) error {
 		Now            utc.UTC
 		SrcLineSize    int
 		GoroutineCount int
-	}{a.buckets, utc.Now(), srcLineLen, goroutineCount}
+		Similarity     string
+	}{a.buckets, utc.Now(), srcLineLen, goroutineCount, a.SimilarityString()}
 
 	return t.Execute(out, data)
 }

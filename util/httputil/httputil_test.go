@@ -2,7 +2,9 @@ package httputil_test
 
 import (
 	"fmt"
+	"github.com/qluvio/content-fabric/constants"
 	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/qluvio/content-fabric/util/httputil"
@@ -160,4 +162,41 @@ func TestNormalizeURL(t *testing.T) {
 	u, err = httputil.NormalizeURL("hello/path/to/pizza", defaultScheme, defaultPort)
 	require.NoError(t, err)
 	require.EqualValues(t, "http://hello:8008/path/to/pizza", u)
+}
+
+func TestGetSetContentDisposition(t *testing.T) {
+	type testCase struct {
+		hdr    http.Header
+		query  url.Values
+		expect string
+	}
+	for _, tcase := range []*testCase{
+		{
+			hdr: http.Header{
+				constants.SetContentDispositionHeader: {"attachment; filename=genome.jpeg;"},
+			},
+			query: url.Values{
+				"header-x_set_content_disposition": []string{"attachment; filename=genome.jpeg;"},
+			},
+			expect: "attachment; filename=genome.jpeg;",
+		},
+		{
+			hdr: http.Header{
+				constants.SetContentDispositionHeader: {"attachment; filename=genome.jpeg;"},
+			},
+			query:  url.Values{},
+			expect: "attachment; filename=genome.jpeg;",
+		},
+		{
+			hdr: http.Header{},
+			query: url.Values{
+				"header-x_set_content_disposition": []string{"attachment; filename=genome.jpeg;"},
+			},
+			expect: "attachment; filename=genome.jpeg;",
+		},
+	} {
+		ct, err := httputil.GetSetContentDisposition(tcase.hdr, tcase.query, "")
+		require.NoError(t, err)
+		require.Equal(t, tcase.expect, ct)
+	}
 }
