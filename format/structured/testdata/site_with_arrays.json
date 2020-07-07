@@ -1,0 +1,51 @@
+{
+  "public": {
+    "name": "Test Site",
+    "description": "A beautiful sight",
+    "asset_metadata": {
+      "asset_type": "primary",
+      "title_type": "franchise",
+      "titles": [
+        {
+          "Slug-0": {
+            "asset_type": "primary",
+            "title": "Title 0",
+            "title_type": "feature",
+            "slug": "Slug-0",
+            "assets": {
+              "1.png": {},
+              "2.tiff": {},
+              "3.pdf": {}
+            }
+          }
+        },
+        {
+          "Slug-1": {
+            "asset_type": "primary",
+            "title": "Title 1",
+            "title_type": "feature",
+            "slug": "Slug-1",
+            "assets": {
+              "1.png": {},
+              "2.tiff": {},
+              "3.pdf": {}
+            }
+          }
+        },
+        {
+          "Slug-2": {
+            "asset_type": "primary",
+            "title": "Title 2",
+            "title_type": "feature",
+            "slug": "Slug-2",
+            "assets": {
+              "1.png": {},
+              "2.tiff": {},
+              "3.pdf": {}
+            }
+          }
+        }
+      ]
+    }
+  }
+}
