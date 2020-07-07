@@ -187,7 +187,7 @@ func ParsePaths(paths []string, separator ...string) []Path {
 	}
 	res := make([]Path, len(paths))
 	for i, p := range paths {
-		res[i] = ParsePath(p)
+		res[i] = ParsePath(p, separator...)
 	}
 	return res
 }

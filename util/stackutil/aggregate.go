@@ -20,8 +20,9 @@ const (
 // An aggregated stack dump - a wrapper around the "buckets" of the 3rd-party
 // panicparse library.
 type AggregateStack struct {
-	trace   string
-	buckets []*stack.Bucket
+	trace      string
+	buckets    []*stack.Bucket
+	similarity stack.Similarity
 }
 
 // Aggregate creates an aggregated stack dump object from the given stack trace.
@@ -49,8 +50,9 @@ func Aggregate(trace string, sim stack.Similarity) (*AggregateStack, error) {
 	buckets := stack.Aggregate(c.Goroutines, sim)
 
 	return &AggregateStack{
-		trace:   trace,
-		buckets: buckets,
+		trace:      trace,
+		buckets:    buckets,
+		similarity: sim,
 	}, nil
 }
 
@@ -61,6 +63,20 @@ func (a *AggregateStack) Buckets() []*stack.Bucket {
 func (a *AggregateStack) String() string {
 	s, _ := a.AsText()
 	return s
+}
+
+func (a *AggregateStack) SimilarityString() string {
+	switch a.similarity {
+	case stack.ExactFlags:
+		return "identical"
+	case stack.ExactLines:
+		return "exact"
+	case stack.AnyPointer:
+		return "normal"
+	case stack.AnyValue:
+		return "aggressive"
+	}
+	return "unknown"
 }
 
 // AsText converts this stack to a text based form.
