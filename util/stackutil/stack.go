@@ -1,7 +1,9 @@
 package stackutil
 
 import (
+	"fmt"
 	"runtime"
+	"strings"
 	"sync"
 
 	"github.com/qluvio/content-fabric/log"
@@ -40,4 +42,38 @@ func FullStack() (stack string) {
 		n = runtime.Stack(buf, true)
 	}
 	return string(buf[:n])
+}
+
+// Caller reports information on the caller at the given index in calling
+// goroutine's stack. The argument index is the number of stack frames to ascend,
+// with 0 identifying the caller of Caller.
+// This function uses internally runtime.Caller
+// The returned string contains the 'simple' name of the package and function
+// followed by (file-name:line-number) of the caller.
+// Example:
+// file:     Users/xx/eluv.io/ws/src/content-fabric/util/stackutil/stack_test.go
+// function: github.com/qluvio/content-fabric/util/stackutil_test.TestCaller
+// results:
+// stackutil_test.TestCaller (stack_test.go:66)
+func Caller(index int) string {
+	simpleName := func(name string) string {
+		if n := strings.LastIndex(name, "/"); n > 0 {
+			name = name[n+1:]
+		}
+		return name
+	}
+
+	fname := "unknown"
+	pc, file, line, ok := runtime.Caller(index + 1) // account for this call
+	if !ok {
+		file = "??"
+		line = 1
+	} else {
+		file = simpleName(file)
+	}
+	f := runtime.FuncForPC(pc)
+	if f != nil {
+		fname = simpleName(f.Name())
+	}
+	return fmt.Sprintf("%s (%s:%d)", fname, file, line)
 }

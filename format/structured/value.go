@@ -2,6 +2,7 @@ package structured
 
 import (
 	"encoding/json"
+	"github.com/qluvio/content-fabric/errors"
 	"time"
 
 	"github.com/qluvio/content-fabric/format/utc"
@@ -129,6 +130,9 @@ func (v *Value) IsError() bool {
 
 // Error returns the error if this Value wraps an error, nil otherwise.
 func (v *Value) Error() error {
+	if v == nil {
+		return errors.E("", errors.K.Invalid, "reason", "nil value")
+	}
 	return v.err
 }
 

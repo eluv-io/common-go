@@ -443,7 +443,8 @@ func resolveTransform(path Path, target interface{}, transform TransformerFn) (i
 					if !found {
 						return nil, e(errors.K.Invalid,
 							"reason", "struct field not found",
-							"path", path[:idx])
+							"path", path[:idx],
+							"type", errors.TypeOf(node))
 					}
 				}
 			} else {

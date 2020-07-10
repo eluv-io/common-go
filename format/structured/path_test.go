@@ -6,6 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/qluvio/content-fabric/util/jsonutil"
 )
 
 func TestNewPath(t *testing.T) {
@@ -168,6 +170,32 @@ func TestEscapeSeparators(t *testing.T) {
 			} else {
 				require.Equal(t, test.want, EscapeSeparators(test.path, test.sep...))
 			}
+		})
+	}
+}
+
+func TestPathParsePaths(t *testing.T) {
+	tests := []struct {
+		paths []string
+		want  []Path
+	}{
+		{
+			paths: nil,
+			want:  nil,
+		},
+		{
+			paths: []string{},
+			want:  []Path{},
+		},
+		{
+			paths: []string{"/", "/a", "/b/c"},
+			want:  []Path{{}, {"a"}, {"b", "c"}},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(jsonutil.MarshalCompactString(tt.paths), func(t *testing.T) {
+			res := ParsePaths(tt.paths)
+			require.Equal(t, tt.want, res)
 		})
 	}
 }

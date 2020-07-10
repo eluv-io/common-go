@@ -178,6 +178,20 @@ func ParsePathDec(decoder *strings.Replacer, path string, separator ...string) P
 	return p
 }
 
+// ParsePaths parses all paths in the given slice into Path objects, using the
+// given optional path separator and the default path decoder (RFC6901). If no
+// separator is specified, the default separator '/' is used.
+func ParsePaths(paths []string, separator ...string) []Path {
+	if paths == nil {
+		return nil
+	}
+	res := make([]Path, len(paths))
+	for i, p := range paths {
+		res[i] = ParsePath(p, separator...)
+	}
+	return res
+}
+
 func resolve(separator []string) string {
 	sep := defaultSeparator
 	if len(separator) > 0 {
