@@ -85,7 +85,7 @@ var codeToName = map[Code]string{
 	KMS:             "KMS",
 	CachedResultSet: "cached result set",
 	Tenant:          "tenant",
-	Group: 			 "group",
+	Group:           "group",
 }
 
 func init() {
