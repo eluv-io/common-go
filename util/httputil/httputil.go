@@ -208,6 +208,12 @@ func RemoveRedirectedQuery(u *url.URL) {
 	u.RawQuery = q.Encode()
 }
 
+func SetRefererQuery(u *url.URL, r string) {
+	q := u.Query()
+	q.Set("header-referer", r)
+	u.RawQuery = q.Encode()
+}
+
 // ShouldRetry returns true if a failed HTTP request should be retried, false
 // otherwise.
 // Adapted from DefaultRetryPolicy in github.com/hashicorp/go-retryablehttp.
@@ -362,19 +368,28 @@ func SetReqNodes(headers http.Header, reqNodes map[string]bool) {
 
 // GetCombinedHeader returns all values of all header names as a single string,
 // individual header values separated by ",".
-func GetCombinedHeader(header http.Header, query url.Values, headers ...string) string {
+func GetCombinedHeader(header http.Header, query url.Values, queryFirst bool, headers ...string) string {
 	res := make([]string, 0)
+	hval := make([]string, 0)
+	qval := make([]string, 0)
 	for _, h := range headers {
+		hval = hval[:0]
 		if v, ok := header[http.CanonicalHeaderKey(h)]; ok {
 			for _, s := range v {
-				res = append(res, s)
+				hval = append(hval, s)
 			}
 		}
+		qval = qval[:0]
 		if v, ok := query["header-"+
 			strings.ReplaceAll(strings.ToLower(h), "-", "_")]; ok {
 			for _, s := range v {
-				res = append(res, s)
+				qval = append(qval, s)
 			}
+		}
+		if queryFirst {
+			res = append(append(res, qval...), hval...)
+		} else {
+			res = append(append(res, hval...), qval...)
 		}
 	}
 	return strings.Join(res, ",")
