@@ -48,6 +48,6 @@ func (b *BaseTest) Run(name string, f func()) bool {
 	})
 }
 
-func Parallel() {
-	panic("parallel test not supported - used testing.T.Run() for parallel subtests")
+func (b *BaseTest) Parallel() {
+	panic("parallel test not supported - use testing.T.Run() for parallel subtests")
 }
