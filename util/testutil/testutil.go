@@ -28,19 +28,22 @@ type BaseTest struct {
 }
 
 // Run runs a subtest with the given name similar to testing.T.Run(). In
-// addition, it replaces the embedded *testing.T instance for the
-// duration of the subtest with the subtest's instance. As a consequence,
-// though, parallel tests are disabled.
+// addition, it replaces the embedded *testing.T and *require.Assertions
+// instance for the duration of the subtest with the subtest's instances. As a
+// consequence, though, parallel tests are disabled.
 func (b *BaseTest) Run(name string, f func()) bool {
 	return b.T.Run(name, func(t *testing.T) {
 		b.mutex.Lock()
-		parent := b.T
+		parentT := b.T
+		parentA := b.Assertions
 		b.T = t
+		b.Assertions = require.New(t)
 		b.mutex.Unlock()
 
 		defer func() {
 			b.mutex.Lock()
-			b.T = parent
+			b.T = parentT
+			b.Assertions = parentA
 			b.mutex.Unlock()
 		}()
 
