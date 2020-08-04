@@ -212,8 +212,24 @@ func IsIDString(s string) bool {
 	return true
 }
 
-// FromString parses an ID from the given string representation.
+// FromString parses an ID from the given string representation. Alias for
+// Parse().
 func FromString(s string) (ID, error) {
+	return Parse(s)
+}
+
+// MustParse parses an ID from the given string representation. Panics if the
+// string cannot be parsed.
+func MustParse(s string) ID {
+	res, err := Parse(s)
+	if err != nil {
+		panic(err)
+	}
+	return res
+}
+
+// Parse parses an ID from the given string representation.
+func Parse(s string) (ID, error) {
 	e := errors.Template("parse ID", errors.K.Invalid, "string", s)
 	if len(s) <= prefixLen {
 		if len(s) == 0 {
