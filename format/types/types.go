@@ -93,3 +93,6 @@ type QIDSet struct {
 	QID    QID
 	QHash  QHash
 }
+
+// The user context of an auth token
+type TokenUsrCtx = map[string]interface{}
