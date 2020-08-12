@@ -432,15 +432,30 @@ func resolveTransform(path Path, target interface{}, transform TransformerFn) (i
 					node = f.Interface()
 				} else {
 					found := false
+					var squashed [][]int
 					for i := 0; i < typ.NumField(); i++ {
-						field := typ.Field(i)
-						if tagMatches(field.Tag, path[idx]) {
-							node = val.FieldByIndex(field.Index).Interface()
-							found = true
-							break
+						field = typ.Field(i)
+						hasJson, name, squash := parseTag(field.Tag)
+						if hasJson {
+							if squash {
+								squashed = append(squashed, field.Index)
+							} else if name == path[idx] {
+								node = val.FieldByIndex(field.Index).Interface()
+								found = true
+								break
+							}
 						}
 					}
 					if !found {
+						for _, fieldIndex := range squashed {
+							node, err = resolveTransform(
+								path[idx:],
+								val.FieldByIndex(fieldIndex).Interface(),
+								transform)
+							if err == nil {
+								return node, nil
+							}
+						}
 						return nil, e(errors.K.Invalid,
 							"reason", "struct field not found",
 							"path", path[:idx],
@@ -469,4 +484,29 @@ func tagMatches(tag reflect.StructTag, name string) bool {
 
 	split := strings.Split(jsn, ",")
 	return len(split) > 0 && split[0] == name
+}
+
+// parseTag parses the given struct tag and determines whether it contains a
+// JSON key, the JSON name and the squash flag (defined by the mapstructure
+// lib).
+func parseTag(tag reflect.StructTag) (hasJson bool, name string, squash bool) {
+	if tag == "" {
+		return false, "", false
+	}
+
+	jsn, ok := tag.Lookup("json")
+	if !ok {
+		return false, "", false
+	}
+
+	split := strings.Split(jsn, ",")
+	if len(split) > 0 {
+		name = split[0]
+		for _, item := range split[1:] {
+			if item == "squash" {
+				squash = true
+			}
+		}
+	}
+	return true, name, squash
 }

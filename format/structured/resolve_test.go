@@ -221,6 +221,7 @@ func TestResolveSubCreate(t *testing.T) {
 func TestResolveTransform(t *testing.T) {
 	transErr := errors.Str("transformer error")
 	tests := []struct {
+		name      string
 		path      string
 		source    interface{}
 		trans     TransformerFn
@@ -302,7 +303,8 @@ func TestResolveTransform(t *testing.T) {
 			},
 			want: "d",
 		},
-		{ // resolve works with a struct
+		{
+			name: "struct",
 			path: "/Name",
 			source: &testStruct{
 				Name:        "James Bond",
@@ -310,7 +312,8 @@ func TestResolveTransform(t *testing.T) {
 			},
 			want: "James Bond",
 		},
-		{ // invalid struct field name
+		{
+			name: "invalid struct field name",
 			path: "/Unknown",
 			source: &testStruct{
 				Name:        "James Bond",
@@ -318,44 +321,92 @@ func TestResolveTransform(t *testing.T) {
 			},
 			wantError: true,
 		},
-		{ // struct & struct tags
+		{
+			name: "struct & struct tags",
 			path: "/name",
-			source: &testStructWithTags{
+			source: &ResRestStructWithTags{
 				Name:        "James Bond",
 				Description: "desc",
 			},
 			want: "James Bond",
 		},
-		{ // invalid struct & struct tags (tag overrides struct field name)
+		{
+			name: "invalid struct & struct tags (tag overrides struct field name)",
 			path: "/Name",
-			source: &testStructWithTags{
+			source: &ResRestStructWithTags{
 				Name:        "James Bond",
 				Description: "desc",
 			},
 			wantError: true,
 		},
-		{ // struct & struct tags (tag same as field name)
+		{
+			name: "struct & struct tags (tag same as field name)",
 			path: "/Description",
-			source: &testStructWithTags{
+			source: &ResRestStructWithTags{
 				Name:        "James Bond",
 				Description: "desc",
 			},
 			want: "desc",
 		},
-		{ // nested structs
+		{
+			name: "nested struct",
 			path: "/nested/name",
 			source: &nestedStruct{
 				Type: "nested",
-				Nested: testStructWithTags{
+				Nested: ResRestStructWithTags{
 					Name:        "James Bond",
 					Description: "desc",
 				},
 			},
 			want: "James Bond",
 		},
+		{
+			name: "nested anonymous struct",
+			path: "/nested/name",
+			source: &nestedAnonymousStruct{
+				Type: "nested anonymous",
+				ResRestStructWithTags: ResRestStructWithTags{
+					Name:        "James Bond",
+					Description: "desc",
+				},
+			},
+			want: "James Bond",
+		},
+		{
+			name: "nested anonymous squashed struct",
+			path: "/name",
+			source: &nestedAnonymousSquashedStruct{
+				Type: "nested anonymous squashed",
+				ResRestStructWithTags: ResRestStructWithTags{
+					Name:        "James Bond",
+					Description: "desc",
+				},
+			},
+			want: "James Bond",
+		},
+		{
+			name: "nested anonymous squashed struct - access map",
+			path: "/key2",
+			source: &nestedAnonymousSquashedStruct{
+				Type: "nested anonymous squashed",
+				ResRestStructWithTags: ResRestStructWithTags{
+					Name:        "James Bond",
+					Description: "desc",
+				},
+				AMap: map[string]interface{}{
+					"key1": "val1",
+					"key2": "val2",
+				},
+			},
+			want: "val2",
+		},
 	}
 	for _, tt := range tests {
-		t.Run("path["+tt.path+"]", func(t *testing.T) {
+		name := tt.name
+		if name == "" {
+			name = "path[" + tt.path + "]"
+		}
+		t.Run(name, func(t *testing.T) {
 			res, err := Resolve(ParsePath(tt.path, "/"), tt.source, tt.trans)
 			if tt.wantError {
 				require.Error(t, err)
@@ -364,7 +415,7 @@ func TestResolveTransform(t *testing.T) {
 				require.Equal(t, tt.want, res)
 			}
 		})
-		t.Run("pass-as-reference_path["+tt.path+"]", func(t *testing.T) {
+		t.Run("pass-as-reference:"+name, func(t *testing.T) {
 			res, err := Resolve(ParsePath(tt.path, "/"), &tt.source, tt.trans)
 			if tt.wantError {
 				require.Error(t, err)
@@ -381,12 +432,23 @@ type testStruct struct {
 	Description string
 }
 
-type testStructWithTags struct {
+type ResRestStructWithTags struct {
 	Name        string `json:"name,omitempty"`
 	Description string `json:"Description"`
 }
 
 type nestedStruct struct {
-	Type   string             `json:"type"`
-	Nested testStructWithTags `json:"nested"`
+	Type   string                `json:"type"`
+	Nested ResRestStructWithTags `json:"nested"`
+}
+
+type nestedAnonymousStruct struct {
+	Type                  string `json:"type"`
+	ResRestStructWithTags `json:"nested"`
+}
+
+type nestedAnonymousSquashedStruct struct {
+	Type                  string `json:"type"`
+	ResRestStructWithTags `json:",squash"`
+	AMap                  map[string]interface{} `json:",squash"`
 }
