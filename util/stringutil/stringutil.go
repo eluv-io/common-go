@@ -3,6 +3,7 @@ package stringutil
 import (
 	"fmt"
 	"math/rand"
+	"reflect"
 	"strconv"
 	"strings"
 	"unicode"
@@ -141,4 +142,35 @@ func isLineSep(r rune) bool {
 
 func SplitToLines(bb []byte) []string {
 	return strings.FieldsFunc(string(bb), isLineSep)
+}
+
+// StringSlice returns a slice of strings if the given value is a slice
+// containing only strings. It returns nil otherwise.
+func StringSlice(v interface{}) []string {
+	if v == nil {
+		return nil
+	}
+
+	av := reflect.ValueOf(v)
+	if av.Kind() != reflect.Slice {
+		return nil
+	}
+	ret := make([]string, 0)
+	for i := 0; i < av.Len(); i++ {
+		sv := av.Index(i)
+		switch sv.Kind() {
+		case reflect.String:
+			ret = append(ret, sv.String())
+		case reflect.Interface:
+			switch sv.Elem().Kind() {
+			case reflect.String:
+				ret = append(ret, sv.Elem().String())
+			default:
+				return nil
+			}
+		default:
+			return nil
+		}
+	}
+	return ret
 }

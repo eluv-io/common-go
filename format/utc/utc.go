@@ -1,12 +1,25 @@
 package utc
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/qluvio/content-fabric/errors"
 )
 
-const ISO8601Format = "2006-01-02T15:04:05.000Z07:00"
+const (
+	ISO8601         = "2006-01-02T15:04:05.000Z07:00"
+	ISO8601DateOnly = "2006-01-02Z07:00"
+	ISO8601NoMilli  = "2006-01-02T15:04:05Z07:00"
+	ISO8601NoSec    = "2006-01-02T15:04Z07:00"
+)
+
+var formats = []string{
+	ISO8601,
+	ISO8601DateOnly,
+	ISO8601NoMilli,
+	ISO8601NoSec,
+}
 
 // New creates a new UTC instance from the given time. Use utc.Now() to get the
 // current time.
@@ -139,6 +152,24 @@ func (u UTC) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + u.String() + `"`), nil
 }
 
+func (u *UTC) UnmarshalJSON(data []byte) error {
+	var s string
+	err := json.Unmarshal(data, &s)
+	if err != nil {
+		return err
+	}
+	return u.UnmarshalText([]byte(s))
+}
+
+func (u *UTC) UnmarshalText(data []byte) error {
+	utc, err := FromString(string(data))
+	if err != nil {
+		return err
+	}
+	*(&u.Time) = utc.Time
+	return nil
+}
+
 // MarshalText implements the encoding.TextMarshaler interface.
 // Contrary to time.Time, it always marshals milliseconds, even if they are all
 // zeros (i.e. 2006-01-02T15:04:05.000Z instead of 2006-01-02T15:04:05Z)
@@ -221,11 +252,15 @@ func (u *UTC) UnmarshalBinary(data []byte) error {
 
 // FromString parses the given time string.
 func FromString(s string) (UTC, error) {
-	t, err := time.Parse(ISO8601Format, s)
-	if err != nil {
-		return UTC{}, errors.E("parse", err, "duration_spec", s)
+	var t time.Time
+	var err error
+	for _, format := range formats {
+		t, err = time.Parse(format, s)
+		if err == nil {
+			return UTC{t}, nil
+		}
 	}
-	return UTC{t}, nil
+	return Zero, errors.E("parse", err, "utc", s)
 }
 
 // MustParse parses the given time string according to ISO 8601 format,
