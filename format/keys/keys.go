@@ -38,6 +38,7 @@ const (
 	EthPublicKey
 	EthPrivateKey
 	FabricNodePublicKey
+	UserPublicKey
 )
 
 const codeLen = 1
@@ -61,6 +62,7 @@ var keyPrefixToCode = map[string]KeyCode{
 	"kepk": EthPublicKey,        // ethereum public key - may or many not be compressed
 	"kesk": EthPrivateKey,       //
 	"knod": FabricNodePublicKey, // fabric node public key
+	"kupk": UserPublicKey,       // key user public key
 }
 
 func init() {
@@ -88,7 +90,7 @@ func (id KID) String() string {
 
 // AssertCode checks whether the ID's Code equals the provided Code
 func (id KID) AssertCode(c KeyCode) error {
-	if id.Code() != c {
+	if len(id) < codeLen || id.Code() != c {
 		return errors.E("ID Code check", errors.K.Invalid,
 			"expected", keyCodeToPrefix[c],
 			"actual", id.prefix())

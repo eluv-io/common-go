@@ -26,6 +26,12 @@ func TestGenerate(t *testing.T) {
 	assert.NoError(t, idFromString.AssertCode(User))
 
 	assert.Equal(t, generated, idFromString)
+
+	assert.True(t, generated.Equal(idFromString))
+	assert.False(t, generated.Equal(nil))
+	var nilID ID
+	//noinspection GoNilness
+	assert.False(t, nilID.Equal(generated))
 }
 
 func TestStringConversion(t *testing.T) {

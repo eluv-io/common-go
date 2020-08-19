@@ -22,17 +22,35 @@ var oneBillion = time.Unix(1000000000, 0)
 const oneBillionString = "2001-09-09T01:46:40.000Z"
 
 func TestFormatting(t *testing.T) {
-	fmt.Println(oneBillion.UTC().Format(utc.ISO8601Format))
+	fmt.Println(oneBillion.UTC().Format(utc.ISO8601))
 	ut := utc.New(oneBillion)
 	assert.Equal(t, oneBillionString, ut.String())
 	assertTimezone(t, ut)
 }
 
 func TestParsing(t *testing.T) {
-	ut, err := utc.FromString(oneBillionString)
-	require.NoError(t, err)
-	require.True(t, oneBillion.Equal(ut.Time))
-	assertTimezone(t, ut)
+	tests := []struct {
+		s       string
+		want    time.Time
+		wantErr bool
+	}{
+		{oneBillionString, oneBillion, false},
+		{"2001-09-09Z", oneBillion.Truncate(24 * time.Hour), false},
+		{"2001-09-09T01:46:40Z", oneBillion.Truncate(time.Second), false},
+		{"2001-09-09T01:46Z", oneBillion.Truncate(time.Minute), false},
+		{"2001-09-09", time.Time{}, true},
+	}
+
+	for _, test := range tests {
+		ut, err := utc.FromString(test.s)
+		if test.wantErr {
+			require.Error(t, err)
+		} else {
+			require.NoError(t, err)
+			require.True(t, test.want.Equal(ut.Time))
+			assertTimezone(t, ut)
+		}
+	}
 }
 
 func TestJSON(t *testing.T) {
@@ -43,11 +61,29 @@ func TestJSON(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "\""+oneBillionString+"\"", string(b))
 
-	var unmarshalled utc.UTC
-	err = json.Unmarshal(b, &unmarshalled)
-	assert.NoError(t, err)
-	assert.Equal(t, ut, unmarshalled)
-	assertTimezone(t, unmarshalled)
+	tests := []struct {
+		s       string
+		want    time.Time
+		wantErr bool
+	}{
+		{oneBillionString, oneBillion, false},
+		{"2001-09-09Z", oneBillion.Truncate(24 * time.Hour), false},
+		{"2001-09-09T01:46:40Z", oneBillion.Truncate(time.Second), false},
+		{"2001-09-09T01:46Z", oneBillion.Truncate(time.Minute), false},
+		{"2001-09-09", time.Time{}, true},
+	}
+
+	for _, test := range tests {
+		var unmarshalled utc.UTC
+		err = json.Unmarshal([]byte(`"`+test.s+`"`), &unmarshalled)
+		if test.wantErr {
+			assert.Error(t, err)
+		} else {
+			assert.NoError(t, err)
+			assert.Equal(t, utc.New(test.want), unmarshalled)
+			assertTimezone(t, unmarshalled)
+		}
+	}
 }
 
 type Wrapper struct {
@@ -172,7 +208,7 @@ func TestString(t *testing.T) {
 		utc.MustParse("9999-12-31T23:59:59.999Z"),
 	}
 	for _, val := range vals {
-		assert.Equal(t, val.Time.Format(utc.ISO8601Format), val.String())
+		assert.Equal(t, val.Time.Format(utc.ISO8601), val.String())
 		fmt.Println(val)
 	}
 
@@ -205,7 +241,7 @@ func BenchmarkString(b *testing.B) {
 		name string
 		fn   func()
 	}{
-		{"time.Time.String", func() { _ = now.Time.Format(utc.ISO8601Format) }},
+		{"time.Time.String", func() { _ = now.Time.Format(utc.ISO8601) }},
 		{"utc.UTC.StringOpt", func() { _ = now.String() }},
 	}
 	for _, bm := range benchmarks {
