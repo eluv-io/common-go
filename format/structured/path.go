@@ -199,3 +199,14 @@ func resolve(separator []string) string {
 	}
 	return sep
 }
+
+// EscapeSeparators escapes all separators in the given path string, using the
+// given optional path separator and corresponding path encoder (RFC6901). If no
+// separator is specified, the default separator '/' is used.
+func EscapeSeparators(path string, separator ...string) string {
+	sep := resolve(separator)
+	if sep == defaultSeparator {
+		return rfc6901Encoder.Replace(path)
+	}
+	return strings.NewReplacer("~", "~0", sep, "~1").Replace(path)
+}

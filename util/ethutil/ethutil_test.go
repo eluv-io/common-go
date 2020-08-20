@@ -1,16 +1,21 @@
 package ethutil
 
 import (
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/qluvio/content-fabric/format/id"
-	"github.com/stretchr/testify/require"
+	"fmt"
 	"math/big"
 	"math/rand"
 	"testing"
+
+	"github.com/qluvio/content-fabric/format/id"
+	"github.com/qluvio/content-fabric/format/keys"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/stretchr/testify/require"
 )
 
 func TestAddrXXID(t *testing.T) {
-
 	a := "0x90f8bf6a479f320ead074411a4b0e7944ea8c9c1"
 	ispc := "ispc329GX6UVyuWzwPzqDHm5shxfNgrc"
 	ispcId, err := id.FromString(ispc)
@@ -56,7 +61,7 @@ func TestAddrToFromID(t *testing.T) {
 	require.Equal(t, common.Address{}, addr)
 }
 
-func TestNullKMDAddress(t *testing.T) {
+func TestNullKMSAddress(t *testing.T) {
 	nullAddress := common.BigToAddress(big.NewInt(0))
 
 	nullId := id.NewID(id.KMS, nullAddress.Bytes())
@@ -80,4 +85,28 @@ func TestAddressEqualsID(t *testing.T) {
 	nid = id.NewID(id.Q, bb)
 	b = AddressEqualsID(addr, nid)
 	require.True(t, b)
+}
+
+func TestToPublicKeyAndID(t *testing.T) {
+	k, err := crypto.GenerateKey()
+	require.NoError(t, err)
+
+	compressedPubBytes := crypto.CompressPubkey(&k.PublicKey)
+	compressedPubString := hexutil.Encode(compressedPubBytes)
+	//fmt.Println("compressedPubString", compressedPubString)
+	compDec, err := hexutil.Decode(compressedPubString)
+	require.NoError(t, err)
+	decCompPub, err := crypto.DecompressPubkey(compDec)
+	require.NoError(t, err)
+	require.Equal(t, &k.PublicKey, decCompPub)
+
+	kid, nid := ToPublicKeyAndID(k, id.User)
+	kid2, err := keys.UserPublicKey.FromString(kid.String())
+	require.NoError(t, err)
+	decPub, err := crypto.DecompressPubkey(kid2.Bytes())
+	require.NoError(t, err)
+	require.Equal(t, &k.PublicKey, decPub)
+	require.Equal(t, crypto.PubkeyToAddress(*decPub), IDToAddress(nid))
+	fmt.Println("user_id", nid)
+	fmt.Println("address", crypto.PubkeyToAddress(*decPub).String())
 }

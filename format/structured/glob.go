@@ -180,30 +180,33 @@ func (f *globFilter) filter(target interface{}, selectAll bool) (interface{}, bo
 		if hasWildcard {
 			selectAll = selectAll || wcf.typ == typSelect
 		}
-		var retain bool
 		if hasWildcard || selectAll {
 			for k, v := range t {
+				retainWC := true
 				if hasWildcard {
-					v, retain = wcf.filter(v, selectAll)
-					if !retain {
-						continue
+					if nv, retain := wcf.filter(v, selectAll); retain {
+						retainWC = true
+						v = nv
+					} else {
+						retainWC = false
 					}
 				}
 				if child, found := f.children[k]; found {
-					v, retain = child.filter(v, selectAll)
-					if !retain {
-						continue
+					if nv, retain := child.filter(v, selectAll); retain {
+						res[k] = nv
 					}
+					continue
 				}
-				res[k] = v
+				if retainWC {
+					res[k] = v
+				}
 			}
 		} else {
 			// no wildcard
 			for k, child := range f.children {
 				if v, has := t[k]; has {
-					v, retain = child.filter(v, selectAll)
-					if retain {
-						res[k] = v
+					if nv, retain := child.filter(v, selectAll); retain {
+						res[k] = nv
 					}
 				}
 			}

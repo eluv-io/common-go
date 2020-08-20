@@ -618,6 +618,168 @@ func TestFilterGlob(t *testing.T) {
 							}
 						`),
 		},
+		{
+			name: "iss-1237",
+			args: args{
+				target: tc.iss1237(),
+				selectPaths: []structured.Path{
+					structured.ParsePath("*/*/title"),
+					structured.ParsePath("*/title"),
+					structured.ParsePath("*/."),
+				},
+			},
+			want: tc.parse(`
+							{
+							  "iron-sky---the-coming-race": {
+								".": {
+								  "source": "hq__TDWrPeHmExp5roZ2UwcBnQ7KfVV73ho1nLJ8ZkKTU5TjetbwPBSvKwn4wUNYxscyWEJPLYceF"
+								},
+								"title": "Iron Sky - The Coming Race (2019)"
+							  },
+							  "meridian": {
+								".": {
+								  "source": "hq__BkabPUUnrySh3aH2dFxqc6K34FRfU1q4odFERifoPzzBtMP1AepTLqB9MBQCKjDp77K4ounSyi"
+								},
+								"title": "Meridian"
+							  }
+							}
+					`),
+		},
+		{
+			name: "iss-1237.arrays.1",
+			args: args{
+				target: tc.parse(`
+									[
+									  [
+										{
+										  "title": "title 1",
+										  "a": "va",
+										  "b": "vb"
+										}
+									  ],
+									  [
+										{
+										  "title": "title 2",
+										  "c": "vc",
+										  "d": "vd"
+										}
+									  ]
+									]
+
+								`),
+				selectPaths: []structured.Path{
+					structured.ParsePath("*/*/title"),
+					structured.ParsePath("*/*/*/title"),
+					structured.ParsePath("*/title"),
+					structured.ParsePath("*/."),
+					structured.ParsePath("*/*/path/does/not/exist"),
+				},
+				removePaths: []structured.Path{
+					structured.ParsePath("*/*/whatever"),
+				},
+			},
+			want: tc.parse(`
+							[
+							  [
+								{
+								  "title": "title 1"
+								}
+							  ],
+							  [
+								{
+								  "title": "title 2"
+								}
+							  ]
+							]
+					`),
+		},
+		{
+			name: "iss-1237.arrays.2",
+			args: args{
+				target: tc.parse(`
+									{
+									  "m1": [
+										{
+										  "title": "title 1",
+										  "a": "va",
+										  "b": "vb"
+										}
+									  ],
+									  "m2": [
+										{
+										  "title": "title 2",
+										  "c": "vc",
+										  "d": "vd"
+										}
+									  ]
+									}
+
+								`),
+				selectPaths: []structured.Path{
+					structured.ParsePath("*/*/title"),
+					structured.ParsePath("*/*/*/title"),
+					structured.ParsePath("*/title"),
+					structured.ParsePath("*/."),
+					structured.ParsePath("*/*/path/does/not/exist"),
+				},
+				removePaths: []structured.Path{
+					structured.ParsePath("*/*/whatever"),
+				},
+			},
+			want: tc.parse(`
+							{
+							  "m1": [
+								{
+								  "title": "title 1"
+								}
+							  ],
+							  "m2": [
+								{
+								  "title": "title 2"
+								}
+							  ]
+							}
+					`),
+		},
+		{
+			name: "iss-1237.arrays.3",
+			args: args{
+				target: tc.parse(`
+									[
+									  {
+									    "title": "title 1",
+									    "a": "va",
+									    "b": "vb"
+									  },
+									  {
+									    "title": "title 2",
+									    "c": "vc",
+									    "d": "vd"
+									  }
+									]
+								`),
+				selectPaths: []structured.Path{
+					structured.ParsePath("*/*/title"),
+					structured.ParsePath("*/*/*/title"),
+					structured.ParsePath("*/title"),
+					structured.ParsePath("*/."),
+					structured.ParsePath("*/*/path/does/not/exist"),
+				},
+				removePaths: []structured.Path{
+					structured.ParsePath("*/*/whatever"),
+				},
+			},
+			want: tc.parse(`
+							[
+							  {
+							    "title": "title 1"
+							  },
+							  {
+							    "title": "title 2"
+							  }
+							]
+					`),
+		},
 	}
 	for _, tt := range tests {
 		targets := []interface{}{tt.args.target}
@@ -626,7 +788,7 @@ func TestFilterGlob(t *testing.T) {
 		}
 		wants := make([]interface{}, len(targets))
 		if tt.wants == nil {
-			for i, _ := range wants {
+			for i := range wants {
 				wants[i] = tt.want
 			}
 		} else {
@@ -638,7 +800,9 @@ func TestFilterGlob(t *testing.T) {
 				name = fmt.Sprintf("%s-target-%d", name, i+1)
 			}
 			t.Run(name, func(t *testing.T) {
+				fmt.Println("test", name)
 				got := structured.FilterGlob(target, tt.args.selectPaths, tt.args.removePaths)
+				tc.Equal(jsonutil.MarshalString(wants[i]), jsonutil.MarshalString(got), jsonutil.MarshalString(got))
 				tc.Equal(wants[i], got, jsonutil.MarshalString(got))
 			})
 		}
@@ -658,14 +822,18 @@ func newCtx(t *testing.T) *tctx {
 func (tc *tctx) site() interface{} {
 	bytes, err := ioutil.ReadFile("testdata/site.json")
 	tc.NoError(err)
-
 	return tc.parse(string(bytes))
 }
 
 func (tc *tctx) siteWithArrays() interface{} {
 	bytes, err := ioutil.ReadFile("testdata/site_with_arrays.json")
 	tc.NoError(err)
+	return tc.parse(string(bytes))
+}
 
+func (tc *tctx) iss1237() interface{} {
+	bytes, err := ioutil.ReadFile("testdata/iss-1237.json")
+	tc.NoError(err)
 	return tc.parse(string(bytes))
 }
 

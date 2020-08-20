@@ -2,7 +2,11 @@ package structured
 
 import (
 	"encoding/json"
+	"time"
 
+	"github.com/qluvio/content-fabric/errors"
+
+	"github.com/qluvio/content-fabric/format/utc"
 	"github.com/qluvio/content-fabric/util/codecutil"
 	"github.com/qluvio/content-fabric/util/numberutil"
 )
@@ -83,8 +87,23 @@ func (v *Value) Delete(path ...string) (deleted bool) {
 	return deleted
 }
 
+// Get returns the value at the given path, specified as string slice, e.g.
+// 	val.Get("path", "to", "value")
 func (v *Value) Get(path ...string) *Value {
 	return NewValue(Resolve(path, v.Data))
+}
+
+// GetP returns the value at the given path, specified as a single string, e.g.
+// 	val.GetP("/path/to/value")
+// Alias of At()
+func (v *Value) GetP(path string) *Value {
+	return v.At(path)
+}
+
+// At returns the value at the given path, specified as a single string, e.g.
+// 	val.At("/path/to/value")
+func (v *Value) At(path string) *Value {
+	return NewValue(Resolve(ParsePath(path), v.Data))
 }
 
 func (v *Value) Query(query string) *Value {
@@ -112,6 +131,9 @@ func (v *Value) IsError() bool {
 
 // Error returns the error if this Value wraps an error, nil otherwise.
 func (v *Value) Error() error {
+	if v == nil {
+		return errors.E("", errors.K.Invalid, "reason", "nil value")
+	}
 	return v.err
 }
 
@@ -136,11 +158,26 @@ func (v *Value) Int(def ...int) int {
 	return int(v.Int64())
 }
 
-// Int returns the value as an int. If the value wraps an error, returns
+// Int64 returns the value as an int. If the value wraps an error, returns
 // the optional default value def if specified, or 0.
 func (v *Value) Int64(def ...int64) int64 {
 	if v.err == nil && v.Data != nil {
 		res, err := numberutil.AsInt64Err(v.Data)
+		if err == nil {
+			return res
+		}
+	}
+	if len(def) > 0 {
+		return def[0]
+	}
+	return 0
+}
+
+// Float64 returns the value as a float64. If the value wraps an error, returns
+// the optional default value def if specified, or 0.
+func (v *Value) Float64(def ...float64) float64 {
+	if v.err == nil && v.Data != nil {
+		res, err := numberutil.AsFloat64Err(v.Data)
 		if err == nil {
 			return res
 		}
@@ -179,20 +216,6 @@ func (v *Value) StringSlice(def ...string) []string {
 	return make([]string, 0)
 }
 
-// Slice returns the value as a generic slice. If the value wraps an
-// error, returns the optional default slice def if specified, or an empty slice.
-func (v *Value) Slice(def ...interface{}) []interface{} {
-	if v.err == nil && v.Data != nil {
-		if t, ok := v.Data.([]interface{}); ok {
-			return t
-		}
-	}
-	if len(def) > 0 {
-		return def
-	}
-	return make([]interface{}, 0)
-}
-
 // Map returns the value as a map. If the value wraps an error, returns
 // the optional default value def if specified, or an empty map.
 func (v *Value) Map(def ...map[string]interface{}) map[string]interface{} {
@@ -207,8 +230,22 @@ func (v *Value) Map(def ...map[string]interface{}) map[string]interface{} {
 	return make(map[string]interface{})
 }
 
-// String returns the value as a string. If the value wraps an error, returns
-// the optional default value def if specified, or "".
+// Slice returns the value as an []interface{}. If the value wraps an error,
+// returns the optional default slice def if specified, or an empty slice.
+func (v *Value) Slice(def ...interface{}) []interface{} {
+	if v.err == nil && v.Data != nil {
+		if t, ok := v.Data.([]interface{}); ok {
+			return t
+		}
+	}
+	if len(def) > 0 {
+		return def
+	}
+	return make([]interface{}, 0)
+}
+
+// Bool returns the value as a string. If the value wraps an error, returns
+// the optional default value def if specified, or false.
 func (v *Value) Bool(def ...bool) bool {
 	if v.err == nil && v.Data != nil {
 		if t, ok := v.Data.(bool); ok {
@@ -219,6 +256,29 @@ func (v *Value) Bool(def ...bool) bool {
 		return def[0]
 	}
 	return false
+}
+
+// UTC returns the value as a UTC instance. If the value is a string, it
+// attempts to parse it as a UTC time. If the value wraps an error, returns the
+// optional default value def if specified, or utc.Zero.
+func (v *Value) UTC(def ...utc.UTC) utc.UTC {
+	if v.err == nil && v.Data != nil {
+		switch t := v.Data.(type) {
+		case utc.UTC:
+			return t
+		case time.Time:
+			return utc.New(t)
+		case string:
+			res, err := utc.FromString(t)
+			if err == nil {
+				return res
+			}
+		}
+	}
+	if len(def) > 0 {
+		return def[0]
+	}
+	return utc.Zero
 }
 
 // Decode decodes this Value into the given target object, which is assumed

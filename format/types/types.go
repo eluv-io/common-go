@@ -19,9 +19,6 @@ type AccountID = id.ID
 // UserID is the type of user IDs
 type UserID = id.ID
 
-// GroupID is the type of group IDs
-type GroupID = id.ID
-
 // QLibID is the type of content library IDs
 type QLibID = id.ID
 
@@ -45,6 +42,9 @@ type NetworkID = id.ID
 
 // KmsID is the type of eluvio network IDs
 type KmsID = id.ID
+
+// GroupID is the type of group IDs
+type GroupID = id.ID
 
 // QHash is the type of a content hash
 type QHash = *hash.Hash
@@ -93,3 +93,6 @@ type QIDSet struct {
 	QID    QID
 	QHash  QHash
 }
+
+// The user context of an auth token
+type TokenUsrCtx = map[string]interface{}

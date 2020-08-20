@@ -57,3 +57,11 @@ func Add(m map[string]interface{}, nameValuePairs ...interface{}) map[string]int
 	}
 	return m
 }
+
+func Copy(m map[string]interface{}) map[string]interface{} {
+	cp := make(map[string]interface{})
+	for k, v := range m {
+		cp[k] = v
+	}
+	return cp
+}

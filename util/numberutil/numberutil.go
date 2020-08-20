@@ -70,6 +70,65 @@ func AsInt(val interface{}) int {
 	return int(AsInt64(val))
 }
 
+// AsFloat64 returns the given value as a float64.
+// If the value is not a number or nil, it returns the zero value float64 0.
+func AsFloat64(val interface{}) float64 {
+	res, err := AsFloat64Err(val)
+	if err != nil {
+		return 0
+	}
+	return res
+}
+
+// AsFloat64Err returns the given value as a float64, trying to convert it from
+// other number types, string or json.Number. Returns an error if the conversion
+// fails.
+func AsFloat64Err(val interface{}) (float64, error) {
+	e := errors.Template("AsFloat64", errors.K.Invalid, "value", val)
+	if val == nil {
+		return 0, e(errors.K.NotExist)
+	}
+	var result float64
+	var err error
+	switch x := val.(type) {
+	case string:
+		result, err = strconv.ParseFloat(x, 64)
+		if err != nil {
+			return 0, e(err)
+		}
+	case int:
+		result = float64(x)
+	case int8:
+		result = float64(x)
+	case int16:
+		result = float64(x)
+	case int32:
+		result = float64(x)
+	case int64:
+		result = float64(x)
+	case uint:
+		result = float64(x)
+	case uint8:
+		result = float64(x)
+	case uint16:
+		result = float64(x)
+	case uint32:
+		result = float64(x)
+	case uint64:
+		result = float64(x)
+	case float32:
+		result = float64(x)
+	case float64:
+		result = x
+	case json.Number:
+		result, err = x.Float64()
+		if err != nil {
+			return 0, e(err)
+		}
+	}
+	return result, nil
+}
+
 func MinInt(a, b int) int {
 	if a < b {
 		return a
