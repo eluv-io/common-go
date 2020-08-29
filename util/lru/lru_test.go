@@ -180,3 +180,108 @@ func constructor(key string, sleep time.Duration) func() (interface{}, error) {
 		return key, nil
 	}
 }
+
+func TestGetValidOrCreate(t *testing.T) {
+
+	modes := []constructionMode{Modes.Blocking, Modes.Concurrent, Modes.Decoupled}
+	const (
+		workers           = 20
+		cacheSize         = 10
+		keyRange          = 5 // no eviction - test expects keyRange < cacheSize
+		runTime           = "2s"
+		valid             = "500ms"
+		constructionDelay = "5ms"
+	)
+
+	runDuration := duration.MustParse(runTime).Duration()
+	constDelay := duration.MustParse(constructionDelay).Duration()
+	validity := duration.MustParse(valid).Duration()
+
+	for _, mode := range modes {
+		t.Run(fmt.Sprintf("%s-mode", mode), func(t *testing.T) {
+			lru := New(cacheSize)
+			lru.Mode = mode
+
+			keys := make([]string, keyRange)
+			for i := 0; i < keyRange; i++ {
+				keys[i] = fmt.Sprintf("k%.2d", i)
+			}
+
+			ctor := &ctor{}
+			stopChan := make(chan bool)
+			resChan := make(chan [2]int)
+			for j := 0; j < workers; j++ {
+				go func() {
+					var count, evictedCount int
+					for {
+						select {
+						case <-stopChan:
+							resChan <- [2]int{count, evictedCount}
+							return
+						default:
+							break
+						}
+						now := time.Now()
+						key := keys[rand.Intn(keyRange)]
+						val, evicted, err := lru.GetOrCreate(
+							key,
+							ctor.constructor(key, constDelay),
+							func(val interface{}) bool {
+								if now.Sub(val.(*entry).createdAt) < validity {
+									return false
+								}
+								return true // expired
+							})
+						require.NoError(t, err)
+						require.Equal(t, key, val.(*entry).key)
+						count++
+						if evicted {
+							evictedCount++
+						}
+					}
+				}()
+			}
+			time.Sleep(runDuration)
+			close(stopChan)
+
+			var totalCount, evictedCount int
+			for j := 0; j < workers; j++ {
+				res := <-resChan
+				totalCount += res[0]
+				evictedCount += res[1]
+			}
+			require.Equal(t, 0, evictedCount)
+			if mode != Modes.Concurrent {
+				require.Equal(
+					t,
+					int64(keyRange*(runDuration/validity)),
+					int64(ctor.invoked))
+			}
+
+			fmt.Println("total", totalCount, "ctor invoked", ctor.invoked)
+		})
+	}
+
+}
+
+type ctor struct {
+	invoked int
+}
+
+type entry struct {
+	key       string
+	createdAt time.Time
+}
+
+func (c *ctor) constructor(key string, sleep time.Duration) func() (interface{}, error) {
+	return func() (interface{}, error) {
+		c.invoked++
+		if sleep > 0 {
+			time.Sleep(sleep)
+		}
+		return &entry{
+			key:       key,
+			createdAt: time.Now(),
+		}, nil
+	}
+}
