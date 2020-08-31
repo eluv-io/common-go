@@ -66,7 +66,7 @@ func NewWithEvict(size int, onEvicted func(key interface{}, value interface{})) 
 	if size <= 0 {
 		size = 1
 	}
-	lru, _ := simplelru.NewLRU(size, simplelru.EvictCallback(onEvicted))
+	lru, _ := simplelru.NewLRU(size, onEvicted)
 	c := &Cache{
 		lru:  lru,
 		Mode: Modes.Blocking,
@@ -114,12 +114,21 @@ func (c *Cache) Get(key interface{}) (interface{}, bool) {
 }
 
 // GetOrCreate looks up a key's value from the cache, creating it if necessary.
-// If the key does not exist, the given constructor function is called to
-// create a new value, store it at the key and return it. If the constructor
-// fails, no value is added to the cache and the error is returned. Otherwise,
-// the new value is added to the cache, and a boolean to mark any evictions
-// from the cache is returned as defined in the Add() method.
-func (c *Cache) GetOrCreate(key interface{}, constructor func() (interface{}, error)) (val interface{}, evicted bool, err error) {
+// Invalid, staled or expired entries are discarded from the cache as dictated
+// by the first optional evict parameter.
+// - If the key does not exist, the given constructor function is called to
+//   create a new value, store it at the key and return it. If the constructor
+//   fails, no value is added to the cache and the error is returned. Otherwise,
+//   the new value is added to the cache, and a boolean to mark any evictions
+//   from the cache is returned as defined in the Add() method.
+// - If the key exists and the evict parameter is not nil, the first evict is
+//   invoked with the retrieved value. When it returns true, the value is
+//   discarded from the cache and the constructor is called.
+func (c *Cache) GetOrCreate(
+	key interface{},
+	constructor func() (interface{}, error),
+	evict ...func(val interface{}) bool) (val interface{}, evicted bool, err error) {
+
 	if c == nil {
 		val, err = constructor()
 		return val, false, err
@@ -127,24 +136,28 @@ func (c *Cache) GetOrCreate(key interface{}, constructor func() (interface{}, er
 
 	switch c.Mode {
 	case Modes.Blocking:
-		return c.getOrCreateBlocking(key, constructor)
+		return c.getOrCreateBlocking(key, constructor, evict...)
 	case Modes.Decoupled:
-		return c.getOrCreateDecoupled(key, constructor)
+		return c.getOrCreateDecoupled(key, constructor, evict...)
 	case Modes.Concurrent:
-		return c.getOrCreateConcurrent(key, constructor)
+		return c.getOrCreateConcurrent(key, constructor, evict...)
 	}
 
 	// should never get here!
-	return nil, false, errors.E("cache.GetOrCreate", errors.K.Invalid, "reason", "invalid construction mode", "mode", c.Mode)
+	return nil, false, errors.E("cache.GetValidOrCreate", errors.K.Invalid, "reason", "invalid construction mode", "mode", c.Mode)
 }
 
-func (c *Cache) getOrCreateBlocking(key interface{}, constructor func() (interface{}, error)) (val interface{}, evicted bool, err error) {
+func (c *Cache) getOrCreateBlocking(
+	key interface{},
+	constructor func() (interface{}, error),
+	evict ...func(val interface{}) bool) (val interface{}, evicted bool, err error) {
+
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
 	var ok bool
 	val, ok = c.lru.Get(key)
-	if ok {
+	if ok && (len(evict) == 0 || !evict[0](val)) {
 		return val, false, nil
 	}
 
@@ -157,13 +170,16 @@ func (c *Cache) getOrCreateBlocking(key interface{}, constructor func() (interfa
 	return val, evicted, err
 }
 
-func (c *Cache) getOrCreateDecoupled(key interface{}, constructor func() (interface{}, error)) (val interface{}, evicted bool, err error) {
+func (c *Cache) getOrCreateDecoupled(
+	key interface{},
+	constructor func() (interface{}, error),
+	evict ...func(val interface{}) bool) (val interface{}, evicted bool, err error) {
 
 	// try to get the value with regular rw lock
 	var ok bool
 	val, ok = c.Get(key)
-	if ok {
-		return val, false, err
+	if ok && (len(evict) == 0 || !evict[0](val)) {
+		return val, false, nil
 	}
 
 	// get the creation mutex for this key
@@ -172,7 +188,7 @@ func (c *Cache) getOrCreateDecoupled(key interface{}, constructor func() (interf
 
 	// try getting the value again - it might have been created in the meantime
 	val, ok = c.Get(key)
-	if ok {
+	if ok && (len(evict) == 0 || !evict[0](val)) {
 		return val, false, nil
 	}
 
@@ -187,12 +203,16 @@ func (c *Cache) getOrCreateDecoupled(key interface{}, constructor func() (interf
 	return val, evicted, nil
 }
 
-func (c *Cache) getOrCreateConcurrent(key interface{}, constructor func() (interface{}, error)) (val interface{}, evicted bool, err error) {
+func (c *Cache) getOrCreateConcurrent(
+	key interface{},
+	constructor func() (interface{}, error),
+	evict ...func(val interface{}) bool) (val interface{}, evicted bool, err error) {
+
 	// try to get the value with regular rw lock
 	var ok bool
 	val, ok = c.Get(key)
-	if ok {
-		return val, false, err
+	if ok && (len(evict) == 0 || !evict[0](val)) {
+		return val, false, nil
 	}
 
 	// create the value - holding no lock at all
