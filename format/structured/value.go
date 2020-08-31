@@ -5,10 +5,10 @@ import (
 	"time"
 
 	"github.com/qluvio/content-fabric/errors"
-
 	"github.com/qluvio/content-fabric/format/utc"
 	"github.com/qluvio/content-fabric/util/codecutil"
 	"github.com/qluvio/content-fabric/util/numberutil"
+	"github.com/qluvio/content-fabric/util/stringutil"
 )
 
 // Wrap wraps the given data structure as a structured Value object, offering
@@ -195,6 +195,18 @@ func (v *Value) String(def ...string) string {
 		if t, ok := v.Data.(string); ok {
 			return t
 		}
+	}
+	if len(def) > 0 {
+		return def[0]
+	}
+	return ""
+}
+
+// ToString converts the value to a string. Returns optional default or "" if
+// the value wraps an error or is nil.
+func (v *Value) ToString(def ...string) string {
+	if v.err == nil && v.Data != nil {
+		return stringutil.ToString(v.Data)
 	}
 	if len(def) > 0 {
 		return def[0]
