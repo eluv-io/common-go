@@ -27,6 +27,7 @@ import (
 
 const customHeaderPrefix = "X-Content-Fabric-"
 const customHeaderMultiCodecPrefix = "X-Content-Fabric-Mc-"
+const customQueryPrefix = "header-x_"
 
 var (
 	// codec used for custom headers
@@ -134,6 +135,15 @@ func GetCustomHeader(headers http.Header, key string) (string, error) {
 	val, err := base64.StdEncoding.DecodeString(headers.Get(customHeaderPrefix + key))
 	if err != nil {
 		return "", errors.E("invalid base64 value in custom header", errors.K.Invalid, err, "header_name", key, "header_value", val)
+	}
+
+	return string(val), nil
+}
+
+func GetCustomQuery(values url.Values, key string) (string, error) {
+	val, err := base64.StdEncoding.DecodeString(values.Get(customQueryPrefix + key))
+	if err != nil {
+		return "", errors.E("invalid base64 value in custom query", errors.K.Invalid, err, "query_key", key, "query_value", val)
 	}
 
 	return string(val), nil
