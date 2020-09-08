@@ -2,11 +2,11 @@ package httputil_test
 
 import (
 	"fmt"
-	"github.com/qluvio/content-fabric/constants"
 	"net/http"
 	"net/url"
 	"testing"
 
+	"github.com/qluvio/content-fabric/constants"
 	"github.com/qluvio/content-fabric/util/httputil"
 
 	"github.com/gin-gonic/gin"
