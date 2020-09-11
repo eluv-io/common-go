@@ -3,6 +3,7 @@ package byteutil
 import (
 	"sync"
 
+	"github.com/qluvio/content-fabric/log"
 	"github.com/qluvio/content-fabric/metrics"
 )
 
@@ -27,12 +28,11 @@ type Pool struct {
 }
 
 // NewPool creates a new buffer pool to service buffers of size bufSize
-func NewPool(bufSize int, bufMetrics metrics.DualCounter) *Pool {
+func NewPool(bufSize int) *Pool {
 	p := &Pool{}
 	p.BufSize = bufSize
 	p.p = &sync.Pool{New: p.new}
 	p.q = make(chan []byte)
-	p.bufMetrics = bufMetrics
 
 	// Process buffers to be released sequentially in background
 	go func() {
@@ -78,6 +78,8 @@ func (p *Pool) Put(buf []byte) {
 	if p.q != nil && cap(buf) == p.BufSize+1 {
 		// Add buffer to queue, to be released sequentially in background
 		p.q <- buf[:p.BufSize]
+	} else if buf != nil {
+		log.Debug("buffer not released back into pool", "expected_size", p.BufSize+1, "actual_size", cap(buf))
 	}
 }
 
@@ -88,6 +90,10 @@ func (p *Pool) Close() error {
 	close(p.q)
 	p.q = nil
 	return nil
+}
+
+func (p *Pool) SetMetrics(bufMetrics metrics.DualCounter) {
+	p.bufMetrics = bufMetrics
 }
 
 // Creates a byte buffer of configured size.
