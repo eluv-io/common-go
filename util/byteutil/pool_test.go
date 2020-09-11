@@ -41,7 +41,8 @@ func TestPool(t *testing.T) {
 	err := inj.Populate(ctx)
 	require.NoError(t, err)
 
-	p := byteutil.NewPool(bufSize, ctx.NetBuffers)
+	p := byteutil.NewPool(bufSize)
+	p.SetMetrics(ctx.NetBuffers)
 
 	buf := p.New()
 	// New (zero-ed) buffer of size 8 with refCount 1 should be created
@@ -135,7 +136,7 @@ func TestPool(t *testing.T) {
 // ok  	github.com/qluvio/content-fabric/util/byteutil	5.404s
 
 func BenchmarkPool(b *testing.B) {
-	p := byteutil.NewPool(bufSize, nil)
+	p := byteutil.NewPool(bufSize)
 
 	b.ReportAllocs()
 	b.ResetTimer()
