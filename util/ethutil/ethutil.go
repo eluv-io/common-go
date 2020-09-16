@@ -112,11 +112,7 @@ func DecryptKeyFile(keyfile string, password string) (*keystore.Key, error) {
 		return nil, errors.E("decrypt key file", err, "file", keyfile)
 	}
 
-	privKey, err := keystore.DecryptKey(keyBytes, password)
-	if err != nil {
-		return nil, err
-	}
-	return privKey, nil
+	return keystore.DecryptKey(keyBytes, password)
 }
 
 func DecryptKeyFileSK(keyfile string, password string) ([]byte, error) {
@@ -125,20 +121,6 @@ func DecryptKeyFileSK(keyfile string, password string) ([]byte, error) {
 		return nil, err
 	}
 	return privKey.PrivateKey.D.Bytes(), nil
-}
-
-/*
- * Decrypts an Ethereum encrypted keystore file
- * Return: private key
- */
-func DecryptKeyFileJSON(keyfile string, password string) (*keystore.Key, error) {
-	keyBytes, err := ioutil.ReadFile(keyfile)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return keystore.DecryptKey(keyBytes, password)
 }
 
 func RecryptKeyFile(keyfile string, password string, newpassword string, scryptN int) error {
