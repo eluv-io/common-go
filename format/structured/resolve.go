@@ -380,6 +380,11 @@ func resolveTransform(path Path, target interface{}, transform TransformerFn) (i
 				return nil, e(errors.K.Invalid, "reason", "invalid array index", "path", path[:idx+1])
 			}
 			aidx := int(i)
+			if aidx < 0 {
+				// treat negative index as offset from the end
+				// i.e -1 is last element
+				aidx = len(t) + aidx
+			}
 			if aidx >= len(t) || aidx < 0 {
 				return nil, e(errors.K.NotExist, "reason", "array index out of range", "path", path[:idx+1])
 			}
@@ -414,6 +419,11 @@ func resolveTransform(path Path, target interface{}, transform TransformerFn) (i
 						"path", path[:idx+1])
 				}
 				aidx := int(i)
+				if aidx < 0 {
+					// treat negative index as offset from the end
+					// i.e -1 is last element
+					aidx = val.Len() + aidx
+				}
 				if aidx >= val.Len() || aidx < 0 {
 					return nil, e(errors.K.NotExist,
 						"reason", "array index out of range",

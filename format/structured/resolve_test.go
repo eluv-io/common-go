@@ -64,6 +64,11 @@ func TestResolve(t *testing.T) {
 			source:   parse(testJson),
 			expected: "0-553-21311-3",
 		},
+		{
+			path:     "/store/books/-1/author", // last book
+			source:   parse(testJson),
+			expected: "J. R. R. Tolkien",
+		},
 	}
 	for _, tt := range tests {
 		t.Run("path["+tt.path+"]", func(t *testing.T) {
