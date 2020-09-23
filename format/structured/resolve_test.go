@@ -141,15 +141,6 @@ func TestResolveErrors(t *testing.T) {
 				"reason": "array index out of range",
 			},
 		},
-		{
-			path:   "/store/books/-1",
-			source: parse(testJson),
-			contains: jm{
-				"kind":   errors.K.NotExist,
-				"path":   ParsePath("/store/books/-1"),
-				"reason": "array index out of range",
-			},
-		},
 	}
 	for _, tt := range tests {
 		t.Run("path["+tt.path+"]", func(t *testing.T) {
