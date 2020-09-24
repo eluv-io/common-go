@@ -30,6 +30,36 @@ func IsNil(obj interface{}) bool {
 	return false
 }
 
+// IsEmpty returns true if the given object is considered "empty":
+//	* nil
+//  * collections with no element (arrays, slices, maps, channels)
+//  * nil pointer or pointer to an empty object
+//	* the zero value for all other types
+func IsEmpty(obj interface{}) bool {
+	if obj == nil {
+		return true
+	}
+
+	val := reflect.ValueOf(obj)
+
+	switch val.Kind() {
+	// collection types are empty when they have no element
+	case reflect.Array, reflect.Chan, reflect.Map, reflect.Slice:
+		return val.Len() == 0
+	// pointers are empty if nil or if the value they point to is empty
+	case reflect.Ptr:
+		if val.IsNil() {
+			return true
+		}
+		// dereference and check again
+		return IsEmpty(val.Elem().Interface())
+	// for all other types, compare against the zero value
+	default:
+		zero := reflect.Zero(val.Type())
+		return reflect.DeepEqual(obj, zero.Interface())
+	}
+}
+
 var spewConfig = spew.ConfigState{
 	Indent:                  " ",
 	DisablePointerAddresses: true,
