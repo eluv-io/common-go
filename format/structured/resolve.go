@@ -395,6 +395,20 @@ func resolveTransform(path Path, target interface{}, transform TransformerFn) (i
 			typ := reflect.TypeOf(node)
 			val := reflect.ValueOf(node)
 
+			switch typ.Kind() {
+			case reflect.Map,
+				reflect.Slice,
+				reflect.Array,
+				reflect.Ptr:
+
+				if val.IsNil() {
+					return nil, e(errors.K.NotExist,
+						"reason", "element is nil",
+						"path", path[:idx],
+						"node_type", typ)
+				}
+			}
+
 			if typ.Kind() == reflect.Ptr {
 				// dereference pointer
 				typ = typ.Elem()

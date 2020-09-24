@@ -345,6 +345,25 @@ func TestResolveTransform(t *testing.T) {
 			want: "desc",
 		},
 		{
+			name: "struct with pointer to struct",
+			path: "/nested/name",
+			source: &testStructWithPointers{
+				&ResRestStructWithTags{
+					Name:        "James Bond",
+					Description: "desc",
+				},
+			},
+			want: "James Bond",
+		},
+		{
+			name: "struct with nil pointer to struct",
+			path: "/nested/name",
+			source: &testStructWithPointers{
+				nil,
+			},
+			wantError: true,
+		},
+		{
 			name: "nested struct",
 			path: "/nested/name",
 			source: &nestedStruct{
@@ -447,4 +466,8 @@ type nestedAnonymousSquashedStruct struct {
 	Type                  string `json:"type"`
 	ResRestStructWithTags `json:",squash"`
 	AMap                  map[string]interface{} `json:",squash"`
+}
+
+type testStructWithPointers struct {
+	*ResRestStructWithTags `json:"nested"`
 }
