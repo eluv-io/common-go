@@ -8,18 +8,29 @@ import (
 )
 
 const (
-	ISO8601         = "2006-01-02T15:04:05.000Z07:00"
-	ISO8601DateOnly = "2006-01-02Z07:00"
-	ISO8601NoMilli  = "2006-01-02T15:04:05Z07:00"
-	ISO8601NoSec    = "2006-01-02T15:04Z07:00"
+	ISO8601             = "2006-01-02T15:04:05.000Z07:00"
+	ISO8601DateOnlyNoTZ = "2006-01-02"
+	ISO8601DateOnly     = "2006-01-02Z07:00"
+	ISO8601NoMilli      = "2006-01-02T15:04:05Z07:00"
+	ISO8601NoSec        = "2006-01-02T15:04Z07:00"
+	ISO8601NoMilliNoTZ  = "2006-01-02T15:04:05"
+	ISO8601NoSecNoTZ    = "2006-01-02T15:04"
 )
 
 var formats = []string{
 	ISO8601,
+	ISO8601DateOnlyNoTZ,
 	ISO8601DateOnly,
 	ISO8601NoMilli,
 	ISO8601NoSec,
+	ISO8601NoMilliNoTZ,
+	ISO8601NoSecNoTZ,
 }
+
+var (
+	Min = UTC{}                                                           // 0000-01-01T00:00:00.000000000
+	Max = New(time.Date(9999, 12, 31, 23, 59, 59, 999_999_999, time.UTC)) // 9999-12-31T23:59:59.999999999
+)
 
 // New creates a new UTC instance from the given time. Use utc.Now() to get the
 // current time.
@@ -37,20 +48,29 @@ func now() UTC {
 
 // MockNowFn allows to replace the Now func variable with a mock function and
 // returns a function to restore the default Now() implementation.
+//
+// Usage:
+//	defer MockNow(func() UTC { ... })()
 func MockNowFn(fn func() UTC) (restore func()) {
 	Now = fn
-	return func() {
-		Now = now
-	}
+	return ResetNow
 }
 
 // MockNow allows to replace the Now func variable with a function that returns
 // the given constant time and returns itself a function to restore the default
 // Now() implementation.
+//
+// Usage:
+//	defer MockNow(utc.MustParse("2020-01-01"))()
 func MockNow(time UTC) (restore func()) {
 	return MockNowFn(func() UTC {
 		return time
 	})
+}
+
+// ResetNow resets the Now func to the default implementation.
+func ResetNow() {
+	Now = now
 }
 
 // Zero is the zero value of UTC.
@@ -255,9 +275,9 @@ func FromString(s string) (UTC, error) {
 	var t time.Time
 	var err error
 	for _, format := range formats {
-		t, err = time.Parse(format, s)
+		t, err = time.ParseInLocation(format, s, time.UTC)
 		if err == nil {
-			return UTC{t}, nil
+			return UTC{t.UTC()}, nil
 		}
 	}
 	return Zero, errors.E("parse", err, "utc", s)

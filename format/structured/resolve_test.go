@@ -64,6 +64,11 @@ func TestResolve(t *testing.T) {
 			source:   parse(testJson),
 			expected: "0-553-21311-3",
 		},
+		{
+			path:     "/store/books/-1/author", // last book
+			source:   parse(testJson),
+			expected: "J. R. R. Tolkien",
+		},
 	}
 	for _, tt := range tests {
 		t.Run("path["+tt.path+"]", func(t *testing.T) {
@@ -133,15 +138,6 @@ func TestResolveErrors(t *testing.T) {
 			contains: jm{
 				"kind":   errors.K.NotExist,
 				"path":   ParsePath("/store/books/77"),
-				"reason": "array index out of range",
-			},
-		},
-		{
-			path:   "/store/books/-1",
-			source: parse(testJson),
-			contains: jm{
-				"kind":   errors.K.NotExist,
-				"path":   ParsePath("/store/books/-1"),
 				"reason": "array index out of range",
 			},
 		},
@@ -349,6 +345,25 @@ func TestResolveTransform(t *testing.T) {
 			want: "desc",
 		},
 		{
+			name: "struct with pointer to struct",
+			path: "/nested/name",
+			source: &testStructWithPointers{
+				&ResRestStructWithTags{
+					Name:        "James Bond",
+					Description: "desc",
+				},
+			},
+			want: "James Bond",
+		},
+		{
+			name: "struct with nil pointer to struct",
+			path: "/nested/name",
+			source: &testStructWithPointers{
+				nil,
+			},
+			wantError: true,
+		},
+		{
 			name: "nested struct",
 			path: "/nested/name",
 			source: &nestedStruct{
@@ -451,4 +466,8 @@ type nestedAnonymousSquashedStruct struct {
 	Type                  string `json:"type"`
 	ResRestStructWithTags `json:",squash"`
 	AMap                  map[string]interface{} `json:",squash"`
+}
+
+type testStructWithPointers struct {
+	*ResRestStructWithTags `json:"nested"`
 }

@@ -36,18 +36,27 @@ func TestParsing(t *testing.T) {
 	}{
 		{oneBillionString, oneBillion, false},
 		{"2001-09-09Z", oneBillion.Truncate(24 * time.Hour), false},
+		{"2001-09-09", oneBillion.Truncate(24 * time.Hour), false},
 		{"2001-09-09T01:46:40Z", oneBillion.Truncate(time.Second), false},
+		{"2001-09-09T02:46:40+01:00", oneBillion.Truncate(time.Second), false},
+		{"2001-09-09T01:46:40", oneBillion.Truncate(time.Second), false},
 		{"2001-09-09T01:46Z", oneBillion.Truncate(time.Minute), false},
-		{"2001-09-09", time.Time{}, true},
+		{"2001-09-09T01:46", oneBillion.Truncate(time.Minute), false},
+		{"2001-09-09", oneBillion.Truncate(24 * time.Hour), false},
+		{"2001-09-09-01:00", oneBillion.Truncate(24 * time.Hour).Add(time.Hour), false},
+		{"2001-09-09 01:46", time.Time{}, true},
+		{"0001-01-01T00:00:00.000000000", utc.Min.Time, false},
+		{"9999-12-31T23:59:59.999999999", utc.Max.Time, false},
 	}
 
 	for _, test := range tests {
 		ut, err := utc.FromString(test.s)
 		if test.wantErr {
-			require.Error(t, err)
+			require.Error(t, err, test.s)
 		} else {
 			require.NoError(t, err)
-			require.True(t, test.want.Equal(ut.Time))
+			require.True(t, utc.New(test.want).Equal(ut), "%v | expected %v, actual %v", test.s, utc.New(test.want), ut)
+			require.True(t, test.want.Equal(ut.Time), "%v | expected %v, actual %v", test.s, utc.New(test.want), ut)
 			assertTimezone(t, ut)
 		}
 	}
@@ -70,7 +79,7 @@ func TestJSON(t *testing.T) {
 		{"2001-09-09Z", oneBillion.Truncate(24 * time.Hour), false},
 		{"2001-09-09T01:46:40Z", oneBillion.Truncate(time.Second), false},
 		{"2001-09-09T01:46Z", oneBillion.Truncate(time.Minute), false},
-		{"2001-09-09", time.Time{}, true},
+		{"2001-09-09 01:46", time.Time{}, true},
 	}
 
 	for _, test := range tests {
@@ -221,10 +230,10 @@ func TestString(t *testing.T) {
 	assert.Equal(t, "0000-01-01T01:01:01.000Z", negative.String())
 }
 
-func assertTimezone(t *testing.T, zeroValue utc.UTC) {
-	zone, offset := zeroValue.Zone()
-	require.Equal(t, "UTC", zone)
+func assertTimezone(t *testing.T, val utc.UTC) {
+	zone, offset := val.Zone()
 	require.Equal(t, 0, offset)
+	require.Equal(t, "UTC", zone)
 }
 
 // 	go test -v -bench "Benchmark" -benchtime 5s -run "none" github.com/qluvio/content-fabric/format/utc

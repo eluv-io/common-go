@@ -27,6 +27,17 @@ func Wrap(data interface{}, err ...error) *Value {
 	return NewValue(data, e)
 }
 
+// Unwraps any directly nested Value objects and returns the raw data.
+func Unwrap(v interface{}) interface{} {
+	for {
+		if val, ok := v.(*Value); ok {
+			v = val.Data
+		} else {
+			return v
+		}
+	}
+}
+
 // NewValue creates a new Value wrapper from the given value and error. Same
 // as Wrap(val, err).
 func NewValue(val interface{}, err error) *Value {
@@ -275,7 +286,7 @@ func (v *Value) Bool(def ...bool) bool {
 // optional default value def if specified, or utc.Zero.
 func (v *Value) UTC(def ...utc.UTC) utc.UTC {
 	if v.err == nil && v.Data != nil {
-		switch t := v.Data.(type) {
+		switch t := v.Unwrap().(type) {
 		case utc.UTC:
 			return t
 		case time.Time:
@@ -304,4 +315,15 @@ func (v *Value) Decode(target interface{}) error {
 		return v.Error()
 	}
 	return codecutil.MapDecode(v.Data, target)
+}
+
+// Unwrap returns the value wrapped by this Value object, recursively. Similar
+// to Value.Data, but unwraps nested Value objects.
+//
+//	Wrap("a string").Data           // "a string"
+//	Wrap("a string").Unwrap()       // "a string"
+//	Wrap(Wrap("a string")).Data     // *Value
+//	Wrap(Wrap("a string")).Unwrap() // "a string"
+func (v *Value) Unwrap() interface{} {
+	return Unwrap(v)
 }
