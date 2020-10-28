@@ -3,6 +3,7 @@ package structured_test
 import (
 	"io"
 	"testing"
+	"time"
 
 	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/structured"
@@ -262,4 +263,18 @@ func TestValue_Decode(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestToBool(t *testing.T) {
+	require.True(t, structured.Wrap(true).ToBool())
+	require.True(t, structured.Wrap("true").ToBool())
+	require.True(t, structured.Wrap("True").ToBool())
+	require.True(t, structured.Wrap("TrUe").ToBool())
+
+	require.False(t, structured.Wrap(false).ToBool())
+	require.False(t, structured.Wrap("false").ToBool())
+	require.False(t, structured.Wrap("False").ToBool())
+	require.False(t, structured.Wrap(time.Now()).ToBool())
+	require.False(t, structured.Wrap("0").ToBool())
+	require.False(t, structured.Wrap("1").ToBool())
 }

@@ -30,7 +30,7 @@ func Merge(target interface{}, path Path, sources ...interface{}) (interface{}, 
 
 	pathCopy := append(Path{}, path...)
 	res := merge(pathCopy, sub.Get(), src)
-	sub.Set(res)
+	sub.Set(res, false)
 	return sub.Root(), nil
 }
 

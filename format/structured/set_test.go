@@ -1,19 +1,21 @@
 package structured
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/qluvio/content-fabric/util/jsonutil"
 )
 
 func TestSet(t *testing.T) {
 	tests := []struct {
-		target      string
-		path        string
-		val         string
-		expected    string
-		expectError bool
+		target            string
+		path              string
+		val               string
+		expected          string
+		expectedEvenIfNil string
+		expectError       bool
 	}{
 		{
 			target:   `{"x":"vx"}`,
@@ -124,21 +126,41 @@ func TestSet(t *testing.T) {
 			val:      `null`,
 			expected: `{"a":"va", "b": ["a","c"]}`,
 		},
+		{
+			target:            `{"a":{"b":null}}`,
+			path:              "/a/b/c",
+			val:               `null`,
+			expected:          `{"a":{"b":{}}}`,
+			expectedEvenIfNil: `{"a":{"b":{"c":null}}}`,
+		},
+		{
+			target:            `{"a":{"b":null}}`,
+			path:              "/a/b/c/d",
+			val:               `null`,
+			expected:          `{"a":{"b":{"c":{}}}}`,
+			expectedEvenIfNil: `{"a":{"b":{"c":{"d":null}}}}`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run("path["+tt.path+"]", func(t *testing.T) {
 			var tgt, exp, val interface{}
-			require.NoError(t, json.Unmarshal([]byte(tt.target), &tgt))
+			tgt = jsonutil.UnmarshalStringToAny(tt.target)
 			if !tt.expectError {
-				require.NoError(t, json.Unmarshal([]byte(tt.expected), &exp))
+				exp = jsonutil.UnmarshalStringToAny(tt.expected)
 			}
-			require.NoError(t, json.Unmarshal([]byte(tt.val), &val))
+			val = jsonutil.UnmarshalStringToAny(tt.val)
 			res, err := Set(&tgt, ParsePath(tt.path), &val)
 			if tt.expectError {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, exp, res)
+			}
+			if tt.expectedEvenIfNil != "" {
+				tgt = jsonutil.UnmarshalStringToAny(tt.target)
+				res, err = SetEvenIfNil(&tgt, ParsePath(tt.path), nil)
+				require.NoError(t, err)
+				require.Equal(t, jsonutil.UnmarshalStringToAny(tt.expectedEvenIfNil), res)
 			}
 		})
 	}

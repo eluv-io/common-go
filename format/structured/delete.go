@@ -28,6 +28,6 @@ func Delete(target interface{}, path Path) (interface{}, bool) {
 		// the path does not exist, so there is nothing to delete...
 		return target, false
 	}
-	sub.Set(nil)
+	sub.Set(nil, false)
 	return sub.Root(), true
 }
