@@ -2,6 +2,7 @@ package structured
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/qluvio/content-fabric/errors"
@@ -274,6 +275,26 @@ func (v *Value) Bool(def ...bool) bool {
 		if t, ok := v.Data.(bool); ok {
 			return t
 		}
+	}
+	if len(def) > 0 {
+		return def[0]
+	}
+	return false
+}
+
+// ToBool converts the value to a boolean. If the value wraps an error, returns
+// the optional default value def if specified, or false.
+func (v *Value) ToBool(def ...bool) bool {
+	if v.err == nil && v.Data != nil {
+		if t, ok := v.Data.(bool); ok {
+			return t
+		}
+	}
+	switch strings.ToLower(v.ToString()) {
+	case "true":
+		return true
+	case "false":
+		return false
 	}
 	if len(def) > 0 {
 		return def[0]

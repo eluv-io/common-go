@@ -106,6 +106,21 @@ func GetPrivateKeyBytes(key *ecdsa.PrivateKey) []byte {
 	return crypto.FromECDSA(key)
 }
 
+func PrivateKeyFromString(keyStr string) (*ecdsa.PrivateKey, error) {
+	has0xPrefix := func(input string) bool {
+		return len(input) >= 2 && input[0] == '0' && (input[1] == 'x' || input[1] == 'X')
+	}
+	if has0xPrefix(keyStr) {
+		keyStr = keyStr[2:]
+	}
+
+	ret, err := crypto.HexToECDSA(keyStr)
+	if err != nil {
+		return nil, err
+	}
+	return ret, nil
+}
+
 func DecryptKeyFile(keyfile string, password string) (*keystore.Key, error) {
 	keyBytes, err := ioutil.ReadFile(keyfile)
 	if err != nil {

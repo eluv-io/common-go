@@ -22,7 +22,7 @@ type sub interface {
 	// Returns the value referenced by the path that was resolved
 	Get() interface{}
 	// Sets the value referenced by the path that was resolved
-	Set(val interface{})
+	Set(val interface{}, evenIfNil bool)
 	// Returns the (potentially new) root element of the structure
 	Root() interface{}
 }
@@ -31,8 +31,8 @@ type subRoot struct {
 	val interface{}
 }
 
-func (s *subRoot) Get() interface{}    { return s.val }
-func (s *subRoot) Set(val interface{}) { s.val = val }
+func (s *subRoot) Get() interface{}                    { return s.val }
+func (s *subRoot) Set(val interface{}, evenIfNil bool) { _ = evenIfNil; s.val = val }
 func (s *subRoot) Root() interface{} {
 	return s.val
 }
@@ -44,8 +44,8 @@ type subMap struct {
 }
 
 func (s *subMap) Get() interface{} { return s.m[s.key] }
-func (s *subMap) Set(val interface{}) {
-	if val == nil {
+func (s *subMap) Set(val interface{}, evenIfNil bool) {
+	if val == nil && !evenIfNil {
 		delete(s.m, s.key)
 	} else {
 		s.m[s.key] = val
@@ -61,10 +61,10 @@ type subArr struct {
 }
 
 func (s *subArr) Get() interface{} { return s.arr[s.idx] }
-func (s *subArr) Set(val interface{}) {
-	if val == nil {
+func (s *subArr) Set(val interface{}, evenIfNil bool) {
+	if val == nil && !evenIfNil {
 		if s.parent != nil {
-			s.parent.Set(append(s.arr[:s.idx], s.arr[s.idx+1:]...))
+			s.parent.Set(append(s.arr[:s.idx], s.arr[s.idx+1:]...), false)
 		} else {
 			s.arr = append(s.arr[:s.idx], s.arr[s.idx+1:]...)
 			s.root = s.arr
@@ -289,7 +289,7 @@ func resolveSub(path Path, target interface{}, create bool) (sub, error) {
 		switch t := node.(type) {
 		case map[string]interface{}:
 			v, found := t[path[idx]]
-			if !found {
+			if !found || (v == nil && !lastPathSegment) {
 				if !create {
 					return nil, e(errors.K.NotExist, "path", path[:idx+1])
 				}
