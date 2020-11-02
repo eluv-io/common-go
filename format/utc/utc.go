@@ -132,7 +132,7 @@ func (u UTC) String() string {
 }
 
 func (u UTC) UnixMilli() int64 {
-	return u.UnixNano() / 1000000
+	return u.Unix()*1000 + time.Duration(u.Nanosecond()).Milliseconds()
 }
 
 func (u UTC) Add(d time.Duration) UTC {
@@ -163,6 +163,9 @@ func (u UTC) Equal(other UTC) bool {
 // Contrary to time.Time, it always marshals milliseconds, even if they are all
 // zeros (i.e. 2006-01-02T15:04:05.000Z instead of 2006-01-02T15:04:05Z)
 func (u UTC) MarshalJSON() ([]byte, error) {
+	if u.IsZero() {
+		return []byte(`""`), nil
+	}
 	// see time.Time.MarshalJSON()
 	if y := u.Year(); y < 0 || y >= 10000 {
 		// RFC 3339 is clear that years are 4 digits exactly.
@@ -194,6 +197,9 @@ func (u *UTC) UnmarshalText(data []byte) error {
 // Contrary to time.Time, it always marshals milliseconds, even if they are all
 // zeros (i.e. 2006-01-02T15:04:05.000Z instead of 2006-01-02T15:04:05Z)
 func (u UTC) MarshalText() ([]byte, error) {
+	if u.IsZero() {
+		return []byte(`""`), nil
+	}
 	if y := u.Year(); y < 0 || y >= 10000 {
 		// RFC 3339 is clear that years are 4 digits exactly.
 		// See golang.org/issue/4556#c15 for more discussion.
@@ -274,6 +280,9 @@ func (u *UTC) UnmarshalBinary(data []byte) error {
 func FromString(s string) (UTC, error) {
 	var t time.Time
 	var err error
+	if s == "" {
+		return Zero, nil
+	}
 	for _, format := range formats {
 		t, err = time.ParseInLocation(format, s, time.UTC)
 		if err == nil {
@@ -310,4 +319,11 @@ func Parse(layout string, value string) (UTC, error) {
 // value is 1<<63-1 (the largest int64 value).
 func Unix(sec int64, nsec int64) UTC {
 	return New(time.Unix(sec, nsec))
+}
+
+// UnixMilli returns the local Time corresponding to the given Unix time in
+// milliseconds since January 1, 1970 UTC. This is the reverse operation of
+// UTC.UnixMilli()
+func UnixMilli(millis int64) UTC {
+	return New(time.Unix(millis/1000, int64(time.Millisecond)*(millis%1000)))
 }

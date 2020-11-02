@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"testing"
 	"time"
 
@@ -12,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/qluvio/content-fabric/format/codecs"
-
 	"github.com/qluvio/content-fabric/format/utc"
 )
 
@@ -63,6 +63,32 @@ func TestParsing(t *testing.T) {
 }
 
 func TestJSON(t *testing.T) {
+	tests := []struct {
+		utc           utc.UTC
+		want          string
+		compareString bool
+	}{
+		{utc.New(oneBillion), `"` + oneBillionString + `"`, true},
+		{utc.New(time.Time{}), `""`, true}, // ensure zero time is marshalled to ""
+		{utc.Now().Truncate(time.Millisecond), "", false},
+	}
+
+	for _, test := range tests {
+		marshalled, err := json.Marshal(test.utc)
+		assert.NoError(t, err)
+		if test.compareString {
+			assert.Equal(t, test.want, string(marshalled))
+		}
+
+		var unmarshalled utc.UTC
+		err = json.Unmarshal(marshalled, &unmarshalled)
+		assert.NoError(t, err)
+		assert.Equal(t, test.utc, unmarshalled)
+		assertTimezone(t, unmarshalled)
+	}
+}
+
+func TestJSONUnmarshal(t *testing.T) {
 	ut := utc.New(oneBillion)
 	assertTimezone(t, ut)
 
@@ -80,6 +106,7 @@ func TestJSON(t *testing.T) {
 		{"2001-09-09T01:46:40Z", oneBillion.Truncate(time.Second), false},
 		{"2001-09-09T01:46Z", oneBillion.Truncate(time.Minute), false},
 		{"2001-09-09 01:46", time.Time{}, true},
+		{"", time.Time{}, false},
 	}
 
 	for _, test := range tests {
@@ -230,20 +257,67 @@ func TestString(t *testing.T) {
 	assert.Equal(t, "0000-01-01T01:01:01.000Z", negative.String())
 }
 
+func TestUnixMilli(t *testing.T) {
+	base := utc.MustParse("1970-01-01T00:00:00.000Z")
+	ms999AsNanos := int64(time.Millisecond * 999)
+	truncToMillis := func(i time.Duration) time.Duration {
+		return i / time.Millisecond * time.Millisecond
+	}
+	tests := []struct {
+		date utc.UTC
+		exp  int64
+	}{
+		{base.Add(math.MaxInt64), time.Duration(math.MaxInt64).Milliseconds()},
+		{base, 0},
+		{base.Add(time.Millisecond), 1},
+		{base.Add(-time.Millisecond), -1},
+		{base.Add(time.Hour), time.Hour.Milliseconds()},
+		{base.Add(-time.Hour), -time.Hour.Milliseconds()},
+		{base.Add(1_000_000 * time.Hour), 1_000_000 * time.Hour.Milliseconds()},
+		{base.Add(-1_000_000 * time.Hour), -1_000_000 * time.Hour.Milliseconds()},
+		{base.Add(truncToMillis(math.MaxInt64)), time.Duration(math.MaxInt64).Milliseconds()},
+		{base.Add(truncToMillis(math.MinInt64)), time.Duration(math.MinInt64).Milliseconds()},
+		{utc.Unix(2e9, 0), 2e12},
+		{utc.Unix(3e12, 0), 3e15},
+		{utc.Unix(4e15, 0), 4e18},
+		{utc.Unix(2e9, ms999AsNanos), 2e12 + 999},
+		{utc.Unix(3e12, ms999AsNanos), 3e15 + 999},
+		{utc.Unix(4e15, ms999AsNanos), 4e18 + 999},
+		{utc.Unix(-2e9, 0), -2e12},
+		{utc.Unix(-3e12, 0), -3e15},
+		{utc.Unix(-4e15, 0), -4e18},
+		{utc.Unix(-2e9, ms999AsNanos), -2e12 + 999},
+		{utc.Unix(-3e12, ms999AsNanos), -3e15 + 999},
+		{utc.Unix(-4e15, ms999AsNanos), -4e18 + 999},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%s_%d", test.date.String(), test.exp), func(t *testing.T) {
+			assert.Equal(t, test.exp, test.date.UnixMilli())
+			recovered := utc.UnixMilli(test.exp)
+			// need to truncate the test date to millis (i.e. cut of micros and
+			// nanos) since the UnitMilli does that, too...
+			trunc := test.date.Truncate(time.Millisecond)
+			assert.True(t, trunc.Equal(recovered), recovered)
+			assert.Equal(t, trunc, recovered)
+		})
+	}
+}
+
 func assertTimezone(t *testing.T, val utc.UTC) {
 	zone, offset := val.Zone()
 	require.Equal(t, 0, offset)
 	require.Equal(t, "UTC", zone)
 }
 
-// 	go test -v -bench "Benchmark" -benchtime 5s -run "none" github.com/qluvio/content-fabric/format/utc
+//  go test -v -bench "Benchmark" -benchtime 5s -run "none" github.com/qluvio/content-fabric/format/utc
 //	goos: darwin
 //	goarch: amd64
 //	pkg: github.com/qluvio/content-fabric/format/utc
-//	BenchmarkString/time.Time.String-8         	19764080	       289 ns/op
-//	BenchmarkString/utc.UTC.StringOpt-8        	69861658	        83.4 ns/op
+//	BenchmarkString/time.Time.String-8         	20580853	       286 ns/op	      32 B/op	       1 allocs/op
+//	BenchmarkString/utc.UTC.StringOpt-8        	70914042	        82.5 ns/op	      32 B/op	       1 allocs/op
 //	PASS
-//	ok  	github.com/qluvio/content-fabric/format/utc	11.949s
+//	ok  	github.com/qluvio/content-fabric/format/utc	12.143s
 func BenchmarkString(b *testing.B) {
 	now := utc.Now()
 	benchmarks := []struct {
@@ -255,6 +329,7 @@ func BenchmarkString(b *testing.B) {
 	}
 	for _, bm := range benchmarks {
 		b.Run(bm.name, func(b *testing.B) {
+			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
 				bm.fn()
 			}

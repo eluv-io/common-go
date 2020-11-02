@@ -89,7 +89,7 @@ func (t Token) String() string {
 // AssertCode checks whether the hash's code equals the provided code
 func (t Token) AssertCode(c Code) error {
 	if t.code() != c {
-		return errors.E("token verify", errors.K.Invalid, "token code doesn't match",
+		return errors.E("token code check", errors.K.Invalid,
 			"expected", codeToPrefix[c],
 			"actual", t.prefix())
 	}

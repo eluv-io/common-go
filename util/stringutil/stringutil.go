@@ -174,3 +174,14 @@ func StringSlice(v interface{}) []string {
 	}
 	return ret
 }
+
+// IndentLines indents all lines in the given string with specified number of
+// spaces.
+func IndentLines(s string, spaces int) string {
+	return PrefixLines(s, strings.Repeat(" ", spaces))
+}
+
+// PrefixLines prefixes each line in the given string with the given prefix.
+func PrefixLines(v, prefix string) string {
+	return prefix + strings.Replace(v, "\n", "\n"+prefix, -1)
+}

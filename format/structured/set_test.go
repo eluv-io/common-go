@@ -181,3 +181,10 @@ func TestNil(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "val", res)
 }
+
+func TestNilIface(t *testing.T) {
+	var nilVal []byte
+	res, err := Set(nilVal, NewPath("a"), "b")
+	require.NoError(t, err)
+	require.Equal(t, map[string]interface{}{"a": "b"}, res)
+}

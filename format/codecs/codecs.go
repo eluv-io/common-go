@@ -8,6 +8,7 @@ import (
 	"io"
 	"reflect"
 
+	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/id"
 	"github.com/qluvio/content-fabric/format/link"
@@ -205,15 +206,30 @@ const CBORCustomTagsStart = 40
 // NewCborCodec creates a new streaming multicodec using the
 // CBOR format.
 func NewCborCodec() mc.Multicodec {
+	return &codec{cborFactoryInstance, []byte("/cbor")}
+}
+
+func NewCborEncoder(w io.Writer) *cd.Encoder {
+	return cd.NewEncoder(w, cborFactoryInstance)
+}
+
+func NewCborDecoder(r io.Reader) *cd.Decoder {
+	return cd.NewDecoder(r, cborFactoryInstance)
+}
+
+var cborFactoryInstance = func() *cborFactory {
 	f := &cborFactory{}
 	f.MapType = reflect.TypeOf(map[string]interface{}(nil))
 	f.Canonical = true
 
 	for idx, con := range cborConverters {
-		f.SetInterfaceExt(con.t, uint64(CBORCustomTagsStart+idx), con.c)
+		err := f.SetInterfaceExt(con.t, uint64(CBORCustomTagsStart+idx), con.c)
+		if err != nil {
+			panic(errors.E("create cbor factory", err))
+		}
 	}
-	return &codec{f, []byte("/cbor")}
-}
+	return f
+}()
 
 type cborConverter struct {
 	t reflect.Type

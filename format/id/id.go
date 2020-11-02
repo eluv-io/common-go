@@ -130,7 +130,7 @@ func (id ID) prefix() string {
 }
 
 func (id ID) Code() Code {
-	if id == nil {
+	if id.IsNil() {
 		return UNKNOWN
 	}
 	return Code(id[0])

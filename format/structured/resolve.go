@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/util/ifutil"
 	"github.com/qluvio/content-fabric/util/stringutil"
 )
 
@@ -270,7 +271,7 @@ func resolveSub(path Path, target interface{}, create bool) (sub, error) {
 
 	if len(path) == 0 {
 		return &subRoot{val: node}, nil
-	} else if root == nil {
+	} else if ifutil.IsNil(root) {
 		root = map[string]interface{}{}
 		node = root
 	}

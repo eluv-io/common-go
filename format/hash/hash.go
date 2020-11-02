@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"strconv"
+	"strings"
 
 	"github.com/qluvio/content-fabric/errors"
 	ei "github.com/qluvio/content-fabric/format/id"
@@ -81,6 +83,25 @@ func (t Type) String() string {
 	return typeToPrefix[t]
 }
 
+func (t Type) Describe() string {
+	var c, f string
+	switch t.Code {
+	case Q:
+		c = "content"
+	case QPart:
+		c = "content part"
+	case QPartLive:
+		c = "live content part"
+	}
+	switch t.Format {
+	case Unencrypted:
+		f = "unencrypted"
+	case AES128AFGH:
+		f = "encrypted with AES-128, AFGHG BLS12-381, 1 MB block size"
+	}
+	return c + ", " + f
+}
+
 const prefixLen = 4
 
 var typeToPrefix = map[Type]string{}
@@ -109,11 +130,11 @@ func init() {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-// Hash is the output of a cryptographic hash function and associated metadata, identifying a particular
-// instance of an immutable resource.
-// Q format : type (1 byte) | digest (var bytes) | size (var bytes) | id (var bytes)
-// QPart format : type (1 byte) | digest (var bytes) | size (var bytes)
-// QPartLive format : type (1 byte) | digest (var bytes)
+// Hash is the output of a cryptographic hash function and associated metadata,
+// identifying a particular instance of an immutable resource.
+//	Q format : type (1 byte) | digest (var bytes) | size (var bytes) | id (var bytes)
+//	QPart format : type (1 byte) | digest (var bytes) | size (var bytes)
+//	QPartLive format : type (1 byte) | digest (var bytes)
 type Hash struct {
 	Type   Type
 	Digest []byte
@@ -164,7 +185,7 @@ func FromString(s string) (*Hash, error) {
 	e := errors.Template("parse hash", errors.K.Invalid, "string", s)
 
 	if len(s) <= prefixLen {
-		return nil, e("reason", "invalid string")
+		return nil, e("reason", "invalid token string")
 	}
 
 	htype, found := prefixToType[s[:prefixLen]]
@@ -370,6 +391,32 @@ func (h *Hash) DigestBytes() []byte {
 		return nil
 	}
 	return h.Digest
+}
+
+func (h *Hash) Describe() string {
+	sb := strings.Builder{}
+
+	add := func(s string) {
+		sb.WriteString(s)
+		sb.WriteString("\n")
+	}
+
+	add("type:   " + h.Type.Describe())
+	add("digest: " + hex.EncodeToString(h.Digest))
+	if h.Type.Code != QPartLive {
+		add("size:   " + strconv.FormatInt(h.Size, 10))
+		if h.Type.Code == Q {
+			add("qid:    " + h.ID.String())
+		}
+	}
+	if h.Type.Code == Q {
+		qphash, err := h.As(QPart, nil)
+		if err == nil {
+			add("part:   " + qphash.String())
+		}
+	}
+
+	return sb.String()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
