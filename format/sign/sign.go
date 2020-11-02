@@ -2,7 +2,11 @@ package sign
 
 import (
 	"bytes"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/mr-tron/base58/base58"
+
 	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/log"
 )
@@ -51,7 +55,9 @@ func init() {
 // Sig is the type representing a Signature.
 //
 // Signature prefixes should follow standard values for the 'alg' claim in JWT.
-// see: https://tools.ietf.org/html/rfc7519
+// see:
+//	* JWA: https://tools.ietf.org/html/rfc7518
+//	* JWT: https://tools.ietf.org/html/rfc7519
 //
 // Sigs follow the multiformat principle and are prefixed with their type
 // (a varint). Unlike other multiformat implementations like multihash, the type
@@ -135,6 +141,22 @@ func (sig Sig) Is(s string) bool {
 		return false
 	}
 	return bytes.Equal(sig, sg)
+}
+
+// SignerAddress returns the address that was used to sign the given bytes,
+// yielding this signature.
+func (sig *Sig) SignerAddress(signedBytes []byte) (common.Address, error) {
+	e := errors.Template("SignerAddress", errors.K.Invalid)
+	hash := crypto.Keccak256(signedBytes)
+	recoverKMSPKBytes, err := crypto.Ecrecover(hash, sig.EthAdjustBytes())
+	if err != nil {
+		return common.Address{}, e(err)
+	}
+	recoverTrustPK, err := crypto.UnmarshalPubkey(recoverKMSPKBytes)
+	if err != nil {
+		return common.Address{}, e(err)
+	}
+	return crypto.PubkeyToAddress(*recoverTrustPK), nil
 }
 
 func NewSig(code SigCode, codeBytes []byte) Sig {

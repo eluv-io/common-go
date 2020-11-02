@@ -82,3 +82,9 @@ func TestStringSlice(t *testing.T) {
 	s3 := []interface{}{"a", "b"}
 	require.Equal(t, s1, StringSlice(s3))
 }
+
+func TestIndent(t *testing.T) {
+	require.Equal(t, "  a\n  b\n  c", IndentLines("a\nb\nc", 2))
+	require.Equal(t, "...a\n...b\n...c", PrefixLines("a\nb\nc", "..."))
+	require.Equal(t, "...a", PrefixLines("a", "..."))
+}
