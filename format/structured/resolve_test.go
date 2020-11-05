@@ -187,30 +187,43 @@ func TestResolveSubCreate(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		t.Run("path["+tt.path+"]", func(t *testing.T) {
-			var src, exp interface{}
-			require.NoError(t, json.Unmarshal([]byte(tt.source), &src))
-			require.NoError(t, json.Unmarshal([]byte(tt.expected), &exp))
-			{
-				// ensure path does not exist
-				sub, err := resolveSub(ParsePath(tt.path), src, false)
-				require.Error(t, err)
-				require.Nil(t, sub)
-			}
-			{
-				// resolve with create
-				sub, err := resolveSub(ParsePath(tt.path), src, true)
-				require.NoError(t, err)
-				require.IsType(t, (*subMap)(nil), sub)
-				require.Equal(t, exp, src)
-			}
-			{
-				// now resolve again without create and make sure there is no error
-				sub, err := resolveSub(ParsePath(tt.path), src, false)
-				require.NoError(t, err)
-				require.IsType(t, (*subMap)(nil), sub)
-			}
-		})
+		for _, cpy := range []bool{false, true} {
+			t.Run(fmt.Sprintf("path[%s] copy[%t]", tt.path, cpy), func(t *testing.T) {
+				var src, src2, exp, resFromCreate interface{}
+				require.NoError(t, json.Unmarshal([]byte(tt.source), &src))
+				require.NoError(t, json.Unmarshal([]byte(tt.source), &src2))
+				require.NoError(t, json.Unmarshal([]byte(tt.expected), &exp))
+				{
+					// ensure path does not exist
+					res, err := resolveSub(ParsePath(tt.path), src, false, cpy)
+					require.Error(t, err)
+					require.Nil(t, res)
+					if cpy {
+						require.Equal(t, src2, src) // src unchanged!
+					}
+				}
+				{
+					// resolve with create
+					res, err := resolveSub(ParsePath(tt.path), src, true, cpy)
+					require.NoError(t, err)
+					require.IsType(t, (*subMap)(nil), res)
+					require.Equal(t, exp, res.Root())
+					if cpy {
+						require.Equal(t, src2, src) // src unchanged!
+					}
+					resFromCreate = res.Root()
+				}
+				{
+					// now resolve again without create and make sure there is no error
+					res, err := resolveSub(ParsePath(tt.path), resFromCreate, false, cpy)
+					require.NoError(t, err)
+					require.IsType(t, (*subMap)(nil), res)
+					if cpy {
+						require.Equal(t, src2, src) // src unchanged!
+					}
+				}
+			})
+		}
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/util/ifutil"
+	"github.com/qluvio/content-fabric/util/maputil"
 	"github.com/qluvio/content-fabric/util/stringutil"
 )
 
@@ -252,7 +253,10 @@ func StringSliceAt(target interface{}, path ...string) []string {
 // params:
 //  * path      : the path to resolve
 //  * target    : the data structure to analyze
-//  * create    : missing path segments are created if true, generate an error otherwise
+//  * create    : missing path segments are created if true, generate an error
+//                otherwise
+//  * copyStruct: create a copy of the target structure if needed in order to
+//                ensure the target structure is not modified.
 //
 // return:
 //  * a subtree object representing the value at path.
@@ -263,18 +267,29 @@ func StringSliceAt(target interface{}, path ...string) []string {
 //    set to true. In the latter case, the given path is created in the target
 //    structure by creating any missing maps and map entries, setting the final
 //    path segment's value to an empty map.
-func resolveSub(path Path, target interface{}, create bool) (sub, error) {
-	e := errors.Template("resolve", "full_path", path)
+func resolveSub(path Path, target interface{}, create bool, copyStruct bool) (sub, error) {
+	e := errors.Template("resolve",
+		"full_path", path,
+		"create", create,
+		"copy", copyStruct)
 
-	node := dereference(target)
-	root := node
+	cpy := func(t interface{}) interface{} { return t }
+	if copyStruct {
+		cpy = shallowCopy
+	}
+
+	target = dereference(target)
 
 	if len(path) == 0 {
-		return &subRoot{val: node}, nil
-	} else if ifutil.IsNil(root) {
-		root = map[string]interface{}{}
-		node = root
+		return &subRoot{val: target}, nil
+	} else if ifutil.IsNil(target) {
+		target = map[string]interface{}{}
 	}
+
+	// copy of the target structure
+	root := cpy(target)
+	// current node (in the copied structure)
+	node := root
 
 	// the following three vars are used to track a node's parent, it's type
 	// and key (in case of a map) or index (in case of an array). The same could
@@ -289,7 +304,8 @@ func resolveSub(path Path, target interface{}, create bool) (sub, error) {
 		lastPathSegment := idx+1 >= len(path)
 		switch t := node.(type) {
 		case map[string]interface{}:
-			v, found := t[path[idx]]
+			key := path[idx]
+			v, found := t[key]
 			if !found || (v == nil && !lastPathSegment) {
 				if !create {
 					return nil, e(errors.K.NotExist, "path", path[:idx+1])
@@ -299,13 +315,16 @@ func resolveSub(path Path, target interface{}, create bool) (sub, error) {
 				} else {
 					v = map[string]interface{}{}
 				}
-				t[path[idx]] = v
+				t[key] = v
+			} else if !lastPathSegment {
+				v = cpy(v)
+				t[key] = v
 			}
 			if lastPathSegment {
-				return &subMap{root: root, key: path[idx], m: t}, nil
+				return &subMap{root: root, key: key, m: t}, nil
 			}
 			parent = t
-			parentKey = path[idx]
+			parentKey = key
 			node = v
 		case []interface{}:
 			i, err := strconv.ParseInt(path[idx], 10, 32)
@@ -330,7 +349,8 @@ func resolveSub(path Path, target interface{}, create bool) (sub, error) {
 			parent = t
 			parentKey = ""
 			parentIdx = aidx
-			node = t[aidx]
+			node = cpy(t[aidx])
+			t[aidx] = node
 		case nil:
 			return nil, e(errors.K.NotExist, "reason", "element is nil", "path", path[:idx+1])
 		default:
@@ -534,4 +554,14 @@ func parseTag(tag reflect.StructTag) (hasJson bool, name string, squash bool) {
 		}
 	}
 	return true, name, squash
+}
+
+func shallowCopy(val interface{}) interface{} {
+	switch t := val.(type) {
+	case map[string]interface{}:
+		return maputil.Copy(t)
+	case []interface{}:
+		return copySlice(t)
+	}
+	return val
 }
