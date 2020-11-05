@@ -7,7 +7,7 @@ package structured
 // that is not desired, use Delete(target, path).
 // Returns the modified structure, or an error.
 func Set(target interface{}, path Path, data interface{}) (interface{}, error) {
-	sub, err := resolveSub(path, target, true)
+	sub, err := resolveSub(path, target, true, false)
 	if err != nil {
 		return nil, err
 	}
@@ -21,7 +21,7 @@ func Set(target interface{}, path Path, data interface{}) (interface{}, error) {
 // even if data is nil.
 // Returns the modified structure, or an error.
 func SetEvenIfNil(target interface{}, path Path, data interface{}) (interface{}, error) {
-	sub, err := resolveSub(path, target, true)
+	sub, err := resolveSub(path, target, true, false)
 	if err != nil {
 		return nil, err
 	}

@@ -178,9 +178,10 @@ func TestMerge(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name+"|path["+tt.path+"]", func(t *testing.T) {
-			var tgt, exp interface{}
+			var tgt, tgt2, exp interface{}
 			var sources []interface{}
 			require.NoError(t, json.Unmarshal([]byte(tt.target), &tgt))
+			require.NoError(t, json.Unmarshal([]byte(tt.target), &tgt2))
 			require.NoError(t, json.Unmarshal([]byte(tt.expected), &exp))
 			if len(tt.sources) == 0 {
 				tt.sources = append(tt.sources, tt.source)
@@ -197,11 +198,19 @@ func TestMerge(t *testing.T) {
 			require.NotNil(t, sources)
 
 			fmt.Println(jsonutil.MarshalString(&tgt))
-			fmt.Println(jsonutil.MarshalString(&sources[0]))
+			if len(sources) > 0 {
+				fmt.Println(jsonutil.MarshalString(&sources[0]))
+			}
 
-			res, err := Merge(tgt, ParsePath(tt.path, "/"), sources...)
+			sourcesJson := jsonutil.MarshalCompactString(sources)
+
+			res, err := MergeCopy(tgt, ParsePath(tt.path, "/"), sources...)
 			require.NoError(t, err)
 			require.Equal(t, exp, res)
+			// tgt unchanged!
+			require.Equal(t, tgt2, tgt)
+			// sources unchanged!
+			require.Equal(t, sourcesJson, jsonutil.MarshalCompactString(sources))
 
 			fmt.Println(jsonutil.MarshalString(&res))
 		})
@@ -215,18 +224,33 @@ func TestMerge2(t *testing.T) {
 }
 
 func TestMergeAtPath(t *testing.T) {
-	m1 := jm{"a": jm{"b": jm{"c": "val1"}}}
-	m2 := jm{"a": jm{"b": jm{"c": "val2"}}}
-	res := merge(Path{"a", "b"}, m1, m2)
-	require.EqualValues(t, m2, res)
+	tests := [][2]interface{}{
+		{
+			jm{"a": jm{"b": jm{"c": "val1"}}},
+			jm{"a": jm{"b": jm{"c": "val2"}}},
+		},
+		{
+			jm{"a": jm{"b": jm{"c": jm{"d": jm{"e": jm{"f": jm{"g": jm{"h": "val1"}}}}}}}},
+			jm{"a": jm{"b": jm{"c": jm{"d": jm{"e": jm{"f": jm{"g": jm{"h": jm{"i": jm{"j": jm{"k": "val2"}}}}}}}}}}},
+		},
+		{
+			jm{"a": jm{"b": jm{"c": jm{"d": jm{"e": jm{"f": jm{"g": jm{"h": jm{"i": jm{"j": jm{"k": "val2"}}}}}}}}}}},
+			jm{"a": jm{"b": jm{"c": jm{"d": jm{"e": jm{"f": jm{"g": jm{"h": "val1"}}}}}}}},
+		},
+	}
 
-	m1 = jm{"a": jm{"b": jm{"c": jm{"d": jm{"e": jm{"f": jm{"g": jm{"h": "val1"}}}}}}}}
-	m2 = jm{"a": jm{"b": jm{"c": jm{"d": jm{"e": jm{"f": jm{"g": jm{"h": jm{"i": jm{"j": jm{"k": "val2"}}}}}}}}}}}
-	res = merge(Path{"a"}, m1, m2)
-	require.EqualValues(t, m2, res)
+	for _, test := range tests {
+		m1 := test[0]
+		m2 := test[1]
+		m1Copy := jsonutil.MustClone(m1)
+		m2Copy := jsonutil.MustClone(m2)
 
-	m1 = jm{"a": jm{"b": jm{"c": jm{"d": jm{"e": jm{"f": jm{"g": jm{"h": jm{"i": jm{"j": jm{"k": "val2"}}}}}}}}}}}
-	m2 = jm{"a": jm{"b": jm{"c": jm{"d": jm{"e": jm{"f": jm{"g": jm{"h": "val1"}}}}}}}}
-	res = merge(Path{"a"}, m1, m2)
-	require.EqualValues(t, m2, res)
+		res := mergeCopy(m1, m2)
+		require.EqualValues(t, m2, res)
+		require.Equal(t, m1Copy, m1) // src unchanged!
+		require.Equal(t, m2Copy, m2) // src unchanged!
+
+		res = merge(m1, m2)
+		require.EqualValues(t, m2, res)
+	}
 }

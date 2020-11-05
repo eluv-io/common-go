@@ -23,7 +23,7 @@ func Delete(target interface{}, path Path) (interface{}, bool) {
 		// cannot delete anything from nil...
 		return nil, false
 	}
-	sub, err := resolveSub(path, target, false)
+	sub, err := resolveSub(path, target, false, false)
 	if err != nil {
 		// the path does not exist, so there is nothing to delete...
 		return target, false
