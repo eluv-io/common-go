@@ -7,10 +7,6 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
-
 	"github.com/qluvio/content-fabric/auth/auth"
 	"github.com/qluvio/content-fabric/constants"
 	"github.com/qluvio/content-fabric/errors"
@@ -18,6 +14,11 @@ import (
 	"github.com/qluvio/content-fabric/format/sign"
 	"github.com/qluvio/content-fabric/format/types"
 	"github.com/qluvio/content-fabric/format/utc"
+	"github.com/qluvio/content-fabric/util/ethutil"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func (t *Token) encodeLegacy() (s string, err error) {
@@ -177,10 +178,19 @@ func (t *Token) decodeLegacyString(s string) (err error) {
 	switch {
 	case !hasSignature:
 		t.Type = Types.Anonymous()
+		if len(t.AFGHPublicKey) > 0 {
+			return errors.E("decodeLegacyString", errors.K.Invalid,
+				"reason", "anonymous token may not have AFGH key")
+		}
 	case t.HasEthTxHash():
 		t.Type = Types.Tx()
 	default:
 		t.Type = Types.Plain()
+	}
+	if hasSignature && t.EthAddr == zeroAddr {
+		return errors.E("decodeLegacyString", errors.K.Invalid,
+			"reason", "invalid ethereum address",
+			"addr", legData.EthAddr)
 	}
 
 	return nil
@@ -292,7 +302,8 @@ func (l *TokenDataLegacy) CopyToTokenData(t *Token, typ TokenType) {
 	case Types.StateChannel(), Types.EditorSigned():
 		t.Subject = l.EthAddr
 	default:
-		t.EthAddr = common.HexToAddress(l.EthAddr)
+		// ignore the error at this point
+		t.EthAddr, _ = ethutil.HexToAddress(l.EthAddr)
 	}
 	t.EthTxHash = common.HexToHash(l.EthTxHash)
 	t.QPHash, _ = hash.FromString(l.QPHash)
