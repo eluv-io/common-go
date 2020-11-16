@@ -70,6 +70,69 @@ func AsInt(val interface{}) int {
 	return int(AsInt64(val))
 }
 
+// AsUInt64 returns the given value as an uint.
+// If the value is not an int or nil, it returns the 'empty' int 0.
+func AsUInt64(val interface{}) uint64 {
+	res, err := AsUInt64Err(val)
+	if err != nil {
+		return 0
+	}
+	return res
+}
+
+// AsUInt64Err returns the given value as an uint, trying to convert it from other
+// number types, string or json.Number. Returns an error if the conversion fails.
+func AsUInt64Err(val interface{}) (uint64, error) {
+	e := errors.Template("AsUInt64", errors.K.Invalid, "value", val)
+	if val == nil {
+		return 0, e(errors.K.NotExist)
+	}
+	var result uint64
+	var err error
+	switch x := val.(type) {
+	case string:
+		result, err = strconv.ParseUint(x, 10, 64)
+		if err != nil {
+			return 0, e(err)
+		}
+	case int:
+		result = uint64(x)
+	case int8:
+		result = uint64(x)
+	case int16:
+		result = uint64(x)
+	case int32:
+		result = uint64(x)
+	case int64:
+		result = uint64(x)
+	case uint:
+		result = uint64(x)
+	case uint8:
+		result = uint64(x)
+	case uint16:
+		result = uint64(x)
+	case uint32:
+		result = uint64(x)
+	case uint64:
+		result = uint64(x)
+	case float32:
+		result = uint64(math.Round(float64(x)))
+	case float64:
+		result = uint64(math.Round(x))
+	case json.Number:
+		int_result, err := x.Int64()
+		if err != nil {
+			return 0, e(err)
+		}
+		result = uint64(int_result)
+	}
+	return result, nil
+}
+
+func AsUInt(val interface{}) uint {
+	return uint(AsUInt64(val))
+}
+
 // AsFloat64 returns the given value as a float64.
 // If the value is not a number or nil, it returns the zero value float64 0.
 func AsFloat64(val interface{}) float64 {
