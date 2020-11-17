@@ -24,7 +24,7 @@ func HashFromHex(hash string) (*common.Hash, error) {
 	h := common.Hash{}
 	hash = strings.ToLower(hash)
 
-	if strings.HasPrefix(hash, "0x") {
+	if strings.HasPrefix(hash, "0x") || strings.HasPrefix(hash, "0X") {
 		hash = hash[2:]
 	}
 
@@ -47,7 +47,7 @@ func HashFromHex(hash string) (*common.Hash, error) {
 // AddrToID converts the given ethereum address to an ID
 // The address is expected to be hex encoded
 func AddrToID(addr string, code id.Code) (id.ID, error) {
-	if strings.HasPrefix(addr, "0x") {
+	if strings.HasPrefix(addr, "0x") || strings.HasPrefix(addr, "0X") {
 		addr = addr[2:]
 	}
 	bufAddr, err := hex.DecodeString(addr)
@@ -73,6 +73,26 @@ func IDStringToAddress(idString string) (common.Address, error) {
 		return common.Address{}, err
 	}
 	return IDToAddress(id), nil
+}
+
+// HexToAddress converts the given hex string into an ethereum address.
+// Similar to common.HexToAddress but returning an error and not setting bytes
+// in the address in case of error.
+func HexToAddress(s string) (common.Address, error) {
+	if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
+		s = s[2:]
+	}
+	if len(s)%2 == 1 {
+		s = "0" + s
+	}
+	b, err := hex.DecodeString(s)
+	var a common.Address
+	if err != nil {
+		return a, errors.E("HexToAddress", errors.K.Invalid, err,
+			"value", s)
+	}
+	a.SetBytes(b)
+	return a, nil
 }
 
 // AddressEqualsID compares an ethereum address and an eluvio ID.

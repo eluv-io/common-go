@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/qluvio/content-fabric/constants"
-
 	"github.com/qluvio/content-fabric/format"
 	"github.com/qluvio/content-fabric/format/eat"
 	"github.com/qluvio/content-fabric/format/hash"

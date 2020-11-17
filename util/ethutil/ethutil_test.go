@@ -110,3 +110,31 @@ func TestToPublicKeyAndID(t *testing.T) {
 	fmt.Println("user_id", nid)
 	fmt.Println("address", crypto.PubkeyToAddress(*decPub).String())
 }
+
+func TestHexToAddress(t *testing.T) {
+	type testCase struct {
+		val     string
+		expFail bool
+	}
+	for _, tcase := range []*testCase{
+		{val: "0x65419c9f653703ed7fb6cc636cf9fda6cc024e2e"},
+		{val: "65419c9f653703ed7fb6cc636cf9fda6cc024e2e"},
+		{val: ""},
+		{val: "bob@example.com", expFail: true},
+		{val: "foo", expFail: true},
+	} {
+		address, err := HexToAddress(tcase.val)
+		if tcase.expFail {
+			require.Error(t, err, "val [%s]", tcase.val)
+			continue
+		}
+		require.NoError(t, err, "val [%s]", tcase.val)
+		exp := common.HexToAddress(tcase.val)
+		require.Equal(t, exp, address)
+		if len(tcase.val) == 0 {
+			zeroAddr := common.Address{}
+			require.Equal(t, zeroAddr, address)
+		}
+	}
+
+}
