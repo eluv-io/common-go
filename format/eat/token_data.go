@@ -9,7 +9,6 @@ import (
 
 	"github.com/qluvio/content-fabric/constants"
 
-	"github.com/qluvio/content-fabric/auth/auth"
 	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/codecs"
 	"github.com/qluvio/content-fabric/format/hash"
@@ -32,7 +31,7 @@ type TokenData struct {
 	// ElvAuthToken ==> elv-master
 	QID      types.QID              // content ID
 	Subject  string                 // the entity the token was granted to
-	Grant    auth.Grant             // type of grant
+	Grant    Grant                  // type of grant
 	IssuedAt utc.UTC                // Issued At
 	Expires  utc.UTC                // Expiration Time
 	Ctx      map[string]interface{} // additional, arbitrary information conveyed in the token
@@ -80,7 +79,7 @@ var zeroAddr common.Address
 
 func (t *TokenData) Encode() ([]byte, error) {
 	e := errors.Template("Encode")
-	enc := newEncoder()
+	enc := newTokenEncoder()
 
 	sd := (&serData{}).copyFrom(t)
 	enc.writeBytes(sd.EthTxHash)
@@ -145,7 +144,7 @@ func (t *TokenData) Decode(bts []byte) error {
 	if err == nil {
 		err = dec.readString(&s)
 		if err == nil {
-			t.Grant = auth.Grant(s)
+			t.Grant = Grant(s)
 		}
 	}
 	if err == nil {
@@ -191,7 +190,7 @@ type serData struct {
 	// ElvAuthToken ==> elvmaster
 	QID      types.QID              `json:"qid,omitempty"` // content ID
 	Subject  string                 `json:"sub,omitempty"` // the entity the token was granted to
-	Grant    auth.Grant             `json:"gra,omitempty"` // type of grant
+	Grant    Grant                  `json:"gra,omitempty"` // type of grant
 	IssuedAt int64                  `json:"iat,omitempty"` // Issued At
 	Expires  int64                  `json:"exp,omitempty"` // Expiration Time
 	Ctx      map[string]interface{} `json:"ctx,omitempty"` // additional, arbitrary information conveyed in the token
@@ -243,7 +242,7 @@ func (d *serData) copyFrom(t *TokenData) *serData {
 
 // -----------------------------------------------------------------------------
 
-func newEncoder() *tokenEncoder {
+func newTokenEncoder() *tokenEncoder {
 	return &tokenEncoder{
 		vbuf: make([]byte, binary.MaxVarintLen64),
 	}

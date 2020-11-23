@@ -37,6 +37,7 @@ var allTypes = []TokenType{
 	{"acl", "client"},
 	{"apl", "plain"},
 	{"aes", "editor-signed"},
+	{"ano", "node"},
 }
 
 type enumType int
@@ -52,6 +53,7 @@ func (enumType) StateChannel() TokenType { return allTypes[3] } // based on defe
 func (enumType) Client() TokenType       { return allTypes[4] } // a state channel token embedded in a client token - aka ElvClientToken
 func (enumType) Plain() TokenType        { return allTypes[5] } // a vanilla (signed) token without tx ==> blockchain-based permissions via HasAccess()
 func (enumType) EditorSigned() TokenType { return allTypes[6] } // a token signed by a user who has edit access to the target content in the token
+func (enumType) Node() TokenType         { return allTypes[7] } // token for node-to-node communication
 
 var prefixToType = map[string]*tokenType{}
 

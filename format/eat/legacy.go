@@ -7,7 +7,10 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/qluvio/content-fabric/auth/auth"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rlp"
+
 	"github.com/qluvio/content-fabric/constants"
 	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/hash"
@@ -15,10 +18,6 @@ import (
 	"github.com/qluvio/content-fabric/format/types"
 	"github.com/qluvio/content-fabric/format/utc"
 	"github.com/qluvio/content-fabric/util/ethutil"
-
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func (t *Token) encodeLegacy() (s string, err error) {
@@ -184,6 +183,8 @@ func (t *Token) decodeLegacyString(s string) (err error) {
 		}
 	case t.HasEthTxHash():
 		t.Type = Types.Tx()
+	case t.QPHash != nil:
+		t.Type = Types.Node()
 	default:
 		t.Type = Types.Plain()
 	}
@@ -198,22 +199,13 @@ func (t *Token) decodeLegacyString(s string) (err error) {
 
 func (t *Token) embedLegacyStateChannelToken(sct *Token) {
 	t.Embedded = sct
-	// PENDING(LUK): below should not be needed! State channel tokens should be
-	//               used explicitly instead of the client token wrapper.
-	//{ // the addr/oauth user is actually the one of the client...
-	//	t.EthAddr = sct.EthAddr
-	//	// sct.EthAddr = zeroAddr
-	//	if sct.Subject != "" {
-	//		t.Subject = sct.Subject
-	//		sct.Subject = ""
-	//	}
-	//}
+	// SID and LID are required on all tokens, so copy over to client token...
+	t.SID = sct.SID
+	t.LID = sct.LID
 }
 
 func NewTokenDataLegacy() *TokenDataLegacy {
-	return &TokenDataLegacy{
-		Ctx: map[string]interface{}{},
-	}
+	return &TokenDataLegacy{}
 }
 
 func (t *Token) decodeLegacySignature(sig string) (err error) {
@@ -290,7 +282,7 @@ func (l *TokenDataLegacy) CopyToTokenData(t *Token, typ TokenType) {
 	t.SID = l.QSpaceID
 	t.LID = l.QLibID
 	t.QID = l.QID
-	t.Grant = auth.Grant(l.GrantType)
+	t.Grant = Grant(l.GrantType)
 	if l.IssuedAt != 0 {
 		t.IssuedAt = utc.Unix(l.IssuedAt, 0)
 	}
@@ -308,6 +300,9 @@ func (l *TokenDataLegacy) CopyToTokenData(t *Token, typ TokenType) {
 	t.EthTxHash = common.HexToHash(l.EthTxHash)
 	t.QPHash, _ = hash.FromString(l.QPHash)
 	if l.IPGeo != "" {
+		if t.Ctx == nil {
+			t.Ctx = map[string]interface{}{}
+		}
 		t.Ctx[constants.ElvIPGeo] = l.IPGeo
 	}
 }
