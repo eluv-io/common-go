@@ -529,6 +529,37 @@ func TestOTPBackwardsCompat(t *testing.T) {
 
 	require.NoError(t, tokDecoded.VerifySignatureFrom(serverAddr))
 	// require.Equal(t, st, tokDecoded)
+
+	s := "ascsj_3rTJP4Prj6RuqofLqaaRPSJyWUE5c8Njdxh4wYP7sma38iqY81fCqEEgswtXQQTFxBydyyEEkctY2BmKTrx8jGgC2GWYChgYm3n3PWFfr4PZoFY7TQ2S2Bv4DHeX5T76LbcEZ2LuY79xZ8FXrCLkRCpc5udTbkJVoQgzzM4X2Y6sGYLi3KAfnevmBpZKEnqkGYSKM7TiFWGbSqyRccGjdz5qQLuzToGQXQfZ2DzZGGz1AZmR5z2bWGAEqPxdxyWJPL2MUiprm7Rja2JxnypmxPckrv3WiRxT2tMdyWPWxbCV6dwvd9fcJxbfebtJKTvBxQ8GaiWJv72HeaQHCrY61QYZEZpAQTsmHHnjaEyvKsP4nJLqZzNV7ZkWQ6XrNcLkxNVVgVrrxc6qcw85hVQYvHaopCSbyMtBVVxkSZmysqLeXrNFS2rSHiaDGx3w78uceYNWYqyX7eq9bhagQ4BFatKq1rb1yBqNgE92bjuDmxCVfdh6JfqZRWR5q5Nk"
+	/* Validation passes because Subject is empty but Ctx is not
+	{
+	  "tok": "ascsj_3rTJP4Prj6RuqofLqaaRPSJyWUE5c8Njdxh4wYP7sma38iqY81fCqEEgswtXQQTFxBydyyEEkctY2BmKTrx8jGgC2GWYChgYm3n3PWFfr4PZoFY7TQ2S2Bv4DHeX5T76LbcEZ2LuY79xZ8FXrCLkRCpc5udTbkJVoQgzzM4X2Y6sGYLi3KAfnevmBpZKEnqkGYSKM7TiFWGbSqyRccGjdz5qQLuzToGQXQfZ2DzZGGz1AZmR5z2bWGAEqPxdxyWJPL2MUiprm7Rja2JxnypmxPckrv3WiRxT2tMdyWPWxbCV6dwvd9fcJxbfebtJKTvBxQ8GaiWJv72HeaQHCrY61QYZEZpAQTsmHHnjaEyvKsP4nJLqZzNV7ZkWQ6XrNcLkxNVVgVrrxc6qcw85hVQYvHaopCSbyMtBVVxkSZmysqLeXrNFS2rSHiaDGx3w78uceYNWYqyX7eq9bhagQ4BFatKq1rb1yBqNgE92bjuDmxCVfdh6JfqZRWR5q5Nk",
+	  "qid": "iq__27jxWVjbos5zLtwmeZ4HcZbpQomL"
+	}
+
+	{
+	  "EthTxHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+	  "EthAddr": "0xd962aff088ca845de83ce0db0c91b9a0b93d294f",
+	  "AFGHPublicKey": "",
+	  "QPHash": null,
+	  "SID": "ispc2RUoRe9eR2v33HARQUVSp1rYXzw1",
+	  "LID": "ilib31RD8PXrsdvSppy2p78LU3C9JdME",
+	  "QID": "iq__27jxWVjbos5zLtwmeZ4HcZbpQomL",
+	  "Subject": "",
+	  "Grant": "read",
+	  "IssuedAt": "2020-12-01T08:35:34.708Z",
+	  "Expires": "2020-12-02T08:35:34.708Z",
+	  "Ctx": {
+	    "elv:delegation-id": "iq__27jxWVjbos5zLtwmeZ4HcZbpQomL",
+	    "elv:otpId": "QOTP5zvPup5LiwF"
+	  }
+	}
+	*/
+	res, err := eat.Parse(s)
+	require.NoError(t, err)
+	require.Equal(t, eat.Types.StateChannel(), res.Type)
+	//fmt.Println(res.Explain())
+
 }
 
 func sign(t *testing.T, tok *eat.Token, key ...*ecdsa.PrivateKey) *eat.Token {

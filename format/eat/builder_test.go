@@ -27,15 +27,29 @@ func TestTokenBuilders(t *testing.T) {
 		"k2": "v2",
 	}
 	tests := []struct {
-		encoder  eat.Encoder
-		wantType eat.TokenType
-		validate func(t *testing.T, data *eat.TokenData)
+		encoder     eat.Encoder
+		wantFailure bool
+		wantType    eat.TokenType
+		validate    func(t *testing.T, data *eat.TokenData)
 	}{
 
 		{
 			encoder:  eat.NewStateChannel(sid, lid, qid, sub).Sign(serverSK),
 			wantType: eat.Types.StateChannel(),
 			validate: stateChannelDefault,
+		},
+		{
+			encoder:     eat.NewStateChannel(sid, lid, qid, "").Sign(serverSK),
+			wantFailure: true, // no subject and no ctx
+			wantType:    eat.Types.Unknown(),
+		},
+		{
+			encoder: eat.NewStateChannel(sid, lid, qid, "").
+				WithCtx(ctx1).
+				Sign(serverSK),
+			wantFailure: false, // no subject but ctx
+			wantType:    eat.Types.StateChannel(),
+			validate:    stateChannelNoSubject,
 		},
 		{
 			encoder: eat.NewStateChannel(sid, lid, qid, sub).
@@ -119,6 +133,10 @@ func TestTokenBuilders(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.wantType.String(), func(t *testing.T) {
 			encoded, err := test.encoder.Encode()
+			if test.wantFailure {
+				require.Error(t, err)
+				return
+			}
 			require.NoError(t, err)
 
 			tok, err := eat.Parse(encoded)
@@ -142,6 +160,14 @@ func stateChannelDefault(t *testing.T, data *eat.TokenData) {
 	require.Equal(t, lid, data.LID)
 	require.Equal(t, qid, data.QID)
 	require.Equal(t, sub, data.Subject)
+	require.NotEqual(t, utc.Zero, data.IssuedAt)
+}
+
+func stateChannelNoSubject(t *testing.T, data *eat.TokenData) {
+	require.Equal(t, sid, data.SID)
+	require.Equal(t, lid, data.LID)
+	require.Equal(t, qid, data.QID)
+	require.Equal(t, "", data.Subject)
 	require.NotEqual(t, utc.Zero, data.IssuedAt)
 }
 

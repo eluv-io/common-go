@@ -11,20 +11,18 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/format/sign"
+	"github.com/qluvio/content-fabric/format/types"
+	"github.com/qluvio/content-fabric/format/utc"
+	"github.com/qluvio/content-fabric/util/jsonutil"
+	"github.com/qluvio/content-fabric/util/stringutil"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/mattn/go-runewidth"
 	"github.com/mr-tron/base58"
 	"github.com/multiformats/go-varint"
-
-	"github.com/qluvio/content-fabric/util/jsonutil"
-
-	"github.com/qluvio/content-fabric/util/stringutil"
-
-	"github.com/qluvio/content-fabric/errors"
-	"github.com/qluvio/content-fabric/format/sign"
-	"github.com/qluvio/content-fabric/format/types"
-	"github.com/qluvio/content-fabric/format/utc"
 )
 
 const prefixLen = 6 // length of entire prefix including type, sig-type and format
@@ -273,7 +271,12 @@ func (t *Token) Validate() (err error) {
 		if t.QID.IsNil() {
 			return e("reason", "qid missing")
 		}
-		if t.Subject == "" {
+		// for state-channel: don't always require a subject since the actual
+		// subject might be 'something else' in the context.
+		// Note that here we don't know what could be in the context but (in the
+		// future) we might (should ?) require the context to have some known
+		// keys since a token should always be granted to someone ...
+		if t.Subject == "" && (len(t.Ctx) == 0 || t.Type != Types.StateChannel()) {
 			return e("reason", "subject missing")
 		}
 		if t.Grant == "" {
