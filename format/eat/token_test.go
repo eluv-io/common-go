@@ -45,18 +45,18 @@ var baseUnsignedToken = &eat.Token{
 	SigType: eat.SigTypes.Unsigned(),
 	Format:  eat.Formats.Json(),
 	TokenData: eat.TokenData{
-		SID:     sid,
-		LID:     lid,
-		QID:     qid,
-		EthAddr: clientAddr,
+		SID: sid,
+		LID: lid,
+		QID: qid,
+		//EthAddr: clientAddr,
 		//EthTxHash: txh.Bytes(),
 		//GrantType: "read",
 		//IssuedAt:  utc.Now().Truncate(time.Second),                // legacy format has second precision
 		//Expires:   utc.Now().Truncate(time.Second).Add(time.Hour), // legacy format has second precision
-		Ctx: map[string]interface{}{
-			"key1": "val1",
-			"key2": "val2",
-		},
+		//Ctx: map[string]interface{}{
+		//	"key1": "val1",
+		//	"key2": "val2",
+		//},
 	},
 }
 var baseSignedToken = &eat.Token{
@@ -64,18 +64,19 @@ var baseSignedToken = &eat.Token{
 	SigType: eat.SigTypes.Unsigned(),
 	Format:  eat.Formats.Json(),
 	TokenData: eat.TokenData{
-		SID:       sid,
-		LID:       lid,
-		QID:       qid,
-		EthAddr:   clientAddr,
+		SID: sid,
+		LID: lid,
+		//EthAddr:   clientAddr,
 		EthTxHash: txh,
+		//Ctx:       map[string]interface{}{},
+		//QID:       qid,
 		//GrantType: "read",
 		//IssuedAt:  utc.Now().Truncate(time.Second),                // legacy format has second precision
 		//Expires:   utc.Now().Truncate(time.Second).Add(time.Hour), // legacy format has second precision
-		Ctx: map[string]interface{}{
-			"key1": "val1",
-			"key2": "val2",
-		},
+		//Ctx: map[string]interface{}{
+		//	"key1": "val1",
+		//	"key2": "val2",
+		//},
 	},
 }
 
@@ -305,6 +306,22 @@ func TestLegacyTokens(t *testing.T) {
 			},
 			trustedAddr: "0xd9DC97B58C5f2584062Cf69775d160ed9A3BFbC4",
 		},
+		{
+			/*
+				{
+				  "qspace_id": "ispc2RUoRe9eR2v33HARQUVSp1rYXzw1",
+				  "addr": "0xD962AFf088CA845de83CE0db0C91b9a0b93d294f",
+				  "qphash": "hqp_6Z7u3fAsD54kYBuWzpD49AiphEYRHf5QppfJMZhJ4Uif8Ze"
+				}
+			*/
+			token:    `eyJxc3BhY2VfaWQiOiJpc3BjMlJVb1JlOWVSMnYzM0hBUlFVVlNwMXJZWHp3MSIsImFkZHIiOiIweEQ5NjJBRmYwODhDQTg0NWRlODNDRTBkYjBDOTFiOWEwYjkzZDI5NGYiLCJxcGhhc2giOiJocXBfNlo3dTNmQXNENTRrWUJ1V3pwRDQ5QWlwaEVZUkhmNVFwcGZKTVpoSjRVaWY4WmUifQ==.RVMyNTZLX01YTmJyYTdZV2JTOW5zZHZFOTV5Y25mN0wyWmpaUlBaOUhDUHhpdXlZRDVyTlk2OWdESGdBNzRyb0dEUE5zbjQ0R3NmSkQ0NFU5UTNoRUUyUVVjdG1teEM3`,
+			wantType: eat.Types.Node(),
+			validate: func(tok *eat.Token) {
+				require.NotEmpty(t, tok.GetQSpaceID())
+				require.NotEmpty(t, tok.QPHash)
+			},
+			trustedAddr: "0xD962AFf088CA845de83CE0db0C91b9a0b93d294f",
+		},
 	}
 
 	for i, test := range tests {
@@ -352,6 +369,7 @@ func TestLegacyTokens(t *testing.T) {
 
 func TestSignatures(t *testing.T) {
 	tok := baseUnsignedToken.With(eat.Formats.Cbor())
+	tok.Type = eat.Types.Plain()
 	err := tok.SignWith(clientSK)
 	require.NoError(t, err)
 
@@ -386,6 +404,7 @@ func TestClientTokens(t *testing.T) {
 			QID:      qid,
 			EthAddr:  clientAddr,
 			Grant:    "read",
+			Subject:  clientAddr.Hex(),
 			IssuedAt: utc.Now().Truncate(time.Second),                // legacy format has second precision
 			Expires:  utc.Now().Truncate(time.Second).Add(time.Hour), // legacy format has second precision
 			Ctx: map[string]interface{}{
@@ -426,6 +445,7 @@ func TestLegacySignedToken(t *testing.T) {
 			QID:      qid,
 			EthAddr:  clientAddr,
 			Grant:    "read",
+			Subject:  clientAddr.Hex(),
 			IssuedAt: utc.Now().Truncate(time.Second),                // legacy format has second precision
 			Expires:  utc.Now().Truncate(time.Second).Add(time.Hour), // legacy format has second precision
 			Ctx: map[string]interface{}{
@@ -457,28 +477,40 @@ func TestLegacySignedToken(t *testing.T) {
 }
 
 func TestOTPBackwardsCompat(t *testing.T) {
-	st := &eat.Token{
-		Type:    eat.Types.StateChannel(),
-		SigType: eat.SigTypes.Unsigned(),
-		Format:  eat.Formats.CborCompressed(),
-		TokenData: eat.TokenData{
-			SID:      sid,
-			LID:      lid,
-			QID:      qid,
-			EthAddr:  clientAddr,
-			Grant:    "read",
-			IssuedAt: utc.Now().Truncate(time.Second),                // legacy format has second precision
-			Expires:  utc.Now().Truncate(time.Second).Add(time.Hour), // legacy format has second precision
-			Ctx: map[string]interface{}{
-				"key1": "val1",
-				"key2": "val2",
-			},
-		},
-	}
+	//st := &eat.Token{
+	//	Type:    eat.Types.StateChannel(),
+	//	SigType: eat.SigTypes.Unsigned(),
+	//	Format:  eat.Formats.CborCompressed(),
+	//	TokenData: eat.TokenData{
+	//		SID:      sid,
+	//		LID:      lid,
+	//		QID:      qid,
+	//		EthAddr:  clientAddr,
+	//		Grant:    "read",
+	//		IssuedAt: utc.Now().Truncate(time.Second),                // legacy format has second precision
+	//		Expires:  utc.Now().Truncate(time.Second).Add(time.Hour), // legacy format has second precision
+	//		Ctx: map[string]interface{}{
+	//			"key1": "val1",
+	//			"key2": "val2",
+	//		},
+	//	},
+	//}
+	//
+	//sign(t, st)
+	//
+	//stEnc, err := st.Encode()
+	//require.NoError(t, err)
 
-	sign(t, st)
-
-	stEnc, err := st.Encode()
+	stEnc, err := eat.NewStateChannel(sid, lid, qid, clientAddr.Hex()).
+		WithGrant(eat.Grants.Read).
+		WithCtx(map[string]interface{}{
+			"key1": "val1",
+			"key2": "val2",
+		}).
+		WithIssuedAt(utc.Now().Truncate(time.Second)).
+		WithExpires(utc.Now().Truncate(time.Second).Add(time.Hour)).
+		Sign(serverSK).
+		Encode()
 	require.NoError(t, err)
 
 	bts, err := json.Marshal(map[string]interface{}{
@@ -496,7 +528,38 @@ func TestOTPBackwardsCompat(t *testing.T) {
 	fmt.Println("server-addr", serverAddr.String(), "client-addr", clientAddr.String())
 
 	require.NoError(t, tokDecoded.VerifySignatureFrom(serverAddr))
-	require.Equal(t, st, tokDecoded)
+	// require.Equal(t, st, tokDecoded)
+
+	s := "ascsj_3rTJP4Prj6RuqofLqaaRPSJyWUE5c8Njdxh4wYP7sma38iqY81fCqEEgswtXQQTFxBydyyEEkctY2BmKTrx8jGgC2GWYChgYm3n3PWFfr4PZoFY7TQ2S2Bv4DHeX5T76LbcEZ2LuY79xZ8FXrCLkRCpc5udTbkJVoQgzzM4X2Y6sGYLi3KAfnevmBpZKEnqkGYSKM7TiFWGbSqyRccGjdz5qQLuzToGQXQfZ2DzZGGz1AZmR5z2bWGAEqPxdxyWJPL2MUiprm7Rja2JxnypmxPckrv3WiRxT2tMdyWPWxbCV6dwvd9fcJxbfebtJKTvBxQ8GaiWJv72HeaQHCrY61QYZEZpAQTsmHHnjaEyvKsP4nJLqZzNV7ZkWQ6XrNcLkxNVVgVrrxc6qcw85hVQYvHaopCSbyMtBVVxkSZmysqLeXrNFS2rSHiaDGx3w78uceYNWYqyX7eq9bhagQ4BFatKq1rb1yBqNgE92bjuDmxCVfdh6JfqZRWR5q5Nk"
+	/* Validation passes because Subject is empty but Ctx is not
+	{
+	  "tok": "ascsj_3rTJP4Prj6RuqofLqaaRPSJyWUE5c8Njdxh4wYP7sma38iqY81fCqEEgswtXQQTFxBydyyEEkctY2BmKTrx8jGgC2GWYChgYm3n3PWFfr4PZoFY7TQ2S2Bv4DHeX5T76LbcEZ2LuY79xZ8FXrCLkRCpc5udTbkJVoQgzzM4X2Y6sGYLi3KAfnevmBpZKEnqkGYSKM7TiFWGbSqyRccGjdz5qQLuzToGQXQfZ2DzZGGz1AZmR5z2bWGAEqPxdxyWJPL2MUiprm7Rja2JxnypmxPckrv3WiRxT2tMdyWPWxbCV6dwvd9fcJxbfebtJKTvBxQ8GaiWJv72HeaQHCrY61QYZEZpAQTsmHHnjaEyvKsP4nJLqZzNV7ZkWQ6XrNcLkxNVVgVrrxc6qcw85hVQYvHaopCSbyMtBVVxkSZmysqLeXrNFS2rSHiaDGx3w78uceYNWYqyX7eq9bhagQ4BFatKq1rb1yBqNgE92bjuDmxCVfdh6JfqZRWR5q5Nk",
+	  "qid": "iq__27jxWVjbos5zLtwmeZ4HcZbpQomL"
+	}
+
+	{
+	  "EthTxHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+	  "EthAddr": "0xd962aff088ca845de83ce0db0c91b9a0b93d294f",
+	  "AFGHPublicKey": "",
+	  "QPHash": null,
+	  "SID": "ispc2RUoRe9eR2v33HARQUVSp1rYXzw1",
+	  "LID": "ilib31RD8PXrsdvSppy2p78LU3C9JdME",
+	  "QID": "iq__27jxWVjbos5zLtwmeZ4HcZbpQomL",
+	  "Subject": "",
+	  "Grant": "read",
+	  "IssuedAt": "2020-12-01T08:35:34.708Z",
+	  "Expires": "2020-12-02T08:35:34.708Z",
+	  "Ctx": {
+	    "elv:delegation-id": "iq__27jxWVjbos5zLtwmeZ4HcZbpQomL",
+	    "elv:otpId": "QOTP5zvPup5LiwF"
+	  }
+	}
+	*/
+	res, err := eat.Parse(s)
+	require.NoError(t, err)
+	require.Equal(t, eat.Types.StateChannel(), res.Type)
+	//fmt.Println(res.Explain())
+
 }
 
 func sign(t *testing.T, tok *eat.Token, key ...*ecdsa.PrivateKey) *eat.Token {

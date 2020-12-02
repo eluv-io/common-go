@@ -3,7 +3,6 @@ package jsonutil
 import (
 	"testing"
 
-	"github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -27,9 +26,8 @@ func TestIsJson(t *testing.T) {
 		{"partial json string", `"some `, true, true},
 
 		{"invalid 1", `some `, false, false},
-		{"invalid 2", string(uuid.NewV4().Bytes()), false, false},
+		{"invalid 2", string([]byte{0, 1, 2, 3, 4}), false, false},
 		{"invalid 3", `<xml><prop bla="blub/></xml>"`, false, false},
-		{"invalid 4", string([]byte{0, 1, 2, 3}), false, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

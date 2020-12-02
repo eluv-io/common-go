@@ -11,20 +11,18 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/format/sign"
+	"github.com/qluvio/content-fabric/format/types"
+	"github.com/qluvio/content-fabric/format/utc"
+	"github.com/qluvio/content-fabric/util/jsonutil"
+	"github.com/qluvio/content-fabric/util/stringutil"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/mattn/go-runewidth"
 	"github.com/mr-tron/base58"
 	"github.com/multiformats/go-varint"
-
-	"github.com/qluvio/content-fabric/util/jsonutil"
-
-	"github.com/qluvio/content-fabric/util/stringutil"
-
-	"github.com/qluvio/content-fabric/errors"
-	"github.com/qluvio/content-fabric/format/sign"
-	"github.com/qluvio/content-fabric/format/types"
-	"github.com/qluvio/content-fabric/format/utc"
 )
 
 const prefixLen = 6 // length of entire prefix including type, sig-type and format
@@ -79,11 +77,14 @@ func NewClientToken(embed *Token) (*Token, error) {
 	}
 
 	return &Token{
-		Type:      Types.Client(),
-		Format:    embed.Format,
-		SigType:   SigTypes.Unsigned(),
-		Embedded:  embed,
-		TokenData: TokenData{},
+		Type:     Types.Client(),
+		Format:   embed.Format,
+		SigType:  SigTypes.Unsigned(),
+		Embedded: embed,
+		TokenData: TokenData{
+			SID: embed.SID,
+			LID: embed.LID,
+		},
 	}, nil
 }
 
@@ -196,7 +197,7 @@ func (t *Token) Decode(s string) (err error) {
 	}
 	t.encoded = s
 
-	return nil
+	return t.Validate()
 }
 
 func (t *Token) decodeLegacySigned(token string) (bool, error) {
@@ -226,7 +227,7 @@ func (t *Token) decodeLegacySigned(token string) (bool, error) {
 }
 
 func (t *Token) Validate() (err error) {
-	e := errors.Template("validate auth token", errors.K.Invalid)
+	e := errors.Template("validate auth token", errors.K.Invalid, "type", t.Type)
 
 	err = t.Type.Validate()
 	if err != nil {
@@ -252,9 +253,140 @@ func (t *Token) Validate() (err error) {
 		}
 	}
 
-	if t.Type == Types.Client() {
-		if t.Format != Formats.Legacy() && t.Embedded == nil {
-			return e("reason", "client token is missing embedded token")
+	if t.SID.IsNil() {
+		return e("reason", "space id missing")
+	}
+
+	// lib seems optional... (because it can be specified in the URL?)
+	//if t.LID.IsNil() {
+	//	return e("reason", "lib id missing")
+	//}
+
+	switch t.Type {
+	case Types.StateChannel(), Types.EditorSigned():
+		// required
+		if t.SigType != SigTypes.ES256K() {
+			return e("reason", "signature missing")
+		}
+		if t.QID.IsNil() {
+			return e("reason", "qid missing")
+		}
+		// for state-channel: don't always require a subject since the actual
+		// subject might be 'something else' in the context.
+		// Note that here we don't know what could be in the context but (in the
+		// future) we might (should ?) require the context to have some known
+		// keys since a token should always be granted to someone ...
+		if t.Subject == "" && (len(t.Ctx) == 0 || t.Type != Types.StateChannel()) {
+			return e("reason", "subject missing")
+		}
+		if t.Grant == "" {
+			return e("reason", "grant missing")
+		}
+		if t.IssuedAt.IsZero() {
+			return e("reason", "issued at missing")
+		}
+		if t.Expires.IsZero() {
+			return e("reason", "expires missing")
+		}
+		if t.Expires.Before(t.IssuedAt) {
+			return e("reason", "expires before issued at",
+				"expires", t.Expires,
+				"issues_at", t.IssuedAt)
+		}
+		// not allowed
+		if t.HasEthTxHash() {
+			return e("reason", "tx hash not allowed")
+		}
+		if !t.QPHash.IsNil() {
+			return e("reason", "qphash not allowed")
+		}
+		// additional editor-signed requirements are checked in auth provider
+		return nil
+	}
+
+	// not allowed for all other types
+	if t.Subject != "" {
+		return e("reason", "subject not allowed")
+	}
+	if t.Grant != "" {
+		return e("reason", "grant not allowed")
+	}
+	if !t.IssuedAt.IsZero() {
+		return e("reason", "issued at not allowed")
+	}
+	if !t.Expires.IsZero() {
+		return e("reason", "expires not allowed")
+	}
+	if len(t.Ctx) > 0 {
+		return e("reason", "ctx not allowed")
+	}
+
+	switch t.Type {
+	case Types.Client():
+		// required
+		if t.Embedded == nil {
+			return e("reason", "embedded token missing")
+		}
+		// no allowed
+		if t.HasEthTxHash() {
+			return e("reason", "tx hash not allowed")
+		}
+		if !t.QPHash.IsNil() {
+			return e("reason", "qphash not allowed")
+		}
+		return e.IfNotNil(t.Embedded.Validate())
+	case Types.Tx():
+		// required
+		if !t.HasEthTxHash() {
+			return e("reason", "tx hash missing")
+		}
+		if t.SigType != SigTypes.ES256K() {
+			return e("reason", "signature missing")
+		}
+		// no allowed
+		if !t.QPHash.IsNil() {
+			return e("reason", "qphash not allowed")
+		}
+		if !t.QID.IsNil() {
+			return e("reason", "qid not allowed")
+		}
+	case Types.Plain():
+		// required
+		if t.SigType != SigTypes.ES256K() {
+			return e("reason", "signature missing")
+		}
+		// not allowed
+		if t.HasEthTxHash() {
+			return e("reason", "tx hash not allowed")
+		}
+		if !t.QPHash.IsNil() {
+			return e("reason", "qphash not allowed")
+		}
+	case Types.Anonymous():
+		// not allowed
+		if t.SigType != SigTypes.Unsigned() {
+			return e("reason", "signature not allowed")
+		}
+		if t.HasEthTxHash() {
+			return e("reason", "tx hash not allowed")
+		}
+		if !t.QPHash.IsNil() {
+			return e("reason", "qphash not allowed")
+		}
+		if t.HasEthAddr() {
+			return e("reason", "address not allowed")
+		}
+	case Types.Node():
+		// required
+		if t.SigType != SigTypes.ES256K() {
+			return e("reason", "signature missing")
+		}
+		if t.QPHash.IsNil() {
+			return e("reason", "qphash missing")
+		}
+		// not allowed
+		if t.HasEthTxHash() {
+			return e("reason", "tx hash not allowed")
 		}
 	}
 
@@ -390,18 +522,16 @@ func (t *Token) Verify(
 func (t *Token) VerifySignature() error {
 	e := errors.Template("verify token", errors.K.Permission)
 
+	err := t.Validate()
+	if err != nil {
+		return e(err)
+	}
+
 	if t.Signature.IsNil() {
-		// Anonymous tokens only allowed if eth addr and tx are empty!
-		if t.HasEthAddr() {
-			return e("reason", "anonymous token may not have address")
-		}
-		if t.HasEthTxHash() {
-			return e("reason", "anonymous token may not have transaction")
-		}
 		return nil
 	}
 
-	if t.EthAddr == zeroAddr {
+	if !t.HasEthAddr() {
 		//  a signature but no address - only allowed for legacy tokens
 		signerAddress, err := t.Signature.SignerAddress(t.TokenBytes)
 		if err != nil {
