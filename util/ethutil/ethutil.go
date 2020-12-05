@@ -223,5 +223,3 @@ func ToPublicKeyAndID(privateKey *ecdsa.PrivateKey, c id.Code) (keys.KID, id.ID)
 	return keys.NewKID(keyCode, crypto.CompressPubkey(&privateKey.PublicKey)),
 		AddressToID(crypto.PubkeyToAddress(privateKey.PublicKey), c)
 }
-
-//UserPublicKey
