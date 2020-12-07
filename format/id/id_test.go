@@ -121,3 +121,12 @@ func TestEqualsFromString(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, id1.Is(s2))
 }
+
+func TestEquivalent(t *testing.T) {
+	id1 := Generate(User)                                      // iusr7zNaN4pwUHNuCHDpawHLEz
+	id2 := append(Generate(QNode)[:codeLen], id1[codeLen:]...) // inod7zNaN4pwUHNuCHDpawHLEz
+
+	require.True(t, id1.Equivalent(id1))
+	require.True(t, id1.Equivalent(id2))
+	require.True(t, id2.Equivalent(id1))
+}
