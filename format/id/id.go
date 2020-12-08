@@ -145,7 +145,7 @@ func (id ID) Bytes() []byte {
 	if id.IsNil() {
 		return nil
 	}
-	return id[1:]
+	return id[codeLen:]
 }
 
 // UnmarshalText implements custom unmarshaling from the string representation.
@@ -184,6 +184,12 @@ func (id ID) Is(s string) bool {
 
 func (id ID) Equal(other ID) bool {
 	return bytes.Equal(id, other)
+}
+
+// Equivalent returns true if this ID is equal to the given ID, ignoring the ID
+// code.
+func (id ID) Equivalent(other ID) bool {
+	return bytes.Equal(id.Bytes(), other.Bytes())
 }
 
 // Generate creates a random ID for the given ID type.

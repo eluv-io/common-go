@@ -1,0 +1,99 @@
+{
+  "name": "21JUMPST - 21 Jump Street Mezzanine",
+  "offerings": {
+    "default": {
+      "drm_optional": false,
+      "entry_point_rat": null,
+      "exit_point_rat": null,
+      "media_struct": {
+        "duration_rat": "2466568/375",
+        "label": "",
+        "start_time_rat": "0",
+        "streams": {}
+      },
+      "mez_prep_specs": null,
+      "playout": {},
+      "prod_master_hash": "hq__41R9dcL5ZAdXGcDxP9RMeDLVwxSWLv6A6UQvVgNuFo97VjqhJaj1HKdXJuFRGbCaRzVa13BKN9",
+      "prod_master_var_key": "default",
+      "ready": true,
+      "simple_watermark": {
+        "font_color": "white@0.2",
+        "font_relative_height": 0.015,
+        "shadow": true,
+        "shadow_color": "black@0.15",
+        "template": "$USERNAME",
+        "x": "(w-tw)/100*85",
+        "y": "(h-th)/100*20"
+      },
+      "store_clear": false
+    },
+    "watermark-large": {
+      "drm_optional": false,
+      "entry_point_rat": null,
+      "exit_point_rat": null,
+      "media_struct": {},
+      "mez_prep_specs": null,
+      "playout": {},
+      "prod_master_hash": "hq__41R9dcL5ZAdXGcDxP9RMeDLVwxSWLv6A6UQvVgNuFo97VjqhJaj1HKdXJuFRGbCaRzVa13BKN9",
+      "prod_master_var_key": "default",
+      "ready": true,
+      "simple_watermark": {
+        "font_color": "white@0.2",
+        "font_relative_height": 0.1,
+        "shadow": true,
+        "shadow_color": "black@0.15",
+        "template": "$USERNAME",
+        "x": "(w-tw)/100*85",
+        "y": "(h-th)/100*20"
+      },
+      "store_clear": false
+    },
+    "watermark-medium": {
+      "drm_optional": false,
+      "entry_point_rat": null,
+      "exit_point_rat": null,
+      "media_struct": {},
+      "mez_prep_specs": null,
+      "playout": {},
+      "prod_master_hash": "hq__41R9dcL5ZAdXGcDxP9RMeDLVwxSWLv6A6UQvVgNuFo97VjqhJaj1HKdXJuFRGbCaRzVa13BKN9",
+      "prod_master_var_key": "default",
+      "ready": true,
+      "simple_watermark": {
+        "font_color": "white@0.2",
+        "font_relative_height": 0.05,
+        "shadow": true,
+        "shadow_color": "black@0.15",
+        "template": "$USERNAME",
+        "x": "(w-tw)/100*85",
+        "y": "(h-th)/100*20"
+      },
+      "store_clear": false
+    },
+    "watermark-small": {
+      "drm_optional": false,
+      "entry_point_rat": null,
+      "exit_point_rat": null,
+      "media_struct": {
+        "duration_rat": "2466568/375",
+        "label": "",
+        "start_time_rat": "0",
+        "streams": {}
+      },
+      "mez_prep_specs": null,
+      "playout": {},
+      "prod_master_hash": "hq__41R9dcL5ZAdXGcDxP9RMeDLVwxSWLv6A6UQvVgNuFo97VjqhJaj1HKdXJuFRGbCaRzVa13BKN9",
+      "prod_master_var_key": "default",
+      "ready": true,
+      "simple_watermark": {
+        "font_color": "white@0.2",
+        "font_relative_height": 0.015,
+        "shadow": true,
+        "shadow_color": "black@0.15",
+        "template": "$USERNAME",
+        "x": "(w-tw)/100*85",
+        "y": "(h-th)/100*20"
+      },
+      "store_clear": false
+    }
+  }
+}
