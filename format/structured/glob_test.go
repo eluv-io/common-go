@@ -780,6 +780,33 @@ func TestFilterGlob(t *testing.T) {
 							]
 					`),
 		},
+		{
+			name: "search-offerings",
+			args: args{
+				target: tc.searchOfferings(),
+				selectPaths: []structured.Path{
+					structured.ParsePath("/offerings/*/ready"),
+				},
+			},
+			want: tc.parse(`
+							{
+							  "offerings": {
+								"default": {
+								  "ready": true
+								},
+								"watermark-large": {
+								  "ready": true
+								},
+								"watermark-medium": {
+								  "ready": true
+								},
+								"watermark-small": {
+								  "ready": true
+								}
+							  }
+							}
+						`),
+		},
 	}
 	for _, tt := range tests {
 		targets := []interface{}{tt.args.target}
@@ -833,6 +860,12 @@ func (tc *tctx) siteWithArrays() interface{} {
 
 func (tc *tctx) iss1237() interface{} {
 	bytes, err := ioutil.ReadFile("testdata/iss-1237.json")
+	tc.NoError(err)
+	return tc.parse(string(bytes))
+}
+
+func (tc *tctx) searchOfferings() interface{} {
+	bytes, err := ioutil.ReadFile("testdata/search-offerings.json")
 	tc.NoError(err)
 	return tc.parse(string(bytes))
 }
