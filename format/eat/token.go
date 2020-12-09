@@ -986,10 +986,8 @@ func (t *Token) VerifyTimes(maxValidity, timeSkew time.Duration) error {
 func (t *Token) LegacyAddr() string {
 	if t.HasEthAddr() {
 		return t.EthAddr.Hex()
-	} else if t.Subject != "" {
-		return t.Subject
 	}
-	return ""
+	return t.Subject
 }
 
 func (t *Token) LegacyTxID() string {
