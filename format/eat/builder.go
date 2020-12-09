@@ -7,12 +7,17 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 
+	"github.com/qluvio/content-fabric/format/structured"
+
 	"github.com/qluvio/content-fabric/format/types"
 	"github.com/qluvio/content-fabric/format/utc"
 )
 
 type Encoder interface {
+	// Encode encodes the token as a string or returns an error.
 	Encode() (string, error)
+	// MustEncode encodes the token as a string - panics in case of error.
+	MustEncode() string
 }
 
 type Signer interface {
@@ -58,6 +63,14 @@ func (b *encoder) Encode() (string, error) {
 		return "", b.err
 	}
 	return b.token.Encode()
+}
+
+func (b *encoder) MustEncode() string {
+	s, err := b.Encode()
+	if err != nil {
+		panic(err)
+	}
+	return s
 }
 
 // -----------------------------------------------------------------------------
@@ -267,4 +280,66 @@ func NewAnonymous(
 func (b *AnonymousBuilder) WithQID(qid types.QID) *AnonymousBuilder {
 	b.token.QID = qid
 	return b
+}
+
+// -----------------------------------------------------------------------------
+
+type SignedLinkBuilder struct {
+	*signer
+}
+
+func NewSignedLink(
+	sid types.QSpaceID,
+	lid types.QLibID,
+	qid types.QID,
+	linkPath string,
+	srcQID types.QID) *SignedLinkBuilder {
+
+	token := New(Types.SignedLink(), defaultFormat, SigTypes.Unsigned())
+	token.SID = sid
+	token.LID = lid
+	token.QID = qid
+	token.Grant = Grants.Read
+	token.IssuedAt = utc.Now()
+	// no expiration time per default
+	// token.Expires = token.IssuedAt.Add(time.Hour)
+	token.Ctx = map[string]interface{}{
+		"elv": map[string]interface{}{
+			"lnk": linkPath,
+			"src": srcQID.String(),
+		},
+	}
+	return &SignedLinkBuilder{newSigner(token)}
+}
+
+func (b *SignedLinkBuilder) WithAfgh(afghPublicKey string) *SignedLinkBuilder {
+	b.enc.token.AFGHPublicKey = afghPublicKey
+	return b
+}
+
+func (b *SignedLinkBuilder) WithGrant(grant Grant) *SignedLinkBuilder {
+	b.enc.token.Grant = grant
+	return b
+}
+
+func (b *SignedLinkBuilder) WithIssuedAt(issuedAt utc.UTC) *SignedLinkBuilder {
+	b.enc.token.IssuedAt = issuedAt
+	return b
+}
+
+func (b *SignedLinkBuilder) WithExpires(expiresAt utc.UTC) *SignedLinkBuilder {
+	b.enc.token.Expires = expiresAt
+	return b
+}
+
+func (b *SignedLinkBuilder) MergeCtx(ctx map[string]interface{}) *SignedLinkBuilder {
+	var res interface{}
+	res, b.enc.err = structured.Merge(b.enc.token.Ctx, nil, ctx)
+	b.enc.token.Ctx = res.(map[string]interface{})
+	return b
+}
+
+func (b *SignedLinkBuilder) Sign(pk *ecdsa.PrivateKey) Encoder {
+	b.enc.token.Subject = crypto.PubkeyToAddress(pk.PublicKey).Hex()
+	return b.signer.Sign(pk)
 }

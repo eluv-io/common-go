@@ -7,14 +7,16 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/util/jsonutil"
-
-	"github.com/qluvio/content-fabric/format/utc"
-
 	"github.com/qluvio/content-fabric/format/eat"
+	"github.com/qluvio/content-fabric/format/id"
+	"github.com/qluvio/content-fabric/format/structured"
+	"github.com/qluvio/content-fabric/format/utc"
+	"github.com/qluvio/content-fabric/util/jsonutil"
 )
 
 var sub = "token subject"
+var lnk = "./meta/some/path"
+var srcQID = id.MustParse("iq__48iLSSjzN3PRyzwWqDmG5Dx1zkfL")
 
 func TestTokenBuilders(t *testing.T) {
 	now := utc.Now().Truncate(time.Second) // times in tokens have second precision
@@ -128,6 +130,21 @@ func TestTokenBuilders(t *testing.T) {
 				require.Equal(t, qid, data.QID)
 			},
 		},
+		{
+			encoder: eat.NewSignedLink(sid, lid, qid, lnk, srcQID).
+				WithGrant(eat.Grants.Read).
+				MergeCtx(map[string]interface{}{"additional": "context"}).
+				Sign(clientSK),
+			wantType: eat.Types.SignedLink(),
+			validate: func(t *testing.T, data *eat.TokenData) {
+				signedLinkDefault(t, data)
+				ctx := structured.Wrap(data.Ctx)
+				require.Equal(t, "context", ctx.At("additional").String())
+				require.Equal(t, lnk, ctx.At("elv/lnk").String())
+				require.Equal(t, srcQID.String(), ctx.At("elv/src").String())
+
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -192,5 +209,16 @@ func editorSignedDefault(t *testing.T, data *eat.TokenData) {
 	require.Equal(t, lid, data.LID)
 	require.Equal(t, qid, data.QID)
 	require.Equal(t, data.EthAddr.Hex(), data.Subject)
+	require.NotEqual(t, utc.Zero, data.IssuedAt)
+}
+
+func signedLinkDefault(t *testing.T, data *eat.TokenData) {
+	require.Equal(t, sid, data.SID)
+	require.Equal(t, lid, data.LID)
+	require.Equal(t, qid, data.QID)
+	require.Equal(t, data.EthAddr.Hex(), data.Subject)
+	ctx := structured.Wrap(data.Ctx).At("elv")
+	require.NotZero(t, ctx.At("lnk").String())
+	require.NotZero(t, ctx.At("src").String())
 	require.NotEqual(t, utc.Zero, data.IssuedAt)
 }

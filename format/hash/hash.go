@@ -177,6 +177,21 @@ func New(htype Type, digest []byte, size int64, id ei.ID) (*Hash, error) {
 	return h, nil
 }
 
+// MustParse parses a hash from the given string representation. Panics if the
+// string cannot be parsed.
+func MustParse(s string) *Hash {
+	res, err := Parse(s)
+	if err != nil {
+		panic(err)
+	}
+	return res
+}
+
+// Parse parses a hash from the given string representation.
+func Parse(s string) (*Hash, error) {
+	return FromString(s)
+}
+
 // FromString parses a hash from the given string representation.
 func FromString(s string) (*Hash, error) {
 	if s == "" {

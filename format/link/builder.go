@@ -84,6 +84,11 @@ func (b *Builder) ResolutionError(err error) *Builder {
 	return b
 }
 
+func (b *Builder) Auth(tok string) *Builder {
+	b.l.Extra.Authorization = tok
+	return b
+}
+
 func (b *Builder) Build() (*Link, error) {
 	err := b.l.Validate(true)
 	if err != nil {

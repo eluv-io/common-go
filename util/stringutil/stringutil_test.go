@@ -1,9 +1,12 @@
 package stringutil
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	elog "github.com/qluvio/content-fabric/log"
 )
 
 func TestStripFunc(t *testing.T) {
@@ -87,4 +90,25 @@ func TestIndent(t *testing.T) {
 	require.Equal(t, "  a\n  b\n  c", IndentLines("a\nb\nc", 2))
 	require.Equal(t, "...a\n...b\n...c", PrefixLines("a\nb\nc", "..."))
 	require.Equal(t, "...a", PrefixLines("a", "..."))
+}
+
+func TestStringer(t *testing.T) {
+
+	require.Equal(t, "a string", Stringer(func() string { return "a string" }).String())
+
+	log := elog.Get("/TestStringer")
+	log.SetInfo()
+
+	i := 0
+	fn := func() string { i++; return fmt.Sprint(i) }
+
+	for j := 1; j < 10; j++ {
+		log.Debug("msg", "i", Stringer(fn))
+		require.Equal(t, 0, i)
+	}
+
+	for j := 1; j < 10; j++ {
+		log.Info("msg", "i", Stringer(fn))
+		require.Equal(t, j, i)
+	}
 }

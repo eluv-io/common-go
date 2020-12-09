@@ -3,6 +3,7 @@ package jsonutil
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 
 	"github.com/qluvio/content-fabric/log"
 
@@ -175,4 +176,40 @@ func MustPretty(js string) string {
 		panic(errors.E("failed to pretty print", err, "json", js))
 	}
 	return out
+}
+
+// Stringer returns a wrapper around val whose String() function will simply
+// return val's JSON representation. If val is a 'func() interface{}', it will
+// call that function and marshal its return value.
+//
+// Stringer also implements MarshalJSON and simply delegates to the wrapped
+// value or the result of calling the function.
+func Stringer(val interface{}) fmt.Stringer {
+	return &stringer{val}
+}
+
+// stringer is a small decorator that returns the nested value's JSON
+// representation in the String() function.
+type stringer struct {
+	val interface{}
+}
+
+func (s *stringer) String() string {
+	val := s.val
+	if fn, ok := val.(func() interface{}); ok {
+		val = fn()
+	}
+	bts, err := json.Marshal(val)
+	if err != nil {
+		return fmt.Sprintf("%#v", val)
+	}
+	return string(bts)
+}
+
+func (s *stringer) MarshalJSON() ([]byte, error) {
+	val := s.val
+	if fn, ok := val.(func() interface{}); ok {
+		val = fn()
+	}
+	return json.Marshal(val)
 }
