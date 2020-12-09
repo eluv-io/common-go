@@ -37,6 +37,10 @@ func newBuilder(tok *Token) *builder {
 	}
 }
 
+func (b *builder) Token() *Token {
+	return b.token
+}
+
 // -----------------------------------------------------------------------------
 
 var _ Encoder = (*encoder)(nil)
@@ -74,6 +78,10 @@ func (b *signer) Sign(pk *ecdsa.PrivateKey) Encoder {
 	}
 	b.enc.err = b.enc.token.SignWith(pk)
 	return b.enc
+}
+
+func (b *signer) Token() *Token {
+	return b.enc.Token()
 }
 
 // -----------------------------------------------------------------------------
@@ -232,6 +240,11 @@ func NewPlain(
 
 func (b *PlainBuilder) WithQID(qid types.QID) *PlainBuilder {
 	b.enc.token.QID = qid
+	return b
+}
+
+func (b *PlainBuilder) WithAfgh(afghPublicKey string) *PlainBuilder {
+	b.enc.token.AFGHPublicKey = afghPublicKey
 	return b
 }
 
