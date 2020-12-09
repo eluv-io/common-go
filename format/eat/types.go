@@ -38,6 +38,7 @@ var allTypes = []TokenType{
 	{"apl", "plain"},
 	{"aes", "editor-signed"},
 	{"ano", "node"},
+	{"asl", "signed-link"},
 }
 
 type enumType int
@@ -54,6 +55,7 @@ func (enumType) Client() TokenType       { return allTypes[4] } // a state chann
 func (enumType) Plain() TokenType        { return allTypes[5] } // a vanilla (signed) token without tx ==> blockchain-based permissions via HasAccess()
 func (enumType) EditorSigned() TokenType { return allTypes[6] } // a token signed by a user who has edit access to the target content in the token
 func (enumType) Node() TokenType         { return allTypes[7] } // token for node-to-node communication
+func (enumType) SignedLink() TokenType   { return allTypes[8] } // token for signed-links (https://github.com/qluvio/proj-mgm/issues/14#issuecomment-724867064)
 
 var prefixToType = map[string]*tokenType{}
 

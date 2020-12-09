@@ -1,9 +1,13 @@
 package jsonutil
 
 import (
+	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/qluvio/content-fabric/errors"
 )
 
 func TestIsJson(t *testing.T) {
@@ -43,4 +47,45 @@ func TestIsJson(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStringer(t *testing.T) {
+	type someStruct struct {
+		Name   string `json:"name,omitempty"`
+		Number int    `json:"number,omitempty"`
+	}
+	structA := &someStruct{"A", 1}
+	structB := &someStruct{"B", 2}
+
+	tests := []struct {
+		val  interface{}
+		want string
+	}{
+		{"just a string", `"just a string"`},
+		{99, `99`},
+		{structA, `{"name":"A","number":1}`},
+		{structB, `{"name":"B","number":2}`},
+		{func() interface{} { return structA }, `{"name":"A","number":1}`},
+		{func() interface{} { return structB }, `{"name":"B","number":2}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%#v", tt.val), func(t *testing.T) {
+			assert.Equal(t, tt.want, Stringer(tt.val).String())
+
+			m, err := json.Marshal(Stringer(tt.val))
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, string(m))
+		})
+	}
+
+	assert.Equal(t, `&jsonutil.unmarshalable{name:"test"}`, Stringer(&unmarshalable{"test"}).String())
+}
+
+type unmarshalable struct {
+	name string
+}
+
+func (u *unmarshalable) MarshalJSON() ([]byte, error) {
+	return nil, errors.E("marshal", errors.K.NotImplemented)
 }

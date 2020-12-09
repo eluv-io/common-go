@@ -325,17 +325,24 @@ func TestExtra(t *testing.T) {
 				ResolutionError(errors.E("resolve", errors.K.NotExist).ClearStacktrace()).
 				AddProp("k1", "v1").AddProp("k2", "v2").MustBuild(),
 		},
+		{ // signed link & props
+			wantJson: `{"/":"/qfab/QHASH1/meta/a",".":{"authorization":"token"},"k1":"v1","k2":"v2"}`,
+			link:     builder().Auth("token").AddProp("k1", "v1").AddProp("k2", "v2").MustBuild(),
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.wantJson, func(t *testing.T) {
 			require.Equal(t,
-				jsonutil.UnmarshalStringToAny(jsonutil.MarshalString(test.link)),
-				jsonutil.UnmarshalStringToAny(replaceHashes(test.wantJson)))
+				jsonutil.UnmarshalStringToAny(replaceHashes(test.wantJson)),
+				jsonutil.UnmarshalStringToAny(jsonutil.MarshalString(test.link)))
 
 			// ensure container and resolution error are not stored
 			newLnk := cbor(t, test.link).(link.Link)
 			require.Empty(t, newLnk.Extra.Container)
 			require.Empty(t, newLnk.Extra.ResolutionError)
+
+			// but authorization is stored
+			require.Equal(t, test.link.Extra.Authorization, newLnk.Extra.Authorization)
 		})
 	}
 }

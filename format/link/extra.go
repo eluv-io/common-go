@@ -1,6 +1,8 @@
 package link
 
-import "github.com/qluvio/content-fabric/format/structured"
+import (
+	"github.com/qluvio/content-fabric/format/structured"
+)
 
 // Extra are additional link features. They are stored in "." in the JSON
 // representation:
@@ -25,6 +27,10 @@ type Extra struct {
 	// An error if this link could not be resolved during link resolution. This
 	// a temporary attribute, but is also marshalled when set.
 	ResolutionError error `json:"resolution_error,omitempty"`
+	// The authorization for a "signed link": the token contains the signature of
+	// a user that is editor of the the link target.
+	// See https://github.com/qluvio/proj-mgm/issues/14#issuecomment-724867064
+	Authorization string `json:"authorization,omitempty"`
 }
 
 func (e *Extra) MarshalMap() map[string]interface{} {
@@ -41,11 +47,18 @@ func (e *Extra) MarshalMap() map[string]interface{} {
 	if e.ResolutionError != nil {
 		m["resolution_error"] = e.ResolutionError
 	}
+	if e.Authorization != "" {
+		m["authorization"] = e.Authorization
+	}
 	return m
 }
 
 func (e *Extra) IsEmpty() bool {
-	return e == nil || e.Container == "" && e.AutoUpdate == nil && e.ResolutionError == nil
+	return e == nil ||
+		e.Container == "" &&
+			e.AutoUpdate == nil &&
+			e.ResolutionError == nil &&
+			e.Authorization == ""
 }
 
 func (e *Extra) UnmarshalMap(m map[string]interface{}) {
@@ -54,6 +67,7 @@ func (e *Extra) UnmarshalMap(m map[string]interface{}) {
 		e.AutoUpdate = &AutoUpdate{}
 		e.AutoUpdate.UnmarshalMap(au)
 	}
+	e.Authorization, _ = m["authorization"].(string)
 }
 
 // AutoUpdate is the structure for auto-update information

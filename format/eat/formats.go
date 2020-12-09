@@ -9,7 +9,7 @@ const Formats enumFormat = 0
 
 type TokenFormat = *tokenFormat
 
-var defaultFormat = Formats.Json()
+var defaultFormat = Formats.JsonCompressed()
 
 type tokenFormat struct {
 	Prefix string

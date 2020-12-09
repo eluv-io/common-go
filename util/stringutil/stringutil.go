@@ -185,3 +185,17 @@ func IndentLines(s string, spaces int) string {
 func PrefixLines(v, prefix string) string {
 	return prefix + strings.Replace(v, "\n", "\n"+prefix, -1)
 }
+
+// Stringer decorates any parameter-less function that returns a string as a
+// fmt.Stringer interface.
+//
+// Useful in situations where string generation is costly and should only be
+// performed when necessary, i.e. in logging statements. The above will call
+// call Sdump only in case the log is actually in DEBUG.
+//
+//   log.Debug("costly string", stringutil.Stringer(obj.AsJSON))
+type Stringer func() string
+
+func (s Stringer) String() string {
+	return s()
+}

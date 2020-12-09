@@ -11,18 +11,21 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/qluvio/content-fabric/errors"
-	"github.com/qluvio/content-fabric/format/sign"
-	"github.com/qluvio/content-fabric/format/types"
-	"github.com/qluvio/content-fabric/format/utc"
-	"github.com/qluvio/content-fabric/util/jsonutil"
-	"github.com/qluvio/content-fabric/util/stringutil"
-
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/mattn/go-runewidth"
 	"github.com/mr-tron/base58"
 	"github.com/multiformats/go-varint"
+
+	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/format/id"
+	"github.com/qluvio/content-fabric/format/sign"
+	"github.com/qluvio/content-fabric/format/structured"
+	"github.com/qluvio/content-fabric/format/types"
+	"github.com/qluvio/content-fabric/format/utc"
+	"github.com/qluvio/content-fabric/log"
+	"github.com/qluvio/content-fabric/util/jsonutil"
+	"github.com/qluvio/content-fabric/util/stringutil"
 )
 
 const prefixLen = 6 // length of entire prefix including type, sig-type and format
@@ -131,7 +134,12 @@ func (t *Token) OriginalBearer() (string, error) {
 	return t.encoded, nil
 }
 
-func (t *Token) AsJSON(prefix, indent string) string {
+func (t *Token) AsJSON() string {
+	bts, _ := json.Marshal(&t.TokenData)
+	return string(bts)
+}
+
+func (t *Token) AsJSONIndent(prefix, indent string) string {
 	bts, _ := json.MarshalIndent(&t.TokenData, prefix, indent)
 	return string(bts)
 }
@@ -227,7 +235,9 @@ func (t *Token) decodeLegacySigned(token string) (bool, error) {
 }
 
 func (t *Token) Validate() (err error) {
-	e := errors.Template("validate auth token", errors.K.Invalid, "type", t.Type)
+	e := errors.Template("validate auth token", errors.K.Invalid,
+		"type", t.Type,
+		"token", stringutil.Stringer(t.AsJSON))
 
 	err = t.Type.Validate()
 	if err != nil {
@@ -263,7 +273,7 @@ func (t *Token) Validate() (err error) {
 	//}
 
 	switch t.Type {
-	case Types.StateChannel(), Types.EditorSigned():
+	case Types.StateChannel(), Types.EditorSigned(), Types.SignedLink():
 		// required
 		if t.SigType != SigTypes.ES256K() {
 			return e("reason", "signature missing")
@@ -285,13 +295,15 @@ func (t *Token) Validate() (err error) {
 		if t.IssuedAt.IsZero() {
 			return e("reason", "issued at missing")
 		}
-		if t.Expires.IsZero() {
-			return e("reason", "expires missing")
-		}
-		if t.Expires.Before(t.IssuedAt) {
-			return e("reason", "expires before issued at",
-				"expires", t.Expires,
-				"issues_at", t.IssuedAt)
+		if t.Type != Types.SignedLink() {
+			if t.Expires.IsZero() {
+				return e("reason", "expires missing")
+			}
+			if t.Expires.Before(t.IssuedAt) {
+				return e("reason", "expires before issued at",
+					"expires", t.Expires,
+					"issued_at", t.IssuedAt)
+			}
 		}
 		// not allowed
 		if t.HasEthTxHash() {
@@ -300,7 +312,23 @@ func (t *Token) Validate() (err error) {
 		if !t.QPHash.IsNil() {
 			return e("reason", "qphash not allowed")
 		}
-		// additional editor-signed requirements are checked in auth provider
+
+		if t.Type == Types.SignedLink() {
+			ctx := structured.Wrap(t.Ctx).Get("elv")
+			if ctx.Get("lnk").IsError() {
+				return e("reason", "ctx/elv/lnk missing")
+			}
+			src := ctx.Get("src").String()
+			if src == "" {
+				return e("reason", "ctx/elv/src missing")
+			}
+			if _, err2 := id.Q.FromString(src); err2 != nil {
+				return e(err2, "reason", "ctx/elv/src invalid")
+			}
+		}
+
+		// additional editor-signed & signed link requirements are checked in
+		// auth provider
 		return nil
 	}
 
@@ -490,30 +518,26 @@ func (t *Token) Verify(
 	getTrustedAddress func(qid types.QID) (common.Address, error),
 	maxValidity, timeSkew time.Duration) (err error) {
 
+	e := errors.Template("verify")
+
 	switch t.SigType {
 	case SigTypes.ES256K():
 	default:
-		return nil
+		// this should never happen and be caught in token.Validate()
+		return e(errors.K.Permission, "reason", "token not signed")
 	}
 
-	e := errors.Template("verify")
-
-	switch t.Type {
-	case Types.StateChannel(), Types.EditorSigned():
-		trusted, err := getTrustedAddress(t.QID)
-		if err != nil {
+	trusted, err := getTrustedAddress(t.QID)
+	if err != nil {
+		return e(err)
+	}
+	if err = t.verifySignatureFrom(trusted); err != nil {
+		return e(err)
+	}
+	if maxValidity != -1 || timeSkew != -1 {
+		if err = t.VerifyTimes(maxValidity, timeSkew); err != nil {
 			return e(err)
 		}
-		if err = t.verifySignatureFrom(trusted); err != nil {
-			return e(err)
-		}
-		if maxValidity != -1 || timeSkew != -1 {
-			if err = t.VerifyTimes(maxValidity, timeSkew); err != nil {
-				return e(err)
-			}
-		}
-	default:
-		return t.VerifySignature()
 	}
 
 	return nil
@@ -572,7 +596,7 @@ func (t *Token) explain(indent string, isEmbedded bool) (res string) {
 		sb.WriteString(tok.String())
 		sb.WriteString("\n")
 		sb.WriteString(indent)
-		sb.WriteString(tok.AsJSON(indent, "  "))
+		sb.WriteString(tok.AsJSONIndent(indent, "  "))
 		sb.WriteString("\n")
 	}
 	uncompressedFormat := func() TokenFormat {
@@ -629,7 +653,7 @@ func (t *Token) explain(indent string, isEmbedded bool) (res string) {
 			sb.WriteString("EMBEDDED\n")
 			indent = indent + "    "
 			sb.WriteString(indent)
-			sb.WriteString(t.Embedded.AsJSON(indent, "  "))
+			sb.WriteString(t.Embedded.AsJSONIndent(indent, "  "))
 			sb.WriteString("\n")
 		}
 		return
@@ -973,11 +997,13 @@ func (t *Token) VerifyTimes(maxValidity, timeSkew time.Duration) error {
 			"now", now)
 	}
 
-	if now.After(t.IssuedAt.Add(maxValidity)) {
-		return e("reason", "max token validity period expired",
-			"issued_at", t.IssuedAt,
-			"now", now,
-			"max_validity", maxValidity)
+	if maxValidity > 0 {
+		if now.After(t.IssuedAt.Add(maxValidity)) {
+			return e("reason", "max token validity period expired",
+				"issued_at", t.IssuedAt,
+				"now", now,
+				"max_validity", maxValidity)
+		}
 	}
 
 	return nil
@@ -986,10 +1012,8 @@ func (t *Token) VerifyTimes(maxValidity, timeSkew time.Duration) error {
 func (t *Token) LegacyAddr() string {
 	if t.HasEthAddr() {
 		return t.EthAddr.Hex()
-	} else if t.Subject != "" {
-		return t.Subject
 	}
-	return ""
+	return t.Subject
 }
 
 func (t *Token) LegacyTxID() string {
@@ -1024,6 +1048,34 @@ func (t *Token) GetQLibID() types.QLibID {
 	if t.Embedded != nil {
 		return t.Embedded.GetQLibID()
 	}
+	return nil
+}
+
+func (t *Token) VerifySignedLink(srcQID, linkPath string) error {
+	log.Debug("verifying signed link",
+		"src", srcQID,
+		"path", linkPath,
+		"tok", stringutil.Stringer(t.AsJSON))
+
+	e := errors.Template("verify signed link")
+
+	err := t.VerifySignature()
+	if err != nil {
+		return e(err)
+	}
+
+	elv := structured.Wrap(t.Ctx).Get("elv")
+
+	src := elv.Get("src").String()
+	if src != srcQID {
+		return e("reason", "src differs", "expected", src, "actual", srcQID)
+	}
+
+	lnk := elv.Get("lnk").String()
+	if lnk != linkPath {
+		return e("reason", "link path differs", "expected", lnk, "actual", linkPath)
+	}
+
 	return nil
 }
 

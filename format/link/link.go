@@ -154,6 +154,8 @@ func (l *Link) UnmarshalMap(m map[string]interface{}) error {
 		}
 		extra.Delete("auto_update")
 		extra.Delete("container")
+		extra.Delete("resolution_error")
+		extra.Delete("authorization")
 		if len(extra.Map()) == 0 {
 			val.Delete(".")
 		}
@@ -388,7 +390,11 @@ func (l *Link) AsBlob() (*BlobLink, error) {
 	return NewBlobLink(l)
 }
 
-func (l Link) cleanupProps() {
+func (l *Link) IsSigned() bool {
+	return l.Extra.Authorization != ""
+}
+
+func (l *Link) cleanupProps() {
 	delete(l.Props, "/")
 }
 
