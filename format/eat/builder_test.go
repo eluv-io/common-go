@@ -7,6 +7,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/qluvio/content-fabric/util/ethutil"
+
 	"github.com/qluvio/content-fabric/format/eat"
 	"github.com/qluvio/content-fabric/format/id"
 	"github.com/qluvio/content-fabric/format/structured"
@@ -208,7 +210,7 @@ func editorSignedDefault(t *testing.T, data *eat.TokenData) {
 	require.Equal(t, sid, data.SID)
 	require.Equal(t, lid, data.LID)
 	require.Equal(t, qid, data.QID)
-	require.Equal(t, data.EthAddr.Hex(), data.Subject)
+	require.Equal(t, ethutil.AddressToID(data.EthAddr, id.User).String(), data.Subject)
 	require.NotEqual(t, utc.Zero, data.IssuedAt)
 }
 
@@ -216,7 +218,7 @@ func signedLinkDefault(t *testing.T, data *eat.TokenData) {
 	require.Equal(t, sid, data.SID)
 	require.Equal(t, lid, data.LID)
 	require.Equal(t, qid, data.QID)
-	require.Equal(t, data.EthAddr.Hex(), data.Subject)
+	require.Equal(t, ethutil.AddressToID(data.EthAddr, id.User).String(), data.Subject)
 	ctx := structured.Wrap(data.Ctx).At("elv")
 	require.NotZero(t, ctx.At("lnk").String())
 	require.NotZero(t, ctx.At("src").String())

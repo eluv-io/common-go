@@ -13,6 +13,14 @@ func NewBuilder() *Builder {
 	}
 }
 
+// BuilderFrom creates a builder from (a shallow copy of) the given existing
+// link.
+func BuilderFrom(lnk Link) *Builder {
+	return &Builder{
+		l: &lnk,
+	}
+}
+
 type Builder struct {
 	l *Link
 }
