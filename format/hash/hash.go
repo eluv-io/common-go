@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
-	"fmt"
 	"hash"
 	"io"
 	"strconv"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/qluvio/content-fabric/errors"
 	ei "github.com/qluvio/content-fabric/format/id"
+	"github.com/qluvio/content-fabric/format/utc"
 	"github.com/qluvio/content-fabric/log"
 
 	"github.com/mr-tron/base58/base58"
@@ -27,18 +27,19 @@ const (
 	Q
 	QPart
 	QPartLive
+	QPartLiveTransient
 )
+
+func (c Code) IsLive() bool {
+	return c == QPartLive || c == QPartLiveTransient
+}
 
 // FromString parses the given string and returns the hash. Returns an error
 // if the string is not a hash or a hash of the wrong code.
 func (c Code) FromString(s string) (*Hash, error) {
 	h, err := FromString(s)
 	if err != nil {
-		n, ok := codeToName[c]
-		if !ok {
-			n = fmt.Sprintf("Unknown code %d", c)
-		}
-		return nil, errors.E("parse Hash", err, "expected_type", n)
+		return nil, err
 	}
 	return h, h.AssertCode(c)
 }
@@ -86,12 +87,16 @@ func (t Type) String() string {
 func (t Type) Describe() string {
 	var c, f string
 	switch t.Code {
+	case UNKNOWN:
+		c = "unknown"
 	case Q:
 		c = "content"
 	case QPart:
 		c = "content part"
 	case QPartLive:
 		c = "live content part"
+	case QPartLiveTransient:
+		c = "transient live content part"
 	}
 	switch t.Format {
 	case Unencrypted:
@@ -112,11 +117,8 @@ var prefixToType = map[string]Type{
 	"hqpe": Type{QPart, AES128AFGH},
 	"hql_": Type{QPartLive, Unencrypted},
 	"hqle": Type{QPartLive, AES128AFGH},
-}
-var codeToName = map[Code]string{
-	UNKNOWN: "unknown",
-	Q:       "content",
-	QPart:   "content part",
+	"hqt_": Type{QPartLiveTransient, Unencrypted},
+	"hqte": Type{QPartLiveTransient, AES128AFGH},
 }
 
 func init() {
@@ -134,26 +136,30 @@ func init() {
 // identifying a particular instance of an immutable resource.
 //	Q format : type (1 byte) | digest (var bytes) | size (var bytes) | id (var bytes)
 //	QPart format : type (1 byte) | digest (var bytes) | size (var bytes)
-//	QPartLive format : type (1 byte) | digest (var bytes)
+//	QPartLive format : type (1 byte) | expiration (var bytes) | digest (var bytes)
+//	QPartLiveTransient format: type (1 byte) | expiration (var bytes) | digest (var bytes)
 type Hash struct {
-	Type   Type
-	Digest []byte
-	Size   int64
-	ID     ei.ID
-	s      string
+	Type       Type
+	Digest     []byte
+	Size       int64
+	ID         ei.ID
+	Expiration utc.UTC
+	s          string
 }
 
-// New creates a new hash with the given type, digest, size, and ID
+// New creates a new non-live hash with the given type, digest, size, and ID
 func New(htype Type, digest []byte, size int64, id ei.ID) (*Hash, error) {
+	e := errors.Template("init hash", errors.K.Invalid)
 	if _, ok := typeToPrefix[htype]; !ok {
-		return nil, errors.E("init hash", errors.K.Invalid, "reason", "invalid type", "code", htype.Code, "format", htype.Format)
+		return nil, e("reason", "invalid type", "code", htype.Code, "format", htype.Format)
 	} else if htype.Code == UNKNOWN {
 		return nil, nil
+	} else if htype.Code.IsLive() {
+		return nil, e("reason", "live code not supported", "code", htype.Code)
 	}
-	e := errors.Template("init hash", errors.K.Invalid)
 
-	if htype.Code != QPartLive && len(digest) != sha256.Size {
-		return nil, errors.E("init hash", errors.K.Invalid, "reason", "invalid digest", "digest", digest)
+	if len(digest) != sha256.Size {
+		return nil, e("reason", "invalid digest", "digest", digest)
 	}
 
 	if size < 0 {
@@ -171,7 +177,24 @@ func New(htype Type, digest []byte, size int64, id ei.ID) (*Hash, error) {
 		}
 	}
 
-	h := &Hash{Type: htype, Digest: digest, Size: size, ID: id}
+	h := &Hash{Type: htype, Digest: digest, Size: size, ID: id, Expiration: utc.UTC{}}
+	h.s = h.String()
+
+	return h, nil
+}
+
+// NewLive creates a new live hash with the given type, digest, and expiration
+func NewLive(htype Type, digest []byte, expiration utc.UTC) (*Hash, error) {
+	e := errors.Template("init hash", errors.K.Invalid)
+	if _, ok := typeToPrefix[htype]; !ok {
+		return nil, e("reason", "invalid type", "code", htype.Code, "format", htype.Format)
+	} else if htype.Code == UNKNOWN {
+		return nil, nil
+	} else if !htype.Code.IsLive() {
+		return nil, e("reason", "non-live code not supported", "code", htype.Code)
+	}
+
+	h := &Hash{Type: htype, Digest: digest, Size: 0, ID: nil, Expiration: expiration}
 	h.s = h.String()
 
 	return h, nil
@@ -217,7 +240,8 @@ func FromString(s string) (*Hash, error) {
 	var digest []byte
 	var size int64
 	var id ei.ID
-	if htype.Code != QPartLive {
+	var expiration utc.UTC
+	if !htype.Code.IsLive() {
 		// Parse digest
 		m := sha256.Size
 		if n+m > len(b) {
@@ -239,11 +263,19 @@ func FromString(s string) (*Hash, error) {
 			id = ei.NewID(ei.Q, b[n:])
 		}
 	} else {
+		// Parse expiration
+		e, m := binary.Uvarint(b[n:])
+		if m <= 0 {
+			return nil, errors.E("parse hash", errors.K.Invalid, "reason", "invalid expiration", "string", s)
+		}
+		expiration = utc.Unix(int64(e), 0)
+		n += m
+
 		// Parse digest
 		digest = b[n:]
 	}
 
-	return &Hash{Type: htype, Digest: digest, Size: size, ID: id, s: s}, nil
+	return &Hash{Type: htype, Digest: digest, Size: size, ID: id, Expiration: expiration, s: s}, nil
 }
 
 func (h *Hash) String() string {
@@ -252,10 +284,12 @@ func (h *Hash) String() string {
 	}
 
 	if h.s == "" && len(h.Digest) > 0 {
-		b := make([]byte, len(h.Digest))
-		copy(b, h.Digest)
+		var b []byte
+		if !h.IsLive() {
+			b = make([]byte, len(h.Digest))
 
-		if h.Type.Code != QPartLive {
+			copy(b, h.Digest)
+
 			s := make([]byte, binary.MaxVarintLen64)
 			n := binary.PutUvarint(s, uint64(h.Size))
 			b = append(b, s[:n]...)
@@ -263,8 +297,13 @@ func (h *Hash) String() string {
 			if h.Type.Code == Q && h.ID.IsValid() {
 				b = append(b, h.ID.Bytes()...)
 			}
-		}
+		} else {
+			b = make([]byte, binary.MaxVarintLen64)
 
+			n := binary.PutUvarint(b, uint64(h.Expiration.Unix()))
+
+			b = append(b[:n], h.Digest...)
+		}
 		h.s = h.prefix() + base58.Encode(b)
 	}
 
@@ -273,6 +312,10 @@ func (h *Hash) String() string {
 
 func (h *Hash) IsNil() bool {
 	return h == nil || h.Type.Code == UNKNOWN
+}
+
+func (h *Hash) IsLive() bool {
+	return h != nil && h.Type.Code.IsLive()
 }
 
 // AssertType checks whether the hash's type equals the provided type
@@ -347,6 +390,8 @@ func (h *Hash) UnmarshalText(text []byte) error {
 func (h *Hash) As(c Code, id ei.ID) (*Hash, error) {
 	if h.IsNil() || c == h.Type.Code {
 		return h, nil
+	} else if h.IsLive() || c.IsLive() {
+		return nil, errors.E("convert hash", errors.K.Invalid, "reason", "no conversion for live parts", "hash", h, "code", c)
 	} else if _, ok := typeToPrefix[Type{c, h.Type.Format}]; !ok {
 		return nil, errors.E("convert hash", errors.K.Invalid, "reason", "invaid type", "code", c, "format", h.Type.Format)
 	}
@@ -379,26 +424,26 @@ func (h *Hash) Equal(h2 *Hash) bool {
 // with detailed reason otherwise.
 func (h *Hash) AssertEqual(h2 *Hash) error {
 	e := errors.Template("hash.assert-equal", errors.K.Invalid, "expected", h, "actual", h2)
-	if h == h2 {
+	switch {
+	case h == h2:
 		return nil
-	} else if h == nil || h2 == nil {
+	case h == nil || h2 == nil:
 		return e()
-	}
-	if h.Type != h2.Type {
+	case h.Type != h2.Type:
 		return e("reason", "type differs")
-	}
-	if h.Size != h2.Size {
-		return e("reason", "size differs", "expected_size", h.Size, "actual_size", h2.Size)
-	}
-	if h.ID.String() != h2.ID.String() {
-		return e("reason", "ID differs", "expected_id", h.ID, "actual_id", h2.ID)
-	}
-	if !bytes.Equal(h.Digest, h2.Digest) {
+	case !bytes.Equal(h.Digest, h2.Digest):
 		return e("reason", "digest differs",
 			"expected_digest", hex.EncodeToString(h.Digest),
 			"actual_digest", hex.EncodeToString(h2.Digest))
+	case h.Size != h2.Size:
+		return e("reason", "size differs", "expected_size", h.Size, "actual_size", h2.Size)
+	case !h.ID.Equal(h2.ID):
+		return e("reason", "ID differs", "expected_id", h.ID, "actual_id", h2.ID)
+	case h.Expiration != h2.Expiration:
+		return e("reason", "Expiration differs", "expected_expiration", h.Expiration, "actual_expiration", h2.Expiration)
+	default:
+		return nil
 	}
-	return nil
 }
 
 func (h *Hash) DigestBytes() []byte {
@@ -416,18 +461,20 @@ func (h *Hash) Describe() string {
 		sb.WriteString("\n")
 	}
 
-	add("type:   " + h.Type.Describe())
-	add("digest: " + hex.EncodeToString(h.Digest))
-	if h.Type.Code != QPartLive {
-		add("size:   " + strconv.FormatInt(h.Size, 10))
+	add("type:       " + h.Type.Describe())
+	add("digest:     " + hex.EncodeToString(h.Digest))
+	if !h.IsLive() {
+		add("size:       " + strconv.FormatInt(h.Size, 10))
 		if h.Type.Code == Q {
-			add("qid:    " + h.ID.String())
+			add("qid:        " + h.ID.String())
 		}
+	} else {
+		add("expiration: " + h.Expiration.String())
 	}
 	if h.Type.Code == Q {
 		qphash, err := h.As(QPart, nil)
 		if err == nil {
-			add("part:   " + qphash.String())
+			add("part:       " + qphash.String())
 		}
 	}
 
@@ -448,7 +495,7 @@ type Digest struct {
 // make sure Digest implements the Hash interface
 var _ hash.Hash = (*Digest)(nil)
 
-// NewDigest creates a new digest
+// NewDigest creates a new digest. Does not support live part hashes
 func NewDigest(h hash.Hash, t Type, i ei.ID) *Digest {
 	return &Digest{Hash: h, htype: t, id: i}
 }

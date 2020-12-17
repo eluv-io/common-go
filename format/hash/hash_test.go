@@ -326,22 +326,40 @@ func ExampleHash_Describe() {
 	fmt.Println(hqpe.String())
 	fmt.Println(hqpe.Describe())
 
+	hql, _ := hash.FromString("hql_7TmHLg49Qd4NtgfcPeWKAG7fsk7HujeMHaE33Bwm2kLYDdjqYJw")
+	fmt.Println(hql.String())
+	fmt.Println(hql.Describe())
+
+	hqt, _ := hash.FromString("hqt_2KhUoLeUJFR3pfBWpYzSqTWA3PoP6vBqEZGTLYu")
+	fmt.Println(hqt.String())
+	fmt.Println(hqt.Describe())
+
 	// Output:
 	//
 	// hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7
-	// type:   content, unencrypted
-	// digest: 9cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47
-	// size:   1024
-	// qid:    iq__WxoChT9EZU2PRdTdNU7Ldf
-	// part:   hqp_4YWKwzD4cymG9DodGRLphDg8fi2euXRgyYq9euQkjZx4a39
+	// type:       content, unencrypted
+	// digest:     9cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47
+	// size:       1024
+	// qid:        iq__WxoChT9EZU2PRdTdNU7Ldf
+	// part:       hqp_4YWKwzD4cymG9DodGRLphDg8fi2euXRgyYq9euQkjZx4a39
 	//
 	// hqp_4YWKwzD4cymG9DodGRLphDg8fi2euXRgyYq9euQkjZx4a39
-	// type:   content part, unencrypted
-	// digest: 9cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47
-	// size:   1024
+	// type:       content part, unencrypted
+	// digest:     9cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47
+	// size:       1024
 	//
 	// hqpe2spNnr1qkdVEBobRW8kqrh21F9gdhRp9p9PewgPPSYzip96
-	// type:   content part, encrypted with AES-128, AFGHG BLS12-381, 1 MB block size
-	// digest: 52fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c649
-	// size:   1234
+	// type:       content part, encrypted with AES-128, AFGHG BLS12-381, 1 MB block size
+	// digest:     52fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c649
+	// size:       1234
+	//
+	// hql_7TmHLg49Qd4NtgfcPeWKAG7fsk7HujeMHaE33Bwm2kLYDdjqYJw
+	// type:       live content part, unencrypted
+	// digest:     affc42f44e3f73204569984e909d89a2086f2aba19c3866b7dd8b1861451f78c
+	// expiration: 2020-12-15T12:00:00.000Z
+	//
+	// hqt_2KhUoLeUJFR3pfBWpYzSqTWA3PoP6vBqEZGTLYu
+	// type:       transient live content part, unencrypted
+	// digest:     6665bb007a6007781f4f4a0940a67dc4b0fadec2e6fa26
+	// expiration: 1992-08-04T00:00:00.000Z
 }

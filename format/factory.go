@@ -3,15 +3,14 @@ package format
 import (
 	"crypto/sha256"
 
+	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/codecs"
-
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/id"
+	"github.com/qluvio/content-fabric/format/token"
 
 	// types only contains type definitions - no other logic or code
 	. "github.com/qluvio/content-fabric/format/types"
-
-	"github.com/qluvio/content-fabric/format/token"
 
 	mc "github.com/multiformats/go-multicodec"
 )
@@ -226,20 +225,32 @@ func (f *factory) ParseQPWriteToken(s string) (QPWriteToken, error) {
 
 // ParseQPHash parses the given string as content part hash
 func (f *factory) ParseQPHash(s string) (QPHash, error) {
-	h, err := hash.QPart.FromString(s)
+	h, err := hash.FromString(s)
 	if err != nil {
-		h2, err2 := hash.QPartLive.FromString(s)
-		if err2 == nil {
-			h = h2
-			err = nil
-		}
+		return nil, err
 	}
-	return h, err
+	switch h.Type.Code {
+	case hash.QPart, hash.QPartLive, hash.QPartLiveTransient:
+		return h, nil
+	default:
+		return nil, errors.E("parse hash", errors.K.Invalid, "reason", "invalid code", "hash", s)
+	}
 }
 
 // ParseQP:Hash parses the given string as live content part hash
 func (f *factory) ParseQPLHash(s string) (QPHash, error) {
-	return hash.QPartLive.FromString(s)
+	h, err := hash.FromString(s)
+	if err != nil {
+		return nil, err
+	}
+	switch h.Type.Code {
+	case hash.QPartLive, hash.QPartLiveTransient:
+		return h, nil
+	case hash.QPart:
+		return nil, errors.E("parse live hash", errors.K.Invalid, "reason", "hash not live", "hash", s)
+	default:
+		return nil, errors.E("parse live hash", errors.K.Invalid, "reason", "invalid code", "hash", s)
+	}
 }
 
 // ParseQType parses the string as content type
