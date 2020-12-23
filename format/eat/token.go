@@ -1057,7 +1057,7 @@ func (t *Token) VerifySignedLink(srcQID, linkPath string) error {
 		"path", linkPath,
 		"tok", stringutil.Stringer(t.AsJSON))
 
-	e := errors.Template("verify signed link")
+	e := errors.Template("verify signed link", errors.K.Permission)
 
 	err := t.VerifySignature()
 	if err != nil {

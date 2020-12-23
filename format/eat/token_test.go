@@ -113,6 +113,8 @@ func TestFormatParse(t *testing.T) {
 					require.NoError(t, err)
 					require.NotNil(t, tok)
 					require.Equal(t, token.TokenData, tok.TokenData)
+					require.Equal(t, sid, tok.TokenData.SID)
+					require.Equal(t, lid, tok.TokenData.LID)
 					if token.Format != eat.Formats.Legacy() {
 						require.Equal(t, token, tok, "expected type: %s, actual type: %s", token.Type, tok.Type)
 					}
