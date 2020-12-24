@@ -100,6 +100,9 @@ func FromString(s string) (*Token, error) {
 func Parse(s string) (*Token, error) {
 	t := New(Types.Unknown(), Formats.Unknown(), SigTypes.Unknown())
 	err := t.Decode(s)
+	if err != nil {
+		return nil, err
+	}
 	return t, err
 }
 
@@ -569,6 +572,9 @@ func (t *Token) VerifySignature() error {
 }
 
 func (t *Token) Explain() (res string) {
+	if t == nil {
+		return "token is nil"
+	}
 	return t.explain("", false)
 }
 

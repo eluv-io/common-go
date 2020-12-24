@@ -63,7 +63,7 @@ type Factory interface {
 	ParseQWriteToken(s string) (QWriteToken, error)
 
 	// GeneratePWriteToken creates a content write token
-	GenerateQWriteToken() QPWriteToken
+	GenerateQWriteToken(qid QID, nid QNodeID) QPWriteToken
 	// GenerateQPWriteToken creates a content part write token
 	GenerateQPWriteToken() QPWriteToken
 
@@ -209,8 +209,8 @@ func (f *factory) ParseQWriteToken(s string) (QWriteToken, error) {
 }
 
 // GenerateQWriteToken creates a content part write token
-func (f *factory) GenerateQWriteToken() QPWriteToken {
-	return token.Generate(token.QWrite)
+func (f *factory) GenerateQWriteToken(qid QID, nid QNodeID) QPWriteToken {
+	return token.New(token.QWrite, qid, nid)
 }
 
 // GenerateQPWriteToken creates a content part write token

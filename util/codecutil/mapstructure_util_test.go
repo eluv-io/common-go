@@ -59,12 +59,12 @@ func TestMapDecode(t *testing.T) {
 }
 
 type testStruct struct {
-	String string      `json:"string"`
-	Int    int         `json:"int"`
-	ID     id.ID       `json:"id"`
-	Hash   hash.Hash   `json:"hash"`
-	Token  token.Token `json:"token"`
-	Link   link.Link   `json:"link"`
+	String string       `json:"string"`
+	Int    int          `json:"int"`
+	ID     id.ID        `json:"id"`
+	Hash   hash.Hash    `json:"hash"`
+	Token  *token.Token `json:"token"`
+	Link   link.Link    `json:"link"`
 }
 
 var rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -73,12 +73,14 @@ func TestMapDecodeStruct(t *testing.T) {
 	hsh, err := hash.FromString("hq__EKjpzYq4vjPxchdoSm8fUSvK2y3PYVgLPdMWP8yqRRvu4rBnv3BY1BS7pdjVjfvvsasaTZA9qq")
 	require.NoError(t, err)
 
+	qid := id.Generate(id.Q)
+	nid := id.Generate(id.QNode)
 	ts := testStruct{
 		stringutil.RandomString(10),
 		rnd.Intn(1000000),
-		id.Generate(id.Q),
+		qid,
 		*hsh,
-		token.Generate(token.QWrite),
+		token.New(token.QWrite, qid, nid),
 		*link.NewBuilder().Selector(link.S.Meta).P("some", "path").AddProp("custom", "prop").MustBuild(),
 	}
 

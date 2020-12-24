@@ -58,10 +58,10 @@ type QPHash = *hash.Hash
 type QType = *hash.Hash
 
 // QWriteToken is a token needed for writing to a content object
-type QWriteToken = token.Token
+type QWriteToken = *token.Token
 
 // QPWriteToken is a token needed for writing to a content part
-type QPWriteToken = token.Token
+type QPWriteToken = *token.Token
 
 // Attributes is the type of content attributes
 type Attributes struct{}
