@@ -7,6 +7,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 
+	"github.com/qluvio/content-fabric/format/id"
+	"github.com/qluvio/content-fabric/util/ethutil"
+
 	"github.com/qluvio/content-fabric/format/structured"
 
 	"github.com/qluvio/content-fabric/format/types"
@@ -231,7 +234,7 @@ func (b *EditorSignedBuilder) WithCtx(ctx map[string]interface{}) *EditorSignedB
 }
 
 func (b *EditorSignedBuilder) Sign(pk *ecdsa.PrivateKey) Encoder {
-	b.enc.token.Subject = crypto.PubkeyToAddress(pk.PublicKey).Hex()
+	b.enc.token.Subject = ethutil.AddressToID(crypto.PubkeyToAddress(pk.PublicKey), id.User).String()
 	return b.signer.Sign(pk)
 }
 
@@ -340,6 +343,6 @@ func (b *SignedLinkBuilder) MergeCtx(ctx map[string]interface{}) *SignedLinkBuil
 }
 
 func (b *SignedLinkBuilder) Sign(pk *ecdsa.PrivateKey) Encoder {
-	b.enc.token.Subject = crypto.PubkeyToAddress(pk.PublicKey).Hex()
+	b.enc.token.Subject = ethutil.AddressToID(crypto.PubkeyToAddress(pk.PublicKey), id.User).String()
 	return b.signer.Sign(pk)
 }
