@@ -22,10 +22,20 @@ var (
 	}()
 )
 
-const expTokenString = "tq__8UmhDD9cZah58THfAYPf3Shj9hVzfwT51Cf4ZHKpayajzZRyMwCPiSpfS5yqRZfjkDjrtXuRmDa"
+const expTokenString = "tqw__8UmhDD9cZah58THfAYPf3Shj9hVzfwT51Cf4ZHKpayajzZRyMwCPiSpfS5yqRZfjkDjrtXuRmDa"
+
+func TestBackwardsCompatibilityHack(t *testing.T) {
+	tok, err := token.Parse("tq__8UmhDD9cZah58THfAYPf3Shj9hVzfwT51Cf4ZHKpayajzZRyMwCPiSpfS5yqRZfjkDjrtXuRmDa")
+	require.NoError(t, err)
+
+	tokBackwardsCompat, err := token.Parse("tq__8UmhDD9cZah58THfAYPf3Shj9hVzfwT51Cf4ZHKpayajzZRyMwCPiSpfS5yqRZfjkDjrtXuRmDa")
+	require.NoError(t, err)
+
+	require.Equal(t, tok, tokBackwardsCompat)
+}
 
 func TestConversion(t *testing.T) {
-	testConversion(t, tok, token.QWrite, "tq__")
+	testConversion(t, tok, token.QWrite, "tqw__")
 	testConversion(t, token.Generate(token.QWriteV1), token.QWriteV1, "tqw_")
 	testConversion(t, token.Generate(token.QPartWrite), token.QPartWrite, "tqpw")
 }
@@ -37,7 +47,7 @@ func testConversion(t *testing.T, tok *token.Token, code token.Code, prefix stri
 	require.NoError(t, err)
 
 	encoded := tok.String()
-	assert.Equal(t, prefix, encoded[:4])
+	assert.Equal(t, prefix, encoded[:len(prefix)])
 
 	decoded, err := token.FromString(encoded)
 	assert.NoError(t, err)
@@ -62,7 +72,8 @@ func TestInvalidStringConversions(t *testing.T) {
 		{tok: "qwt_00001111"},
 		{tok: "tqw "},
 		{tok: "tqw_1W7LcTy70"},
-		{tok: "tq__xevbBFoiALJxdwZdxpR5XBvfqvTaDxf7"}, // a tqw_ with the w removed...
+		{tok: "tq__xevbBFoiALJxdwZdxpR5XBvfqvTaDxf7"},  // a tqw_ with the w removed...
+		{tok: "tqw__xevbBFoiALJxdwZdxpR5XBvfqvTaDxf7"}, // a new QWrite with invalid data
 	}
 	for _, test := range tests {
 		t.Run(test.tok, func(t *testing.T) {

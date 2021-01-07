@@ -62,14 +62,13 @@ const (
 	QPartWrite      // random bytes
 )
 
-const codeLen = 1
 const prefixLen = 4
 
 var codeToPrefix = map[Code]string{}
 var prefixToCode = map[string]Code{
 	"tunk": Unknown,
 	"tqw_": QWriteV1,
-	"tq__": QWrite,
+	"tq__": QWrite, // QWrite new version
 	"tqpw": QPartWrite,
 }
 var codeToName = map[Code]string{
@@ -79,6 +78,12 @@ var codeToName = map[Code]string{
 	QPartWrite: "content part write token",
 }
 
+// NOTE: 5 char prefix - 2 underscores!
+// This is a backward compatibility hack because the JS client code requires
+// a "tqw_" prefix for tokens! This prefix will be switched back to the
+// original "tq__" in the near future and
+const qwPrefix = "tqw__"
+
 func init() {
 	for prefix, code := range prefixToCode {
 		if len(prefix) != prefixLen {
@@ -86,6 +91,7 @@ func init() {
 		}
 		codeToPrefix[code] = prefix
 	}
+	codeToPrefix[QWrite] = qwPrefix // use "tqw__" when encoding!
 }
 
 // Token is the type representing a Token. Tokens follow the multiformat
@@ -255,16 +261,25 @@ func Parse(s string) (*Token, error) {
 		return nil, e("reason", "unknown prefix")
 	}
 
-	code, found := prefixToCode[s[:prefixLen]]
-	if !found {
-		return nil, e("reason", "unknown prefix")
-	}
+	var code Code
+	var found bool
+	prefix := s[:prefixLen]
 
-	if len(s) == prefixLen {
+	if strings.HasPrefix(s, qwPrefix) {
+		prefix = qwPrefix
+		code = QWrite
+		found = true
+	} else {
+		code, found = prefixToCode[prefix]
+		if !found {
+			return nil, e("reason", "unknown prefix")
+		}
+	}
+	if len(s) == len(prefix) {
 		return nil, e("reason", "too short")
 	}
 
-	dec, err := base58.Decode(s[prefixLen:])
+	dec, err := base58.Decode(s[len(prefix):])
 	if err != nil {
 		return nil, e(err)
 	}
