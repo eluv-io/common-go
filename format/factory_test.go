@@ -63,7 +63,7 @@ func TestTokenGenerators(t *testing.T) {
 
 	tests := []struct {
 		name   string
-		token  token.Token
+		token  *token.Token
 		prefix string
 	}{
 		{"QPWriteToken", f.GenerateQPWriteToken(), "tqpw"},
@@ -168,7 +168,7 @@ func assertID(t *testing.T, id id.ID, expectedPrefix string) {
 	assert.Contains(t, id.String(), expectedPrefix)
 }
 
-func assertToken(t *testing.T, tok token.Token, expectedPrefix string) {
+func assertToken(t *testing.T, tok *token.Token, expectedPrefix string) {
 	fmt.Println(tok)
 	assert.NotNil(t, tok)
 	assert.Contains(t, tok.String(), expectedPrefix)

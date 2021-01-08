@@ -100,6 +100,9 @@ func FromString(s string) (*Token, error) {
 func Parse(s string) (*Token, error) {
 	t := New(Types.Unknown(), Formats.Unknown(), SigTypes.Unknown())
 	err := t.Decode(s)
+	if err != nil {
+		return nil, err
+	}
 	return t, err
 }
 
@@ -569,6 +572,9 @@ func (t *Token) VerifySignature() error {
 }
 
 func (t *Token) Explain() (res string) {
+	if t == nil {
+		return "token is nil"
+	}
 	return t.explain("", false)
 }
 
@@ -1057,7 +1063,7 @@ func (t *Token) VerifySignedLink(srcQID, linkPath string) error {
 		"path", linkPath,
 		"tok", stringutil.Stringer(t.AsJSON))
 
-	e := errors.Template("verify signed link")
+	e := errors.Template("verify signed link", errors.K.Permission)
 
 	err := t.VerifySignature()
 	if err != nil {
