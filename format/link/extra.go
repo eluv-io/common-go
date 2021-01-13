@@ -86,3 +86,11 @@ func (a *AutoUpdate) MarshalMap() map[string]interface{} {
 func (a *AutoUpdate) UnmarshalMap(m map[string]interface{}) {
 	a.Tag = structured.Wrap(m).Get("tag").String()
 }
+
+func (a *AutoUpdate) Clone() *AutoUpdate {
+	if a == nil {
+		return a
+	}
+	clone := *a
+	return &clone
+}

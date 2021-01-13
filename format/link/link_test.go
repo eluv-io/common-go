@@ -343,6 +343,16 @@ func TestExtra(t *testing.T) {
 
 			// but authorization is stored
 			require.Equal(t, test.link.Extra.Authorization, newLnk.Extra.Authorization)
+
+			// test cloning
+			clone := newLnk.Clone()
+			require.Equal(t, newLnk, clone)
+			require.Equal(t, &newLnk, &clone)
+
+			// test cloning from a link pointer
+			linkPtr := &newLnk
+			cloneFromPtr := linkPtr.Clone() // this is a Link, not a *Link!
+			require.EqualValues(t, linkPtr, &cloneFromPtr)
 		})
 	}
 }
