@@ -394,6 +394,15 @@ func (l *Link) IsSigned() bool {
 	return l.Extra.Authorization != ""
 }
 
+// Clone creates a "deepish" copy of this link: it duplicates the link struct
+// and all nested values except the Target hash and Path.
+func (l *Link) Clone() Link {
+	res := *l
+	res.Props = structured.Copy(l.Props).(map[string]interface{})
+	res.Extra.AutoUpdate = res.Extra.AutoUpdate.Clone()
+	return res
+}
+
 func (l *Link) cleanupProps() {
 	delete(l.Props, "/")
 }
