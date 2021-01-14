@@ -9,9 +9,10 @@ import (
 
 	"github.com/hashicorp/golang-lru/simplelru"
 
-	"github.com/qluvio/content-fabric/util/syncutil"
-
 	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/format/duration"
+	"github.com/qluvio/content-fabric/util/jsonutil"
+	"github.com/qluvio/content-fabric/util/syncutil"
 )
 
 type constructionMode string
@@ -44,10 +45,12 @@ var Modes = struct {
 
 // Cache is a thread-safe fixed size LRU cache.
 type Cache struct {
-	lru        *simplelru.LRU
-	lock       sync.RWMutex
-	Mode       constructionMode // defaults to Blocking...
-	namedLocks syncutil.NamedLocks
+	lru          *simplelru.LRU
+	lock         sync.RWMutex
+	Mode         constructionMode // defaults to Blocking...
+	namedLocks   syncutil.NamedLocks
+	metrics      Metrics
+	evictHandler func(key interface{}, value interface{}) // the external evict handler function
 }
 
 // Nil creates a cache that doesn't cache anything at all.
@@ -66,21 +69,42 @@ func NewWithEvict(size int, onEvicted func(key interface{}, value interface{})) 
 	if size <= 0 {
 		size = 1
 	}
-	lru, _ := simplelru.NewLRU(size, onEvicted)
 	c := &Cache{
-		lru:  lru,
-		Mode: Modes.Blocking,
+		evictHandler: onEvicted,
 	}
+	c.lru, _ = simplelru.NewLRU(size, c.onEvict)
+	c.metrics.Config.MaxItems = size
+	c.WithMode(Modes.Blocking)
 	return c
 }
 
-// WithMode set's the cache's construction mode and returns itself for call
+// WithMode sets the cache's construction mode and returns itself for call
 // chaining.
 func (c *Cache) WithMode(mode constructionMode) *Cache {
 	if c == nil {
-		return c
+		return nil
 	}
 	c.Mode = mode
+	c.metrics.Config.Mode = string(mode)
+	return c
+}
+
+// WithName sets the cache's name and returns itself for call chaining.
+func (c *Cache) WithName(name string) *Cache {
+	if c == nil {
+		return nil
+	}
+	c.metrics.Name = name
+	return c
+}
+
+// WithMaxAge sets the cache's maxAge (only for collection in metrics) and
+// returns itself for call chaining.
+func (c *Cache) WithMaxAge(age duration.Spec) *Cache {
+	if c == nil {
+		return nil
+	}
+	c.metrics.Config.MaxAge = age
 	return c
 }
 
@@ -101,6 +125,13 @@ func (c *Cache) Add(key, value interface{}) bool {
 	}
 	c.lock.Lock()
 	defer c.lock.Unlock()
+	c.metrics.ItemAdded()
+	if c.lru.Contains(key) {
+		// updating existing key is basically a remove and an add. Since simple
+		// lru doesn't count this as an eviction (and does not call the evict
+		// callback), we have to update the metrics here...
+		c.metrics.ItemRemoved()
+	}
 	return c.lru.Add(key, value)
 }
 
@@ -113,20 +144,27 @@ func (c *Cache) Get(key interface{}) (interface{}, bool) {
 	// simple.LRU!
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	return c.lru.Get(key)
+
+	res, found := c.lru.Get(key)
+	if found {
+		c.metrics.Hit()
+	} else {
+		c.metrics.Miss()
+	}
+	return res, found
 }
 
 // GetOrCreate looks up a key's value from the cache, creating it if necessary.
-// Invalid, staled or expired entries are discarded from the cache as dictated
+// Invalid, stale or expired entries are discarded from the cache as dictated
 // by the first optional evict parameter.
 // - If the key does not exist, the given constructor function is called to
 //   create a new value, store it at the key and return it. If the constructor
 //   fails, no value is added to the cache and the error is returned. Otherwise,
 //   the new value is added to the cache, and a boolean to mark any evictions
 //   from the cache is returned as defined in the Add() method.
-// - If the key exists and the evict parameter is not nil, the first evict is
-//   invoked with the retrieved value. When it returns true, the value is
-//   discarded from the cache and the constructor is called.
+// - If the key exists and the evict parameter is not nil, then the first evict
+//   function is invoked with the retrieved value. If it returns true, the
+//   value is discarded from the cache and the constructor is called.
 func (c *Cache) GetOrCreate(
 	key interface{},
 	constructor func() (interface{}, error),
@@ -137,13 +175,18 @@ func (c *Cache) GetOrCreate(
 		return val, false, err
 	}
 
+	var evictFn func(val interface{}) bool
+	if len(evict) > 0 {
+		evictFn = evict[0]
+	}
+
 	switch c.Mode {
 	case Modes.Blocking:
-		return c.getOrCreateBlocking(key, constructor, evict...)
+		return c.getOrCreateBlocking(key, constructor, evictFn)
 	case Modes.Decoupled:
-		return c.getOrCreateDecoupled(key, constructor, evict...)
+		return c.getOrCreateDecoupled(key, constructor, evictFn)
 	case Modes.Concurrent:
-		return c.getOrCreateConcurrent(key, constructor, evict...)
+		return c.getOrCreateConcurrent(key, constructor, evictFn)
 	}
 
 	// should never get here!
@@ -153,22 +196,24 @@ func (c *Cache) GetOrCreate(
 func (c *Cache) getOrCreateBlocking(
 	key interface{},
 	constructor func() (interface{}, error),
-	evict ...func(val interface{}) bool) (val interface{}, evicted bool, err error) {
+	evict func(val interface{}) bool) (val interface{}, evicted bool, err error) {
 
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
 	var ok bool
-	val, ok = c.lru.Get(key)
-	if ok && (len(evict) == 0 || !evict[0](val)) {
+	val, ok = c.getOrEvict(key, false, evict, nil)
+	if ok {
 		return val, false, nil
 	}
 
 	// create the value - holding the write lock (and blocking any other call...)
 	val, err = constructor()
 	if err != nil {
+		c.metrics.Error()
 		return nil, false, err
 	}
+	c.metrics.ItemAdded()
 	evicted = c.lru.Add(key, val)
 	return val, evicted, err
 }
@@ -176,12 +221,12 @@ func (c *Cache) getOrCreateBlocking(
 func (c *Cache) getOrCreateDecoupled(
 	key interface{},
 	constructor func() (interface{}, error),
-	evict ...func(val interface{}) bool) (val interface{}, evicted bool, err error) {
+	evict func(val interface{}) bool) (val interface{}, evicted bool, err error) {
 
 	// try to get the value with regular rw lock
 	var ok bool
-	val, ok = c.Get(key)
-	if ok && (len(evict) == 0 || !evict[0](val)) {
+	val, ok = c.getOrEvict(key, true, evict, nil)
+	if ok {
 		return val, false, nil
 	}
 
@@ -190,18 +235,25 @@ func (c *Cache) getOrCreateDecoupled(
 	defer keyMutex.Unlock()
 
 	// try getting the value again - it might have been created in the meantime
-	val, ok = c.Get(key)
-	if ok && (len(evict) == 0 || !evict[0](val)) {
+	val, ok = c.getOrEvict(key, true, evict, func() {
+		// decrement the metrics' Misses count - independent of the new result: if
+		// we still have a miss, we counted them twice. If we get a hit now, the
+		// previous miss was incorrect.
+		c.metrics.UnMiss()
+	})
+
+	if ok {
 		return val, false, nil
 	}
 
 	// create the value
 	val, err = constructor()
 	if err != nil {
+		c.metrics.Error()
 		return nil, false, err
 	}
 
-	// add it to the cache
+	// add it to the cache (using the regular rw lock)
 	evicted = c.Add(key, val)
 	return val, evicted, nil
 }
@@ -209,18 +261,21 @@ func (c *Cache) getOrCreateDecoupled(
 func (c *Cache) getOrCreateConcurrent(
 	key interface{},
 	constructor func() (interface{}, error),
-	evict ...func(val interface{}) bool) (val interface{}, evicted bool, err error) {
+	evict func(val interface{}) bool) (val interface{}, evicted bool, err error) {
 
 	// try to get the value with regular rw lock
 	var ok bool
-	val, ok = c.Get(key)
-	if ok && (len(evict) == 0 || !evict[0](val)) {
+	val, ok = c.getOrEvict(key, true, evict, nil)
+	if ok {
 		return val, false, nil
 	}
 
 	// create the value - holding no lock at all
 	val, err = constructor()
 	if err != nil {
+		c.lock.Lock()
+		c.metrics.Error()
+		c.lock.Unlock()
 		return nil, false, err
 	}
 
@@ -251,8 +306,8 @@ func (c *Cache) Peek(key interface{}) (interface{}, bool) {
 	return c.lru.Peek(key)
 }
 
-// ContainsOrAdd checks if a key is in the cache  without updating the
-// recent-ness or deleting it for being stale,  and if not, adds the value.
+// ContainsOrAdd checks if a key is in the cache without updating the
+// recent-ness or deleting it for being stale, and if not, adds the value.
 // Returns whether found and whether an eviction occurred.
 func (c *Cache) ContainsOrAdd(key, value interface{}) (ok, evict bool) {
 	if c == nil {
@@ -264,7 +319,8 @@ func (c *Cache) ContainsOrAdd(key, value interface{}) (ok, evict bool) {
 	if c.lru.Contains(key) {
 		return true, false
 	} else {
-		evict := c.lru.Add(key, value)
+		c.metrics.ItemAdded()
+		evict = c.lru.Add(key, value)
 		return false, evict
 	}
 }
@@ -276,6 +332,7 @@ func (c *Cache) Remove(key interface{}) {
 	}
 	c.lock.Lock()
 	defer c.lock.Unlock()
+	// no need to update metrics: lru.Remove calls onEvicted()
 	c.lru.Remove(key)
 }
 
@@ -286,6 +343,7 @@ func (c *Cache) RemoveOldest() {
 	}
 	c.lock.Lock()
 	defer c.lock.Unlock()
+	// no need to update metrics: lru.RemoveOldest calls onEvicted()
 	c.lru.RemoveOldest()
 }
 
@@ -307,4 +365,64 @@ func (c *Cache) Len() int {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 	return c.lru.Len()
+}
+
+// Metrics returns a copy of the cache's runtime properties.
+func (c *Cache) Metrics() Metrics {
+	if c == nil {
+		return Metrics{}
+	}
+	return c.metrics
+}
+
+// CollectMetrics returns a copy of the cache's runtime properties.
+func (c *Cache) CollectMetrics() jsonutil.GenericMarshaler {
+	m := c.Metrics()
+	return &m
+}
+
+// onEvict is the evict handler registered with the simple LRU and is used to
+// update the item count. Relays to the external evict handler if present.
+func (c *Cache) onEvict(key interface{}, value interface{}) {
+	c.metrics.ItemRemoved()
+	if c.evictHandler != nil {
+		c.evictHandler(key, value)
+	}
+}
+
+// getOrEvict gets the value for the given key using the regular write lock if
+// requested. It handles a possible eviction with the optional evict function,
+// but doesn't call the registered onEvict handler (for backwards
+// compatibility). It also updates all necessary metrics accordingly.
+// optFn is an optional function that gets called (within the write lock if
+// requested).
+func (c *Cache) getOrEvict(
+	key interface{},
+	lock bool,
+	evict func(val interface{}) bool,
+	optFn func()) (interface{}, bool) {
+
+	if lock {
+		// need the write lock, since this updates the recently-used list in
+		// simple.LRU!
+		c.lock.Lock()
+		defer c.lock.Unlock()
+	}
+
+	if optFn != nil {
+		defer optFn()
+	}
+
+	val, ok := c.lru.Get(key)
+	if ok {
+		if evict == nil || !evict(val) {
+			c.metrics.Hit()
+			return val, true
+		}
+		// item got evicted by custom optional evict function
+		c.metrics.ItemRemoved()
+	}
+	c.metrics.Miss()
+
+	return nil, false
 }
