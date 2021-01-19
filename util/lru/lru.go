@@ -15,7 +15,7 @@ import (
 	"github.com/qluvio/content-fabric/util/syncutil"
 )
 
-type constructionMode string
+type ConstructionMode string
 
 // Modes defines the different construction modes that can be used with the LRU
 // cache. The mode affects the synchronization in calls to the GetOrCreate(key)
@@ -34,9 +34,9 @@ type constructionMode string
 // prevented by acquiring key-specific locks. This mode provides concurrency
 // among different keys, but prevents it for a given key.
 var Modes = struct {
-	Blocking   constructionMode
-	Concurrent constructionMode
-	Decoupled  constructionMode
+	Blocking   ConstructionMode
+	Concurrent ConstructionMode
+	Decoupled  ConstructionMode
 }{
 	Blocking:   "blocking",
 	Concurrent: "concurrent",
@@ -47,7 +47,7 @@ var Modes = struct {
 type Cache struct {
 	lru          *simplelru.LRU
 	lock         sync.RWMutex
-	Mode         constructionMode // defaults to Blocking...
+	Mode         ConstructionMode // defaults to Blocking...
 	namedLocks   syncutil.NamedLocks
 	metrics      Metrics
 	evictHandler func(key interface{}, value interface{}) // the external evict handler function
@@ -80,7 +80,7 @@ func NewWithEvict(size int, onEvicted func(key interface{}, value interface{})) 
 
 // WithMode sets the cache's construction mode and returns itself for call
 // chaining.
-func (c *Cache) WithMode(mode constructionMode) *Cache {
+func (c *Cache) WithMode(mode ConstructionMode) *Cache {
 	if c == nil {
 		return nil
 	}
@@ -125,12 +125,12 @@ func (c *Cache) Add(key, value interface{}) bool {
 	}
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.metrics.ItemAdded()
+	c.metrics.Add()
 	if c.lru.Contains(key) {
 		// updating existing key is basically a remove and an add. Since simple
 		// lru doesn't count this as an eviction (and does not call the evict
 		// callback), we have to update the metrics here...
-		c.metrics.ItemRemoved()
+		c.metrics.Remove()
 	}
 	return c.lru.Add(key, value)
 }
@@ -213,7 +213,7 @@ func (c *Cache) getOrCreateBlocking(
 		c.metrics.Error()
 		return nil, false, err
 	}
-	c.metrics.ItemAdded()
+	c.metrics.Add()
 	evicted = c.lru.Add(key, val)
 	return val, evicted, err
 }
@@ -319,7 +319,7 @@ func (c *Cache) ContainsOrAdd(key, value interface{}) (ok, evict bool) {
 	if c.lru.Contains(key) {
 		return true, false
 	} else {
-		c.metrics.ItemAdded()
+		c.metrics.Add()
 		evict = c.lru.Add(key, value)
 		return false, evict
 	}
@@ -384,7 +384,7 @@ func (c *Cache) CollectMetrics() jsonutil.GenericMarshaler {
 // onEvict is the evict handler registered with the simple LRU and is used to
 // update the item count. Relays to the external evict handler if present.
 func (c *Cache) onEvict(key interface{}, value interface{}) {
-	c.metrics.ItemRemoved()
+	c.metrics.Remove()
 	if c.evictHandler != nil {
 		c.evictHandler(key, value)
 	}
@@ -420,7 +420,7 @@ func (c *Cache) getOrEvict(
 			return val, true
 		}
 		// item got evicted by custom optional evict function
-		c.metrics.ItemRemoved()
+		c.metrics.Remove()
 	}
 	c.metrics.Miss()
 

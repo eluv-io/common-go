@@ -17,11 +17,11 @@ type Metrics struct {
 		MaxAge   duration.Spec
 		Mode     string
 	}
-	Hits         int64 // Number of cache hits
-	Misses       int64 // Number of cache misses
-	Errors       int64 // Number of errors when trying to load/create a cache entry
-	ItemsAdded   int64 // ItemsAdded - ItemsRemoved = Current Size
-	ItemsRemoved int64 // see ItemsAdded
+	Hits    int64 // Number of cache hits
+	Misses  int64 // Number of cache misses
+	Errors  int64 // Number of errors when trying to load/create a cache entry
+	Added   int64 // Added - Removed = Current Size
+	Removed int64 // see Added
 }
 
 // Hit increments the Hits count.
@@ -44,14 +44,14 @@ func (c *Metrics) Error() {
 	c.Errors++
 }
 
-// ItemAdded increments the ItemsAdded count.
-func (c *Metrics) ItemAdded() {
-	c.ItemsAdded++
+// Add increments the Added count.
+func (c *Metrics) Add() {
+	c.Added++
 }
 
-// ItemRemoved increments the ItemsRemoved count.
-func (c *Metrics) ItemRemoved() {
-	c.ItemsRemoved++
+// Remove increments the Removed count.
+func (c *Metrics) Remove() {
+	c.Removed++
 }
 
 func (c *Metrics) MarshalJSON() ([]byte, error) {
@@ -64,16 +64,19 @@ func (c *Metrics) String() string {
 }
 
 func (c *Metrics) MarshalGeneric() interface{} {
+	conf := map[string]interface{}{
+		"max_items": c.Config.MaxItems,
+	}
 	m := map[string]interface{}{
-		"config": map[string]interface{}{
-			"max_items": c.Config.MaxItems,
-			"mode":      c.Config.Mode,
-		},
-		"hits":          c.Hits,
-		"misses":        c.Misses,
-		"errors":        c.Errors,
-		"items_added":   c.ItemsAdded,
-		"items_removed": c.ItemsRemoved,
+		"config":  conf,
+		"hits":    c.Hits,
+		"misses":  c.Misses,
+		"errors":  c.Errors,
+		"added":   c.Added,
+		"removed": c.Removed,
+	}
+	if c.Config.Mode != "" {
+		conf["mode"] = c.Config.Mode
 	}
 	if c.Config.MaxAge != 0 {
 		m["max_age"] = c.Config.MaxAge

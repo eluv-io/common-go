@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var modes = []constructionMode{Modes.Blocking, Modes.Concurrent, Modes.Decoupled}
+var modes = []ConstructionMode{Modes.Blocking, Modes.Concurrent, Modes.Decoupled}
 
 func TestBasic(t *testing.T) {
 	evictedCount := 0
@@ -151,8 +151,8 @@ func createAssertMetricsFn(t *testing.T, lru *Cache, name string) func(hits int,
 		require.Equal(t, name, m.Name)
 		require.EqualValues(t, hits, m.Hits, "hits")
 		require.EqualValues(t, misses, m.Misses, "misses")
-		require.EqualValues(t, added, m.ItemsAdded, "added")
-		require.EqualValues(t, removed, m.ItemsRemoved, "removed")
+		require.EqualValues(t, added, m.Added, "added")
+		require.EqualValues(t, removed, m.Removed, "removed")
 	}
 }
 
@@ -172,15 +172,15 @@ func TestGetOrCreate(t *testing.T) {
 				metrics := lru.Metrics()
 				So(metrics.Hits, ShouldEqual, 0)
 				So(metrics.Misses, ShouldEqual, i+1)
-				So(metrics.ItemsAdded, ShouldEqual, i+1)
+				So(metrics.Added, ShouldEqual, i+1)
 				if i < 2 {
 					So(evicted, ShouldBeFalse)
 					So(evictedCount, ShouldEqual, 0)
-					So(metrics.ItemsRemoved, ShouldEqual, 0)
+					So(metrics.Removed, ShouldEqual, 0)
 				} else {
 					So(evicted, ShouldBeTrue)
 					So(evictedCount, ShouldEqual, i-1)
-					So(metrics.ItemsRemoved, ShouldEqual, i-1)
+					So(metrics.Removed, ShouldEqual, i-1)
 				}
 			}
 
@@ -259,8 +259,8 @@ func TestNilCache(t *testing.T) {
 				So(m.Hits, ShouldEqual, 0)
 				So(m.Misses, ShouldEqual, 0)
 				So(m.Errors, ShouldEqual, 0)
-				So(m.ItemsAdded, ShouldEqual, 0)
-				So(m.ItemsRemoved, ShouldEqual, 0)
+				So(m.Added, ShouldEqual, 0)
+				So(m.Removed, ShouldEqual, 0)
 				So(m.Config.MaxItems, ShouldEqual, 0)
 				So(m.Config.MaxAge, ShouldEqual, 0)
 				So(m.Config.Mode, ShouldEqual, "")
@@ -332,7 +332,7 @@ func TestGetOrCreateStress(t *testing.T) {
 			require.EqualValues(t, totalCount, metrics.Hits+metrics.Misses)
 			require.EqualValues(t, 0, metrics.Errors)
 			require.EqualValues(t, cacheSize, metrics.Config.MaxItems)
-			require.EqualValues(t, cacheSize, metrics.ItemsAdded-metrics.ItemsRemoved)
+			require.EqualValues(t, cacheSize, metrics.Added-metrics.Removed)
 		})
 	}
 
@@ -392,13 +392,13 @@ func TestGetValidOrCreate(t *testing.T) {
 							key,
 							ctor.constructor(key, constDelay),
 							func(val interface{}) bool {
-								if now.Sub(val.(*entry).createdAt) < validity {
+								if now.Sub(val.(*testResource).createdAt) < validity {
 									return false
 								}
 								return true // expired
 							})
 						require.NoError(t, err)
-						require.Equal(t, key, val.(*entry).key)
+						require.Equal(t, key, val.(*testResource).key)
 						count++
 						if evicted {
 							evictedCount++
@@ -433,7 +433,7 @@ type ctor struct {
 	invoked int
 }
 
-type entry struct {
+type testResource struct {
 	key       string
 	createdAt time.Time
 }
@@ -444,7 +444,7 @@ func (c *ctor) constructor(key string, sleep time.Duration) func() (interface{},
 		if sleep > 0 {
 			time.Sleep(sleep)
 		}
-		return &entry{
+		return &testResource{
 			key:       key,
 			createdAt: time.Now(),
 		}, nil
