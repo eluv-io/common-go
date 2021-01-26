@@ -115,7 +115,7 @@ func (sig Sig) EthAdjustBytes() []byte {
 	if len(sig) == 0 {
 		return []byte{}
 	}
-	if sig.Code() != ES256K || sig.Bytes()[64] < 4 {
+	if sig.Code() != ES256K || len(sig.Bytes()) <= 64 || sig.Bytes()[64] < 4 {
 		return sig.Bytes()
 	} else {
 		adjSigBytes := make([]byte, 65)

@@ -478,6 +478,31 @@ func TestLegacySignedToken(t *testing.T) {
 	require.Equal(t, st, tokDecoded.Embedded)
 }
 
+func TestLegacySignedTokenParseError(t *testing.T) {
+	missingPadding :=
+		"ascsj_5hZL3eWQopZJVry4A1jR3yxZ69QxeySh1ithBGFuF9JACBZCQRriFHRLT7WBwp" +
+			"KcKVjFJHzpXk87jTmfj2Vq7Hch9uo7CrSaowvgVay4s9LnwTEaM7DCM2E9oAT7Av" +
+			"GvJDju1x3hYrhZz6s4oGgsQX9wFSWWCNCxgNebUjAgtsbXgGp2Zy9oVYco1aNpVj" +
+			"FronE5QtWgk48BFw8QAqwCUAW7XFRi5BjPexomcMD5TBaqZYtZ97CXGKNeoFtjy2" +
+			"CUCaRzuf3XSuGSEA73NDWGRqhZ85sLtd8fthpKFMhfWzbgbLekdA8zPVTVcRCWVR" +
+			"Etv3uXUrWZeHLQiTT1t2LA3LJwbwYjXP8Sp8VkBmSHkaVKnH6AU9TVjTtkjejos5" +
+			"r1UV4fwbtKS6Ficy6E6yKjopp6r3gonV3vXP7jgD3cZEfnNtrU19Hn.RVMyNTZLX" +
+			"zhWdlNRUEJ3WlRGSEpmVnV1OUZCdnVZOVh4UjdxN0ZGQ01zVjIzakJkc0h2MVEzY" +
+			"zNoZnhIVGllbVA5UlJjOVRjQnV6bUpud0g3NFhOc3RIbTZwVXZCRUc"
+	correct := missingPadding + "="
+	for i, s := range []string{correct, missingPadding} {
+		tok, err := eat.Parse(s)
+		if i == 0 {
+			require.NoError(t, err, i)
+			err = tok.VerifySignature()
+			require.NoError(t, err, i)
+		} else {
+			require.Error(t, err)
+		}
+
+	}
+}
+
 func TestOTPBackwardsCompat(t *testing.T) {
 	//st := &eat.Token{
 	//	Type:    eat.Types.StateChannel(),
