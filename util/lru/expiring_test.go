@@ -6,8 +6,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/qluvio/content-fabric/format/duration"
 	"github.com/qluvio/content-fabric/format/utc"
-
 	"github.com/qluvio/content-fabric/util/lru"
 )
 
@@ -19,7 +19,7 @@ func TestExpiringCache(t *testing.T) {
 		return now
 	})
 
-	cache := lru.NewExpiringCache(10, 5*time.Second)
+	cache := lru.NewExpiringCache(10, duration.Spec(5*time.Second))
 
 	cstr := func(v interface{}) func() (interface{}, error) {
 		return func() (interface{}, error) {

@@ -3,15 +3,21 @@ package lru
 import (
 	"time"
 
+	"github.com/qluvio/content-fabric/format/duration"
 	"github.com/qluvio/content-fabric/format/utc"
+	"github.com/qluvio/content-fabric/util/jsonutil"
 )
 
 // NewExpiringCache creates a new ExpiringCache.
-func NewExpiringCache(maxSize int, maxAge time.Duration) *ExpiringCache {
-	return &ExpiringCache{
+func NewExpiringCache(maxSize int, maxAge duration.Spec) *ExpiringCache {
+	res := &ExpiringCache{
 		cache:  New(maxSize),
-		maxAge: maxAge,
+		maxAge: maxAge.Duration(),
 	}
+	if res.cache != nil {
+		res.cache.metrics.Config.MaxAge = maxAge
+	}
+	return res
 }
 
 // ExpiringCache is an LRU cache that evicts entries from the cache when they
@@ -55,6 +61,17 @@ func (c *ExpiringCache) GetOrCreate(
 		return nil, evicted, err
 	}
 	return val.(*expiringEntry).val, evicted, nil
+}
+
+// Metrics returns a copy of the cache's runtime properties.
+func (c *ExpiringCache) Metrics() Metrics {
+	return c.cache.Metrics()
+}
+
+// CollectMetrics returns a copy of the cache's runtime properties.
+func (c *ExpiringCache) CollectMetrics() jsonutil.GenericMarshaler {
+	m := c.Metrics()
+	return &m
 }
 
 type expiringEntry struct {
