@@ -67,7 +67,7 @@ func New(size int) *Cache {
 // callback.
 func NewWithEvict(size int, onEvicted func(key interface{}, value interface{})) *Cache {
 	if size <= 0 {
-		size = 1
+		return Nil()
 	}
 	c := &Cache{
 		evictHandler: onEvicted,
