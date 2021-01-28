@@ -358,6 +358,8 @@ func TestGetValidOrCreate(t *testing.T) {
 		constructionDelay = "5ms"
 	)
 
+	rand.Seed(time.Now().UnixNano())
+
 	runDuration := duration.MustParse(runTime).Duration()
 	constDelay := duration.MustParse(constructionDelay).Duration()
 	validity := duration.MustParse(valid).Duration()
