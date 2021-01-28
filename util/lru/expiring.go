@@ -1,6 +1,10 @@
 package lru
 
-import "time"
+import (
+	"time"
+
+	"github.com/qluvio/content-fabric/format/utc"
+)
 
 // NewExpiringCache creates a new ExpiringCache.
 func NewExpiringCache(maxSize int, maxAge time.Duration) *ExpiringCache {
@@ -10,8 +14,9 @@ func NewExpiringCache(maxSize int, maxAge time.Duration) *ExpiringCache {
 	}
 }
 
-// ExpiringCache is an LRU cache that evicts entries from the cache if they are
-// older than the configured max age.
+// ExpiringCache is an LRU cache that evicts entries from the cache when they
+// reach the configured max age. Expired entries are evicted lazily, i.e. only
+// when requested, and hence not garbage collected otherwise.
 type ExpiringCache struct {
 	cache  *Cache
 	maxAge time.Duration
@@ -33,11 +38,11 @@ func (c *ExpiringCache) GetOrCreate(
 			}
 			return &expiringEntry{
 				val: val,
-				ts:  time.Now(),
+				ts:  utc.Now(),
 			}, nil
 		},
 		func(val interface{}) bool {
-			if time.Now().Sub(val.(*expiringEntry).ts) > c.maxAge {
+			if utc.Now().Sub(val.(*expiringEntry).ts) >= c.maxAge {
 				return true
 			}
 			if len(evict) > 0 {
@@ -54,5 +59,5 @@ func (c *ExpiringCache) GetOrCreate(
 
 type expiringEntry struct {
 	val interface{}
-	ts  time.Time
+	ts  utc.UTC
 }
