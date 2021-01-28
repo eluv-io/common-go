@@ -14,9 +14,7 @@ func NewExpiringCache(maxSize int, maxAge duration.Spec) *ExpiringCache {
 		cache:  New(maxSize),
 		maxAge: maxAge.Duration(),
 	}
-	if res.cache != nil {
-		res.cache.metrics.Config.MaxAge = maxAge
-	}
+	res.cache.WithMaxAge(maxAge)
 	return res
 }
 
@@ -26,6 +24,11 @@ func NewExpiringCache(maxSize int, maxAge duration.Spec) *ExpiringCache {
 type ExpiringCache struct {
 	cache  *Cache
 	maxAge time.Duration
+}
+
+func (c *ExpiringCache) WithMode(mode ConstructionMode) *ExpiringCache {
+	c.cache.WithMode(mode)
+	return c
 }
 
 // GetOrCreate gets the cached entry or creates a new one if it doesn't exist.
