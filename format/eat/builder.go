@@ -233,8 +233,15 @@ func (b *EditorSignedBuilder) WithCtx(ctx map[string]interface{}) *EditorSignedB
 	return b
 }
 
+func (b *EditorSignedBuilder) WithSubject(s string) *EditorSignedBuilder {
+	b.enc.token.Subject = s
+	return b
+}
+
 func (b *EditorSignedBuilder) Sign(pk *ecdsa.PrivateKey) Encoder {
-	b.enc.token.Subject = ethutil.AddressToID(crypto.PubkeyToAddress(pk.PublicKey), id.User).String()
+	if len(b.enc.token.Subject) == 0 {
+		b.enc.token.Subject = ethutil.AddressToID(crypto.PubkeyToAddress(pk.PublicKey), id.User).String()
+	}
 	return b.signer.Sign(pk)
 }
 
