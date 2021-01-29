@@ -116,6 +116,9 @@ func (id KID) MarshalText() ([]byte, error) {
 }
 
 func (id KID) Bytes() []byte {
+	if len(id) < 1 {
+		return nil
+	}
 	return id[1:]
 }
 
