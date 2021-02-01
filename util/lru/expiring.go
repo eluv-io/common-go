@@ -35,6 +35,11 @@ func (c *ExpiringCache) GetOrCreate(
 	constructor func() (interface{}, error),
 	evict ...func(val interface{}) bool) (val interface{}, evicted bool, err error) {
 
+	if c == nil {
+		val, err = constructor()
+		return val, false, err
+	}
+
 	val, evicted, err = c.cache.GetOrCreate(
 		key,
 		func() (interface{}, error) {
