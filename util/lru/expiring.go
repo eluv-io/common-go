@@ -38,6 +38,11 @@ func (c *ExpiringCache) GetOrCreate(
 	constructor func() (interface{}, error),
 	evict ...func(val interface{}) bool) (val interface{}, evicted bool, err error) {
 
+	if c == nil {
+		val, err = constructor()
+		return val, false, err
+	}
+
 	val, evicted, err = c.cache.GetOrCreate(
 		key,
 		func() (interface{}, error) {
@@ -64,6 +69,10 @@ func (c *ExpiringCache) GetOrCreate(
 		return nil, evicted, err
 	}
 	return val.(*expiringEntry).val, evicted, nil
+}
+
+func (c *ExpiringCache) Remove(key interface{}) {
+	c.cache.Remove(key)
 }
 
 // Metrics returns a copy of the cache's runtime properties.
