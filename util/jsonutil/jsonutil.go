@@ -213,3 +213,23 @@ func (s *stringer) MarshalJSON() ([]byte, error) {
 	}
 	return json.Marshal(val)
 }
+
+// MarshallingError converts the given marshalling error to a string in JSON
+// format limited to ~100 characters. This is useful for handling errors in a
+// struct's 'String() string' method that uses JSON marshalling to create the
+// string description.
+func MarshallingError(msg string, err error) string {
+	log.Warn("Failed to marshall "+msg, "error", err)
+	ex := err.Error()
+	if len(ex) > 80 {
+		ex = ex[:80] + ".."
+	}
+	return fmt.Sprintf(`{"marshalling_error": "%s"}`, ex)
+}
+
+// GenericMarshaler is an interface for types that implement a marshalling
+// method which converts the type to a generic go data structure consisting of
+// map[string]interface{}, []interface{} and primitive types.
+type GenericMarshaler interface {
+	MarshalGeneric() interface{}
+}
