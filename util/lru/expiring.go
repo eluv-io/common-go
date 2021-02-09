@@ -31,8 +31,18 @@ func (c *ExpiringCache) WithMode(mode ConstructionMode) *ExpiringCache {
 	return c
 }
 
-// GetOrCreate gets the cached entry or creates a new one if it doesn't exist.
-// See lru.Cache.GetOrCreate() for details.
+// GetOrCreate looks up a key's value from the cache, creating it if necessary.
+//
+//  - If the key does not exist, the given constructor function is called to
+//    create a new value, store it at the key and return it. If the constructor
+//    fails, no value is added to the cache and the error is returned.
+//    Otherwise, the new value is added to the cache, and a boolean to mark any
+//    evictions from the cache is returned as defined in the Add() method.
+//  - If the key exists but is expired according to the max age, the current
+//    value is discarded and re-created with the constructor function.
+//  - If evict functions are passed and a non-expired cache entry exists, then
+//    the first evict function is invoked with the cached value. If it returns
+//    true, the value is discarded from the cache and the constructor is called.
 func (c *ExpiringCache) GetOrCreate(
 	key interface{},
 	constructor func() (interface{}, error),
