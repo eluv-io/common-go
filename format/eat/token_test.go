@@ -12,15 +12,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/qluvio/content-fabric/format/eat"
+	"github.com/qluvio/content-fabric/format/id"
+	"github.com/qluvio/content-fabric/format/utc"
+	"github.com/qluvio/content-fabric/util/ethutil"
+	"github.com/qluvio/content-fabric/util/jsonutil"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/stretchr/testify/require"
-
-	"github.com/qluvio/content-fabric/format/eat"
-	"github.com/qluvio/content-fabric/format/id"
-	"github.com/qluvio/content-fabric/format/utc"
-	"github.com/qluvio/content-fabric/util/jsonutil"
 )
 
 var (
@@ -603,4 +604,48 @@ func requireEquivalentLegacyToken(t *testing.T, expected string, actual string) 
 	require.Equal(t, 2, len(gens))
 	//goland:noinspection GoNilness
 	require.Equal(t, gens[0], gens[1])
+}
+
+func TestEditorSignedSubject(t *testing.T) {
+	token := eat.New(eat.Types.EditorSigned(), eat.Formats.Json(), eat.SigTypes.Unsigned())
+	token.SID = sid
+	token.LID = lid
+	token.QID = qid
+	token.Grant = eat.Grants.Read
+	token.IssuedAt = utc.Now()
+	token.Expires = token.IssuedAt.Add(time.Hour)
+
+	// subject is not necessarily the signer
+	token.Subject = "me"
+
+	err := token.SignWith(clientSK)
+	require.NoError(t, err)
+	_, err = token.Encode()
+	require.NoError(t, err)
+
+	signAddr := crypto.PubkeyToAddress(clientSK.PublicKey)
+	token.Subject = signAddr.String()
+	err = token.SignWith(clientSK)
+	require.NoError(t, err)
+	_, err = token.Encode()
+	require.NoError(t, err)
+
+	token.Subject = ethutil.AddressToID(signAddr, id.User).String()
+	err = token.SignWith(clientSK)
+	require.NoError(t, err)
+	_, err = token.Encode()
+	require.NoError(t, err)
+
+	ess := eat.NewEditorSigned(sid, lid, qid).
+		WithSubject("me").
+		WithExpires(token.Expires)
+	_, err = ess.Sign(clientSK).Encode()
+	require.NoError(t, err)
+	require.Equal(t, "me", ess.Token().Subject)
+
+	ess = eat.NewEditorSigned(sid, lid, qid).
+		WithExpires(token.Expires)
+	_, err = ess.Sign(clientSK).Encode()
+	require.NoError(t, err)
+	require.Equal(t, token.Subject, ess.Token().Subject)
 }
