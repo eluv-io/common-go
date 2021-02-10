@@ -76,6 +76,10 @@ func (c *ExpiringCache) GetOrCreate(
 	return val.(*expiringEntry).val, evicted, nil
 }
 
+func (c *ExpiringCache) Get(key interface{}) (interface{}, bool) {
+	return c.cache.Get(key)
+}
+
 func (c *ExpiringCache) Remove(key interface{}) {
 	c.cache.Remove(key)
 }
