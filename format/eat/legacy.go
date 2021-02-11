@@ -212,7 +212,9 @@ func (t *Token) decodeLegacySignature(sig string) (err error) {
 	t.SigType = SigTypes.ES256K()
 	var sigBytes []byte
 	sigBytes, err = base64.StdEncoding.DecodeString(sig)
-	t.Signature, err = sign.ES256K.FromString(string(sigBytes))
+	if err == nil {
+		t.Signature, err = sign.ES256K.FromString(string(sigBytes))
+	}
 	if err != nil {
 		return errors.E("decode legacy token signature", errors.K.Invalid, err)
 	}
