@@ -190,12 +190,15 @@ func PrefixLines(v, prefix string) string {
 // fmt.Stringer interface.
 //
 // Useful in situations where string generation is costly and should only be
-// performed when necessary, i.e. in logging statements. The above will call
-// call Sdump only in case the log is actually in DEBUG.
+// performed when necessary, i.e. in logging statements. The following will call
+// call obj.AsJSON() only in case the log is actually in DEBUG.
 //
 //   log.Debug("costly string", stringutil.Stringer(obj.AsJSON))
 type Stringer func() string
 
 func (s Stringer) String() string {
+	if s == nil {
+		return "nil"
+	}
 	return s()
 }
