@@ -621,6 +621,8 @@ func (t *Token) explain(indent string, isEmbedded bool) (res string) {
 				unicode.IsDigit(r) ||
 				unicode.IsPunct(r) ||
 				r == '=' ||
+				r == '+' ||
+				r == '_' ||
 				r == ' ' {
 				return r
 			}
