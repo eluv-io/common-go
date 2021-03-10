@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"math"
 	"strconv"
+	"time"
 
 	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/format/duration"
 )
 
 // AsInt returns the given value as an int.
@@ -62,6 +64,10 @@ func AsInt64Err(val interface{}) (int64, error) {
 		if err != nil {
 			return 0, e(err)
 		}
+	case time.Duration:
+		result = int64(x)
+	case duration.Spec:
+		result = int64(x)
 	}
 	return result, nil
 }
