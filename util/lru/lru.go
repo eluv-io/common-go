@@ -420,6 +420,7 @@ func (c *Cache) getOrEvict(
 			return val, true
 		}
 		// item got evicted by custom optional evict function
+		c.lru.Remove(key)
 		c.metrics.Remove()
 	}
 	c.metrics.Miss()
