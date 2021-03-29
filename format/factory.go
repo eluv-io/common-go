@@ -66,6 +66,8 @@ type Factory interface {
 	GenerateQWriteToken(qid QID, nid QNodeID) QPWriteToken
 	// GenerateQPWriteToken creates a content part write token
 	GenerateQPWriteToken() QPWriteToken
+	// GenerateLROHandle creates a handle for long running bitcode operations
+	GenerateLROHandle(nid QNodeID) LROHandle
 
 	// ParseQPWriteToken parses the given string as content part write token
 	ParseQPWriteToken(s string) (QPWriteToken, error)
@@ -216,6 +218,11 @@ func (f *factory) GenerateQWriteToken(qid QID, nid QNodeID) QPWriteToken {
 // GenerateQPWriteToken creates a content part write token
 func (f *factory) GenerateQPWriteToken() QPWriteToken {
 	return token.Generate(token.QPartWrite)
+}
+
+// GenerateLROHandle creates a handle for long running bitcode operations
+func (f *factory) GenerateLROHandle(nid QNodeID) LROHandle {
+	return token.New(token.LRO, nil, nid)
 }
 
 // ParseQPWriteToken parse the given string as content part write token

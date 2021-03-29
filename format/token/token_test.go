@@ -15,7 +15,7 @@ import (
 var (
 	qid = id.MustParse("iq__99d4kp14eSDEP7HWfjU4W6qmqDw")
 	nid = id.MustParse("inod3Sa5p3czRyYi8GnVGnh8gBDLaqJr")
-	tok = func() *token.Token {
+	qwt = func() *token.Token {
 		t := token.New(token.QWrite, qid, nid)
 		t.Bytes = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 		return t
@@ -35,9 +35,10 @@ func TestBackwardsCompatibilityHack(t *testing.T) {
 }
 
 func TestConversion(t *testing.T) {
-	testConversion(t, tok, token.QWrite, "tqw__")
+	testConversion(t, qwt, token.QWrite, "tqw__")
 	testConversion(t, token.Generate(token.QWriteV1), token.QWriteV1, "tqw_")
 	testConversion(t, token.Generate(token.QPartWrite), token.QPartWrite, "tqpw")
+	testConversion(t, token.New(token.LRO, nil, nid), token.LRO, "tlro")
 }
 
 func testConversion(t *testing.T, tok *token.Token, code token.Code, prefix string) {
@@ -107,15 +108,15 @@ func TestInvalidStringConversions2(t *testing.T) {
 }
 
 func TestJSON(t *testing.T) {
-	b, err := json.Marshal(tok)
+	b, err := json.Marshal(qwt)
 	assert.NoError(t, err)
 	assert.Equal(t, "\""+expTokenString+"\"", string(b))
 
 	var unmarshalled token.Token
 	err = json.Unmarshal(b, &unmarshalled)
 	assert.NoError(t, err)
-	assert.True(t, tok.Equal(&unmarshalled))
-	assert.Equal(t, tok.String(), unmarshalled.String())
+	assert.True(t, qwt.Equal(&unmarshalled))
+	assert.Equal(t, qwt.String(), unmarshalled.String())
 }
 
 type Wrapper struct {
@@ -124,7 +125,7 @@ type Wrapper struct {
 
 func TestWrappedJSON(t *testing.T) {
 	s := Wrapper{
-		Token: tok,
+		Token: qwt,
 	}
 	b, err := json.Marshal(s)
 	assert.NoError(t, err)
@@ -148,5 +149,16 @@ func ExampleToken_Describe() {
 	// qid:    iq__1Bhh3pU9gLXZiNDL6PEZuEP5ri
 	// nid:    inod2KRn6vRvn8U3gczhSMJwd1
 	// random: 0xe6ded2a798ac1f820fe871c6170b6d12
+}
 
+func ExampleToken_Describe_lroHandle() {
+	tok, _ := token.FromString("tlro12hb4zikV2ArEoXXyUV6xKJPfC6Ff2siNKDKBVM6js8adif81")
+	fmt.Println(tok.Describe())
+
+	// Output:
+	//
+	// type:   bitcode LRO handle
+	// qid:    n/a
+	// nid:    inod2KRn6vRvn8U3gczhSMJwd1
+	// random: 0x2df2a5d3d6c4e0830a95e7f1e8c779f6
 }
