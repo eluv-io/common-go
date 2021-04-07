@@ -30,6 +30,16 @@ func (c Code) FromString(s string) (ID, error) {
 	return id, id.AssertCode(c)
 }
 
+// MustParse parses an ID from the given string representation. Panics if the
+// string cannot be parsed.
+func (c Code) MustParse(s string) ID {
+	res, err := c.FromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return res
+}
+
 // lint disable
 const (
 	UNKNOWN Code = iota

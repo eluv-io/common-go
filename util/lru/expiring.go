@@ -22,12 +22,18 @@ func NewExpiringCache(maxSize int, maxAge duration.Spec) *ExpiringCache {
 // reach the configured max age. Expired entries are evicted lazily, i.e. only
 // when requested, and hence not garbage collected otherwise.
 type ExpiringCache struct {
-	cache  *Cache
-	maxAge time.Duration
+	cache            *Cache
+	maxAge           time.Duration
+	resetAgeOnAccess bool // if true, resets the entries age to 0 on access
 }
 
 func (c *ExpiringCache) WithMode(mode ConstructionMode) *ExpiringCache {
 	c.cache.WithMode(mode)
+	return c
+}
+
+func (c *ExpiringCache) WithResetAgeOnAccess(set bool) *ExpiringCache {
+	c.resetAgeOnAccess = set
 	return c
 }
 
@@ -48,6 +54,7 @@ func (c *ExpiringCache) GetOrCreate(
 	constructor func() (interface{}, error),
 	evict ...func(val interface{}) bool) (val interface{}, evicted bool, err error) {
 
+	now := utc.Now()
 	val, evicted, err = c.cache.GetOrCreate(
 		key,
 		func() (interface{}, error) {
@@ -57,18 +64,10 @@ func (c *ExpiringCache) GetOrCreate(
 			}
 			return &expiringEntry{
 				val: val,
-				ts:  utc.Now(),
+				ts:  now,
 			}, nil
 		},
-		func(val interface{}) bool {
-			if utc.Now().Sub(val.(*expiringEntry).ts) >= c.maxAge {
-				return true
-			}
-			if len(evict) > 0 {
-				return evict[0](val)
-			}
-			return false
-		},
+		c.checkAge(now, evict...),
 	)
 	if err != nil {
 		return nil, evicted, err
@@ -76,8 +75,37 @@ func (c *ExpiringCache) GetOrCreate(
 	return val.(*expiringEntry).val, evicted, nil
 }
 
+func (c *ExpiringCache) checkAge(now utc.UTC, evict ...func(val interface{}) bool) func(val interface{}) bool {
+	return func(val interface{}) bool {
+		if now.Sub(val.(*expiringEntry).ts) >= c.maxAge {
+			return true
+		}
+		if c.resetAgeOnAccess {
+			val.(*expiringEntry).ts = now
+		}
+		if len(evict) > 0 {
+			return evict[0](val)
+		}
+		return false
+	}
+}
+
+// Get returns the value stored for the given key and true if the key exists,
+// nil and false if the key does not exist or has expired.
 func (c *ExpiringCache) Get(key interface{}) (interface{}, bool) {
-	return c.cache.Get(key)
+	val, ok := c.cache.getOrEvict(key, true, c.checkAge(utc.Now()), nil)
+	if ok {
+		return val.(*expiringEntry).val, true
+	}
+	return nil, false
+}
+
+// Add adds a value to the cache.  Returns true if an eviction occurred.
+func (c *ExpiringCache) Add(key, value interface{}) bool {
+	return c.cache.Add(key, &expiringEntry{
+		val: value,
+		ts:  utc.Now(),
+	})
 }
 
 func (c *ExpiringCache) Remove(key interface{}) {

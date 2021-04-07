@@ -60,6 +60,7 @@ const (
 	QWriteV1        // 1st version: just random bytes
 	QWrite          // 2nd version: content ID, node ID, random bytes
 	QPartWrite      // random bytes
+	LRO             // node ID, random bytes
 )
 
 const prefixLen = 4
@@ -70,12 +71,14 @@ var prefixToCode = map[string]Code{
 	"tqw_": QWriteV1,
 	"tq__": QWrite, // QWrite new version
 	"tqpw": QPartWrite,
+	"tlro": LRO,
 }
 var codeToName = map[Code]string{
 	Unknown:    "unknown",
 	QWriteV1:   "content write token v1",
 	QWrite:     "content write token",
 	QPartWrite: "content part write token",
+	LRO:        "bitcode LRO handle",
 }
 
 // NOTE: 5 char prefix - 2 underscores!
@@ -122,7 +125,7 @@ func (t *Token) String() string {
 	case QWriteV1, QPartWrite:
 		b = make([]byte, len(t.Bytes))
 		copy(b, t.Bytes)
-	case QWrite:
+	case QWrite, LRO:
 		// prefix + base58(uvarint(len(QID) | QID |
 		//                 uvarint(len(NID) | NID |
 		//                 uvarint(len(RAND_BYTES) | RAND_BYTES)
@@ -211,10 +214,16 @@ func (t *Token) Equal(o *Token) bool {
 
 // Describe returns a textual description of this token.
 func (t *Token) Describe() string {
+	toString := func(anID id.ID) string {
+		if anID.IsNil() {
+			return "n/a"
+		}
+		return anID.String()
+	}
 	sb := strings.Builder{}
 	sb.WriteString("type:   " + t.Code.Describe() + "\n")
-	sb.WriteString("qid:    " + t.QID.String() + "\n")
-	sb.WriteString("nid:    " + t.NID.String() + "\n")
+	sb.WriteString("qid:    " + toString(t.QID) + "\n")
+	sb.WriteString("nid:    " + toString(t.NID) + "\n")
 	sb.WriteString("random: 0x" + hex.EncodeToString(t.Bytes) + "\n")
 	return sb.String()
 }
@@ -224,7 +233,7 @@ func (t *Token) Validate() (err error) {
 		err = t.QID.AssertCode(id.Q)
 	}
 	if err == nil && !t.NID.IsNil() {
-		err = t.QID.AssertCode(id.Q)
+		err = t.NID.AssertCode(id.QNode)
 	}
 	if err == nil && len(t.Bytes) == 0 {
 		err = errors.E("validate", errors.K.Invalid, "reason", "no random bytes")
@@ -287,7 +296,7 @@ func Parse(s string) (*Token, error) {
 	switch code {
 	case QWriteV1, QPartWrite:
 		return &Token{Code: code, Bytes: dec, s: s}, nil
-	case QWrite:
+	case QWrite, LRO:
 		// prefix + base58(uvarint(len(QID) | QID |
 		//                 uvarint(len(NID) | NID |
 		//                 uvarint(len(RAND_BYTES) | RAND_BYTES)
@@ -297,7 +306,8 @@ func Parse(s string) (*Token, error) {
 
 		decodeID := func() (res []byte, err error) {
 			n, err = binary.ReadUvarint(r)
-			if err != nil || n <= 0 || n > 50 {
+			if err != nil ||
+				(code == QWrite && (n <= 0 || n > 50)) {
 				return nil, errors.E("decode id", errors.K.Invalid, err, "reason", "invalid size", "size", n)
 			}
 			res = make([]byte, n)

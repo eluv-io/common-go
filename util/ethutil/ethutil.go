@@ -202,6 +202,20 @@ func NewKeyFile(keystoreDir, password string) (common.Address, accounts.URL, err
 	return acct.Address, acct.URL, nil
 }
 
+func ToKeyFile(keystoreDir, privateKeyHex, password string) (common.Address, accounts.URL, error) {
+	e := errors.Template("ToKeyFile", "dir", keystoreDir)
+	pk, err := PrivateKeyFromString(privateKeyHex)
+	if err != nil {
+		return common.Address{}, accounts.URL{}, e(err)
+	}
+	ks := keystore.NewKeyStore(keystoreDir, keystore.StandardScryptN, keystore.StandardScryptP)
+	account, err := ks.ImportECDSA(pk, password)
+	if err != nil {
+		return common.Address{}, accounts.URL{}, e(err)
+	}
+	return account.Address, account.URL, nil
+}
+
 // ToNodePublicKey returns the public key of the given key in keys.KID format
 // as well as as an address in id format. All returns use node prefixes.
 func ToNodePublicKey(privateKey *ecdsa.PrivateKey) (keys.KID, types.QNodeID) {
