@@ -5,8 +5,6 @@ import (
 	"strconv"
 
 	"github.com/qluvio/content-fabric/util/jsonutil"
-
-	"github.com/qluvio/content-fabric/log"
 )
 
 const wildcard = "*"
@@ -44,9 +42,9 @@ func FilterGlob(target interface{}, selectPaths, removePaths []Path) interface{}
 	}
 
 	filter := createFilter(selectPaths, removePaths)
-	if log.IsDebug() {
-		log.Debug("filter.glob", "select", selectPaths, "remove", removePaths, "filters", filter)
-	}
+	// if log.IsDebug() {
+	// 	log.Debug("filter.glob", "select", selectPaths, "remove", removePaths, "filters", filter)
+	// }
 	res := filter.Filter(target)
 	return res
 }
