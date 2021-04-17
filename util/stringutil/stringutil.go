@@ -85,8 +85,9 @@ func Contains(s string, slice []string) (index int, exists bool) {
 	return -1, false
 }
 
-// ContainsSubstring checks whether the given string is present in the provided slice.
-// Returns the string's position in the slice and true, or -1 and false.
+// ContainsSubstring checks whether the given string is contained in any of the
+// strings of the provided slice. Returns the matching string's position in the
+// slice and true, or -1 and false.
 func ContainsSubstring(s string, slice []string) (index int, exists bool) {
 	var el string
 	for index, el = range slice {
