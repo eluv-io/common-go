@@ -203,3 +203,7 @@ func (s Stringer) String() string {
 	}
 	return s()
 }
+
+func (s Stringer) MarshalText() ([]byte, error) {
+	return []byte(s.String()), nil
+}

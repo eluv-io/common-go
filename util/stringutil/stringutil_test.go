@@ -1,11 +1,13 @@
 package stringutil
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/qluvio/content-fabric/errors"
 	elog "github.com/qluvio/content-fabric/log"
 )
 
@@ -111,4 +113,8 @@ func TestStringer(t *testing.T) {
 		log.Info("msg", "i", Stringer(fn))
 		require.Equal(t, j, i)
 	}
+
+	jsn, err := json.Marshal(errors.E("op", errors.K.Invalid, "val", Stringer(fn)))
+	require.NoError(t, err)
+	require.Contains(t, string(jsn), `"val":"10"`)
 }
