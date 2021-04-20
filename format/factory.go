@@ -235,6 +235,8 @@ func (f *factory) ParseQPHash(s string) (QPHash, error) {
 	h, err := hash.FromString(s)
 	if err != nil {
 		return nil, err
+	} else if h.IsNil() {
+		return nil, nil
 	}
 	switch h.Type.Code {
 	case hash.QPart, hash.QPartLive, hash.QPartLiveTransient:
@@ -249,6 +251,8 @@ func (f *factory) ParseQPLHash(s string) (QPHash, error) {
 	h, err := hash.FromString(s)
 	if err != nil {
 		return nil, err
+	} else if h.IsNil() {
+		return nil, nil
 	}
 	switch h.Type.Code {
 	case hash.QPartLive, hash.QPartLiveTransient:
