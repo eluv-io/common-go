@@ -200,3 +200,14 @@ func TestGetSetContentDisposition(t *testing.T) {
 		require.Equal(t, tcase.expect, ct)
 	}
 }
+
+func TestSetReqNodes(t *testing.T) {
+	inods := map[string]bool{
+		"inod42f2YMiWdwmPB8Ts34vKm24Su9LJ": true,
+	}
+	h := make(http.Header)
+	httputil.SetReqNodes(h, inods)
+	m, err := httputil.GetReqNodes(h)
+	require.NoError(t, err)
+	require.True(t, m["inod42f2YMiWdwmPB8Ts34vKm24Su9LJ"])
+}
