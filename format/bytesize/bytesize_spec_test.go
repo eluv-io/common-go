@@ -146,3 +146,13 @@ func formatString(v interface{}) string {
 func formatStringBrackets(v interface{}) string {
 	return fmt.Sprintf("[%s]", v)
 }
+
+func ExampleSpec_HumanReadable() {
+	fmt.Println(bytesize.Spec(5123456).HumanReadable())
+	fmt.Println(bytesize.Spec(5123456).HR())
+
+	// Output:
+	//
+	// 4.9 MB
+	// 4.9 MB (5123456B)
+}
