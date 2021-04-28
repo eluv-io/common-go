@@ -89,8 +89,10 @@ func (b Spec) String() string {
 	}
 }
 
+// HR returns a human readable form, followed by the precise byte count in
+// parenthesis: "5.3 MB (5341321)"
 func (b Spec) HR() string {
-	return b.HumanReadable()
+	return b.HumanReadable() + " (" + b.String() + ")"
 }
 
 func (b Spec) HumanReadable() string {

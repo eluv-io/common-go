@@ -23,11 +23,11 @@ type Code uint8
 
 // lint disable
 const (
-	UNKNOWN Code = iota
-	Q
-	QPart
-	QPartLive
-	QPartLiveTransient
+	UNKNOWN            Code = iota
+	Q                       // content object hash
+	QPart                   // regular part hash
+	QPartLive               // live part that generates a regular part upon finalization for vod
+	QPartLiveTransient      // live part that doesn't generate a regular part upon finalization
 )
 
 func (c Code) IsLive() bool {
