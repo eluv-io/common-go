@@ -3,6 +3,8 @@ package maputil
 import (
 	"reflect"
 	"sort"
+
+	"github.com/qluvio/content-fabric/util/stringutil"
 )
 
 // SortedStringKeys returns a slice with the sorted keys of the given
@@ -65,4 +67,21 @@ func Copy(m map[string]interface{}) map[string]interface{} {
 		cp[k] = v
 	}
 	return cp
+}
+
+// CopyMSI (MSI = Map String Interface) creates a shallow copy of the given map,
+// assumed to have string keys. Returns an empty map if m is not a map.
+func CopyMSI(m interface{}) map[string]interface{} {
+	mv := reflect.ValueOf(m)
+	if mv.Kind() != reflect.Map {
+		return map[string]interface{}{}
+	}
+
+	kvs := mv.MapKeys()
+	ret := make(map[string]interface{})
+	for _, kv := range kvs {
+		i := mv.MapIndex(kv)
+		ret[stringutil.ToString(kv.Interface())] = i.Interface()
+	}
+	return ret
 }
