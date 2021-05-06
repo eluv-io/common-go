@@ -168,3 +168,27 @@ func TestAdd(t *testing.T) {
 		})
 	}
 }
+
+func TestCopyMSI(t *testing.T) {
+	ms := CopyMSI("s")
+	require.Equal(t, 0, len(ms))
+
+	m := map[string]interface{}{
+		"un":   1,
+		"deux": "two",
+	}
+	m2 := CopyMSI(m)
+	require.Equal(t, m, m2)
+
+	type any struct {
+		name string
+	}
+	ma := map[string]*any{
+		"one": {name: "one"},
+		"two": {name: "two"},
+	}
+	ma2 := CopyMSI(ma)
+	require.Equal(t, 2, len(ma2))
+	require.Equal(t, ma2["one"], ma["one"])
+	require.Equal(t, ma2["two"], ma["two"])
+}
