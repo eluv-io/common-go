@@ -54,7 +54,7 @@ func (p Path) Format(separator ...string) string {
 	return p.FormatEnc(rfc6901Encoder, separator...)
 }
 
-// Format formats this path as a string, using the given path encoder and
+// FormatEnc formats this path as a string, using the given path encoder and
 // optional path separator.
 // If no separator is specified, the default separator '/' is used.
 func (p Path) FormatEnc(encoder *strings.Replacer, separator ...string) string {
@@ -141,7 +141,7 @@ func (p Path) CommonRoot(other Path) Path {
 	return p[:idx]
 }
 
-// Clones this path.
+// Clone makes a copy of this path.
 func (p Path) Clone() Path {
 	// see https://github.com/golang/go/wiki/SliceTricks
 	return append(p[:0:0], p...)
@@ -154,7 +154,7 @@ func ParsePath(path string, separator ...string) Path {
 	return ParsePathDec(rfc6901Decoder, path, separator...)
 }
 
-// ParsePath parses the given path string into a Path object, using the given
+// ParsePathDec parses the given path string into a Path object, using the given
 // optional path separator and path decoder (may be nil). If no separator is
 // specified, the default separator '/' is used.
 func ParsePathDec(decoder *strings.Replacer, path string, separator ...string) Path {

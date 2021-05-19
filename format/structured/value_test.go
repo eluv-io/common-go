@@ -1,12 +1,15 @@
 package structured_test
 
 import (
+	"encoding/json"
+	"fmt"
 	"io"
 	"testing"
 	"time"
 
 	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/structured"
+	"github.com/qluvio/content-fabric/util/codecutil"
 	"github.com/qluvio/content-fabric/util/jsonutil"
 	"github.com/qluvio/content-fabric/util/maputil"
 
@@ -277,4 +280,53 @@ func TestToBool(t *testing.T) {
 	require.False(t, structured.Wrap(time.Now()).ToBool())
 	require.False(t, structured.Wrap("0").ToBool())
 	require.False(t, structured.Wrap("1").ToBool())
+}
+
+func TestMarshaling(t *testing.T) {
+	tests := []interface{}{
+		"a string",
+		10.123,
+		true,
+		map[string]interface{}{
+			"k1": "v1",
+			"k2": "v2",
+		},
+		[]interface{}{
+			"one",
+			"two",
+			"tree",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%s", tt), func(t *testing.T) {
+			val := structured.Wrap(tt)
+			bts, err := json.Marshal(val)
+			require.NoError(t, err)
+			fmt.Println(string(bts))
+
+			{ // test json unmarshal
+				var val2 structured.Value
+				err = json.Unmarshal(bts, &val2)
+				require.NoError(t, err)
+
+				require.Equal(t, val, &val2)
+			}
+
+			if _, isMap := tt.(map[string]interface{}); isMap { // test codecutil.Decode
+				t.Run(fmt.Sprintf("decode %s", tt), func(t *testing.T) {
+					var gen interface{}
+					err = json.Unmarshal(bts, &gen)
+					require.NoError(t, err)
+
+					var val2 structured.Value
+					err = codecutil.MapDecode(gen, &val2)
+					require.NoError(t, err)
+
+					require.Equal(t, val, &val2)
+				})
+			}
+
+		})
+	}
 }
