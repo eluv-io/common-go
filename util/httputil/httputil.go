@@ -410,3 +410,30 @@ func GetSetContentDisposition(header http.Header, query url.Values, def string) 
 
 	return decs[0], nil
 }
+
+// ClientIP returns the client IP address for the given HTTP request. By default
+// this is the IP address portion of the request's RemoteAddr (ip:port). If the
+// request contains X-Forwarded-For or X-Real-IP headers (usually set by a
+// reverse-proxy in front of the HTTP server, e.g. nginx), then the client IP is
+// extracted from those headers.
+//
+// If an optional acceptHeadersFrom function is provided and refuses the
+// RemoteAddr, then the above headers are ignored and the IP address from
+// RemoteAddr is returned.
+func ClientIP(r *http.Request, acceptHeadersFrom ...func(remoteAddr string) bool) string {
+	if len(acceptHeadersFrom) > 0 && acceptHeadersFrom[0] != nil && !acceptHeadersFrom[0](r.RemoteAddr) {
+		return strings.Split(r.RemoteAddr, ":")[0]
+	}
+	for _, headerName := range []string{"X-Forwarded-For", "X-Real-IP"} {
+		header := r.Header.Get(headerName)
+		if header == "" {
+			continue
+		}
+		// header may have multiple values separated by comma
+		// -> https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-For
+		vals := strings.SplitN(header, ",", 2)
+		// client IP is the first value
+		return strings.TrimSpace(vals[0])
+	}
+	return strings.Split(r.RemoteAddr, ":")[0]
+}
