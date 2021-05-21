@@ -74,6 +74,19 @@ type Value struct {
 	err  error
 }
 
+func (v *Value) UnmarshalMap(m map[string]interface{}) error {
+	v.Data = m
+	return nil
+}
+
+func (v *Value) UnmarshalJSON(bytes []byte) error {
+	return json.Unmarshal(bytes, &v.Data)
+}
+
+func (v *Value) MarshalJSON() ([]byte, error) {
+	return json.Marshal(v.Data)
+}
+
 func (v *Value) Set(path Path, data interface{}) error {
 	data, err := Set(v.Data, path, data)
 	if err != nil {

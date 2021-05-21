@@ -211,3 +211,47 @@ func TestSetReqNodes(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, m["inod42f2YMiWdwmPB8Ts34vKm24Su9LJ"])
 }
+
+func TestClientIP(t *testing.T) {
+	req := func(remoteAddr string, headers ...string) *http.Request {
+		header := http.Header{}
+		for i := 0; i < len(headers); i += 2 {
+			header.Add(headers[i], headers[i+1])
+		}
+		return &http.Request{
+			RemoteAddr: remoteAddr,
+			Header:     header,
+		}
+	}
+	var tests = []struct {
+		r      *http.Request
+		accept string
+		want   string
+	}{
+		// RemoteAddr is "" for reverse proxy using unix domain socket file
+		{r: req("", "X-Real-IP", "2.2.2.2"), accept: "y", want: "2.2.2.2"},
+		{r: req(""), want: ""},
+		{r: req("", "X-Forwarded-For", "2.2.2.2"), accept: "", want: "2.2.2.2"},
+		{r: req("", "X-Forwarded-For", "2.2.2.2"), accept: "nil", want: "2.2.2.2"},
+		{r: req("", "X-Forwarded-For", "2.2.2.2"), accept: "n", want: ""},
+		{r: req("", "X-Forwarded-For", "2.2.2.2"), accept: "y", want: "2.2.2.2"},
+		{r: req("", "X-Real-IP", "2.2.2.2"), accept: "y", want: "2.2.2.2"},
+		{r: req("", "X-Forwarded-For", "2.2.2.2", "X-Real-IP", "3.3.3.3"), accept: "y", want: "2.2.2.2"},
+		{r: req("1.1.1.1:80"), want: "1.1.1.1"},
+		{r: req("1.1.1.1:80", "X-Forwarded-For", "2.2.2.2"), accept: "n", want: "1.1.1.1"},
+		{r: req("1.1.1.1:80", "X-Forwarded-For", "2.2.2.2"), accept: "y", want: "2.2.2.2"},
+		{r: req("1.1.1.1:80", "X-Forwarded-For", "  3.3.3.3, 2.2.2.2"), accept: "y", want: "3.3.3.3"},
+	}
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("[%v] %v %v", test.r.RemoteAddr, test.accept, test.r.Header), func(t *testing.T) {
+			switch test.accept {
+			case "":
+				require.Equal(t, test.want, httputil.ClientIP(test.r))
+			case "nil":
+				require.Equal(t, test.want, httputil.ClientIP(test.r, nil))
+			default:
+				require.Equal(t, test.want, httputil.ClientIP(test.r, func(string) bool { return test.accept == "y" }))
+			}
+		})
+	}
+}
