@@ -1,6 +1,7 @@
 package maputil
 
 import (
+	"encoding/json"
 	"reflect"
 	"sort"
 
@@ -43,6 +44,19 @@ func SortedKeys(m map[string]interface{}) []string {
 // parameters, e.g. maputil.From("op", "add", "val1", 4, "val2", 32)
 func From(nameValuePairs ...interface{}) map[string]interface{} {
 	return Add(nil, nameValuePairs...)
+}
+
+// FromJsonStruct creates a generic map from a struct with JSON tags. The
+// purpose of this is to invoke the json.Marshaler hooks, albiet inefficiently.
+//
+// Note that mapstructure's Decoder can also do this conversion, but does not
+// convert the children (or children of children, and so on).
+func FromJsonStruct(i interface{}) (m interface{}, err error) {
+	var jsonBytes []byte
+	if jsonBytes, err = json.Marshal(i); err == nil {
+		err = json.Unmarshal(jsonBytes, &m)
+	}
+	return
 }
 
 // Add adds the given nameValuePairs to the given map. If the map is nil, it

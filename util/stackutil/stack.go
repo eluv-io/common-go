@@ -2,6 +2,7 @@ package stackutil
 
 import (
 	"fmt"
+	"path"
 	"runtime"
 	"strings"
 	"sync"
@@ -76,4 +77,15 @@ func Caller(index int) string {
 		fname = simpleName(f.Name())
 	}
 	return fmt.Sprintf("%s (%s:%d)", fname, file, line)
+}
+
+// Fn returns the caller's function name, e.g. pkg.Foo
+func Fn() (fname string) {
+	fname = "unknown"
+	if pc, _, _, ok := runtime.Caller(1); ok {
+		if f := runtime.FuncForPC(pc); f != nil {
+			fname = path.Base(f.Name())
+		}
+	}
+	return
 }
