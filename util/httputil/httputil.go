@@ -422,23 +422,21 @@ func GetDecryptionMode(header http.Header, query url.Values, def string) (string
 			res = append(res, s)
 		}
 	}
-	dec := strings.Join(res, ",")
-	if dec == "" {
+	if len(res) == 0 {
 		return def, nil
 	}
-	decs := strings.Split(dec, ",")
-	if len(decs) > 1 {
-		for _, s := range decs[1:] {
-			if s != decs[0] {
+	if len(res) > 1 {
+		for _, s := range res[1:] {
+			if s != res[0] {
 				return "", errors.E("GetDecryptionMode",
 					errors.K.Invalid,
 					"reason", "multiple values (inconsistent)",
-					"values", dec)
+					"values", strings.Join(res, ","))
 			}
 		}
 	}
 
-	return decs[0], nil
+	return res[0], nil
 }
 
 func GetRequestSetContentDisposition(r *http.Request) (string, error) {
@@ -464,23 +462,21 @@ func GetSetContentDisposition(header http.Header, query url.Values, def string) 
 			res = append(res, s)
 		}
 	}
-	dec := strings.Join(res, ",")
-	if dec == "" {
+	if len(res) == 0 {
 		return def, nil
 	}
-	decs := strings.Split(dec, ",")
-	if len(decs) > 1 {
-		for _, s := range decs[1:] {
-			if s != decs[0] {
+	if len(res) > 1 {
+		for _, s := range res[1:] {
+			if s != res[0] {
 				return "", errors.E("GetSetContentDisposition",
 					errors.K.Invalid,
 					"reason", "multiple values (inconsistent)",
-					"values", dec)
+					"values", strings.Join(res, ","))
 			}
 		}
 	}
 
-	return decs[0], nil
+	return res[0], nil
 }
 
 // ClientIP returns the client IP address for the given HTTP request. By default

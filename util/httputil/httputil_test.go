@@ -166,11 +166,21 @@ func TestNormalizeURL(t *testing.T) {
 
 func TestGetSetContentDisposition(t *testing.T) {
 	type testCase struct {
-		hdr    http.Header
-		query  url.Values
-		expect string
+		hdr        http.Header
+		query      url.Values
+		expect     string
+		expectFail bool
 	}
 	for _, tcase := range []*testCase{
+		{
+			hdr: http.Header{
+				constants.SetContentDispositionHeader: {"attachment; filename=genomex.jpeg;"},
+			},
+			query: url.Values{
+				"header-x_set_content_disposition": []string{"attachment; filename=genomey.jpeg;"},
+			},
+			expectFail: true,
+		},
 		{
 			hdr: http.Header{
 				constants.SetContentDispositionHeader: {"attachment; filename=genome.jpeg;"},
@@ -194,8 +204,19 @@ func TestGetSetContentDisposition(t *testing.T) {
 			},
 			expect: "attachment; filename=genome.jpeg;",
 		},
+		{
+			hdr: http.Header{},
+			query: url.Values{
+				"header-x_set_content_disposition": []string{"attachment;filename=Wolf+of+Snow+Hollow,+The_MGM_Final_CCSL.pdf"},
+			},
+			expect: "attachment;filename=Wolf+of+Snow+Hollow,+The_MGM_Final_CCSL.pdf",
+		},
 	} {
 		ct, err := httputil.GetSetContentDisposition(tcase.hdr, tcase.query, "")
+		if tcase.expectFail {
+			require.Error(t, err)
+			continue
+		}
 		require.NoError(t, err)
 		require.Equal(t, tcase.expect, ct)
 	}
