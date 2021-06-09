@@ -27,13 +27,21 @@ type ExpiringCache struct {
 	resetAgeOnAccess bool // if true, resets the entries age to 0 on access
 }
 
+// WithMode sets the cache's construction mode.
 func (c *ExpiringCache) WithMode(mode ConstructionMode) *ExpiringCache {
 	c.cache.WithMode(mode)
 	return c
 }
 
+// WithResetAgeOnAccess turns resetting of an entry's age on access on or off.
 func (c *ExpiringCache) WithResetAgeOnAccess(set bool) *ExpiringCache {
 	c.resetAgeOnAccess = set
+	return c
+}
+
+// WithEvictHandler sets the given evict handler.
+func (c *ExpiringCache) WithEvictHandler(onEvicted func(key interface{}, value interface{})) *ExpiringCache {
+	c.cache.WithEvictHandler(onEvicted)
 	return c
 }
 
@@ -77,7 +85,7 @@ func (c *ExpiringCache) GetOrCreate(
 
 func (c *ExpiringCache) checkAge(now utc.UTC, evict ...func(val interface{}) bool) func(val interface{}) bool {
 	return func(val interface{}) bool {
-		if now.Sub(val.(*expiringEntry).ts) >= c.maxAge {
+		if c.isExpired(val, now) {
 			return true
 		}
 		if c.resetAgeOnAccess {
@@ -88,6 +96,13 @@ func (c *ExpiringCache) checkAge(now utc.UTC, evict ...func(val interface{}) boo
 		}
 		return false
 	}
+}
+
+func (c *ExpiringCache) isExpired(val interface{}, now utc.UTC) bool {
+	if now.Sub(val.(*expiringEntry).ts) >= c.maxAge {
+		return true
+	}
+	return false
 }
 
 // Get returns the value stored for the given key and true if the key exists,
@@ -108,8 +123,74 @@ func (c *ExpiringCache) Add(key, value interface{}) bool {
 	})
 }
 
+// Update updates the existing value for the given key or adds it to the cache if it doesn't exist.
+// It returns two booleans:
+//  - new: true if the key is new, false if it already existed and the entry was updated
+//  - evicted: true if an eviction occurred.
+func (c *ExpiringCache) Update(key, value interface{}) (new bool, evicted bool) {
+	return c.cache.Update(key, &expiringEntry{
+		val: value,
+		ts:  utc.Now(),
+	})
+}
+
+// Remove removes the entry with the given key.
 func (c *ExpiringCache) Remove(key interface{}) {
 	c.cache.Remove(key)
+}
+
+// Len returns the number of entries in the cache after evicting any expired entries.
+func (c *ExpiringCache) Len() (len int) {
+	now := utc.Now()
+	c.cache.runWithWriteLock(func() {
+		c.evictExpired(now)
+		len = c.cache.lru.Len()
+	})
+	return len
+}
+
+// Entries returns all (non-expired) entries in the cache from oldest to newest.
+func (c *ExpiringCache) Entries() (entries []ExpiringEntry) {
+	now := utc.Now()
+	c.cache.runWithWriteLock(func() {
+		c.evictExpired(now)
+		keys := c.cache.lru.Keys()
+		entries = make([]ExpiringEntry, len(keys))
+		for idx, key := range keys {
+			val, ok := c.cache.lru.Get(key)
+			if ok {
+				ee := val.(*expiringEntry)
+				clone := *ee
+				entries[idx] = &clone
+			}
+		}
+	})
+	return entries
+}
+
+// Purge removes all entries from the cache.
+func (c *ExpiringCache) Purge() {
+	c.cache.Purge()
+}
+
+// EvictExpired removes all expired entries.
+func (c *ExpiringCache) EvictExpired() {
+	c.Len()
+}
+
+// evictExpired removes all expired entries
+func (c *ExpiringCache) evictExpired(now utc.UTC) {
+	for {
+		_, val, ok := c.cache.lru.GetOldest()
+		if !ok {
+			return
+		}
+		if c.isExpired(val, now) {
+			c.cache.lru.RemoveOldest()
+		} else {
+			return
+		}
+	}
 }
 
 // Metrics returns a copy of the cache's runtime properties.
@@ -123,7 +204,20 @@ func (c *ExpiringCache) CollectMetrics() jsonutil.GenericMarshaler {
 	return &m
 }
 
+type ExpiringEntry interface {
+	Value() interface{}
+	LastUpdated() utc.UTC
+}
+
 type expiringEntry struct {
 	val interface{}
 	ts  utc.UTC
+}
+
+func (e *expiringEntry) Value() interface{} {
+	return e.val
+}
+
+func (e *expiringEntry) LastUpdated() utc.UTC {
+	return e.ts
 }

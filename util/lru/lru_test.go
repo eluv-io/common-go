@@ -27,6 +27,8 @@ func TestBasic(t *testing.T) {
 	val1 := "val1"
 	key2 := "key2"
 	val2 := "val2"
+	key3 := "key3"
+	val3 := "val3"
 
 	val, evicted := lru.Get(key1)
 	require.Nil(t, val)
@@ -75,6 +77,16 @@ func TestBasic(t *testing.T) {
 	require.False(t, evicted)
 	assertMetrics(2, 4, 3, 2) // no eviction, but still removed and added!
 
+	var isNew bool
+	isNew, evicted = lru.Update(key2, val2)
+	require.False(t, isNew)
+	require.False(t, evicted)
+	assertMetrics(2, 4, 4, 3) // no eviction, but still removed and added!
+
+	isNew, evicted = lru.Update(key3, val3)
+	require.True(t, isNew)
+	require.True(t, evicted)
+	assertMetrics(2, 4, 5, 4)
 }
 
 func TestGetOrCreateBasic(t *testing.T) {

@@ -19,14 +19,14 @@ func NewMemScanRegistry() MemScanRegistry {
 // scanning.
 type MemScanRegistry interface {
 
-	// Registers an object with the given name. Panics if the object is not a
+	// Register registers an object with the given name. Panics if the object is not a
 	// non-nil pointer.
 	Register(name string, obj interface{})
 
-	// Returns a sorted list of the names of all registered objects.
+	// Names returns a sorted list of the names of all registered objects.
 	Names() []string
 
-	// Get's the registered object with the given name.
+	// Get retrieves the registered object with the given name.
 	Get(name string) (obj interface{}, ok bool)
 }
 
