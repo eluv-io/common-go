@@ -108,6 +108,15 @@ func (c *Cache) WithMaxAge(age duration.Spec) *Cache {
 	return c
 }
 
+// WithEvictHandler sets the given evict handler.
+func (c *Cache) WithEvictHandler(onEvicted func(key interface{}, value interface{})) *Cache {
+	if c == nil {
+		return nil
+	}
+	c.evictHandler = onEvicted
+	return c
+}
+
 // Purge is used to completely clear the cache
 func (c *Cache) Purge() {
 	if c == nil {
@@ -118,10 +127,20 @@ func (c *Cache) Purge() {
 	c.lru.Purge()
 }
 
-// Add adds a value to the cache.  Returns true if an eviction occurred.
+// Add adds a value to the cache or updates an existing entry. Works exactly like Update(), but only returns whether an
+// an eviction occurred.
 func (c *Cache) Add(key, value interface{}) bool {
+	_, evicted := c.Update(key, value)
+	return evicted
+}
+
+// Update updates the existing value for the given key or adds it to the cache if it doesn't exist.
+// Update returns two booleans:
+//  - new: true if the key is new, false if it already existed and the entry was updated
+//  - evicted: true if an eviction occurred.
+func (c *Cache) Update(key, value interface{}) (new bool, evicted bool) {
 	if c == nil {
-		return false
+		return true, false
 	}
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -131,8 +150,11 @@ func (c *Cache) Add(key, value interface{}) bool {
 		// lru doesn't count this as an eviction (and does not call the evict
 		// callback), we have to update the metrics here...
 		c.metrics.Remove()
+	} else {
+		new = true
 	}
-	return c.lru.Add(key, value)
+	evicted = c.lru.Add(key, value)
+	return new, evicted
 }
 
 // Get looks up a key's value from the cache.
@@ -284,7 +306,7 @@ func (c *Cache) getOrCreateConcurrent(
 	return val, evicted, err
 }
 
-// Check if a key is in the cache, without updating the recent-ness
+// Contains checks if a key is in the cache, without updating the recent-ness
 // or deleting it for being stale.
 func (c *Cache) Contains(key interface{}) bool {
 	if c == nil {
@@ -295,7 +317,7 @@ func (c *Cache) Contains(key interface{}) bool {
 	return c.lru.Contains(key)
 }
 
-// Returns the key value (or undefined if not found) without updating
+// Peek returns value associated with the given key (or nil if not found) without updating
 // the "recently used"-ness of the key.
 func (c *Cache) Peek(key interface{}) (interface{}, bool) {
 	if c == nil {
@@ -426,4 +448,13 @@ func (c *Cache) getOrEvict(
 	c.metrics.Miss()
 
 	return nil, false
+}
+
+// runWithWriteLock runs the given function within the write mutex of the cache.
+// Allows other cache types in the package to use the cache's main mutex.
+func (c *Cache) runWithWriteLock(fn func()) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	fn()
 }
