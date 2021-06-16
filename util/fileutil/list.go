@@ -34,12 +34,14 @@ func (i *FileInfo) RelPath() string {
 //
 // * targetPath: the target path
 // * followSymLinks: true to follow symlinks
+// * filter: an optional filter function to accept files. All files are accepted
+//   when not provided
 // Return
 // * an array of *FileInfo describing the listed files. Symlinks are not
 //   included if followSymLinks is false.
 // * error is not nil in case followSymLinks is true and a loop is detected
 //   or if there was an error listing the content of a directory.
-func ListFiles(targetPath string, followSymLinks bool) ([]*FileInfo, error) {
+func ListFiles(targetPath string, followSymLinks bool, filter ...func(path string) bool) ([]*FileInfo, error) {
 	var res []*FileInfo
 
 	targetPath = filepath.Clean(targetPath)
@@ -49,6 +51,9 @@ func ListFiles(targetPath string, followSymLinks bool) ([]*FileInfo, error) {
 		}
 		if !followSymLinks && info.Mode()&os.ModeSymlink == os.ModeSymlink {
 			// don't include symlinks if we don't follow
+			return nil
+		}
+		if len(filter) > 0 && filter[0] != nil && !filter[0](path) {
 			return nil
 		}
 		fi := &FileInfo{

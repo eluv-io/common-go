@@ -143,4 +143,19 @@ func TestListFolder(t *testing.T) {
 	require.Equal(t, int64(1), lfs2[1].Size)
 	require.Equal(t, "t1f1", lfs2[2].RelPath())
 	require.Equal(t, int64(10), lfs2[2].Size)
+
+	target = filepath.Join(folder, "t1", "td1", "d2")
+	lfs3, err := fileutil.ListFiles(target, false)
+	require.NoError(t, err)
+	require.Equal(t, 3, len(lfs3)) // includes the directory
+	require.Equal(t, "f1", filepath.Base(lfs3[1].Path))
+	require.Equal(t, "f2", filepath.Base(lfs3[2].Path))
+
+	lfs3, err = fileutil.ListFiles(target, false, func(path string) bool {
+		return filepath.Base(path) == "f2"
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(lfs3))
+	require.Equal(t, "f2", filepath.Base(lfs3[0].Path))
+
 }
