@@ -6,6 +6,9 @@ import (
 
 	"github.com/qluvio/content-fabric/format/duration"
 	"github.com/qluvio/content-fabric/format/utc"
+	"github.com/qluvio/content-fabric/log"
+	"github.com/qluvio/content-fabric/qfab/daemon/monitor"
+	"github.com/qluvio/content-fabric/util/jsonutil"
 	"github.com/qluvio/content-fabric/util/lru"
 )
 
@@ -18,6 +21,7 @@ type Tracker interface {
 	Purge()
 	SessionMetrics() SessionMetrics
 	Metrics() lru.Metrics
+	Register(name string, monitor monitor.CacheMonitor) Tracker
 }
 
 type SessionInfo struct {
@@ -38,6 +42,7 @@ func New(maxAge duration.Spec) Tracker {
 type SessionMetrics struct {
 	Added   int64 // sessions added (Added - Removed = Current Size)
 	Removed int64 // sessions removed
+	Current int64 // current sessions
 }
 
 func (c *SessionMetrics) String() string {
@@ -49,6 +54,7 @@ func (c *SessionMetrics) MarshalGeneric() interface{} {
 	m := map[string]interface{}{
 		"added":   c.Added,
 		"removed": c.Removed,
+		"current": c.Current,
 	}
 	return m
 }
@@ -59,6 +65,13 @@ type tracker struct {
 	mutex    sync.Mutex
 	sessions *lru.ExpiringCache
 	metrics  SessionMetrics
+	name     string
+}
+
+func (t *tracker) Register(name string, cacheMon monitor.CacheMonitor) Tracker {
+	t.name = name
+	cacheMon.Register(name, t.sessions)
+	return t
 }
 
 func (t *tracker) Metrics() lru.Metrics {
@@ -69,7 +82,14 @@ func (t *tracker) SessionMetrics() SessionMetrics {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 
-	t.sessions.EvictExpired()
+	t.metrics.Current = int64(t.sessions.Len()) // also calls EvictExpired...
+
+	if t.metrics.Current != t.metrics.Added-t.metrics.Removed {
+		log.Warn("session tracker",
+			"invariant violation", "current != added - removed",
+			"metrics", jsonutil.Stringer(t.metrics))
+	}
+
 	return t.metrics
 }
 
@@ -89,6 +109,9 @@ func (t *tracker) Count() int {
 }
 
 func (t *tracker) List() []SessionInfo {
+	t.mutex.Lock()
+	defer t.mutex.Unlock()
+
 	entries := t.sessions.Entries()
 	res := make([]SessionInfo, len(entries))
 	for i, entry := range entries {

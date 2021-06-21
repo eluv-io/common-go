@@ -77,16 +77,43 @@ func TestBasic(t *testing.T) {
 	require.False(t, evicted)
 	assertMetrics(2, 4, 3, 2) // no eviction, but still removed and added!
 
+	// update existing key
 	var isNew bool
 	isNew, evicted = lru.Update(key2, val2)
 	require.False(t, isNew)
 	require.False(t, evicted)
 	assertMetrics(2, 4, 4, 3) // no eviction, but still removed and added!
 
-	isNew, evicted = lru.Update(key3, val3)
+	val, ok = lru.Peek(key2)
+	require.True(t, ok)
+	require.Equal(t, val2, val)
+
+	// update existing key with UpdateFn
+	isNew, evicted = lru.UpdateFn(key2, func(value interface{}) interface{} {
+		require.Equal(t, val2, value)
+		val2 = "val2-3"
+		return val2
+	})
+	require.False(t, isNew)
+	require.False(t, evicted)
+	assertMetrics(2, 4, 5, 4) // no eviction, but still removed and added!
+
+	val, ok = lru.Peek(key2)
+	require.True(t, ok)
+	require.Equal(t, val2, val)
+
+	// update non-existing key with UpdateFn
+	isNew, evicted = lru.UpdateFn(key3, func(value interface{}) interface{} {
+		require.Nil(t, value)
+		return val3
+	})
 	require.True(t, isNew)
 	require.True(t, evicted)
-	assertMetrics(2, 4, 5, 4)
+	assertMetrics(2, 4, 6, 5)
+
+	val, ok = lru.Peek(key3)
+	require.True(t, ok)
+	require.Equal(t, val3, val)
 }
 
 func TestGetOrCreateBasic(t *testing.T) {
