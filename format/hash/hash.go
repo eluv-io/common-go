@@ -44,6 +44,16 @@ func (c Code) FromString(s string) (*Hash, error) {
 	return h, h.AssertCode(c)
 }
 
+// MustParse parses the given string and returns the hash.
+// It panics on error.
+func (c Code) MustParse(s string) *Hash {
+	ret, err := c.FromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return ret
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 
 // Format is the format of a hash

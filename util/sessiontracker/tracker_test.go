@@ -2,6 +2,7 @@ package sessiontracker_test
 
 import (
 	"fmt"
+	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +14,10 @@ import (
 	"github.com/qluvio/content-fabric/util/jsonutil"
 	"github.com/qluvio/content-fabric/util/sessiontracker"
 )
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 func TestSessionTrackerBasic(t *testing.T) {
 	now := utc.Now()
@@ -26,6 +31,7 @@ func TestSessionTrackerBasic(t *testing.T) {
 		metrics := tracker.SessionMetrics()
 		require.Equal(t, added, metrics.Added)
 		require.Equal(t, removed, metrics.Removed)
+		require.Equal(t, added-removed, metrics.Current)
 		require.Equal(t, int(added-removed), tracker.Count())
 	}
 
@@ -114,11 +120,60 @@ func TestSessionTrackerConcurrent(t *testing.T) {
 	metrics := tracker.SessionMetrics()
 	require.EqualValues(t, 10, metrics.Added)
 	require.EqualValues(t, 0, metrics.Removed)
+	require.EqualValues(t, 10, metrics.Current)
 
 	time.Sleep(100 * time.Millisecond)
 	metrics = tracker.SessionMetrics()
 	require.EqualValues(t, 10, metrics.Added)
 	require.EqualValues(t, 10, metrics.Removed)
+	require.EqualValues(t, 0, metrics.Current)
 
-	fmt.Println(jsonutil.Stringer(tracker.Metrics()))
+	fmt.Println("sessions", jsonutil.Stringer(metrics))
+	fmt.Println("metrics ", jsonutil.Stringer(tracker.Metrics()))
+}
+
+func TestSessionTrackerConcurrent2(t *testing.T) {
+	tracker := sessiontracker.New(duration.Spec(10 * time.Millisecond))
+	termChan := make(chan bool)
+	wg := &sync.WaitGroup{}
+
+	for i := 0; i < 1000; i++ {
+		wg.Add(1)
+		id := fmt.Sprintf("id%d", i)
+		go func() {
+			timer := time.NewTimer(1)
+			for {
+				select {
+				case <-termChan:
+					wg.Done()
+					return
+				default:
+					tracker.Update(id)
+				}
+				sleep := time.Millisecond * time.Duration(rand.Int63n(5)+7)
+				timer.Reset(sleep)
+				select {
+				case <-timer.C:
+				case <-termChan:
+				}
+			}
+		}()
+	}
+
+	time.Sleep(1 * time.Second)
+	close(termChan)
+	wg.Wait()
+
+	metrics := tracker.SessionMetrics()
+	fmt.Println("sessions", jsonutil.Stringer(metrics))
+	require.LessOrEqual(t, int64(1000), metrics.Added)
+	require.EqualValues(t, metrics.Current, metrics.Added-metrics.Removed)
+
+	time.Sleep(10 * time.Millisecond)
+	metrics = tracker.SessionMetrics()
+	require.EqualValues(t, 0, metrics.Added-metrics.Removed, jsonutil.Stringer(tracker.Metrics()))
+	require.EqualValues(t, 0, metrics.Current)
+
+	fmt.Println("sessions", jsonutil.Stringer(metrics))
+	fmt.Println("metrics ", jsonutil.Stringer(tracker.Metrics()))
 }

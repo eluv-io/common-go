@@ -128,9 +128,17 @@ func (c *ExpiringCache) Add(key, value interface{}) bool {
 //  - new: true if the key is new, false if it already existed and the entry was updated
 //  - evicted: true if an eviction occurred.
 func (c *ExpiringCache) Update(key, value interface{}) (new bool, evicted bool) {
-	return c.cache.Update(key, &expiringEntry{
-		val: value,
-		ts:  utc.Now(),
+	return c.cache.UpdateFn(key, func(entry interface{}) interface{} {
+		if en, ok := entry.(*expiringEntry); ok {
+			en.val = value
+			en.ts = utc.Now()
+			return entry
+		}
+
+		return &expiringEntry{
+			val: value,
+			ts:  utc.Now(),
+		}
 	})
 }
 
