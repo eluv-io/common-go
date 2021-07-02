@@ -14,6 +14,8 @@ const (
 	ClientGen        // Encrypted, client-generated content key
 )
 
+var Schemes = []Scheme{None, ClientGen}
+
 var schemeToName = map[Scheme]string{
 	UNKNOWN:   "",
 	None:      "none",
