@@ -14,6 +14,10 @@ const (
 	ClientGen        // Encrypted, client-generated content key
 )
 
+// Schemes lists all schemes - including UNKNOWN, which is used in filename generation for parts
+// => see aferoFactory.Create and aferoFactory.OpenWriter
+var Schemes = []Scheme{UNKNOWN, None, ClientGen}
+
 var schemeToName = map[Scheme]string{
 	UNKNOWN:   "",
 	None:      "none",
