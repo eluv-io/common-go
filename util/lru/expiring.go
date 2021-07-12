@@ -10,8 +10,12 @@ import (
 
 // NewExpiringCache creates a new ExpiringCache.
 func NewExpiringCache(maxSize int, maxAge duration.Spec) *ExpiringCache {
+	cache := Nil()
+	if maxSize > 0 && maxAge > 0 {
+		cache = New(maxSize)
+	}
 	res := &ExpiringCache{
-		cache:  New(maxSize),
+		cache:  cache,
 		maxAge: maxAge.Duration(),
 	}
 	res.cache.WithMaxAge(maxAge)
