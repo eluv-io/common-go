@@ -12,7 +12,43 @@ import (
 )
 
 func TestExpiringCache(t *testing.T) {
+	testNilCache(t, lru.NewExpiringCache(0, 5))
+	testNilCache(t, lru.NewExpiringCache(5, 0))
+	testNilCache(t, lru.NewExpiringCache(0, 0))
 	testExpiringCache(t, nil)
+}
+
+func testNilCache(t *testing.T, cache *lru.ExpiringCache) {
+	key := "key"
+	value := "value"
+
+	for i := 0; i < 10; i++ {
+		val, evicted, err := cache.GetOrCreate(key, func() (interface{}, error) {
+			return value, nil
+		})
+		require.NoError(t, err)
+		require.Equal(t, false, evicted)
+		require.Equal(t, value, val)
+	}
+
+	require.False(t, cache.Add(key, value))
+	require.Equal(t, 0, cache.Len())
+
+	val, evicted := cache.Get(key)
+	require.Nil(t, val)
+	require.False(t, evicted)
+
+	isNew, evicted := cache.Update(key, value)
+	require.True(t, isNew)
+	require.False(t, evicted)
+
+	cache.Remove("another key")
+	cache.Purge()
+	require.Nil(t, cache.Entries())
+
+	cache.EvictExpired()
+	require.Equal(t, lru.Metrics{}, cache.Metrics())
+	require.Equal(t, &lru.Metrics{}, cache.CollectMetrics())
 }
 
 func TestExpiringCacheAssertEntries(t *testing.T) {

@@ -5,6 +5,8 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/base64"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -432,4 +434,37 @@ func ClientIP(r *http.Request, acceptHeadersFrom ...func(remoteAddr string) bool
 		return strings.TrimSpace(vals[0])
 	}
 	return strings.Split(r.RemoteAddr, ":")[0]
+}
+
+// ParseServerError tries parsing an error response from a fabric API call and
+// returns the result as error.
+func ParseServerError(body io.Reader, httpStatusCode int) error {
+	var e errors.TemplateFn
+
+	switch httpStatusCode {
+	case http.StatusUnauthorized, http.StatusForbidden:
+		e = errors.TemplateNoTrace(errors.K.Permission, "status", httpStatusCode)
+	case http.StatusNotFound:
+		e = errors.TemplateNoTrace(errors.K.NotFound, "status", httpStatusCode)
+	default:
+		e = errors.TemplateNoTrace(errors.K.Internal, "status", httpStatusCode)
+	}
+
+	resp, err := ioutil.ReadAll(io.LimitReader(body, 1_000_000))
+	if err != nil || len(resp) == 0 {
+		return e(err, "body", string(resp))
+	}
+	remoteErr, err := errors.ParseApiErrorBody(resp)
+	if err != nil {
+		return e("body", string(resp))
+	}
+	remotes := errors.GetRemoteErrors(remoteErr)
+	switch len(remotes) {
+	case 0:
+		return e()
+	case 1:
+		return e(remotes[0])
+	}
+
+	return e(remoteErr)
 }

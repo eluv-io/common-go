@@ -2,12 +2,17 @@ package httputil_test
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/qluvio/content-fabric/constants"
+	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/format/id"
 	"github.com/qluvio/content-fabric/util/httputil"
+	"github.com/qluvio/content-fabric/util/jsonutil"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -275,4 +280,37 @@ func TestClientIP(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestParseServerError(t *testing.T) {
+	r := func(s string) io.Reader {
+		return strings.NewReader(s)
+	}
+
+	match := func(e1, e2 error) {
+		require.True(t, errors.Match(e1, e2), "e1=%s\ne2=%s", e1, e2)
+	}
+
+	assertKind := func(status int, kind interface{}) {
+		err := httputil.ParseServerError(r("no json!"), status)
+		match(errors.E(kind, "status", status, "body", "no json!"), err)
+	}
+
+	assertKind(http.StatusNotFound, errors.K.NotFound)
+	assertKind(http.StatusUnauthorized, errors.K.Permission)
+	assertKind(http.StatusForbidden, errors.K.Permission)
+	assertKind(http.StatusInternalServerError, errors.K.Internal)
+	assertKind(http.StatusConflict, errors.K.Internal)
+	assertKind(http.StatusGone, errors.K.Internal)
+
+	match(errors.E(errors.K.NotFound, "body", ""), httputil.ParseServerError(r(""), http.StatusNotFound))
+	match(errors.E(errors.K.NotFound, "body", "abc"), httputil.ParseServerError(r("abc"), http.StatusNotFound))
+
+	err := errors.NoTrace("get meta", errors.K.NotExist, "id", id.Generate(id.Q).String())
+	body := jsonutil.MarshalString(map[string]interface{}{
+		"errors": []interface{}{
+			err,
+		},
+	})
+	match(errors.NoTrace(errors.K.NotFound, err), httputil.ParseServerError(r(body), http.StatusNotFound))
 }
