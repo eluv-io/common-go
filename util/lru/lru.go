@@ -445,8 +445,11 @@ func (c *Cache) onEvict(key interface{}, value interface{}) {
 func (c *Cache) getOrEvict(
 	key interface{},
 	lock bool,
-	evict func(val interface{}) bool,
-	optFn func()) (interface{}, bool) {
+	evict func(val interface{}) bool, optFn func()) (interface{}, bool) {
+
+	if c == nil {
+		return nil, false
+	}
 
 	if lock {
 		// need the write lock, since this updates the recently-used list in
@@ -477,6 +480,10 @@ func (c *Cache) getOrEvict(
 // runWithWriteLock runs the given function within the write mutex of the cache.
 // Allows other cache types in the package to use the cache's main mutex.
 func (c *Cache) runWithWriteLock(fn func()) {
+	if c == nil {
+		return
+	}
+
 	c.lock.Lock()
 	defer c.lock.Unlock()
 

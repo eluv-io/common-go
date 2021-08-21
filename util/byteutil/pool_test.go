@@ -2,6 +2,7 @@ package byteutil_test
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"sync"
 	"testing"
@@ -31,7 +32,7 @@ func TestPool(t *testing.T) {
 	bufSize := 8
 	refCount := byte(4)
 	zeroBuf := make([]byte, bufSize)
-	var openCount, closeCount float64
+	var openCount, closeCount int
 
 	c, cleanup := test.CreateDebugAppConfig()
 	defer cleanup()
@@ -94,24 +95,47 @@ func TestPool(t *testing.T) {
 		require.Equal(t, refCount-n-1, buf[:bufSize+1][bufSize])
 	}
 
+	getRefCount := func(buf []byte) byte {
+		buf = buf[:p.BufSize+1]
+		return buf[p.BufSize]
+	}
+	require.Equal(t, byte(1), getRefCount(buf))
+
 	p.Put(buf)
+	time.Sleep(50 * time.Millisecond)
+	require.Equal(t, byte(0), getRefCount(buf))
+	closeCount++
+
 	// Existing buffer should be re-added to pool
 	// Attempt to retrieve existing buffer from pool; buffer may not necessarily be the first buffer from Get()
+	// Most of the time the buffer is retrieved in a few iterations, but there's
+	// no guarantee and can fail even with as much as 5000 trials. From doc:
+	//    Get may choose to ignore the pool and treat it as empty.
+	//    Callers should not assume any relation between values passed to Put and
+	//    the values returned by Get.
+	max := 5000
 	var buf2 []byte
-	for i := 0; i < 100; i++ {
+	for i := 0; i < max; i++ {
 		buf2 = p.Get(0)
 		if buf2[0] == 1 {
 			// Existing buffer was re-added to pool and successfully retrieved with new refCount 0
+			fmt.Println(fmt.Sprintf("found buffer at %d", i))
 			break
 		}
 		openCount++
 		time.Sleep(time.Millisecond)
 	}
-	require.Equal(t, buf2, buf)
-	require.Equal(t, byte(0), buf[:bufSize+1][bufSize])
-	closeCount++
+
+	// make sure we retrieved our buffer
+	if buf2[0] == 1 {
+		require.Equal(t, buf, buf2, "buffer not found")
+		require.Equal(t, byte(0), buf[:bufSize+1][bufSize])
+	}
 
 	p.Put(buf2)
+	time.Sleep(50 * time.Millisecond)
+	require.Equal(t, byte(0), getRefCount(buf2))
+
 	// Existing buffer with refCount 0 should not be re-added to pool
 	// Attempt to retrieve existing buffer from pool; buffer should not be found
 	for i := 0; i < 100; i++ {
@@ -121,8 +145,8 @@ func TestPool(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 
-	require.Equal(t, openCount, ctx.NetBuffers.Open().Get())
-	require.Equal(t, closeCount, ctx.NetBuffers.Close().Get())
+	require.Equal(t, float64(openCount), ctx.NetBuffers.Open().Get())
+	require.Equal(t, float64(closeCount), ctx.NetBuffers.Close().Get())
 }
 
 // go test -tags "avpipe LLVM byollvm" -count=1 -v -bench=Benchmark* -run=Benchmark ./util/byteutil
