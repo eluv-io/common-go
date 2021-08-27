@@ -2,12 +2,15 @@ package structured
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/format/id"
 	"github.com/qluvio/content-fabric/format/utc"
 	"github.com/qluvio/content-fabric/util/codecutil"
+	"github.com/qluvio/content-fabric/util/ifutil"
 	"github.com/qluvio/content-fabric/util/numberutil"
 	"github.com/qluvio/content-fabric/util/stringutil"
 )
@@ -360,4 +363,30 @@ func (v *Value) Decode(target interface{}) error {
 //	Wrap(Wrap("a string")).Unwrap() // "a string"
 func (v *Value) Unwrap() interface{} {
 	return Unwrap(v)
+}
+
+func (v *Value) ID(code id.Code, def ...id.ID) (id.ID, error) {
+	raw := v.Unwrap()
+	if ifutil.IsNil(raw) && len(def) > 0 {
+		return def[0], nil
+	}
+	switch r := raw.(type) {
+	case id.ID:
+		err := r.AssertCode(code)
+		if err != nil {
+			return nil, err
+		}
+		return r, nil
+	case string:
+		ret, err := code.FromString(r)
+		if err != nil {
+			return nil, err
+		}
+		return ret, nil
+	}
+	ret, err := code.FromString(fmt.Sprintf("%v", raw))
+	if err != nil {
+		return nil, err
+	}
+	return ret, nil
 }
