@@ -22,7 +22,7 @@ var hsh *hash.Hash
 const hashString = "hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7"
 
 func init() {
-	htype := hash.Type{hash.Q, hash.Unencrypted}
+	htype := hash.Type{Code: hash.Q, Format: hash.Unencrypted}
 	digest, _ := hex.DecodeString("9cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47")
 	size := int64(1024)
 	idx, _ := id.FromString("iq__WxoChT9EZU2PRdTdNU7Ldf")
@@ -149,9 +149,7 @@ func TestInvalidStringConversions(t *testing.T) {
 	}
 }
 
-func ExampleConversions() {
-
-	hashString := "hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7"
+func ExampleHash_String() {
 	fmt.Println("hash", "string", hashString)
 
 	// Convert a hash string to a hash object
@@ -211,8 +209,8 @@ func TestWrappedJSON(t *testing.T) {
 
 func TestCreation(t *testing.T) {
 	digest, _ := hex.DecodeString("9cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47")
-	id, _ := id.FromString("iq__WxoChT9EZU2PRdTdNU7Ldf")
-	h, err := hash.New(hash.Type{hash.Q, hash.Unencrypted}, digest, 1024, id)
+	idObj, _ := id.FromString("iq__WxoChT9EZU2PRdTdNU7Ldf")
+	h, err := hash.New(hash.Type{Code: hash.Q, Format: hash.Unencrypted}, digest, 1024, idObj)
 	assert.NoError(t, err)
 	assertHash(t, h, "hq_")
 	//assertHash(t, GenerateAccountHash(), "acc")
@@ -230,7 +228,7 @@ func assertHash(t *testing.T, hsh *hash.Hash, expectedPrefix string) {
 func TestDigest(t *testing.T) {
 	idx, _ := id.FromString("iq__WxoChT9EZU2PRdTdNU7Ldf")
 
-	d := hash.NewDigest(sha256.New(), hash.Type{hash.Q, hash.Unencrypted}, idx)
+	d := hash.NewDigest(sha256.New(), hash.Type{Code: hash.Q, Format: hash.Unencrypted}, idx)
 	b := make([]byte, 1024)
 
 	c, err := rand.Read(b)
@@ -251,7 +249,7 @@ func TestDigest(t *testing.T) {
 func TestEmptyDigest(t *testing.T) {
 	idx, _ := id.FromString("iq__WxoChT9EZU2PRdTdNU7Ldf")
 
-	d := hash.NewDigest(sha256.New(), hash.Type{hash.Q, hash.Unencrypted}, idx)
+	d := hash.NewDigest(sha256.New(), hash.Type{Code: hash.Q, Format: hash.Unencrypted}, idx)
 	h := d.AsHash()
 	assert.NotNil(t, h)
 	assert.NoError(t, h.AssertCode(hash.Q))
@@ -283,7 +281,7 @@ func TestAssertEqual(t *testing.T) {
 	require.NoError(t, hsh.AssertEqual(other))
 	require.NoError(t, other.AssertEqual(hsh))
 
-	assert := func(other *hash.Hash, err error) {
+	testAssertEqual := func(other *hash.Hash, err error) {
 		ae := hsh.AssertEqual(other)
 		fmt.Println(ae)
 		require.True(t, errors.Match(err, ae), ae)
@@ -291,20 +289,20 @@ func TestAssertEqual(t *testing.T) {
 
 	other, err = hash.New(hsh.Type, hsh.Digest, hsh.Size+10, hsh.ID)
 	require.NoError(t, err)
-	assert(other, errors.E().With("reason", "size differs"))
+	testAssertEqual(other, errors.E().With("reason", "size differs"))
 
 	other, err = hash.New(hash.Type{Code: hash.QPart, Format: hash.AES128AFGH}, hsh.Digest, hsh.Size, nil)
 	require.NoError(t, err)
-	assert(other, errors.E().With("reason", "type differs"))
+	testAssertEqual(other, errors.E().With("reason", "type differs"))
 
 	dig := make([]byte, sha256.Size)
 	other, err = hash.New(hsh.Type, dig, hsh.Size, hsh.ID)
 	require.NoError(t, err)
-	assert(other, errors.E().With("reason", "digest differs"))
+	testAssertEqual(other, errors.E().With("reason", "digest differs"))
 
 	id2, _ := id.FromString("iq__1Bhh3pU9gLXZiNDL6PEZuEP5ri")
 	other, _ = hash.New(hsh.Type, hsh.Digest, hsh.Size, id2)
-	assert(other, errors.E().With("reason", "ID differs"))
+	testAssertEqual(other, errors.E().With("reason", "ID differs"))
 
 	var nilHash *hash.Hash
 	require.Error(t, nilHash.AssertEqual(hsh))

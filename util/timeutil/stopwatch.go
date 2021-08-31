@@ -53,3 +53,8 @@ func (w *StopWatch) Duration() time.Duration {
 	}
 	return w.stopTime.Sub(w.startTime)
 }
+
+// String returns the duration as a string.
+func (w *StopWatch) String() string {
+	return w.Duration().String()
+}

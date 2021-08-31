@@ -5,6 +5,11 @@ import (
 	"sync"
 
 	"github.com/hashicorp/golang-lru/simplelru"
+	"go.opentelemetry.io/otel/api/kv"
+	"go.opentelemetry.io/otel/api/trace"
+
+	"github.com/qluvio/content-fabric/util/stringutil"
+	"github.com/qluvio/content-fabric/util/traceutil"
 
 	"github.com/qluvio/content-fabric/log"
 	"github.com/qluvio/content-fabric/util/jsonutil"
@@ -75,11 +80,33 @@ func (e *entry) validate() (resource io.Closer, err error) {
 	return e.resource, e.error
 }
 
+func (c *RefCache) WithName(name string) {
+	c.metrics.Name = name
+}
+
 func (c *RefCache) GetOrCreate(key string, constructor Constructor) (interface{}, error) {
 	var val interface{}
 	var ent *entry
 	var exists bool
 	var err error
+
+	span := traceutil.StartSpan(
+		"lru.RefCache.GetOrCreate",
+		func(sc *trace.StartConfig) {
+			// this is only called if tracing is enabled!
+			orgConstructor := constructor
+			constructor = func() (io.Closer, error) {
+				span := traceutil.StartSpan("constructor")
+				defer span.End()
+				return orgConstructor()
+			}
+			if c != nil {
+				sc.Attributes = append(sc.Attributes, kv.String("cache", c.metrics.Name))
+				sc.Attributes = append(sc.Attributes, kv.String("key", stringutil.ToString(key)))
+			}
+		},
+	)
+	defer span.End()
 
 	// first check whether it's an active resource
 	c.mutex.Lock()

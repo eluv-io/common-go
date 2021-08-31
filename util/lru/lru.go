@@ -8,11 +8,16 @@ import (
 	"sync"
 
 	"github.com/hashicorp/golang-lru/simplelru"
+	"go.opentelemetry.io/otel/api/kv"
+	"go.opentelemetry.io/otel/api/trace"
+
+	"github.com/qluvio/content-fabric/util/stringutil"
 
 	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/duration"
 	"github.com/qluvio/content-fabric/util/jsonutil"
 	"github.com/qluvio/content-fabric/util/syncutil"
+	"github.com/qluvio/content-fabric/util/traceutil"
 )
 
 type ConstructionMode string
@@ -215,6 +220,24 @@ func (c *Cache) GetOrCreate(
 	key interface{},
 	constructor func() (interface{}, error),
 	evict ...func(val interface{}) bool) (val interface{}, evicted bool, err error) {
+
+	span := traceutil.StartSpan(
+		"lru.Cache.GetOrCreate",
+		func(sc *trace.StartConfig) {
+			// this is only called if tracing is enabled!
+			orgConstructor := constructor
+			constructor = func() (interface{}, error) {
+				span := traceutil.StartSpan("constructor")
+				defer span.End()
+				return orgConstructor()
+			}
+			if c != nil {
+				sc.Attributes = append(sc.Attributes, kv.String("cache", c.metrics.Name))
+				sc.Attributes = append(sc.Attributes, kv.String("key", stringutil.ToString(key)))
+			}
+		},
+	)
+	defer span.End()
 
 	if c == nil {
 		val, err = constructor()

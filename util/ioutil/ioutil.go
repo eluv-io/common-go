@@ -128,12 +128,8 @@ func Consume(r io.ReadCloser) error {
 		return nil
 	}
 
-	_, err := io.Copy(ioutil.Discard, r)
-	if err == nil {
-		err = r.Close()
-	}
-
-	return err
+	_, _ = io.Copy(ioutil.Discard, r)
+	return r.Close() // close reader regardless of copy success
 }
 
 type nopWriteCloser struct {

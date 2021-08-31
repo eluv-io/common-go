@@ -6,6 +6,7 @@ import (
 	"github.com/qluvio/content-fabric/format/duration"
 	"github.com/qluvio/content-fabric/format/utc"
 	"github.com/qluvio/content-fabric/util/jsonutil"
+	"github.com/qluvio/content-fabric/util/traceutil"
 )
 
 // NewExpiringCache creates a new ExpiringCache.
@@ -46,6 +47,15 @@ func (c *ExpiringCache) WithResetAgeOnAccess(set bool) *ExpiringCache {
 // WithEvictHandler sets the given evict handler.
 func (c *ExpiringCache) WithEvictHandler(onEvicted func(key interface{}, value interface{})) *ExpiringCache {
 	c.cache.WithEvictHandler(onEvicted)
+	return c
+}
+
+// WithName sets the cache's name and returns itself for call chaining.
+func (c *ExpiringCache) WithName(name string) *ExpiringCache {
+	if c == nil {
+		return nil
+	}
+	c.cache.WithName(name)
 	return c
 }
 
@@ -103,7 +113,9 @@ func (c *ExpiringCache) checkAge(now utc.UTC, evict ...func(val interface{}) boo
 }
 
 func (c *ExpiringCache) isExpired(val interface{}, now utc.UTC) bool {
-	if now.Sub(val.(*expiringEntry).ts) >= c.maxAge {
+	age := now.Sub(val.(*expiringEntry).ts)
+	if age >= c.maxAge {
+		traceutil.Span().SetAttribute("expired_entry_age", age)
 		return true
 	}
 	return false
