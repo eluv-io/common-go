@@ -12,7 +12,6 @@ import (
 	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/duration"
 	"github.com/qluvio/content-fabric/format/utc"
-	"github.com/qluvio/content-fabric/log"
 	"github.com/qluvio/content-fabric/util/jsonutil"
 )
 

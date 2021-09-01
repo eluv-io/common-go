@@ -23,6 +23,7 @@ import (
 	"github.com/qluvio/content-fabric/constants"
 	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/id"
+	eioutil "github.com/qluvio/content-fabric/util/ioutil"
 )
 
 const customHeaderPrefix = "X-Content-Fabric-"
@@ -508,9 +509,12 @@ func ClientIP(r *http.Request, acceptHeadersFrom ...func(remoteAddr string) bool
 
 // ParseServerError tries parsing an error response from a fabric API call and
 // returns the result as error.
-func ParseServerError(body io.Reader, httpStatusCode int) error {
-	var e errors.TemplateFn
+func ParseServerError(body io.ReadCloser, httpStatusCode int) error {
+	defer func() {
+		_ = eioutil.Consume(body)
+	}()
 
+	var e errors.TemplateFn
 	switch httpStatusCode {
 	case http.StatusUnauthorized, http.StatusForbidden:
 		e = errors.TemplateNoTrace(errors.K.Permission, "status", httpStatusCode)

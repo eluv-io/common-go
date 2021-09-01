@@ -7,8 +7,6 @@ import (
 	"go.opentelemetry.io/otel/api/trace"
 	export "go.opentelemetry.io/otel/sdk/export/trace"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-
-	"github.com/qluvio/content-fabric/log"
 )
 
 // NewTracer creates a new tracer that collects spans with a TraceCollector and

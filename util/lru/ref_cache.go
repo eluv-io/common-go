@@ -5,6 +5,11 @@ import (
 	"sync"
 
 	"github.com/hashicorp/golang-lru/simplelru"
+	"go.opentelemetry.io/otel/api/kv"
+	"go.opentelemetry.io/otel/api/trace"
+
+	"github.com/qluvio/content-fabric/util/stringutil"
+	"github.com/qluvio/content-fabric/util/traceutil"
 
 	"github.com/qluvio/content-fabric/log"
 	"github.com/qluvio/content-fabric/util/jsonutil"
@@ -75,11 +80,33 @@ func (e *entry) validate() (resource io.Closer, err error) {
 	return e.resource, e.error
 }
 
+func (c *RefCache) WithName(name string) {
+	c.metrics.Name = name
+}
+
 func (c *RefCache) GetOrCreate(key string, constructor Constructor) (interface{}, error) {
 	var val interface{}
 	var ent *entry
 	var exists bool
 	var err error
+
+	span := traceutil.StartSpan(
+		"lru.RefCache.GetOrCreate",
+		func(sc *trace.StartConfig) {
+			// this is only called if tracing is enabled!
+			orgConstructor := constructor
+			constructor = func() (io.Closer, error) {
+				span := traceutil.StartSpan("constructor")
+				defer span.End()
+				return orgConstructor()
+			}
+			if c != nil {
+				sc.Attributes = append(sc.Attributes, kv.String("cache", c.metrics.Name))
+				sc.Attributes = append(sc.Attributes, kv.String("key", stringutil.ToString(key)))
+			}
+		},
+	)
+	defer span.End()
 
 	// first check whether it's an active resource
 	c.mutex.Lock()
@@ -88,18 +115,16 @@ func (c *RefCache) GetOrCreate(key string, constructor Constructor) (interface{}
 		if exists {
 			// it's an active resource
 			ent.refCount++
-			c.metrics.Hit()
-			c.callback.OnGet()
 		} else {
-			val, exists = c.lru.Get(key)
+			if c.lru != nil {
+				val, exists = c.lru.Get(key)
+			}
 			if exists {
 				// it's a cached resource in the LRU
 				ent = val.(*entry)
 				ent.refCount = 1
 				// add it back to the active map
 				c.active[key] = ent
-				c.metrics.Hit()
-				c.callback.OnGet()
 			} else {
 				// it doesn't exist - create the wrapper entry, lock it and add
 				// it to the active map. The actual resource is created below.
@@ -119,9 +144,14 @@ func (c *RefCache) GetOrCreate(key string, constructor Constructor) (interface{}
 		// finished. If there is an error in the (concurrent) creation, we
 		// return that error as well.
 		val, err = ent.validate()
+		c.mutex.Lock()
 		if err != nil {
 			c.metrics.Error()
+		} else {
+			c.metrics.Hit()
+			c.callback.OnGet()
 		}
+		c.mutex.Unlock()
 		return val, err
 	}
 
@@ -228,14 +258,15 @@ func (c *RefCache) onEvict(key interface{}, val interface{}) {
 }
 
 func (c *RefCache) closeEntry(key interface{}, ent *entry) {
+	// close entry is always called holding c.mutex!
 	res, err := ent.validate()
 	if err != nil {
 		log.Warn("RefCache: closeEntry called for invalid resource!", "key", key)
 		return
 	}
 	if _, found := c.active[key.(string)]; !found {
-		// lru AND the active map.
 		// the resource is only removed from the cache if it's gone from the
+		// lru AND the active map.
 		_ = res.Close()
 		c.metrics.Remove()
 		c.callback.OnClose()

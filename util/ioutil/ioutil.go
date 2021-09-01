@@ -15,6 +15,32 @@ type ReadSeekCloser interface {
 	io.Closer
 }
 
+func NewReadSeekCloser(fnRead func(p []byte) (int, error), fnSeek func(offset int64, whence int) (int64, error), fnClose func() error) ReadSeekCloser {
+	return &readSeekCloser{
+		fnRead:  fnRead,
+		fnSeek:  fnSeek,
+		fnClose: fnClose,
+	}
+}
+
+type readSeekCloser struct {
+	fnRead  func(p []byte) (int, error)
+	fnSeek  func(offset int64, whence int) (int64, error)
+	fnClose func() error
+}
+
+func (r *readSeekCloser) Read(buf []byte) (int, error) {
+	return r.fnRead(buf)
+}
+
+func (r *readSeekCloser) Seek(offset int64, whence int) (int64, error) {
+	return r.fnSeek(offset, whence)
+}
+
+func (r *readSeekCloser) Close() error {
+	return r.fnClose()
+}
+
 // TrackedCloser tracks calls to its Close() method and returns immediately if
 // it was already called.
 type TrackedCloser interface {
@@ -102,12 +128,8 @@ func Consume(r io.ReadCloser) error {
 		return nil
 	}
 
-	_, err := io.Copy(ioutil.Discard, r)
-	if err == nil {
-		err = r.Close()
-	}
-
-	return err
+	_, _ = io.Copy(ioutil.Discard, r)
+	return r.Close() // close reader regardless of copy success
 }
 
 type nopWriteCloser struct {
