@@ -118,3 +118,33 @@ func TestStringer(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(jsn), `"val":"10"`)
 }
+
+func TestLessLex(t *testing.T) {
+	tests := []struct {
+		i    string
+		j    string
+		want bool
+	}{
+		{"a", "a", false},
+		{"a", "b", true},
+		{"b", "a", false},
+		{"a", "aa", true},
+		{"0", "0", false},
+		{"0", "1", true},
+		{"1", "0", false},
+		{"9", "10", true},
+		{"9a", "9a", false},
+		{"9a", "9b", true},
+		{"9a", "10a", true},
+		{"9.a", "10.a", true},
+		{"9a9", "9a9", false},
+		{"9a9", "9a10", true},
+		{"a9", "a9", false},
+		{"a9", "a10", true},
+		{"007", "7", true},
+	}
+	for _, tt := range tests {
+		got := LessLex(tt.i, tt.j)
+		require.Equal(t, tt.want, got, "%s < %s", tt.i, tt.j)
+	}
+}

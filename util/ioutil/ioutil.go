@@ -76,7 +76,8 @@ func (t *trackedCloser) IsClosed() bool {
 	return t.closed
 }
 
-// closeCloser lets us catch close errors when deferred
+// CloseCloser lets us catch close errors when deferred
+// Deprecated: Use log.Call instead
 func CloseCloser(c io.Closer, l *log.Log) {
 	if c != nil {
 		err := c.Close()

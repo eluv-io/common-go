@@ -3,6 +3,7 @@ package numberutil
 import (
 	"encoding/json"
 	"math"
+	"math/big"
 	"strconv"
 	"time"
 
@@ -68,6 +69,12 @@ func AsInt64Err(val interface{}) (int64, error) {
 		result = int64(x)
 	case duration.Spec:
 		result = int64(x)
+	case big.Rat:
+		f, _ := x.Float64()
+		result = int64(math.Round(f))
+	case *big.Rat:
+		f, _ := x.Float64()
+		result = int64(math.Round(f))
 	}
 	return result, nil
 }
@@ -131,6 +138,10 @@ func AsFloat64Err(val interface{}) (float64, error) {
 		if err != nil {
 			return 0, e(err)
 		}
+	case big.Rat:
+		result, _ = x.Float64()
+	case *big.Rat:
+		result, _ = x.Float64()
 	}
 	return result, nil
 }
@@ -166,4 +177,24 @@ func LessInt(ascending bool, i1 int, i2 int, tie ...func() bool) (less bool) {
 		return ascending
 	}
 	return tie[0]()
+}
+
+func RatModulo(num, denom *big.Rat) (mod *big.Rat, err error) {
+	var quo *big.Rat
+	if quo, err = RatQuoSafe(num, denom); err == nil {
+		quoMod := quo.Num().Int64() % quo.Denom().Int64()
+		// The percentage of the denominator left over
+		ratio := big.NewRat(quoMod, quo.Denom().Int64())
+		mod = ratio.Mul(ratio, denom)
+	}
+	return
+}
+
+func RatQuoSafe(num, den *big.Rat) (quo *big.Rat, err error) {
+	quo = big.NewRat(-1, 1)
+	if den.Sign() == 0 {
+		return nil, errors.E("RatQuotient", errors.K.Invalid, "reason", "divide by zero")
+	}
+	quo.Quo(num, den)
+	return
 }

@@ -207,3 +207,62 @@ func (s Stringer) String() string {
 func (s Stringer) MarshalText() ([]byte, error) {
 	return []byte(s.String()), nil
 }
+
+// LessLex reports whether i must sort before j, using lexicographic order
+// (aka alphabetical, dictionary, or natural sort order). That is, compare
+// numbers by value rather than character by character. Currently only integer
+// comparison is implemented (no floats)
+//
+// Usage: sort.Slice(list, func(i, j int) bool { return stringutil.LessLex(list[i], list[j]) })
+func LessLex(i, j string) bool {
+	var err error
+	var ipos, jpos int   // Current character indices
+	var inum, jnum int64 // Current number
+	for ipos < len(i) && jpos < len(j) {
+		ichar := i[ipos]
+		jchar := j[jpos]
+		// Convert numbers to int64 for comparison
+		if unicode.IsDigit(rune(ichar)) && unicode.IsDigit(rune(jchar)) {
+			if inum, ipos, err = parseNum(i, ipos); err != nil {
+				return i < j
+			}
+			if jnum, jpos, err = parseNum(j, jpos); err != nil {
+				return i < j
+			}
+			if inum == jnum {
+				if ipos != jpos {
+					return ipos > jpos // e.g. 7 compared to 007
+				}
+			} else {
+				return inum < jnum
+			}
+		} else {
+			if ichar == jchar {
+				ipos++
+				jpos++
+			} else {
+				return ichar < jchar
+			}
+		}
+	}
+	return len(i) < len(j)
+}
+
+// parseNum converts the number string at the start index to int64
+func parseNum(s string, startPos int) (num int64, endPos int, err error) {
+	endPos = digitEndPosition(s, startPos)
+	num, err = strconv.ParseInt(s[startPos:endPos], 10, 64)
+	return
+}
+
+// digitEndPosition finds the end index of the number beginning from the start
+// index
+func digitEndPosition(s string, startPos int) int {
+	i := startPos
+	for ; i < len(s); i++ {
+		if !unicode.IsDigit(rune(s[i])) {
+			break
+		}
+	}
+	return i
+}

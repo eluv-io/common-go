@@ -71,7 +71,8 @@ type Factory interface {
 
 	// ParseQPWriteToken parses the given string as content part write token
 	ParseQPWriteToken(s string) (QPWriteToken, error)
-	// ParseQPHash parses the given string as content part hash
+	// ParseQPHash parses the given string as content part hash. Returns nil
+	// if the string is empty invalid.
 	ParseQPHash(s string) (QPHash, error)
 	// ParseQPLHash parses the given string as live content part hash
 	ParseQPLHash(s string) (QPHash, error)
