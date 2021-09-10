@@ -27,10 +27,16 @@ type Extra struct {
 	// An error if this link could not be resolved during link resolution. This
 	// a temporary attribute, but is also marshalled when set.
 	ResolutionError error `json:"resolution_error,omitempty"`
-	// The authorization for a "signed link": the token contains the signature of
-	// a user that is editor of the the link target.
+	// The authorization for a "signed link": the token contains the signature
+	// of a user that is editor of the the link target.
 	// See https://github.com/qluvio/proj-mgm/issues/14#issuecomment-724867064
 	Authorization string `json:"authorization,omitempty"`
+	// EnforceAuth determines whether the link's target path should be
+	// explicitly authorized. False per default, which means that links from
+	// public meta to private meta are interpreted as implicitly permitted. If
+	// true, then the link's target path is authorized as if accessed directly
+	// through /meta/path.
+	EnforceAuth bool `json:"enforce_auth,omitempty"`
 }
 
 func (e *Extra) MarshalMap() map[string]interface{} {
@@ -50,6 +56,9 @@ func (e *Extra) MarshalMap() map[string]interface{} {
 	if e.Authorization != "" {
 		m["authorization"] = e.Authorization
 	}
+	if e.EnforceAuth {
+		m["enforce_auth"] = e.EnforceAuth
+	}
 	return m
 }
 
@@ -58,7 +67,8 @@ func (e *Extra) IsEmpty() bool {
 		e.Container == "" &&
 			e.AutoUpdate == nil &&
 			e.ResolutionError == nil &&
-			e.Authorization == ""
+			e.Authorization == "" &&
+			e.EnforceAuth == false
 }
 
 func (e *Extra) UnmarshalMap(m map[string]interface{}) {
@@ -68,6 +78,7 @@ func (e *Extra) UnmarshalMap(m map[string]interface{}) {
 		e.AutoUpdate.UnmarshalMap(au)
 	}
 	e.Authorization, _ = m["authorization"].(string)
+	e.EnforceAuth, _ = m["enforce_auth"].(bool)
 }
 
 // AutoUpdate is the structure for auto-update information

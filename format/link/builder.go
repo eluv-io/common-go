@@ -97,6 +97,11 @@ func (b *Builder) Auth(tok string) *Builder {
 	return b
 }
 
+func (b *Builder) EnforceAuth(force bool) *Builder {
+	b.l.Extra.EnforceAuth = force
+	return b
+}
+
 func (b *Builder) Build() (*Link, error) {
 	err := b.l.Validate(true)
 	if err != nil {

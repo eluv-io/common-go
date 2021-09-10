@@ -19,6 +19,7 @@ func TestLinkBuilder(t *testing.T) {
 		builder   *link.Builder
 		expString string
 		expProps  map[string]interface{}
+		expExtra  link.Extra
 	}{
 		{
 			builder:   link.NewBuilder().Selector(link.S.Meta).Path(structured.Path{"public", "description"}),
@@ -50,6 +51,13 @@ func TestLinkBuilder(t *testing.T) {
 			expString: "./meta/replace_props",
 			expProps:  map[string]interface{}{"k2": "v2"},
 		},
+		{
+			builder:   link.NewBuilder().Selector(link.S.Meta).P("path").EnforceAuth(true),
+			expString: "./meta/path",
+			expExtra: link.Extra{
+				EnforceAuth: true,
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.expString, func(t *testing.T) {
@@ -57,6 +65,7 @@ func TestLinkBuilder(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, test.expString, lnk.String())
 			require.EqualValues(t, test.expProps, lnk.Props)
+			require.EqualValues(t, test.expExtra, lnk.Extra)
 		})
 	}
 }
