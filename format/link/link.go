@@ -156,6 +156,7 @@ func (l *Link) UnmarshalMap(m map[string]interface{}) error {
 		extra.Delete("container")
 		extra.Delete("resolution_error")
 		extra.Delete("authorization")
+		extra.Delete("enforce_auth")
 		if len(extra.Map()) == 0 {
 			val.Delete(".")
 		}

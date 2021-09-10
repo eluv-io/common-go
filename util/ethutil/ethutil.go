@@ -227,7 +227,7 @@ func ToUserPublicKey(privateKey *ecdsa.PrivateKey) (keys.KID, types.UserID) {
 }
 
 func ToPublicKeyAndID(privateKey *ecdsa.PrivateKey, c id.Code) (keys.KID, id.ID) {
-	var keyCode keys.KeyCode = keys.KUNKNOWN
+	var keyCode = keys.KUNKNOWN
 	switch c {
 	case id.QNode:
 		keyCode = keys.FabricNodePublicKey
