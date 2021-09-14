@@ -202,3 +202,12 @@ func Whence(whence int) string {
 		return ""
 	}
 }
+
+func NewComposedReadCloser(r io.Reader, c io.Closer) *ComposedReadCloser {
+	return &ComposedReadCloser{r, c}
+}
+
+type ComposedReadCloser struct {
+	io.Reader
+	io.Closer
+}
