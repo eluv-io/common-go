@@ -117,7 +117,7 @@ func (l Link) String() string {
 	return b.String()
 }
 
-func (l Link) MarshalJSON() ([]byte, error) {
+func (l *Link) MarshalMap() map[string]interface{} {
 	m := make(map[string]interface{})
 	for key, val := range l.Props {
 		m[key] = val
@@ -126,7 +126,11 @@ func (l Link) MarshalJSON() ([]byte, error) {
 	if !l.Extra.IsEmpty() {
 		structured.Merge(m, structured.Path{"."}, l.Extra.MarshalMap())
 	}
-	return json.Marshal(m)
+	return m
+}
+
+func (l Link) MarshalJSON() ([]byte, error) {
+	return json.Marshal(l.MarshalMap())
 }
 
 func (l *Link) UnmarshalJSON(data []byte) error {
@@ -440,6 +444,34 @@ func AsLink(val interface{}) *Link {
 		return &l
 	}
 	return nil
+}
+
+// ToLink tries to convert the given target object to a Link pointer. Returns the link pointer and true if successful,
+// nil and false otherwise.
+//
+// The following objects are successfully converted:
+// * *Link (returned unchanged)
+// * Link
+// * a map[string]interface{} with a "/" key that unmarshals successfully to a link object
+func ToLink(target interface{}) (*Link, bool) {
+	switch t := target.(type) {
+	case Link:
+		return &t, true
+	case *Link:
+		return t, true
+	case map[string]interface{}:
+		lo, found := t["/"]
+		if found {
+			if _, ok := lo.(string); ok {
+				l := &Link{}
+				err := l.UnmarshalMap(t)
+				if err == nil {
+					return l, true
+				}
+			}
+		}
+	}
+	return nil, false
 }
 
 // Converts the given value to an int64 if it is any of the possible Go integer

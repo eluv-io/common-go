@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/davecgh/go-spew/spew"
+
 	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/codecs"
 	"github.com/qluvio/content-fabric/format/hash"
@@ -366,6 +368,29 @@ func TestExtra(t *testing.T) {
 			linkPtr := &newLnk
 			cloneFromPtr := linkPtr.Clone() // this is a Link, not a *Link!
 			require.EqualValues(t, linkPtr, &cloneFromPtr)
+		})
+	}
+}
+
+func TestToLink(t *testing.T) {
+	lnk := link.NewBuilder().Selector(link.S.Meta).P("a").MustBuild()
+	tests := []struct {
+		target   interface{}
+		wantLink *link.Link
+		wantOK   bool
+	}{
+		{lnk, lnk, true},
+		{*lnk, lnk, true},
+		{lnk.MarshalMap(), lnk, true},
+		{"a string", nil, false},
+		{nil, nil, false},
+		{map[string]interface{}{"k1": "v1"}, nil, false},
+	}
+	for _, test := range tests {
+		t.Run(spew.Sdump(test.target), func(t *testing.T) {
+			l, ok := link.ToLink(test.target)
+			require.Equal(t, test.wantOK, ok)
+			require.Equal(t, test.wantLink, l)
 		})
 	}
 }
