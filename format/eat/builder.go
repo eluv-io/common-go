@@ -118,7 +118,7 @@ func NewStateChannel(
 	token.QID = qid
 	token.Subject = subject
 	token.Grant = Grants.Read
-	token.IssuedAt = utc.Now()
+	token.IssuedAt = utc.Now().StripMono()
 	token.Expires = token.IssuedAt.Add(time.Hour)
 	return &StateChannelBuilder{newSigner(token)}
 }

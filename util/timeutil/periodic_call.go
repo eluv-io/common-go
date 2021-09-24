@@ -2,6 +2,8 @@ package timeutil
 
 import (
 	"time"
+
+	"github.com/qluvio/content-fabric/format/utc"
 )
 
 // Periodic is a helper that calls a provided function at most once every
@@ -16,17 +18,17 @@ type Periodic interface {
 func NewPeriodic(period time.Duration) Periodic {
 	return &periodic{
 		period: period,
-		next:   time.Now(),
+		next:   utc.Now(),
 	}
 }
 
 type periodic struct {
 	period time.Duration // the function is called at most once every period
-	next   time.Time     // the next possible time the function may be called (again)
+	next   utc.UTC       // the next possible time the function may be called (again)
 }
 
 func (p *periodic) Do(f func()) bool {
-	now := time.Now()
+	now := utc.Now()
 	if now.After(p.next) || now.Equal(p.next) {
 		p.next = now.Add(p.period)
 		f()
