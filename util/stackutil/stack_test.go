@@ -74,3 +74,10 @@ func BenchmarkCaller(b *testing.B) {
 		stackutil.Caller(1)
 	}
 }
+
+func BenchmarkFn(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		stackutil.Fn()
+	}
+}

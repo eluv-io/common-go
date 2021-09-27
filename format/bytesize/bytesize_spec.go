@@ -1,6 +1,7 @@
 package bytesize
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 	"strings"
@@ -27,6 +28,7 @@ const (
 )
 
 var ErrBits = fmt.Errorf("capital prefix with lower-case b represents bits, not bytes")
+var ErrInvalidFraction = fmt.Errorf("invalid fraction")
 
 func (b Spec) Bytes() uint64 {
 	return uint64(b)
@@ -98,17 +100,17 @@ func (b Spec) HR() string {
 func (b Spec) HumanReadable() string {
 	switch {
 	case b > EB:
-		return fmt.Sprintf("%.1f EB", b.EBytes())
+		return fmt.Sprintf("%.1fEB", b.EBytes())
 	case b > PB:
-		return fmt.Sprintf("%.1f PB", b.PBytes())
+		return fmt.Sprintf("%.1fPB", b.PBytes())
 	case b > TB:
-		return fmt.Sprintf("%.1f TB", b.TBytes())
+		return fmt.Sprintf("%.1fTB", b.TBytes())
 	case b > GB:
-		return fmt.Sprintf("%.1f GB", b.GBytes())
+		return fmt.Sprintf("%.1fGB", b.GBytes())
 	case b > MB:
-		return fmt.Sprintf("%.1f MB", b.MBytes())
+		return fmt.Sprintf("%.1fMB", b.MBytes())
 	case b > KB:
-		return fmt.Sprintf("%.1f KB", b.KBytes())
+		return fmt.Sprintf("%.1fKB", b.KBytes())
 	default:
 		return fmt.Sprintf("%d B", b)
 	}
@@ -119,41 +121,58 @@ func (b Spec) MarshalText() ([]byte, error) {
 }
 
 func (b *Spec) UnmarshalText(t []byte) error {
-	var val uint64
-	var unit string
+	res, err := unmarshalText(t)
+	*b = res
+	return err
+}
 
+func unmarshalText(t []byte) (Spec, error) {
 	// copy for error message
 	t0 := string(t)
 
-	var c byte
+StartOver:
+	spec := Spec(0)
+	b := &spec
+	var val uint64
+	var fraction uint64
+	var fractionDiv uint64 = 1
+	var parseFraction bool
+	var unit string
+	var unitMul uint64 = 1
+
 	var i int
 
 ParseLoop:
-	for i < len(t) {
-		c = t[i]
-		switch {
+	for ; i < len(t); i++ {
+		switch c := t[i]; {
 		case '0' <= c && c <= '9':
-			if val > cutoff {
-				return b.overflow(t0)
-			}
-
 			c = c - '0'
-			val *= 10
-
-			if val > val+uint64(c) {
-				// val+v b.overflows
-				return b.overflow(t0)
+			if !parseFraction {
+				if val > cutoff { // val*10 overflows
+					return spec, b.overflow(t0)
+				}
+				val *= 10
+				if val > val+uint64(c) { // val+c overflows
+					return spec, b.overflow(t0)
+				}
+				val += uint64(c)
+			} else {
+				fraction *= 10
+				fraction += uint64(c)
+				fractionDiv *= 10
 			}
-			val += uint64(c)
-			i++
+		case c == '.':
+			if parseFraction {
+				return spec, b.syntaxError(t0)
+			}
+			parseFraction = true
 
 		case c == ' ':
-			// ignore leading whitespace
-			i++
+			// ignore whitespace
 
 		default:
 			if i == 0 {
-				return b.syntaxError(t0)
+				return spec, b.syntaxError(t0)
 			}
 			break ParseLoop
 		}
@@ -163,55 +182,53 @@ ParseLoop:
 	switch unit {
 	case "Kb", "Mb", "Gb", "Tb", "Pb", "Eb":
 		*b = 0
-		return errors.E("unmarshal bytesize spec", errors.K.Invalid, ErrBits, "from", t0)
+		return spec, errors.E("unmarshal bytesize spec", errors.K.Invalid, ErrBits, "from", t0)
 	}
 	unit = strings.ToLower(unit)
+
 	switch unit {
 	case "", "b", "byte":
 		// no conversion needed
 
 	case "k", "kb", "kilo", "kilobyte", "kilobytes":
-		if val > maxUint64/uint64(KB) {
-			return b.overflow(t0)
-		}
-		val *= uint64(KB)
-
+		unitMul = uint64(KB)
 	case "m", "mb", "mega", "megabyte", "megabytes":
-		if val > maxUint64/uint64(MB) {
-			return b.overflow(t0)
-		}
-		val *= uint64(MB)
-
+		unitMul = uint64(MB)
 	case "g", "gb", "giga", "gigabyte", "gigabytes":
-		if val > maxUint64/uint64(GB) {
-			return b.overflow(t0)
-		}
-		val *= uint64(GB)
-
+		unitMul = uint64(GB)
 	case "t", "tb", "tera", "terabyte", "terabytes":
-		if val > maxUint64/uint64(TB) {
-			return b.overflow(t0)
-		}
-		val *= uint64(TB)
-
+		unitMul = uint64(TB)
 	case "p", "pb", "peta", "petabyte", "petabytes":
-		if val > maxUint64/uint64(PB) {
-			return b.overflow(t0)
-		}
-		val *= uint64(PB)
-
+		unitMul = uint64(PB)
 	case "E", "EB", "e", "eb", "eB":
-		if val > maxUint64/uint64(EB) {
-			return b.overflow(t0)
-		}
-		val *= uint64(EB)
-
+		unitMul = uint64(EB)
 	default:
-		return b.syntaxError(t0)
+		idxPrecise := bytes.IndexRune(t, '(')
+		if idxPrecise >= 0 && t[len(t)-1] == ')' {
+			val = 0
+			unit = ""
+			i = 0
+			t = t[idxPrecise+1 : len(t)-1]
+			goto StartOver
+		}
+		return spec, b.syntaxError(t0)
+	}
+
+	// if fraction > unitMul {
+	// 	return spec, errors.E("unmarshal bytesize spec", errors.K.Invalid, ErrInvalidFraction, "from", t0)
+	// }
+
+	if val > maxUint64/unitMul {
+		return spec, b.overflow(t0)
+	}
+	val = val * unitMul
+
+	if parseFraction {
+		val += uint64(float64(unitMul) / float64(fractionDiv) * float64(fraction))
 	}
 
 	*b = Spec(val)
-	return nil
+	return spec, nil
 }
 
 func (b *Spec) syntaxError(s string) error {
@@ -233,8 +250,13 @@ func (b *Spec) UnmarshalJSON(t []byte) error {
 	return err
 }
 
-// FromString parses the given bytesize string into a bytesize spec.
+// FromString is an alias for Parse()
 func FromString(s string) (Spec, error) {
+	return Parse(s)
+}
+
+// Parse parses the given bytesize string into a bytesize spec.
+func Parse(s string) (Spec, error) {
 	spec := Spec(0)
 	err := spec.UnmarshalText([]byte(s))
 	if err != nil {
