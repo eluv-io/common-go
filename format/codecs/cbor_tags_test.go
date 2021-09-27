@@ -58,7 +58,7 @@ func TestLinkTag(t *testing.T) {
 }
 
 func TestUTCTag(t *testing.T) {
-	val := utc.Now()
+	val := utc.Now().StripMono()
 	runTests(t, val)
 	runTests(t, utc.New(time.Date(9999, 12, 12, 23, 59, 59, 999999999, time.UTC)))
 	runTests(t, utc.New(time.Date(0, 1, 1, 0, 0, 0, 0, time.UTC)))

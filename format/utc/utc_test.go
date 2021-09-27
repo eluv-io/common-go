@@ -83,7 +83,7 @@ func TestJSON(t *testing.T) {
 		var unmarshalled utc.UTC
 		err = json.Unmarshal(marshalled, &unmarshalled)
 		assert.NoError(t, err)
-		assert.Equal(t, test.utc, unmarshalled)
+		assert.True(t, test.utc.Equal(unmarshalled))
 		assertTimezone(t, unmarshalled)
 	}
 }
@@ -116,7 +116,7 @@ func TestJSONUnmarshal(t *testing.T) {
 			assert.Error(t, err)
 		} else {
 			assert.NoError(t, err)
-			assert.Equal(t, utc.New(test.want), unmarshalled)
+			assert.True(t, utc.New(test.want).Equal(unmarshalled))
 			assertTimezone(t, unmarshalled)
 		}
 	}
@@ -141,7 +141,7 @@ func TestWrappedJSON(t *testing.T) {
 	var unmarshalled Wrapper
 	err = json.Unmarshal(b, &unmarshalled)
 	assert.NoError(t, err)
-	assert.Equal(t, wrapper, unmarshalled)
+	assert.True(t, wrapper.UTC.Equal(unmarshalled.UTC))
 	assertTimezone(t, unmarshalled.UTC)
 }
 
@@ -225,7 +225,7 @@ func TestMarshalBinary(t *testing.T) {
 		res := utc.UTC{}
 		err = res.UnmarshalBinary(b)
 		require.NoError(t, err)
-		require.Equal(t, val, res, val.String())
+		require.True(t, val.Equal(res), val.String())
 	}
 }
 
@@ -299,7 +299,33 @@ func TestUnixMilli(t *testing.T) {
 			// nanos) since the UnitMilli does that, too...
 			trunc := test.date.Truncate(time.Millisecond)
 			assert.True(t, trunc.Equal(recovered), recovered)
-			assert.Equal(t, trunc, recovered)
+			assert.True(t, trunc.Equal(recovered))
+		})
+	}
+}
+
+func TestMono(t *testing.T) {
+	tests := []struct {
+		name     string
+		utc      utc.UTC
+		wantMono bool
+	}{
+		{name: "utc.Now()", utc: utc.Now(), wantMono: true},
+		{name: "utc.New(time.Now())", utc: utc.New(time.Now()), wantMono: true},
+		{name: "utc.MustParse(\"2021-09-09T07:24:42.638Z\")", utc: utc.MustParse("2021-09-09T07:24:42.638Z"), wantMono: false},
+		{name: "u: utc.Now.Truncate(0)", utc: utc.Now().Truncate(0), wantMono: false},
+		{name: "u: utc.Now.StripMono()", utc: utc.Now().StripMono(), wantMono: false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			// the only way to figure out if a Time instance has a mono clock is to transform it to a string and check that
+			// there is a suffix with the mono clock: e.g. 2021-09-09 09:18:18.909178 +0200 CEST m=+0.003535001
+			asString := test.utc.Mono().String()
+			if test.wantMono {
+				require.Regexp(t, "m=[+-]\\d+", asString)
+			} else {
+				require.NotRegexp(t, "m=[+-]\\d+", asString)
+			}
 		})
 	}
 }

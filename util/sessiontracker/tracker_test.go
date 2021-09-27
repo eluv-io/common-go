@@ -108,6 +108,7 @@ func TestSessionTrackerConcurrent(t *testing.T) {
 					return
 				default:
 					tracker.Update(id)
+					time.Sleep(time.Millisecond)
 				}
 			}
 		}()

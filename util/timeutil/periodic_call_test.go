@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/qluvio/content-fabric/format/utc"
 )
 
 func TestPeriodicInitialCall(t *testing.T) {
@@ -20,6 +22,9 @@ func TestPeriodicInitialCall(t *testing.T) {
 }
 
 func TestPeriodic(t *testing.T) {
+	now := utc.Now()
+	defer utc.MockNowFn(func() utc.UTC { return now })()
+
 	tests := []struct {
 		name          string
 		testDuration  time.Duration
@@ -44,7 +49,7 @@ func TestPeriodic(t *testing.T) {
 				if called {
 					calledCount++
 				}
-				time.Sleep(test.sleep)
+				now = now.Add(test.sleep)
 			}
 
 			require.Equal(t, test.expectedCalls, count)

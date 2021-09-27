@@ -193,6 +193,8 @@ func RecryptKeyFile(keyfile string, password string, newpassword string, scryptN
 	return nil
 }
 
+// NewKeyFile generates a new key and stores it into the key directory,
+// encrypting it with the passphrase
 func NewKeyFile(keystoreDir, password string) (common.Address, accounts.URL, error) {
 	ks := keystore.NewKeyStore(keystoreDir, keystore.StandardScryptN, keystore.StandardScryptP)
 	acct, err := ks.NewAccount(password)

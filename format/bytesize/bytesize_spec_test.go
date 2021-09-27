@@ -50,9 +50,11 @@ func TestUnmarshalText(t *testing.T) {
 		err      error
 		expected bytesize.Spec
 	}{
-		{"0", nil, bytesize.Spec(0)},
-		{"0B", nil, bytesize.Spec(0)},
-		{"0 KB", nil, bytesize.Spec(0)},
+		{"0", nil, 0},
+		{"0B", nil, 0},
+		{"0 KB", nil, 0},
+		{"0.1 B", nil, 0},
+		{"0.000001 KB", nil, 0},
 		{"1", nil, bytesize.B},
 		{"1K", nil, bytesize.KB},
 		{"2MB", nil, 2 * bytesize.MB},
@@ -60,13 +62,18 @@ func TestUnmarshalText(t *testing.T) {
 		{"20480 G", nil, 20 * bytesize.TB},
 		{"50 eB", strconv.ErrRange, bytesize.Spec((1 << 64) - 1)},
 		{"200000 pb", strconv.ErrRange, bytesize.Spec((1 << 64) - 1)},
-		{"10 Mb", bytesize.ErrBits, bytesize.Spec(0)},
-		{"g", strconv.ErrSyntax, bytesize.Spec(0)},
+		{"10 Mb", bytesize.ErrBits, 0},
+		{"g", strconv.ErrSyntax, 0},
 		{"10 kB ", nil, 10 * bytesize.KB},
 		{"  10 kB ", nil, 10 * bytesize.KB},
 		{"  0010 kB ", nil, 10 * bytesize.KB},
 		{"10kb", nil, 10 * bytesize.KB},
-		{"10 kBs ", strconv.ErrSyntax, bytesize.Spec(0)},
+		{"10 kBs ", strconv.ErrSyntax, 0},
+		{"10 eB", nil, 10 * bytesize.EB},
+		{"402.5MB", nil, 402*bytesize.MB + 512*bytesize.KB},
+		{"7.000244140625TB", nil, 7*bytesize.TB + 256*bytesize.MB},
+		{"10.125EB", nil, 10*bytesize.EB + 128*bytesize.PB},
+		{"1.453.6693MB", strconv.ErrSyntax, 0},
 	}
 
 	Convey("Unmarshaling from text should produce correct result", t, func() {
@@ -153,6 +160,6 @@ func ExampleSpec_HumanReadable() {
 
 	// Output:
 	//
-	// 4.9 MB
-	// 4.9 MB (5123456B)
+	// 4.9MB
+	// 4.9MB (5123456B)
 }
