@@ -15,6 +15,12 @@ type ReadSeekCloser interface {
 	io.Closer
 }
 
+type ReadSeekSizer interface {
+	io.Reader
+	io.Seeker
+	Size() int64
+}
+
 func NewReadSeekCloser(fnRead func(p []byte) (int, error), fnSeek func(offset int64, whence int) (int64, error), fnClose func() error) ReadSeekCloser {
 	return &readSeekCloser{
 		fnRead:  fnRead,
