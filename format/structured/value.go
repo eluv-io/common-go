@@ -201,6 +201,30 @@ func (v *Value) Int64(def ...int64) int64 {
 	return 0
 }
 
+// UInt returns the value as an uint. If the value wraps an error, returns
+// the optional default value def if specified, or 0.
+func (v *Value) UInt(def ...uint) uint {
+	if len(def) > 0 {
+		return uint(v.UInt64(uint64(def[0])))
+	}
+	return uint(v.UInt64())
+}
+
+// UInt64 returns the value as an uint. If the value wraps an error, returns
+// the optional default value def if specified, or 0.
+func (v *Value) UInt64(def ...uint64) uint64 {
+	if v.err == nil && v.Data != nil {
+		res, err := numberutil.AsUInt64Err(v.Data)
+		if err == nil {
+			return res
+		}
+	}
+	if len(def) > 0 {
+		return def[0]
+	}
+	return 0
+}
+
 // Float64 returns the value as a float64. If the value wraps an error, returns
 // the optional default value def if specified, or 0.
 func (v *Value) Float64(def ...float64) float64 {

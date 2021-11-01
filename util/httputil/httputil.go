@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/json"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gin-gonic/gin/binding"
 	mc "github.com/multiformats/go-multicodec"
 	cbor "github.com/multiformats/go-multicodec/cbor"
 	mcjson "github.com/multiformats/go-multicodec/json"
@@ -269,6 +271,74 @@ func ShouldRetry(ctx context.Context, statusCode int, err error) bool {
 	}
 
 	return false
+}
+
+// Unmarshal unmarshals the body of the HTTP request, using the correct JSON or
+// XML unmarshaler depending on the "Content-Type" header of the request (JSON
+// per default). The data is unmarshaled into generic maps and slices.
+func Unmarshal(reqBody io.ReadCloser, reqHeader http.Header) (interface{}, error) {
+	if reqBody == nil {
+		// this should not happen with a real server request, but will in unit
+		// tests...
+		return nil, nil
+	}
+	body, err := ioutil.ReadAll(reqBody)
+	if err != nil {
+		return nil, errors.E("read request body", errors.K.IO, err)
+	}
+	if len(body) == 0 {
+		return nil, nil
+	}
+	ct := reqHeader.Get("Content-Type")
+	switch {
+	case strings.HasPrefix(ct, binding.MIMEXML):
+		return defaultUnmarshaler.XML(body)
+	case strings.HasPrefix(ct, binding.MIMEJSON) || ct == "":
+		return defaultUnmarshaler.JSON(body)
+	default:
+		return nil, errors.E("unmarshal request", errors.K.Invalid, "reason", "unacceptable content type", "content_type", ct)
+	}
+}
+
+// UnmarshalTo unmarshals the body of the HTTP request into the given target go
+// structure, using the correct JSON or XML unmarshaler depending on the
+// "Content-Type" header of the request (JSON per default).
+//
+// Returns without error if the body is empty and "required" is false.
+func UnmarshalTo(reqBody io.Reader, reqHeader http.Header, target interface{}, required bool) error {
+	var body []byte
+	var err error
+	if reqBody != nil {
+		body, err = ioutil.ReadAll(reqBody)
+		if err != nil {
+			return errors.E("read request body", errors.K.IO, err)
+		}
+	}
+	if len(body) == 0 && !required {
+		return nil
+	}
+	ct := reqHeader.Get("Content-Type")
+	switch {
+	case strings.HasPrefix(ct, "application/xml"):
+		// Convert XML to JSON
+		s, err := defaultUnmarshaler.XML(body)
+		if err == nil {
+			buf := &bytes.Buffer{}
+			err = defaultMarshaler.JSON(buf, s)
+			body = buf.Bytes()
+		}
+		if err != nil {
+			return err
+		}
+	case strings.HasPrefix(ct, "application/json") || ct == "":
+	default:
+		return errors.E("unmarshal request", errors.K.Invalid, "reason", "unacceptable content type", "content_type", ct)
+	}
+	err = json.Unmarshal(body, target)
+	if err != nil {
+		return errors.E("unmarshal request", errors.K.Invalid, err, "content_type", ct)
+	}
+	return nil
 }
 
 func GetReqNodes(headers http.Header) (map[string]bool, error) {
