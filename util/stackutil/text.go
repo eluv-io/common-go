@@ -1,21 +1,22 @@
 package stackutil
 
 import (
+	"fmt"
 	"io"
 	"text/template"
 
-	"github.com/maruel/panicparse/stack"
+	"github.com/maruel/panicparse/v2/stack"
 
 	"github.com/qluvio/content-fabric/format/utc"
 )
 
 const textTmpl = `
 {{- define "RenderCall" -}}
-{{printf "\n\t%-*s" srcLineLen .SrcLine}} {{.Func.PkgDotName}}({{.Args}})
+{{printf "\n\t%-*s" srcLineLen (srcLine .)}} {{.Func.Complete}}({{.Args}})
 {{- end -}}
 
 {{- define "RenderCallNoSpace" -}}
-{{.SrcLine}} {{.Func.PkgDotName}}({{.Args}})
+{{srcLine .}} {{.Func.Complete}}({{.Args}})
 {{- end -}}
 
 ** Aggregate Stacktrace **
@@ -33,7 +34,7 @@ go-routines:      {{.GoroutineCount}}
 	{{- end}}
 	{{- if .Locked}} [locked]
 	{{- end -}}
-	{{- if .CreatedBy.SrcPath}} [Created by {{template "RenderCallNoSpace" .CreatedBy}}]
+	{{- if len .CreatedBy.Calls }} [Created by {{template "RenderCallNoSpace" index .CreatedBy.Calls 0 }}]
 	{{- end -}}
 	{{- range .Signature.Stack.Calls}}
 		{{- template "RenderCall" .}}
@@ -46,6 +47,7 @@ func (a *AggregateStack) writeAsText(out io.Writer) error {
 	goroutineCount, srcLineLen, _ := a.calcLengths(false)
 	m := template.FuncMap{
 		"srcLineLen": func() int { return srcLineLen },
+		"srcLine":    srcLine,
 	}
 	t, err := template.New("textTmpl").Funcs(m).Parse(textTmpl)
 	if err != nil {
@@ -57,8 +59,7 @@ func (a *AggregateStack) writeAsText(out io.Writer) error {
 		SrcLineSize    int
 		GoroutineCount int
 		Similarity     string
-	}{a.buckets, utc.Now(), srcLineLen, goroutineCount, a.SimilarityString()}
-
+	}{a.agg.Buckets, utc.Now(), srcLineLen, goroutineCount, a.SimilarityString()}
 	return t.Execute(out, data)
 }
 
@@ -67,23 +68,33 @@ func (a *AggregateStack) calcLengths(fullPath bool) (int, int, int) {
 	goroutineCount := 0
 	srcLen := 0
 	pkgLen := 0
-	for _, bucket := range a.buckets {
+	for _, bucket := range a.agg.Buckets {
 		goroutineCount += len(bucket.IDs)
 		for _, line := range bucket.Signature.Stack.Calls {
+
 			l := 0
 			if fullPath {
-				l = len(line.FullSrcLine())
+				l = len(fullSrcLine(line))
 			} else {
-				l = len(line.SrcLine())
+				l = len(srcLine(line))
 			}
 			if l > srcLen {
 				srcLen = l
 			}
-			l = len(line.Func.PkgName())
+			l = len(line.Func.DirName)
 			if l > pkgLen {
 				pkgLen = l
 			}
 		}
 	}
 	return goroutineCount, srcLen, pkgLen
+}
+
+func srcLine(c stack.Call) string {
+	return fmt.Sprintf("%s:%d", c.SrcName, c.Line)
+}
+
+func fullSrcLine(c stack.Call) string {
+	// return fmt.Sprintf("%s:%d", c.RemoteSrcPath, c.Line)
+	return fmt.Sprintf("%s:%d", c.RelSrcPath, c.Line)
 }
