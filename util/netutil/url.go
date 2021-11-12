@@ -2,7 +2,9 @@ package netutil
 
 import (
 	"encoding/json"
-	"net/url"
+	"net"
+	url "net/url"
+	"strconv"
 
 	"github.com/qluvio/content-fabric/errors"
 )
@@ -11,7 +13,7 @@ type URL struct {
 	*url.URL
 }
 
-// MarshalJSON implements json.Marshaler to cope with url as string otherwise
+// MarshalJSON implements json.Marshaler to cope with url as string
 func (u *URL) MarshalJSON() ([]byte, error) {
 	s := ""
 	if u.URL != nil {
@@ -20,7 +22,7 @@ func (u *URL) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s)
 }
 
-// MarshalJSON implements json.Unmarshaler to cope with url as string
+// UnmarshalJSON implements json.Unmarshaler to cope with url as string
 func (u *URL) UnmarshalJSON(b []byte) error {
 	e := errors.Template("UnmarshalJSON", errors.K.Invalid)
 	if len(b) == 0 {
@@ -39,4 +41,24 @@ func (u *URL) UnmarshalJSON(b []byte) error {
 		return e(err)
 	}
 	return nil
+}
+
+func ExtractHostAndPort(fromUrl string) (host string, port int, err error) {
+	var netUrl *url.URL
+	netUrl, err = url.Parse(fromUrl)
+	if err != nil {
+		return
+	}
+	var portString string
+	host, portString, err = net.SplitHostPort(netUrl.Host)
+	if err != nil {
+		return
+	}
+	port, err = strconv.Atoi(portString)
+	return
+}
+
+func ExtractPort(fromUrl string) (port int, err error) {
+	_, port, err = ExtractHostAndPort(fromUrl)
+	return
 }
