@@ -6,9 +6,10 @@ import (
 )
 
 // Scheme is the encryption scheme of a resource.
-type Scheme uint
+// Byte type is used so that scheme can be stored directly as a byte, e.g. in tokens
+type Scheme byte
 
-const (
+const ( // List should be preserved and not re-arranged or removed from, only added to
 	UNKNOWN   Scheme = iota
 	None             // Unencrypted
 	ClientGen        // Encrypted, client-generated content key
@@ -16,7 +17,11 @@ const (
 
 // Schemes lists all schemes - including UNKNOWN, which is used in filename generation for parts
 // => see aferoFactory.Create and aferoFactory.OpenWriter
-var Schemes = []Scheme{UNKNOWN, None, ClientGen}
+var Schemes = map[Scheme]bool{
+	UNKNOWN:   true,
+	None:      true,
+	ClientGen: true,
+}
 
 var schemeToName = map[Scheme]string{
 	UNKNOWN:   "",

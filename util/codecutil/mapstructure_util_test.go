@@ -75,12 +75,14 @@ func TestMapDecodeStruct(t *testing.T) {
 
 	qid := id.Generate(id.Q)
 	nid := id.Generate(id.QNode)
+	tok, err := token.NewObject(token.QWrite, qid, nid)
+	require.NoError(t, err)
 	ts := testStruct{
 		stringutil.RandomString(10),
 		rnd.Intn(1000000),
 		qid,
 		*hsh,
-		token.New(token.QWrite, qid, nid),
+		tok,
 		*link.NewBuilder().Selector(link.S.Meta).P("some", "path").AddProp("custom", "prop").MustBuild(),
 	}
 

@@ -5,18 +5,29 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/qluvio/content-fabric/format/id"
-	"github.com/qluvio/content-fabric/format/token"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/qluvio/content-fabric/format/encryption"
+	"github.com/qluvio/content-fabric/format/id"
+	"github.com/qluvio/content-fabric/format/token"
 )
 
 var (
 	qid = id.MustParse("iq__99d4kp14eSDEP7HWfjU4W6qmqDw")
 	nid = id.MustParse("inod3Sa5p3czRyYi8GnVGnh8gBDLaqJr")
 	qwt = func() *token.Token {
-		t := token.New(token.QWrite, qid, nid)
+		t, _ := token.NewObject(token.QWrite, qid, nid)
+		t.Bytes = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+		return t
+	}()
+	qpwt = func() *token.Token {
+		t, _ := token.NewPart(token.QPartWrite, encryption.ClientGen, token.PreambleQPWFlag)
+		t.Bytes = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+		return t
+	}()
+	lrot = func() *token.Token {
+		t, _ := token.NewLRO(token.LRO, nid)
 		t.Bytes = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 		return t
 	}()
@@ -37,8 +48,9 @@ func TestBackwardsCompatibilityHack(t *testing.T) {
 func TestConversion(t *testing.T) {
 	testConversion(t, qwt, token.QWrite, "tqw__")
 	testConversion(t, token.Generate(token.QWriteV1), token.QWriteV1, "tqw_")
-	testConversion(t, token.Generate(token.QPartWrite), token.QPartWrite, "tqpw")
-	testConversion(t, token.New(token.LRO, nil, nid), token.LRO, "tlro")
+	testConversion(t, qpwt, token.QPartWrite, "tqp_")
+	testConversion(t, token.Generate(token.QPartWriteV1), token.QPartWriteV1, "tqpw")
+	testConversion(t, lrot, token.LRO, "tlro")
 }
 
 func testConversion(t *testing.T, tok *token.Token, code token.Code, prefix string) {
@@ -139,26 +151,37 @@ func TestWrappedJSON(t *testing.T) {
 	assert.True(t, s.Token.Equal(unmarshalled.Token))
 }
 
-func ExampleToken_Describe() {
+func ExampleToken_Describe_Object() {
 	tok, _ := token.FromString("tq__3WhUFGKoJAzvqrDWiZtkcfQHiKp4Gda4KkiwuRgX6BTFfq7hNeji2hPDW6qZxLuk7xAju4bgm8iLwK")
 	fmt.Println(tok.Describe())
 
 	// Output:
 	//
 	// type:   content write token
+	// bytes:  0xe6ded2a798ac1f820fe871c6170b6d12
 	// qid:    iq__1Bhh3pU9gLXZiNDL6PEZuEP5ri
 	// nid:    inod2KRn6vRvn8U3gczhSMJwd1
-	// random: 0xe6ded2a798ac1f820fe871c6170b6d12
 }
 
-func ExampleToken_Describe_lroHandle() {
+func ExampleToken_Describe_Part() {
+	tok, _ := token.FromString("tqp_NHG92YAkoUg7dnCrWT8J3RLp6")
+	fmt.Println(tok.Describe())
+
+	// Output:
+	//
+	// type:   content part write token
+	// bytes:  0x5b28b6f7c5410bff09967db0e7e1a997
+	// scheme: cgck
+	// flags:  [preamble]
+}
+
+func ExampleToken_Describe_LRO() {
 	tok, _ := token.FromString("tlro12hb4zikV2ArEoXXyUV6xKJPfC6Ff2siNKDKBVM6js8adif81")
 	fmt.Println(tok.Describe())
 
 	// Output:
 	//
 	// type:   bitcode LRO handle
-	// qid:    n/a
+	// bytes:  0x2df2a5d3d6c4e0830a95e7f1e8c779f6
 	// nid:    inod2KRn6vRvn8U3gczhSMJwd1
-	// random: 0x2df2a5d3d6c4e0830a95e7f1e8c779f6
 }

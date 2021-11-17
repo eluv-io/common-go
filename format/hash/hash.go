@@ -9,9 +9,11 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/qluvio/content-fabric/errors"
 	ei "github.com/qluvio/content-fabric/format/id"
+	"github.com/qluvio/content-fabric/format/preamble"
 	"github.com/qluvio/content-fabric/format/utc"
 	"github.com/qluvio/content-fabric/log"
 
@@ -145,27 +147,28 @@ func init() {
 // Hash is the output of a cryptographic hash function and associated metadata,
 // identifying a particular instance of an immutable resource.
 //	Q format : type (1 byte) | digest (var bytes) | size (var bytes) | id (var bytes)
-//	QPart format : type (1 byte) | digest (var bytes) | size (var bytes)
+//	QPart format : type (1 byte) | digest (var bytes) | size (var bytes) | preamble_size (var bytes, optional)
 //	QPartLive format : type (1 byte) | expiration (var bytes) | digest (var bytes)
 //	QPartLiveTransient format: type (1 byte) | expiration (var bytes) | digest (var bytes)
 type Hash struct {
-	Type       Type
-	Digest     []byte
-	Size       int64
-	ID         ei.ID
-	Expiration utc.UTC
-	s          string
+	Type         Type
+	Digest       []byte
+	Size         int64
+	PreambleSize int64
+	ID           ei.ID
+	Expiration   utc.UTC
+	s            string
 }
 
-// New creates a new non-live hash with the given type, digest, size, and ID
-func New(htype Type, digest []byte, size int64, id ei.ID) (*Hash, error) {
+// NewObject creates a new object hash with the given type, digest, size, and ID
+func NewObject(htype Type, digest []byte, size int64, id ei.ID) (*Hash, error) {
 	e := errors.Template("init hash", errors.K.Invalid)
 	if _, ok := typeToPrefix[htype]; !ok {
 		return nil, e("reason", "invalid type", "code", htype.Code, "format", htype.Format)
 	} else if htype.Code == UNKNOWN {
 		return nil, nil
-	} else if htype.Code.IsLive() {
-		return nil, e("reason", "live code not supported", "code", htype.Code)
+	} else if htype.Code != Q {
+		return nil, e("reason", "code not supported", "code", htype.Code)
 	}
 
 	if len(digest) != sha256.Size {
@@ -176,18 +179,40 @@ func New(htype Type, digest []byte, size int64, id ei.ID) (*Hash, error) {
 		return nil, e("reason", "invalid size", "size", size)
 	}
 
-	switch htype.Code {
-	case Q:
-		if id.AssertCode(ei.Q) != nil {
-			return nil, e("reason", "invalid id", "id", id)
-		}
-	case QPart:
-		if len(id) > 0 {
-			return nil, e("reason", "id not supported with QPart")
-		}
+	if id.AssertCode(ei.Q) != nil {
+		return nil, e("reason", "invalid id", "id", id)
 	}
 
-	h := &Hash{Type: htype, Digest: digest, Size: size, ID: id, Expiration: utc.UTC{}}
+	h := &Hash{Type: htype, Digest: digest, Size: size, ID: id}
+	h.s = h.String()
+
+	return h, nil
+}
+
+// NewPart creates a new non-live part hash with the given type, digest, size, and optional preamble size
+func NewPart(htype Type, digest []byte, size int64, preambleSize int64) (*Hash, error) {
+	e := errors.Template("init hash", errors.K.Invalid)
+	if _, ok := typeToPrefix[htype]; !ok {
+		return nil, e("reason", "invalid type", "code", htype.Code, "format", htype.Format)
+	} else if htype.Code == UNKNOWN {
+		return nil, nil
+	} else if htype.Code != QPart {
+		return nil, e("reason", "code not supported", "code", htype.Code)
+	}
+
+	if len(digest) != sha256.Size {
+		return nil, e("reason", "invalid digest", "digest", digest)
+	}
+
+	if size < 0 {
+		return nil, e("reason", "invalid size", "size", size)
+	}
+
+	if preambleSize < 0 {
+		return nil, e("reason", "invalid preamble size", "preamble_size", size)
+	}
+
+	h := &Hash{Type: htype, Digest: digest, Size: size, PreambleSize: preambleSize}
 	h.s = h.String()
 
 	return h, nil
@@ -201,10 +226,13 @@ func NewLive(htype Type, digest []byte, expiration utc.UTC) (*Hash, error) {
 	} else if htype.Code == UNKNOWN {
 		return nil, nil
 	} else if !htype.Code.IsLive() {
-		return nil, e("reason", "non-live code not supported", "code", htype.Code)
+		return nil, e("reason", "code not supported", "code", htype.Code)
 	}
 
-	h := &Hash{Type: htype, Digest: digest, Size: 0, ID: nil, Expiration: expiration}
+	// Strip sub-second info from expiration, since it is stored as Unix time in hash string
+	expiration = expiration.Truncate(time.Second)
+
+	h := &Hash{Type: htype, Digest: digest, Expiration: expiration}
 	h.s = h.String()
 
 	return h, nil
@@ -248,7 +276,7 @@ func FromString(s string) (*Hash, error) {
 	n := 0
 
 	var digest []byte
-	var size int64
+	var size, preambleSize int64
 	var id ei.ID
 	var expiration utc.UTC
 	if !htype.Code.IsLive() {
@@ -268,7 +296,14 @@ func FromString(s string) (*Hash, error) {
 		size = int64(sz)
 		n += m
 
-		if htype.Code == Q {
+		if htype.Code == QPart {
+			sz, m = binary.Uvarint(b[n:])
+			if m < 0 {
+				return nil, errors.E("parse hash", errors.K.Invalid, "reason", "invalid preamble size", "string", s)
+			} else if m > 0 {
+				preambleSize = int64(sz)
+			}
+		} else if htype.Code == Q {
 			// Parse id
 			id = ei.NewID(ei.Q, b[n:])
 		}
@@ -285,7 +320,7 @@ func FromString(s string) (*Hash, error) {
 		digest = b[n:]
 	}
 
-	return &Hash{Type: htype, Digest: digest, Size: size, ID: id, Expiration: expiration, s: s}, nil
+	return &Hash{Type: htype, Digest: digest, Size: size, PreambleSize: preambleSize, ID: id, Expiration: expiration, s: s}, nil
 }
 
 func (h *Hash) String() string {
@@ -304,7 +339,10 @@ func (h *Hash) String() string {
 			n := binary.PutUvarint(s, uint64(h.Size))
 			b = append(b, s[:n]...)
 
-			if h.Type.Code == Q && h.ID.IsValid() {
+			if h.Type.Code == QPart && h.PreambleSize > 0 {
+				n := binary.PutUvarint(s, uint64(h.PreambleSize))
+				b = append(b, s[:n]...)
+			} else if h.Type.Code == Q && h.ID.IsValid() {
 				b = append(b, h.ID.Bytes()...)
 			}
 		} else {
@@ -400,6 +438,8 @@ func (h *Hash) UnmarshalText(text []byte) error {
 func (h *Hash) As(c Code, id ei.ID) (*Hash, error) {
 	if h.IsNil() || c == h.Type.Code {
 		return h, nil
+	} else if h.PreambleSize > 0 {
+		return nil, errors.E("convert hash", errors.K.Invalid, "reason", "no conversion for parts with preamble", "hash", h)
 	} else if h.IsLive() || c.IsLive() {
 		return nil, errors.E("convert hash", errors.K.Invalid, "reason", "no conversion for live parts", "hash", h, "code", c)
 	} else if _, ok := typeToPrefix[Type{c, h.Type.Format}]; !ok {
@@ -447,10 +487,12 @@ func (h *Hash) AssertEqual(h2 *Hash) error {
 			"actual_digest", hex.EncodeToString(h2.Digest))
 	case h.Size != h2.Size:
 		return e("reason", "size differs", "expected_size", h.Size, "actual_size", h2.Size)
+	case h.PreambleSize != h2.PreambleSize:
+		return e("reason", "preamble size differs", "expected_size", h.PreambleSize, "actual_size", h2.PreambleSize)
 	case !h.ID.Equal(h2.ID):
-		return e("reason", "ID differs", "expected_id", h.ID, "actual_id", h2.ID)
+		return e("reason", "id differs", "expected_id", h.ID, "actual_id", h2.ID)
 	case h.Expiration != h2.Expiration:
-		return e("reason", "Expiration differs", "expected_expiration", h.Expiration, "actual_expiration", h2.Expiration)
+		return e("reason", "expiration differs", "expected_expiration", h.Expiration, "actual_expiration", h2.Expiration)
 	default:
 		return nil
 	}
@@ -471,20 +513,21 @@ func (h *Hash) Describe() string {
 		sb.WriteString("\n")
 	}
 
-	add("type:       " + h.Type.Describe())
-	add("digest:     " + hex.EncodeToString(h.Digest))
+	add("type:          " + h.Type.Describe())
+	add("digest:        0x" + hex.EncodeToString(h.Digest))
 	if !h.IsLive() {
-		add("size:       " + strconv.FormatInt(h.Size, 10))
-		if h.Type.Code == Q {
-			add("qid:        " + h.ID.String())
+		add("size:          " + strconv.FormatInt(h.Size, 10))
+		if h.PreambleSize > 0 {
+			add("preamble_size: " + strconv.FormatInt(h.PreambleSize, 10))
 		}
 	} else {
-		add("expiration: " + h.Expiration.String())
+		add("expiration:    " + h.Expiration.String())
 	}
 	if h.Type.Code == Q {
+		add("qid:           " + h.ID.String())
 		qphash, err := h.As(QPart, nil)
 		if err == nil {
-			add("part:       " + qphash.String())
+			add("part:          " + qphash.String())
 		}
 	}
 
@@ -497,21 +540,57 @@ func (h *Hash) Describe() string {
 // of Hash
 type Digest struct {
 	hash.Hash
-	htype Type
-	id    ei.ID
-	size  int64
+	preamble *preamble.Sizer
+	htype    Type
+	id       ei.ID
+	size     int64
+	psize    int64
 }
 
 // make sure Digest implements the Hash interface
 var _ hash.Hash = (*Digest)(nil)
 
 // NewDigest creates a new digest. Does not support live part hashes
-func NewDigest(h hash.Hash, t Type, i ei.ID) *Digest {
-	return &Digest{Hash: h, htype: t, id: i}
+func NewDigest(h hash.Hash, t Type) *Digest {
+	return &Digest{Hash: h, preamble: preamble.NewSizer(), htype: t}
+}
+
+func (d *Digest) WithPreamble(preambleSize int64) *Digest {
+	if d.htype.Code == QPart {
+		if preambleSize > 0 {
+			d.psize = preambleSize
+		} else {
+			// Calculate preamble size
+			var err error
+			d.psize, err = d.preamble.Size()
+			if err != nil {
+				// Should not happen
+				log.Warn("invalid hash", "error", err)
+			}
+		}
+	} else {
+		// Should not happen
+		log.Warn("invalid hash", "error", "preamble not applicable", "code", d.htype.Code)
+	}
+	return d
+}
+
+func (d *Digest) WithID(i ei.ID) *Digest {
+	if d.htype.Code == Q {
+		d.id = i
+	}
+	return d
 }
 
 func (d *Digest) Write(p []byte) (int, error) {
 	n, err := d.Hash.Write(p)
+	if err == nil && d.htype.Code == QPart {
+		n2, err2 := d.preamble.Write(p)
+		if err2 != nil || n2 != n {
+			// Should not happen
+			log.Warn("invalid hash", "error", err, "n", n, "n2", n2)
+		}
+	}
 	d.size += int64(n)
 	return n, err
 }
@@ -520,7 +599,13 @@ func (d *Digest) Write(p []byte) (int, error) {
 // previously written to this digest object and return the result as a Hash.
 func (d *Digest) AsHash() *Hash {
 	b := d.Hash.Sum(nil)
-	h, err := New(d.htype, b, d.size, d.id)
+	var h *Hash
+	var err error
+	if d.htype.Code == Q {
+		h, err = NewObject(d.htype, b, d.size, d.id)
+	} else {
+		h, err = NewPart(d.htype, b, d.size, d.psize)
+	}
 	if err != nil {
 		// errors must be caught by unit tests!
 		log.Fatal("invalid hash", "error", err)
@@ -530,8 +615,23 @@ func (d *Digest) AsHash() *Hash {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-func CalcHash(reader io.Reader) (*Hash, error) {
-	digest := NewDigest(sha256.New(), Type{QPart, Unencrypted}, nil)
+func CalcHash(reader io.ReadSeeker, size ...int64) (*Hash, error) {
+	digest := NewDigest(sha256.New(), Type{QPart, Unencrypted})
+
+	// Check for preamble
+	var preambleSize int64
+	var err error
+	if len(size) > 0 {
+		_, _, preambleSize, err = preamble.Read(reader, true, size[0])
+	} else {
+		_, _, preambleSize, err = preamble.Read(reader, true)
+	}
+	if errors.IsNotExist(err) {
+		preambleSize = 0
+	} else if err != nil {
+		return nil, err
+	}
+
 	buf := make([]byte, 128*1024)
 	for {
 		n, err := reader.Read(buf)
@@ -548,5 +648,10 @@ func CalcHash(reader io.Reader) (*Hash, error) {
 			return nil, err
 		}
 	}
+
+	if preambleSize > 0 {
+		digest = digest.WithPreamble(preambleSize)
+	}
+
 	return digest.AsHash(), nil
 }

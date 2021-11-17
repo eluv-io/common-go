@@ -7,15 +7,13 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/qluvio/content-fabric/format/hash"
-
-	"github.com/qluvio/content-fabric/format/id"
-
-	"github.com/qluvio/content-fabric/format/token"
-
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/qluvio/content-fabric/format/encryption"
+	"github.com/qluvio/content-fabric/format/hash"
+	"github.com/qluvio/content-fabric/format/id"
+	"github.com/qluvio/content-fabric/format/token"
 )
 
 func TestContentDigest(t *testing.T) {
@@ -62,15 +60,18 @@ func TestTokenGenerators(t *testing.T) {
 	f := NewTestFactory(t)
 
 	tests := []struct {
-		name   string
-		token  *token.Token
-		prefix string
+		name      string
+		tokenFunc func() (*token.Token, error)
+		prefix    string
 	}{
-		{"QPWriteToken", f.GenerateQPWriteToken(), "tqpw"},
+		{"QWriteToken", func() (*token.Token, error) { return f.GenerateQWriteToken(id.Generate(id.Q), id.Generate(id.QNode)) }, "tqw__"},
+		{"QPWriteToken", func() (*token.Token, error) {
+			return f.GenerateQPWriteToken(encryption.ClientGen, token.PreambleQPWFlag)
+		}, "tqp_"},
 	}
 	for _, v := range tests {
 		t.Run(v.name, func(t *testing.T) {
-			assertToken(t, v.token, v.prefix)
+			assertToken(t, v.tokenFunc, v.prefix)
 		})
 	}
 }
@@ -168,7 +169,9 @@ func assertID(t *testing.T, id id.ID, expectedPrefix string) {
 	assert.Contains(t, id.String(), expectedPrefix)
 }
 
-func assertToken(t *testing.T, tok *token.Token, expectedPrefix string) {
+func assertToken(t *testing.T, tokFunc func() (*token.Token, error), expectedPrefix string) {
+	tok, err := tokFunc()
+	assert.NoError(t, err)
 	fmt.Println(tok)
 	assert.NotNil(t, tok)
 	assert.Contains(t, tok.String(), expectedPrefix)

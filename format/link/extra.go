@@ -68,7 +68,7 @@ func (e *Extra) IsEmpty() bool {
 			e.AutoUpdate == nil &&
 			e.ResolutionError == nil &&
 			e.Authorization == "" &&
-			e.EnforceAuth == false
+			!e.EnforceAuth
 }
 
 func (e *Extra) UnmarshalMap(m map[string]interface{}) {

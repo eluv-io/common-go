@@ -6,31 +6,101 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 
 	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/format/encryption"
 	"github.com/qluvio/content-fabric/format/id"
-	ei "github.com/qluvio/content-fabric/format/id"
 	"github.com/qluvio/content-fabric/log"
 	"github.com/qluvio/content-fabric/util/byteutil"
 
 	"github.com/mr-tron/base58/base58"
 )
 
-func New(code Code, qid id.ID, nid id.ID) *Token {
-	//if code == QWrite && (len(qid) == 0 || len(nid) == 0) {
-	//	panic("qid and nid must not be nil!")
-	//}
-	return &Token{
-		Code:  code,
-		Bytes: byteutil.RandomBytes(16),
-		QID:   qid,
-		NID:   nid,
+func NewObject(code Code, qid id.ID, nid id.ID, bytes ...byte) (*Token, error) {
+	e := errors.Template("init token", errors.K.Invalid)
+	if code == UNKNOWN {
+		return nil, nil
+	} else if code != QWriteV1 && code != QWrite {
+		return nil, e("reason", "code not supported", "code", code)
 	}
+	res := &Token{Code: code}
+	if len(bytes) == 0 {
+		bytes = byteutil.RandomBytes(16)
+	}
+	res.Bytes = bytes
+	if code == QWrite {
+		if qid.AssertCode(id.Q) != nil {
+			return nil, e("reason", "invalid qid", "qid", qid)
+		}
+		res.QID = qid
+		if nid.AssertCode(id.QNode) != nil {
+			return nil, e("reason", "invalid nid", "nid", nid)
+		}
+		res.NID = nid
+	}
+	return res, nil
+}
+
+func NewPart(code Code, scheme encryption.Scheme, flags byte, bytes ...byte) (*Token, error) {
+	e := errors.Template("init token", errors.K.Invalid)
+	if code == UNKNOWN {
+		return nil, nil
+	} else if code != QPartWriteV1 && code != QPartWrite {
+		return nil, e("reason", "code not supported", "code", code)
+	}
+	res := &Token{Code: code}
+	if len(bytes) == 0 {
+		bytes = byteutil.RandomBytes(16)
+	}
+	res.Bytes = bytes
+	if code == QPartWrite {
+		if !encryption.Schemes[scheme] {
+			return nil, e("reason", "invalid scheme", "scheme", scheme)
+		}
+		res.Scheme = scheme
+		if ValidateFlags(flags, allQPWFlags) {
+			return nil, e("reason", "invalid flags", "flags", flags)
+		}
+		res.Flags = flags
+	}
+	return res, nil
+}
+
+func NewLRO(code Code, nid id.ID, bytes ...byte) (*Token, error) {
+	e := errors.Template("init token", errors.K.Invalid)
+	if code == UNKNOWN {
+		return nil, nil
+	} else if code != LRO {
+		return nil, e("reason", "code not supported", "code", code)
+	}
+	res := &Token{Code: code}
+	if len(bytes) == 0 {
+		bytes = byteutil.RandomBytes(16)
+	}
+	res.Bytes = bytes
+	if nid.AssertCode(id.QNode) != nil {
+		return nil, e("reason", "invalid nid", "nid", nid)
+	}
+	res.NID = nid
+	return res, nil
 }
 
 // Code is the type of a Token
 type Code uint8
+
+func CodeFromString(s string) (Code, error) {
+	c, ok := prefixToCode[s]
+	if !ok {
+		return UNKNOWN, errors.E("parse code", errors.K.Invalid, "string", s)
+	}
+	return c, nil
+}
+
+func (c Code) String() string {
+	return codeToPrefix[c]
+}
 
 // FromString parses the given string and returns the Token. Returns an error
 // if the string is not a Token or a Token of the wrong type.
@@ -56,29 +126,32 @@ func (c Code) Describe() string {
 
 // lint off
 const (
-	Unknown    Code = iota
-	QWriteV1        // 1st version: just random bytes
-	QWrite          // 2nd version: content ID, node ID, random bytes
-	QPartWrite      // random bytes
-	LRO             // node ID, random bytes
+	UNKNOWN      Code = iota
+	QWriteV1          // 1st version: random bytes
+	QWrite            // 2nd version: content ID, node ID, random bytes
+	QPartWriteV1      // 1st version: random bytes
+	QPartWrite        // 2nd version: scheme, flags, random bytes
+	LRO               // node ID, random bytes
 )
 
 const prefixLen = 4
 
 var codeToPrefix = map[Code]string{}
 var prefixToCode = map[string]Code{
-	"tunk": Unknown,
+	"tunk": UNKNOWN,
 	"tqw_": QWriteV1,
 	"tq__": QWrite, // QWrite new version
-	"tqpw": QPartWrite,
+	"tqpw": QPartWriteV1,
+	"tqp_": QPartWrite, // QPartWrite new version
 	"tlro": LRO,
 }
 var codeToName = map[Code]string{
-	Unknown:    "unknown",
-	QWriteV1:   "content write token v1",
-	QWrite:     "content write token",
-	QPartWrite: "content part write token",
-	LRO:        "bitcode LRO handle",
+	UNKNOWN:      "unknown",
+	QWriteV1:     "content write token v1",
+	QWrite:       "content write token",
+	QPartWriteV1: "content part write token v1",
+	QPartWrite:   "content part write token",
+	LRO:          "bitcode LRO handle",
 }
 
 // NOTE: 5 char prefix - 2 underscores!
@@ -86,6 +159,35 @@ var codeToName = map[Code]string{
 // a "tqw_" prefix for tokens! This prefix will be switched back to the
 // original "tq__" in the near future and
 const qwPrefix = "tqw__"
+
+const (
+	NoQPWFlag       byte = 0b0
+	PreambleQPWFlag      = 0b1             // Preamble exists
+	allQPWFlags          = PreambleQPWFlag // Combination of all flags
+)
+
+var QPWFlagNames = map[byte]string{}
+var QPWFlags = map[string]byte{
+	"preamble": PreambleQPWFlag,
+}
+
+func DescribeFlags(flags byte, flagNames map[byte]string) string {
+	sb := strings.Builder{}
+	sb.WriteString("[")
+	f := make([]string, 0, len(flagNames))
+	for flag, name := range flagNames {
+		if flag&flags > 0 {
+			f = append(f, name)
+		}
+	}
+	sort.Strings(f)
+	sb.WriteString(strings.Join(f, ",") + "]")
+	return sb.String()
+}
+
+func ValidateFlags(flags byte, allFlags byte) bool {
+	return flags|allFlags > allFlags
+}
 
 func init() {
 	for prefix, code := range prefixToCode {
@@ -95,6 +197,9 @@ func init() {
 		codeToPrefix[code] = prefix
 	}
 	codeToPrefix[QWrite] = qwPrefix // use "tqw__" when encoding!
+	for name, code := range QPWFlags {
+		QPWFlagNames[code] = name
+	}
 }
 
 // Token is the type representing a Token. Tokens follow the multiformat
@@ -103,11 +208,13 @@ func init() {
 // form (String(), JSON) as a short text prefix instead of their encoded varint
 // for increased readability.
 type Token struct {
-	Code  Code
-	Bytes []byte
-	QID   ei.ID // content ID
-	NID   ei.ID // node ID of insertion point node
-	s     string
+	Code   Code
+	Bytes  []byte
+	QID    id.ID             // content ID
+	NID    id.ID             // node ID of insertion point node
+	Scheme encryption.Scheme // encryption scheme
+	Flags  byte              // misc flags
+	s      string
 }
 
 func (t *Token) String() string {
@@ -122,7 +229,7 @@ func (t *Token) String() string {
 	var b []byte
 
 	switch t.Code {
-	case QWriteV1, QPartWrite:
+	case QWriteV1, QPartWriteV1:
 		b = make([]byte, len(t.Bytes))
 		copy(b, t.Bytes)
 	case QWrite, LRO:
@@ -141,6 +248,15 @@ func (t *Token) String() string {
 		off += copy(b[off:], t.QID)
 		off += binary.PutUvarint(b[off:], uint64(len(t.NID)))
 		off += copy(b[off:], t.NID)
+		off += binary.PutUvarint(b[off:], uint64(len(t.Bytes)))
+		off += copy(b[off:], t.Bytes)
+	case QPartWrite:
+		// prefix + base58(byte(SCHEME) | byte(FLAGS) |
+		//                 uvarint(len(RAND_BYTES) | RAND_BYTES)
+		b = make([]byte, 2+byteutil.LenUvarInt(uint64(len(t.Bytes)))+len(t.Bytes))
+		off := 0
+		off += copy(b[off:], []byte{byte(t.Scheme)})
+		off += copy(b[off:], []byte{t.Flags})
 		off += binary.PutUvarint(b[off:], uint64(len(t.Bytes)))
 		off += copy(b[off:], t.Bytes)
 	}
@@ -169,13 +285,13 @@ func (t *Token) IsNil() bool {
 }
 
 func (t *Token) IsValid() bool {
-	return t != nil && t.Code != Unknown && len(t.Bytes) > 0
+	return t != nil && t.Code != UNKNOWN && len(t.Bytes) > 0
 }
 
 func (t *Token) prefix() string {
 	p, found := codeToPrefix[t.Code]
 	if !found {
-		return codeToPrefix[Unknown]
+		return codeToPrefix[UNKNOWN]
 	}
 	return p
 }
@@ -209,41 +325,69 @@ func (t *Token) Equal(o *Token) bool {
 	return t.Code == o.Code &&
 		bytes.Equal(t.Bytes, o.Bytes) &&
 		t.QID.Equal(o.QID) &&
-		t.NID.Equal(o.NID)
+		t.NID.Equal(o.NID) &&
+		t.Scheme == o.Scheme &&
+		t.Flags == o.Flags
 }
 
 // Describe returns a textual description of this token.
 func (t *Token) Describe() string {
-	toString := func(anID id.ID) string {
-		if anID.IsNil() {
-			return "n/a"
-		}
-		return anID.String()
-	}
 	sb := strings.Builder{}
-	sb.WriteString("type:   " + t.Code.Describe() + "\n")
-	sb.WriteString("qid:    " + toString(t.QID) + "\n")
-	sb.WriteString("nid:    " + toString(t.NID) + "\n")
-	sb.WriteString("random: 0x" + hex.EncodeToString(t.Bytes) + "\n")
+
+	add := func(s string) {
+		sb.WriteString(s)
+		sb.WriteString("\n")
+	}
+
+	add("type:   " + t.Code.Describe())
+	add("bytes:  0x" + hex.EncodeToString(t.Bytes))
+	if t.Code == QWrite {
+		add("qid:    " + t.QID.String())
+	}
+	if t.Code == QWrite || t.Code == LRO {
+		add("nid:    " + t.NID.String())
+	}
+	if t.Code == QPartWrite {
+		add("scheme: " + t.Scheme.String())
+		add("flags:  " + DescribeFlags(t.Flags, QPWFlagNames))
+	}
 	return sb.String()
 }
 
 func (t *Token) Validate() (err error) {
-	if !t.QID.IsNil() {
+	e := errors.Template("validate token", errors.K.Invalid)
+	if t.Code == QWrite {
 		err = t.QID.AssertCode(id.Q)
 	}
-	if err == nil && !t.NID.IsNil() {
+	if err == nil && (t.Code == QWrite || t.Code == LRO) {
 		err = t.NID.AssertCode(id.QNode)
 	}
+	if err == nil && t.Code == QPartWrite {
+		if !encryption.Schemes[t.Scheme] {
+			err = e("reason", "invalid scheme", "scheme", t.Scheme)
+		}
+		if err == nil && ValidateFlags(t.Flags, allQPWFlags) {
+			err = e("reason", "invalid flags", "flags", t.Flags)
+		}
+	}
 	if err == nil && len(t.Bytes) == 0 {
-		err = errors.E("validate", errors.K.Invalid, "reason", "no random bytes")
+		err = e("reason", "no random bytes")
 	}
 	return err
 }
 
 // Generate creates a random Token for the given Token type.
 func Generate(code Code) *Token {
-	return New(code, nil, nil)
+	var t *Token
+	switch code {
+	case QWriteV1, QWrite:
+		t, _ = NewObject(code, id.Generate(id.Q), id.Generate(id.QNode))
+	case QPartWriteV1, QPartWrite:
+		t, _ = NewPart(code, encryption.None, 0)
+	case LRO:
+		t, _ = NewLRO(code, id.Generate(id.QNode))
+	}
+	return t
 }
 
 // FromString parses a token from the given string representation. Alias for
@@ -294,7 +438,7 @@ func Parse(s string) (*Token, error) {
 	}
 
 	switch code {
-	case QWriteV1, QPartWrite:
+	case QWriteV1, QPartWriteV1:
 		return &Token{Code: code, Bytes: dec, s: s}, nil
 	case QWrite, LRO:
 		// prefix + base58(uvarint(len(QID) | QID |
@@ -302,33 +446,40 @@ func Parse(s string) (*Token, error) {
 		//                 uvarint(len(RAND_BYTES) | RAND_BYTES)
 		res := &Token{Code: code, s: s}
 		r := bytes.NewReader(dec)
-		var n uint64
 
-		decodeID := func() (res []byte, err error) {
-			n, err = binary.ReadUvarint(r)
-			if err != nil ||
-				(code == QWrite && (n <= 0 || n > 50)) {
-				return nil, errors.E("decode id", errors.K.Invalid, err, "reason", "invalid size", "size", n)
-			}
-			res = make([]byte, n)
-			read, err := r.Read(res)
-			if err == io.EOF {
-				return nil, e("decode id", "reason", "id truncated", "expected", n, "actual", read)
-			}
-			return res, nil
-		}
-
-		res.QID, err = decodeID()
+		res.QID, err = decodeBytes(r)
 		if err != nil {
 			return nil, e(err, "reason", "invalid qid")
 		}
 
-		res.NID, err = decodeID()
+		res.NID, err = decodeBytes(r)
 		if err != nil {
 			return nil, e(err, "reason", "invalid nid")
 		}
 
-		res.Bytes, err = decodeID()
+		res.Bytes, err = decodeBytes(r)
+		if err != nil {
+			return nil, e(err, "reason", "invalid rand bytes")
+		}
+
+		err = res.Validate()
+		if err != nil {
+			return nil, e(err)
+		}
+
+		return res, nil
+	case QPartWrite:
+		// prefix + base58(byte(SCHEME) | byte(FLAGS) |
+		//                 uvarint(len(RAND_BYTES) | RAND_BYTES)
+		res := &Token{Code: code, s: s}
+
+		if len(dec) < 3 {
+			return nil, e(err, "reason", "token truncated")
+		}
+		res.Scheme = encryption.Scheme(dec[0])
+		res.Flags = dec[1]
+
+		res.Bytes, err = decodeBytes(bytes.NewReader(dec[2:]))
 		if err != nil {
 			return nil, e(err, "reason", "invalid rand bytes")
 		}
@@ -340,7 +491,19 @@ func Parse(s string) (*Token, error) {
 
 		return res, nil
 	}
-	return nil, errors.E("FromString", errors.K.Invalid,
-		"reason", "unknown code",
-		"code", code)
+	return nil, e("reason", "unknown code", "code", code)
+}
+
+func decodeBytes(r *bytes.Reader) ([]byte, error) {
+	e := errors.Template("decode bytes", errors.K.Invalid)
+	n, err := binary.ReadUvarint(r)
+	if err != nil || n > 50 {
+		return nil, e(err, "reason", "invalid size", "size", n)
+	}
+	res := make([]byte, n)
+	read, err := r.Read(res)
+	if err == io.EOF {
+		return nil, e("reason", "token truncated", "expected", n, "actual", read)
+	}
+	return res, nil
 }

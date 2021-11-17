@@ -7,14 +7,15 @@ import (
 	"fmt"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/qluvio/content-fabric/errors"
-
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/id"
+	"github.com/qluvio/content-fabric/format/utc"
 )
 
 var hsh *hash.Hash
@@ -42,58 +43,115 @@ func TestEmptyHash(t *testing.T) {
 }
 
 func TestHashCtorError(t *testing.T) {
-	idx := id.NewID(id.Q, []byte{1, 2, 3, 4})
 	digest := make([]byte, sha256.Size)
 	rand.Read(digest)
-	h1, err := hash.New(
-		hash.Type{Code: hash.Q, Format: hash.Unencrypted},
-		digest,
-		1234,
-		idx)
-	require.NoError(t, err)
-	h2, err := hash.FromString(h1.String())
-	require.NoError(t, err)
-	require.Equal(t, h1, h2)
+	idx := id.NewID(id.Q, []byte{1, 2, 3, 4})
 
-	_, err = hash.New(
-		hash.Type{Code: hash.Q, Format: hash.AES128AFGH},
-		digest,
-		1234,
-		id.NewID(id.QLib, []byte{1, 2, 3, 4}))
-	require.Error(t, err)
+	{ // Object hash
+		h1, err := hash.NewObject(
+			hash.Type{Code: hash.Q, Format: hash.Unencrypted},
+			digest,
+			1234,
+			idx)
+		require.NoError(t, err)
+		h2, err := hash.FromString(h1.String())
+		require.NoError(t, err)
+		require.Equal(t, h1, h2)
 
-	_, err = hash.New(
-		hash.Type{Code: hash.QPart, Format: hash.AES128AFGH},
-		digest,
-		1234,
-		idx)
-	require.Error(t, err)
+		_, err = hash.NewObject(
+			hash.Type{Code: hash.QPart, Format: hash.Unencrypted},
+			digest,
+			1234,
+			idx)
+		require.Error(t, err)
 
-	_, err = hash.New(
-		hash.Type{Code: hash.Q, Format: hash.Unencrypted},
-		digest,
-		1234,
-		nil)
-	require.Error(t, err)
+		_, err = hash.NewObject(
+			hash.Type{Code: hash.Q, Format: hash.AES128AFGH},
+			make([]byte, 3),
+			1234,
+			idx)
+		require.Error(t, err)
 
-	_, err = hash.New(
-		hash.Type{Code: hash.Q, Format: hash.AES128AFGH},
-		make([]byte, 3),
-		1234,
-		idx)
-	require.Error(t, err)
+		_, err = hash.NewObject(
+			hash.Type{Code: hash.Q, Format: hash.Unencrypted},
+			digest,
+			-1234,
+			idx)
+		require.Error(t, err)
 
-	hp1 := &hash.Hash{
-		Type:   hash.Type{Code: hash.QPart, Format: hash.AES128AFGH},
-		Digest: digest,
-		ID:     idx,
-		Size:   1234,
+		_, err = hash.NewObject(
+			hash.Type{Code: hash.Q, Format: hash.Unencrypted},
+			digest,
+			1234,
+			nil)
+		require.Error(t, err)
+
+		_, err = hash.NewObject(
+			hash.Type{Code: hash.Q, Format: hash.AES128AFGH},
+			digest,
+			1234,
+			id.NewID(id.QLib, []byte{1, 2, 3, 4}))
+		require.Error(t, err)
 	}
-	hp2, err := hash.FromString(hp1.String())
-	require.NoError(t, err)       // String() does not serialize id: no error
-	require.NotEqual(t, hp1, hp2) // but not equal
-	hp1.ID = nil
-	require.Equal(t, hp1, hp2)
+
+	{ // Part hash
+		hp1, err := hash.NewPart(
+			hash.Type{Code: hash.QPart, Format: hash.Unencrypted},
+			digest,
+			1234,
+			567,
+		)
+		require.NoError(t, err)
+		hp2, err := hash.FromString(hp1.String())
+		require.NoError(t, err)
+		require.Equal(t, hp1, hp2)
+
+		_, err = hash.NewPart(
+			hash.Type{Code: hash.QPartLive, Format: hash.Unencrypted},
+			digest,
+			1234,
+			0)
+		require.Error(t, err)
+
+		_, err = hash.NewPart(
+			hash.Type{Code: hash.QPart, Format: hash.AES128AFGH},
+			make([]byte, 3),
+			1234,
+			0)
+		require.Error(t, err)
+
+		_, err = hash.NewPart(
+			hash.Type{Code: hash.QPart, Format: hash.Unencrypted},
+			digest,
+			-1234,
+			0)
+		require.Error(t, err)
+
+		_, err = hash.NewPart(
+			hash.Type{Code: hash.QPart, Format: hash.Unencrypted},
+			digest,
+			1234,
+			-567)
+		require.Error(t, err)
+	}
+
+	{ // Live hash
+		hl1, err := hash.NewLive(
+			hash.Type{Code: hash.QPartLive, Format: hash.Unencrypted},
+			digest,
+			utc.Now(),
+		)
+		require.NoError(t, err)
+		hl2, err := hash.FromString(hl1.String())
+		require.NoError(t, err)
+		require.Equal(t, hl1, hl2)
+
+		_, err = hash.NewLive(
+			hash.Type{Code: hash.QPart, Format: hash.Unencrypted},
+			digest,
+			utc.Now())
+		require.Error(t, err)
+	}
 }
 
 func TestStringConversion(t *testing.T) {
@@ -150,21 +208,65 @@ func TestInvalidStringConversions(t *testing.T) {
 }
 
 func ExampleHash_String() {
-	fmt.Println("hash", "string", hashString)
+	{ // Object hash
+		hashString := "hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7"
+		fmt.Println("hash", "string", hashString)
 
-	// Convert a hash string to a hash object
-	h, _ := hash.FromString(hashString)
-	fmt.Println("hash", "object", h)
+		// Convert a hash string to a hash object
+		h, _ := hash.FromString(hashString)
+		fmt.Println("hash", "object", h)
 
-	// Extract the data of the hash object
-	fmt.Println("hash", "type", h.Type)
-	fmt.Println("hash", "digest", h.Digest)
-	fmt.Println("hash", "size", h.Size)
-	fmt.Println("hash", "id", h.ID)
+		// Extract the data of the hash object
+		fmt.Println("hash", "type", h.Type)
+		fmt.Println("hash", "digest", h.Digest)
+		fmt.Println("hash", "size", h.Size)
+		fmt.Println("hash", "id", h.ID)
 
-	// Convert the raw bytes to a hash object
-	h2, _ := hash.New(h.Type, h.Digest, h.Size, h.ID)
-	fmt.Println("hash", "from data", h2)
+		// Convert the raw bytes to a hash object
+		h2, _ := hash.NewObject(h.Type, h.Digest, h.Size, h.ID)
+		fmt.Println("hash", "from data", h2)
+	}
+
+	fmt.Println("")
+
+	{ // Part hash
+		hashString := "hqpedYvWGgmzmerRxa2Rzv6dqjDogfCZE7dwSuDnfgaSfGbMeXXnT"
+		fmt.Println("hash", "string", hashString)
+
+		// Convert a hash string to a hash object
+		h, _ := hash.FromString(hashString)
+		fmt.Println("hash", "object", h)
+
+		// Extract the data of the hash object
+		fmt.Println("hash", "type", h.Type)
+		fmt.Println("hash", "digest", h.Digest)
+		fmt.Println("hash", "size", h.Size)
+		fmt.Println("hash", "preamble_size", h.PreambleSize)
+
+		// Convert the raw bytes to a hash object
+		h2, _ := hash.NewPart(h.Type, h.Digest, h.Size, h.PreambleSize)
+		fmt.Println("hash", "from data", h2)
+	}
+
+	fmt.Println("")
+
+	{ // Live hash
+		hashString := "hql_7TmHLg49Qd4NtgfcPeWKAG7fsk7HujeMHaE33Bwm2kLYDdjqYJw"
+		fmt.Println("hash", "string", hashString)
+
+		// Convert a hash string to a hash object
+		h, _ := hash.FromString(hashString)
+		fmt.Println("hash", "object", h)
+
+		// Extract the data of the hash object
+		fmt.Println("hash", "type", h.Type)
+		fmt.Println("hash", "digest", h.Digest)
+		fmt.Println("hash", "expiration", h.Expiration)
+
+		// Convert the raw bytes to a hash object
+		h2, _ := hash.NewLive(h.Type, h.Digest, h.Expiration)
+		fmt.Println("hash", "from data", h2)
+	}
 
 	// Output:
 	// hash string hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7
@@ -174,6 +276,21 @@ func ExampleHash_String() {
 	// hash size 1024
 	// hash id iq__WxoChT9EZU2PRdTdNU7Ldf
 	// hash from data hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7
+	//
+	// hash string hqpedYvWGgmzmerRxa2Rzv6dqjDogfCZE7dwSuDnfgaSfGbMeXXnT
+	// hash object hqpedYvWGgmzmerRxa2Rzv6dqjDogfCZE7dwSuDnfgaSfGbMeXXnT
+	// hash type hqpe
+	// hash digest [82 253 252 7 33 130 101 79 22 63 95 15 154 98 29 114 149 102 199 77 16 3 124 77 123 187 4 7 209 226 198 73]
+	// hash size 1234
+	// hash preamble_size 567
+	// hash from data hqpedYvWGgmzmerRxa2Rzv6dqjDogfCZE7dwSuDnfgaSfGbMeXXnT
+	//
+	// hash string hql_7TmHLg49Qd4NtgfcPeWKAG7fsk7HujeMHaE33Bwm2kLYDdjqYJw
+	// hash object hql_7TmHLg49Qd4NtgfcPeWKAG7fsk7HujeMHaE33Bwm2kLYDdjqYJw
+	// hash type hql_
+	// hash digest [175 252 66 244 78 63 115 32 69 105 152 78 144 157 137 162 8 111 42 186 25 195 134 107 125 216 177 134 20 81 247 140]
+	// hash expiration 2020-12-15T12:00:00.000Z
+	// hash from data hql_7TmHLg49Qd4NtgfcPeWKAG7fsk7HujeMHaE33Bwm2kLYDdjqYJw
 }
 
 func TestJSON(t *testing.T) {
@@ -210,7 +327,7 @@ func TestWrappedJSON(t *testing.T) {
 func TestCreation(t *testing.T) {
 	digest, _ := hex.DecodeString("9cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47")
 	idObj, _ := id.FromString("iq__WxoChT9EZU2PRdTdNU7Ldf")
-	h, err := hash.New(hash.Type{Code: hash.Q, Format: hash.Unencrypted}, digest, 1024, idObj)
+	h, err := hash.NewObject(hash.Type{hash.Q, hash.Unencrypted}, digest, 1024, idObj)
 	assert.NoError(t, err)
 	assertHash(t, h, "hq_")
 	//assertHash(t, GenerateAccountHash(), "acc")
@@ -228,7 +345,7 @@ func assertHash(t *testing.T, hsh *hash.Hash, expectedPrefix string) {
 func TestDigest(t *testing.T) {
 	idx, _ := id.FromString("iq__WxoChT9EZU2PRdTdNU7Ldf")
 
-	d := hash.NewDigest(sha256.New(), hash.Type{Code: hash.Q, Format: hash.Unencrypted}, idx)
+	d := hash.NewDigest(sha256.New(), hash.Type{Code: hash.Q, Format: hash.Unencrypted}).WithID(idx)
 	b := make([]byte, 1024)
 
 	c, err := rand.Read(b)
@@ -249,7 +366,7 @@ func TestDigest(t *testing.T) {
 func TestEmptyDigest(t *testing.T) {
 	idx, _ := id.FromString("iq__WxoChT9EZU2PRdTdNU7Ldf")
 
-	d := hash.NewDigest(sha256.New(), hash.Type{Code: hash.Q, Format: hash.Unencrypted}, idx)
+	d := hash.NewDigest(sha256.New(), hash.Type{Code: hash.Q, Format: hash.Unencrypted}).WithID(idx)
 	h := d.AsHash()
 	assert.NotNil(t, h)
 	assert.NoError(t, h.AssertCode(hash.Q))
@@ -281,28 +398,36 @@ func TestAssertEqual(t *testing.T) {
 	require.NoError(t, hsh.AssertEqual(other))
 	require.NoError(t, other.AssertEqual(hsh))
 
-	testAssertEqual := func(other *hash.Hash, err error) {
+	testAssertEqual := func(hsh *hash.Hash, other *hash.Hash, err error) {
 		ae := hsh.AssertEqual(other)
 		fmt.Println(ae)
 		require.True(t, errors.Match(err, ae), ae)
 	}
 
-	other, err = hash.New(hsh.Type, hsh.Digest, hsh.Size+10, hsh.ID)
+	other, err = hash.NewPart(hash.Type{Code: hash.QPart, Format: hash.AES128AFGH}, hsh.Digest, hsh.Size, 0)
 	require.NoError(t, err)
-	testAssertEqual(other, errors.E().With("reason", "size differs"))
-
-	other, err = hash.New(hash.Type{Code: hash.QPart, Format: hash.AES128AFGH}, hsh.Digest, hsh.Size, nil)
-	require.NoError(t, err)
-	testAssertEqual(other, errors.E().With("reason", "type differs"))
+	testAssertEqual(hsh, other, errors.E().With("reason", "type differs"))
 
 	dig := make([]byte, sha256.Size)
-	other, err = hash.New(hsh.Type, dig, hsh.Size, hsh.ID)
+	other, err = hash.NewObject(hsh.Type, dig, hsh.Size, hsh.ID)
 	require.NoError(t, err)
-	testAssertEqual(other, errors.E().With("reason", "digest differs"))
+	testAssertEqual(hsh, other, errors.E().With("reason", "digest differs"))
+
+	other, err = hash.NewObject(hsh.Type, hsh.Digest, hsh.Size+10, hsh.ID)
+	require.NoError(t, err)
+	testAssertEqual(hsh, other, errors.E().With("reason", "size differs"))
 
 	id2, _ := id.FromString("iq__1Bhh3pU9gLXZiNDL6PEZuEP5ri")
-	other, _ = hash.New(hsh.Type, hsh.Digest, hsh.Size, id2)
-	testAssertEqual(other, errors.E().With("reason", "ID differs"))
+	other, _ = hash.NewObject(hsh.Type, hsh.Digest, hsh.Size, id2)
+	testAssertEqual(hsh, other, errors.E().With("reason", "id differs"))
+
+	hsh2, _ := hash.NewPart(hash.Type{Code: hash.QPart, Format: hash.Unencrypted}, hsh.Digest, hsh.Size, 1234)
+	other, _ = hash.NewPart(hash.Type{Code: hash.QPart, Format: hash.Unencrypted}, hsh.Digest, hsh.Size, 0)
+	testAssertEqual(hsh2, other, errors.E().With("reason", "preamble size differs"))
+
+	hsh2, _ = hash.NewLive(hash.Type{Code: hash.QPartLive, Format: hash.Unencrypted}, hsh.Digest, utc.Now())
+	other, _ = hash.NewLive(hash.Type{Code: hash.QPartLive, Format: hash.Unencrypted}, hsh.Digest, utc.Now().Add(time.Minute))
+	testAssertEqual(hsh2, other, errors.E().With("reason", "expiration differs"))
 
 	var nilHash *hash.Hash
 	require.Error(t, nilHash.AssertEqual(hsh))
@@ -320,7 +445,7 @@ func ExampleHash_Describe() {
 	fmt.Println(ph.String())
 	fmt.Println(ph.Describe())
 
-	hqpe, _ := hash.FromString("hqpe2spNnr1qkdVEBobRW8kqrh21F9gdhRp9p9PewgPPSYzip96")
+	hqpe, _ := hash.FromString("hqpedYvWGgmzmerRxa2Rzv6dqjDogfCZE7dwSuDnfgaSfGbMeXXnT")
 	fmt.Println(hqpe.String())
 	fmt.Println(hqpe.Describe())
 
@@ -335,29 +460,30 @@ func ExampleHash_Describe() {
 	// Output:
 	//
 	// hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7
-	// type:       content, unencrypted
-	// digest:     9cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47
-	// size:       1024
-	// qid:        iq__WxoChT9EZU2PRdTdNU7Ldf
-	// part:       hqp_4YWKwzD4cymG9DodGRLphDg8fi2euXRgyYq9euQkjZx4a39
+	// type:          content, unencrypted
+	// digest:        0x9cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47
+	// size:          1024
+	// qid:           iq__WxoChT9EZU2PRdTdNU7Ldf
+	// part:          hqp_4YWKwzD4cymG9DodGRLphDg8fi2euXRgyYq9euQkjZx4a39
 	//
 	// hqp_4YWKwzD4cymG9DodGRLphDg8fi2euXRgyYq9euQkjZx4a39
-	// type:       content part, unencrypted
-	// digest:     9cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47
-	// size:       1024
+	// type:          content part, unencrypted
+	// digest:        0x9cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47
+	// size:          1024
 	//
-	// hqpe2spNnr1qkdVEBobRW8kqrh21F9gdhRp9p9PewgPPSYzip96
-	// type:       content part, encrypted with AES-128, AFGHG BLS12-381, 1 MB block size
-	// digest:     52fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c649
-	// size:       1234
+	// hqpedYvWGgmzmerRxa2Rzv6dqjDogfCZE7dwSuDnfgaSfGbMeXXnT
+	// type:          content part, encrypted with AES-128, AFGHG BLS12-381, 1 MB block size
+	// digest:        0x52fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c649
+	// size:          1234
+	// preamble_size: 567
 	//
 	// hql_7TmHLg49Qd4NtgfcPeWKAG7fsk7HujeMHaE33Bwm2kLYDdjqYJw
-	// type:       live content part, unencrypted
-	// digest:     affc42f44e3f73204569984e909d89a2086f2aba19c3866b7dd8b1861451f78c
-	// expiration: 2020-12-15T12:00:00.000Z
+	// type:          live content part, unencrypted
+	// digest:        0xaffc42f44e3f73204569984e909d89a2086f2aba19c3866b7dd8b1861451f78c
+	// expiration:    2020-12-15T12:00:00.000Z
 	//
 	// hqt_2KhUoLeUJFR3pfBWpYzSqTWA3PoP6vBqEZGTLYu
-	// type:       transient live content part, unencrypted
-	// digest:     6665bb007a6007781f4f4a0940a67dc4b0fadec2e6fa26
-	// expiration: 1992-08-04T00:00:00.000Z
+	// type:          transient live content part, unencrypted
+	// digest:        0x6665bb007a6007781f4f4a0940a67dc4b0fadec2e6fa26
+	// expiration:    1992-08-04T00:00:00.000Z
 }

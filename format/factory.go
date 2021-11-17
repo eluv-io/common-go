@@ -5,6 +5,7 @@ import (
 
 	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/codecs"
+	"github.com/qluvio/content-fabric/format/encryption"
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/id"
 	"github.com/qluvio/content-fabric/format/token"
@@ -63,11 +64,11 @@ type Factory interface {
 	ParseQWriteToken(s string) (QWriteToken, error)
 
 	// GeneratePWriteToken creates a content write token
-	GenerateQWriteToken(qid QID, nid QNodeID) QPWriteToken
+	GenerateQWriteToken(qid QID, nid QNodeID) (QWriteToken, error)
 	// GenerateQPWriteToken creates a content part write token
-	GenerateQPWriteToken() QPWriteToken
+	GenerateQPWriteToken(scheme encryption.Scheme, flags byte) (QPWriteToken, error)
 	// GenerateLROHandle creates a handle for long running bitcode operations
-	GenerateLROHandle(nid QNodeID) LROHandle
+	GenerateLROHandle(nid QNodeID) (LROHandle, error)
 
 	// ParseQPWriteToken parses the given string as content part write token
 	ParseQPWriteToken(s string) (QPWriteToken, error)
@@ -103,12 +104,12 @@ type factory struct{}
 
 // NewContentDigest returns a digest object for calculating content hashes.
 func (f *factory) NewContentDigest(format hash.Format, id QID) *hash.Digest {
-	return hash.NewDigest(sha256.New(), hash.Type{hash.Q, format}, id)
+	return hash.NewDigest(sha256.New(), hash.Type{hash.Q, format}).WithID(id)
 }
 
 // NewContentPartDigest returns a digest object for calculating content hashes.
 func (f *factory) NewContentPartDigest(format hash.Format) *hash.Digest {
-	return hash.NewDigest(sha256.New(), hash.Type{hash.QPart, format}, nil)
+	return hash.NewDigest(sha256.New(), hash.Type{hash.QPart, format})
 }
 
 // GenerateAccountID generates a new account ID
@@ -212,18 +213,18 @@ func (f *factory) ParseQWriteToken(s string) (QWriteToken, error) {
 }
 
 // GenerateQWriteToken creates a content part write token
-func (f *factory) GenerateQWriteToken(qid QID, nid QNodeID) QPWriteToken {
-	return token.New(token.QWrite, qid, nid)
+func (f *factory) GenerateQWriteToken(qid QID, nid QNodeID) (QWriteToken, error) {
+	return token.NewObject(token.QWrite, qid, nid)
 }
 
 // GenerateQPWriteToken creates a content part write token
-func (f *factory) GenerateQPWriteToken() QPWriteToken {
-	return token.Generate(token.QPartWrite)
+func (f *factory) GenerateQPWriteToken(scheme encryption.Scheme, flags byte) (QPWriteToken, error) {
+	return token.NewPart(token.QPartWrite, scheme, flags)
 }
 
 // GenerateLROHandle creates a handle for long running bitcode operations
-func (f *factory) GenerateLROHandle(nid QNodeID) LROHandle {
-	return token.New(token.LRO, nil, nid)
+func (f *factory) GenerateLROHandle(nid QNodeID) (LROHandle, error) {
+	return token.NewLRO(token.LRO, nid)
 }
 
 // ParseQPWriteToken parse the given string as content part write token

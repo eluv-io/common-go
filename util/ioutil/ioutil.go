@@ -9,6 +9,13 @@ import (
 	"github.com/qluvio/content-fabric/log"
 )
 
+type ReadWriteSeekCloser interface {
+	io.Reader
+	io.Writer
+	io.Seeker
+	io.Closer
+}
+
 type ReadSeekCloser interface {
 	io.Reader
 	io.Seeker
@@ -216,4 +223,27 @@ func NewComposedReadCloser(r io.Reader, c io.Closer) *ComposedReadCloser {
 type ComposedReadCloser struct {
 	io.Reader
 	io.Closer
+}
+
+// NewByteReader provides an io.ByteReader given an io.Reader, if needed
+// This implementation does not perform buffered reads, unlike bufio.Reader,
+// but therefore allows the caller to continue to use the embedded io.Reader
+// directly without skipping data that may be buffered within bufio.Reader
+func NewByteReader(r io.Reader) io.ByteReader {
+	if br, ok := r.(io.ByteReader); ok {
+		return br
+	}
+	return &byteReaderWrapper{Reader: r, buf: make([]byte, 1)}
+}
+
+type byteReaderWrapper struct {
+	io.Reader
+	buf []byte
+}
+
+func (br *byteReaderWrapper) ReadByte() (byte, error) {
+	if _, err := io.ReadFull(br, br.buf[:1]); err != nil {
+		return 0, err
+	}
+	return br.buf[0], nil
 }
