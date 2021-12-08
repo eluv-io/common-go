@@ -622,9 +622,9 @@ func CalcHash(reader io.ReadSeeker, size ...int64) (*Hash, error) {
 	var preambleSize int64
 	var err error
 	if len(size) > 0 {
-		_, _, preambleSize, err = preamble.Read(reader, true, size[0])
+		_, _, preambleSize, err = preamble.Read(reader, false, size[0])
 	} else {
-		_, _, preambleSize, err = preamble.Read(reader, true)
+		_, _, preambleSize, err = preamble.Read(reader, false)
 	}
 	if errors.IsNotExist(err) {
 		preambleSize = 0
