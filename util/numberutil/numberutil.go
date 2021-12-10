@@ -242,6 +242,14 @@ func LessInt(ascending bool, i1 int, i2 int, tie ...func() bool) (less bool) {
 	return tie[0]()
 }
 
+func ParseFloat32(s string) (f float32, err error) {
+	var f64 float64
+	if f64, err = strconv.ParseFloat(s, 32); err == nil {
+		f = float32(f64)
+	}
+	return
+}
+
 func RatModulo(num, denom *big.Rat) (mod *big.Rat, err error) {
 	var quo *big.Rat
 	if quo, err = RatQuoSafe(num, denom); err == nil {
