@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"unicode"
 
 	"github.com/stretchr/testify/require"
 
@@ -147,4 +148,20 @@ func TestLessLex(t *testing.T) {
 		got := LessLex(tt.i, tt.j)
 		require.Equal(t, tt.want, got, "%s < %s", tt.i, tt.j)
 	}
+}
+
+func TestMatchRunes(t *testing.T) {
+	require.True(t, MatchRunes(""))
+	require.True(t, MatchRunes("abc"))
+	require.True(t, MatchRunes("", unicode.IsMark))
+
+	require.False(t, MatchRunes("abc", unicode.IsDigit))
+	require.False(t, MatchRunes("abc", unicode.IsUpper))
+	require.False(t, MatchRunes("abc", unicode.IsDigit, unicode.IsUpper))
+
+	require.True(t, MatchRunes("abc", unicode.IsLetter))
+	require.True(t, MatchRunes("abc", unicode.IsLower))
+	require.True(t, MatchRunes("abc", unicode.IsLetter, unicode.IsLower))
+
+	require.False(t, MatchRunes("abc", unicode.IsUpper, unicode.IsLower))
 }

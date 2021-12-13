@@ -266,3 +266,18 @@ func digitEndPosition(s string, startPos int) int {
 	}
 	return i
 }
+
+// MatchRunes returns true if all runes of string s match all provided functions, false otherwise.
+//
+// Example usage:
+//	if stringutil.MatchRunes("some string", unicode.IsLetter, unicode.IsDigit) { ... }
+func MatchRunes(s string, funcs ...func(r rune) bool) bool {
+	for _, r := range s {
+		for _, f := range funcs {
+			if !f(r) {
+				return false
+			}
+		}
+	}
+	return true
+}
