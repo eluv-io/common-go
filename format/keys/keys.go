@@ -2,6 +2,7 @@ package keys
 
 import (
 	"bytes"
+
 	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/log"
 
@@ -146,6 +147,9 @@ func NewKID(code KeyCode, codeBytes []byte) KID {
 
 // KFromString parses an KID from the given string representation.
 func KFromString(s string) (KID, error) {
+	if len(s) == 0 {
+		return nil, nil
+	}
 	if len(s) <= prefixLen {
 		return nil, errors.E("parse KID", errors.K.Invalid).With("string", s)
 	}
