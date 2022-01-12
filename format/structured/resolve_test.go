@@ -151,7 +151,7 @@ func TestResolveErrors(t *testing.T) {
 			switch e := err.(type) {
 			case *errors.Error:
 				for k, v := range tt.contains {
-					require.Equal(t, v, e.Fields[k])
+					require.Equal(t, v, e.Field(k))
 				}
 
 			}

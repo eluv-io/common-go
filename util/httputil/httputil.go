@@ -528,17 +528,9 @@ func ParseServerError(body io.ReadCloser, httpStatusCode int) error {
 	if err != nil || len(resp) == 0 {
 		return e(err, "body", string(resp))
 	}
-	remoteErr, err := errors.ParseApiErrorBody(resp)
+	list, err := errors.UnmarshalJsonErrorList(resp)
 	if err != nil {
 		return e("body", string(resp))
 	}
-	remotes := errors.GetRemoteErrors(remoteErr)
-	switch len(remotes) {
-	case 0:
-		return e()
-	case 1:
-		return e(remotes[0])
-	}
-
-	return e(remoteErr)
+	return e(list.ErrorOrNil())
 }

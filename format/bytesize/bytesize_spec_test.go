@@ -87,7 +87,7 @@ func TestUnmarshalText(t *testing.T) {
 				if tt.err != nil {
 					So(err, ShouldHaveSameTypeAs, &errors.Error{})
 					ne, _ := err.(*errors.Error)
-					So(ne.Fields["cause"], ShouldEqual, tt.err)
+					So(ne.Cause(), ShouldEqual, tt.err)
 				} else {
 					So(err, ShouldBeNil)
 				}
@@ -120,7 +120,7 @@ func TestUnmarshalJson(t *testing.T) {
 				if tt.err != nil {
 					So(err, ShouldHaveSameTypeAs, &errors.Error{})
 					ne, _ := err.(*errors.Error)
-					So(ne.Fields["cause"], ShouldEqual, tt.err.Error())
+					So(ne.Cause(), ShouldEqual, tt.err.Error())
 				} else {
 					So(err, ShouldBeNil)
 				}

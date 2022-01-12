@@ -281,13 +281,13 @@ func (l *Link) UnmarshalText(text []byte) error {
 	}
 
 	if err != nil {
-		return e().Cause(err)
+		return e().WithCause(err)
 	}
 
 	if !isRelative {
 		l.Target, err = hash.FromString(p[0])
 		if err != nil {
-			return e().Cause(err)
+			return e().WithCause(err)
 		}
 		p = p[1:]
 		switch l.Target.Type.Code {

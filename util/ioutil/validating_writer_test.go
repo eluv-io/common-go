@@ -42,7 +42,7 @@ func TestValidatingWriter(t *testing.T) {
 			src:        "abcdefghijklmn012345678",
 			ref:        "abcdefghijklmnopqrstuvwxyz",
 			success:    false,
-			errMatches: `off \[14\].*reason \[bytes differ\]`,
+			errMatches: `reason \[bytes differ\] off \[14\]`,
 		},
 	}
 	for _, tt := range tests {
