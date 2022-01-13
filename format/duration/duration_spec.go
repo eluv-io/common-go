@@ -1,6 +1,7 @@
 package duration
 
 import (
+	"strconv"
 	"strings"
 	"time"
 
@@ -10,6 +11,16 @@ import (
 // Spec represents a time duration. It provides marshaling to and from
 // a human readable format, e.g. 1h15m or 200ms
 type Spec time.Duration
+
+const (
+	Zero        Spec = 0
+	Nanosecond  Spec = 1
+	Microsecond      = 1000 * Nanosecond
+	Millisecond      = 1000 * Microsecond
+	Second           = 1000 * Millisecond
+	Minute           = 60 * Second
+	Hour             = 60 * Minute
+)
 
 // String returns the duration spec formatted like time.Duration.String(), but
 // omits zero values.
@@ -44,6 +55,24 @@ func (s *Spec) UnmarshalText(text []byte) error {
 		return errors.E("unmarshal duration", errors.K.Invalid, err)
 	}
 	*s = parsed
+	return nil
+}
+
+// UnmarshalJSON implements custom unmarshaling. It supports unmarshalling from
+//  * human readable strings with units: "1h15m"
+//  * numeric strings without units, interpreted as seconds: "10.5"
+//  * numeric values, interpreted as seconds: 10.5
+func (s *Spec) UnmarshalJSON(b []byte) error {
+	if len(b) >= 2 && b[0] == '"' {
+		return s.UnmarshalText(b[1 : len(b)-1])
+	}
+
+	str := string(b)
+	f, err := strconv.ParseFloat(str, 64)
+	if err != nil {
+		return errors.E("unmarshal duration", errors.K.Invalid, err)
+	}
+	*s = Spec(f * float64(Second))
 	return nil
 }
 
@@ -99,10 +128,16 @@ func (s Spec) RoundTo(decimals int) Spec {
 // FromString parses the given duration string into a duration spec.
 func FromString(s string) (Spec, error) {
 	d, err := time.ParseDuration(s)
-	if err != nil {
-		return 0, errors.E("parse", err, "duration_spec", s)
+	if err == nil {
+		return Spec(d), nil
 	}
-	return Spec(d), nil
+
+	f, err2 := strconv.ParseFloat(s, 64)
+	if err2 == nil {
+		return Spec(f * float64(Second)), nil
+	}
+
+	return 0, errors.E("parse", err, "duration_spec", s)
 }
 
 // MustParse parses the given duration string into a duration spec, panicking in

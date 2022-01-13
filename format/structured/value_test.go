@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/big"
 	"testing"
 	"time"
 
 	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/format/duration"
 	"github.com/qluvio/content-fabric/format/structured"
 	"github.com/qluvio/content-fabric/util/codecutil"
 	"github.com/qluvio/content-fabric/util/jsonutil"
@@ -329,4 +331,28 @@ func TestMarshaling(t *testing.T) {
 
 		})
 	}
+}
+
+func TestValue_Duration(t *testing.T) {
+	// invalid conversions
+	require.Equal(t, duration.Zero, structured.Wrap(nil).Duration(duration.Second))
+	require.Equal(t, duration.Zero, structured.Wrap(nil, errors.Str("an error")).Duration(duration.Second))
+	require.Equal(t, duration.Zero, structured.Wrap("an invalid string").Duration(duration.Second))
+	// invalid conversions, return default value
+	require.Equal(t, duration.Hour, structured.Wrap(nil).Duration(duration.Second, duration.Hour))
+	require.Equal(t, duration.Hour, structured.Wrap(nil, errors.Str("an error")).Duration(duration.Second, duration.Hour))
+	require.Equal(t, duration.Hour, structured.Wrap("an invalid string").Duration(duration.Second, duration.Hour))
+
+	require.Equal(t, duration.Zero, structured.Wrap(0).Duration(duration.Second))
+	require.Equal(t, duration.Zero, structured.Wrap("0").Duration(duration.Second))
+	require.Equal(t, duration.Zero, structured.Wrap("").Duration(duration.Second))
+
+	require.Equal(t, duration.Hour, structured.Wrap(duration.Hour).Duration(duration.Nanosecond))
+	require.Equal(t, duration.Second, structured.Wrap(1).Duration(duration.Second))
+	require.Equal(t, duration.Second, structured.Wrap("1").Duration(duration.Second))
+	require.Equal(t, 99*duration.Second, structured.Wrap(99.0).Duration(duration.Second))
+	require.Equal(t, 3*duration.Minute, structured.Wrap("3m").Duration(duration.Second))
+	require.Equal(t, 90*duration.Second, structured.Wrap(json.Number("1.5")).Duration(duration.Minute))
+	require.Equal(t, 90*duration.Second, structured.Wrap(1.5).Duration(duration.Minute))
+	require.Equal(t, 90*duration.Second, structured.Wrap(big.NewRat(3, 2)).Duration(duration.Minute))
 }

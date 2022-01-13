@@ -7,20 +7,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/qluvio/content-fabric/format/duration"
-
-	"github.com/stretchr/testify/assert"
 )
 
 const (
-	ns = duration.Spec(time.Nanosecond)
-	us = duration.Spec(time.Microsecond)
-	ms = duration.Spec(time.Millisecond)
-	s  = duration.Spec(time.Second)
-	m  = duration.Spec(time.Minute)
-	h  = duration.Spec(time.Hour)
+	ns = duration.Nanosecond
+	us = duration.Microsecond
+	ms = duration.Millisecond
+	s  = duration.Second
+	m  = duration.Minute
+	h  = duration.Hour
 )
 
 func TestFormatting(t *testing.T) {
@@ -81,6 +80,12 @@ func TestParsing(t *testing.T) {
 	assert.Equal(t, h+m+s, from("1h1m1s"))
 
 	assert.Equal(t, h+m+s+ms+us+ns, from("1h1m1.001001001s"))
+
+	// no units
+	assert.Equal(t, s, from("1"))
+	assert.Equal(t, 10*s, from("10"))
+	assert.Equal(t, 100*ms, from("0.1"))
+	assert.Equal(t, s+222*ms+333*us+444*ns, from("1.222333444"))
 }
 
 func TestJSON(t *testing.T) {
@@ -97,8 +102,74 @@ func TestJSON(t *testing.T) {
 	assert.Equal(t, d, unmarshalled)
 }
 
+func TestUnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		text      string
+		wrapper   bool
+		want      duration.Spec
+		wantError bool
+	}{
+		{
+			text: `"15ms"`,
+			want: 15 * duration.Millisecond,
+		},
+		{
+			text: `"99.5s"`,
+			want: 99*duration.Second + 500*duration.Millisecond,
+		},
+		{
+			text: `"99.5"`, // numeric string (no unit)
+			want: 99*duration.Second + 500*duration.Millisecond,
+		},
+		{
+			text: `99.5`, // number
+			want: 99*duration.Second + 500*duration.Millisecond,
+		},
+		{
+			text:    `{"spec": "15ms"}`,
+			wrapper: true,
+			want:    15 * duration.Millisecond,
+		},
+		{
+			text:    `{"spec": "99.5s"}`,
+			wrapper: true,
+			want:    99*duration.Second + 500*duration.Millisecond,
+		},
+		{
+			text:    `{"spec": "99.5"}`, // numeric string (no unit)
+			wrapper: true,
+			want:    99*duration.Second + 500*duration.Millisecond,
+		},
+		{
+			text:    `{"spec": 99.5}`, // number
+			wrapper: true,
+			want:    99*duration.Second + 500*duration.Millisecond,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.text, func(t *testing.T) {
+			var err error
+			var spec duration.Spec
+			if tt.wrapper {
+				w := Wrapper{}
+				err = json.Unmarshal([]byte(tt.text), &w)
+				spec = w.Spec
+			} else {
+				err = json.Unmarshal([]byte(tt.text), &spec)
+			}
+			if tt.wantError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, spec, tt.want)
+			}
+		})
+	}
+}
+
 type Wrapper struct {
-	Spec duration.Spec
+	Spec duration.Spec `json:"spec,omitempty"`
 }
 
 func TestWrappedJSON(t *testing.T) {

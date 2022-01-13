@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/qluvio/content-fabric/errors"
+	"github.com/qluvio/content-fabric/format/duration"
 	"github.com/qluvio/content-fabric/format/id"
 	"github.com/qluvio/content-fabric/format/utc"
 	"github.com/qluvio/content-fabric/util/codecutil"
@@ -154,7 +155,7 @@ func (v *Value) Path(p ...string) Path {
 
 // IsError returns true if this Value wraps an error, false otherwise.
 func (v *Value) IsError() bool {
-	return v.err != nil
+	return v == nil || v.err != nil
 }
 
 // Error returns the error if this Value wraps an error, nil otherwise.
@@ -389,6 +390,8 @@ func (v *Value) Unwrap() interface{} {
 	return Unwrap(v)
 }
 
+// ID returns this value as an id.ID with the given code and optional default
+// value.
 func (v *Value) ID(code id.Code, def ...id.ID) (id.ID, error) {
 	raw := v.Unwrap()
 	if ifutil.IsNil(raw) && len(def) > 0 {
@@ -413,4 +416,32 @@ func (v *Value) ID(code id.Code, def ...id.ID) (id.ID, error) {
 		return nil, err
 	}
 	return ret, nil
+}
+
+// Duration converts this value to a duration spec. If the value is numeric, it is interpreted as a multiple of the
+// provided unit. Returns the default value or 0 if the conversion fails.
+func (v *Value) Duration(unit duration.Spec, def ...duration.Spec) duration.Spec {
+	if v.err == nil && v.Data != nil {
+		data := v.Unwrap()
+		switch t := data.(type) {
+		case duration.Spec:
+			return t
+		case time.Duration:
+			return duration.Spec(t)
+		case string:
+			d, err := duration.FromString(t) // also parses time.Duration correctly
+			if err == nil {
+				return d
+			}
+			// otherwise try to parse as numeric value below
+		}
+		f, err := numberutil.AsFloat64Err(data)
+		if err == nil {
+			return duration.Spec(f * float64(unit))
+		}
+	}
+	if len(def) > 0 {
+		return def[0]
+	}
+	return 0
 }

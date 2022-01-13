@@ -11,7 +11,7 @@ import (
 	"github.com/qluvio/content-fabric/format/duration"
 )
 
-// AsInt returns the given value as an int.
+// AsInt64 returns the given value as an int.
 // If the value is not an int or nil, it returns the 'empty' int 0.
 func AsInt64(val interface{}) int64 {
 	res, err := AsInt64Err(val)
