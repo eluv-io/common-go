@@ -20,8 +20,8 @@ const (
 )
 
 var (
-	Zero    = UTC{}                                                           // Zero is the zero value of UTC
-	Min     = Zero                                                            // 0000-01-01T00:00:00.000000000 = Zero
+	Zero    = UTC{}                                                           // 0001-01-01T00:00:00.000000000 the zero value of UTC
+	Min     = New(time.Date(0, 1, 1, 0, 0, 0, 0, time.UTC))                   // 0000-01-01T00:00:00.000000000 (Zero - 1 year!)
 	Max     = New(time.Date(9999, 12, 31, 23, 59, 59, 999_999_999, time.UTC)) // 9999-12-31T23:59:59.999999999
 	formats = []string{
 		ISO8601,
@@ -33,48 +33,6 @@ var (
 		ISO8601NoSecNoTZ,
 	}
 )
-
-// New creates a new UTC instance from the given time. Use utc.Now() to get the
-// current time.
-func New(t time.Time) UTC {
-	return UTC{Time: t.UTC(), mono: t}
-}
-
-// Now returns the current time as UTC instance. Now is a func *variable*, so
-// it can be mocked in tests. See MockNow() function.
-var Now = now
-
-// now is the default, non-mocked value of Now.
-func now() UTC {
-	return New(time.Now())
-}
-
-// MockNowFn allows to replace the Now func variable with a mock function and
-// returns a function to restore the default Now() implementation.
-//
-// Usage:
-//	defer MockNow(func() UTC { ... })()
-func MockNowFn(fn func() UTC) (restore func()) {
-	Now = fn
-	return ResetNow
-}
-
-// MockNow allows to replace the Now func variable with a function that returns
-// the given constant time and returns itself a function to restore the default
-// Now() implementation.
-//
-// Usage:
-//	defer MockNow(utc.MustParse("2020-01-01"))()
-func MockNow(time UTC) (restore func()) {
-	return MockNowFn(func() UTC {
-		return time
-	})
-}
-
-// ResetNow resets the Now func to the default implementation.
-func ResetNow() {
-	Now = now
-}
 
 // UTC is a standard time.Time in the UTC timezone with marshaling to and from ISO 8601 / RFC 3339 format with fixed
 // milliseconds: 2006-01-02T15:04:05.000Z
@@ -116,7 +74,7 @@ func (u UTC) StripMono() UTC {
 	return New(u.Time.Truncate(0))
 }
 
-// String returns the time formatted ISO 8601 format.
+// String returns the time formatted ISO 8601 format: 2006-01-02T15:04:05.000Z
 func (u UTC) String() string {
 	s := []byte("0000-00-00T00:00:00.000Z")
 	year, month, day := u.Date()
@@ -160,7 +118,7 @@ func (u UTC) String() string {
 	return string(s)
 }
 
-// UnixMilli returns the unix time in millis (milliseconds since 1970-01-01T00:00:00.000Z.
+// UnixMilli returns the unix time in milliseconds since 1970-01-01T00:00:00.000Z.
 func (u UTC) UnixMilli() int64 {
 	return u.Unix()*1000 + time.Duration(u.Nanosecond()).Milliseconds()
 }
@@ -193,22 +151,19 @@ func (u UTC) Equal(other UTC) bool {
 	return u.Time.Equal(other.Time)
 }
 
-// MarshalJSON implements the json.Marshaler interface.
-// Contrary to time.Time, it always marshals milliseconds, even if they are all
-// zeros (i.e. 2006-01-02T15:04:05.000Z instead of 2006-01-02T15:04:05Z)
+// MarshalJSON implements the json.Marshaler interface. Unlike time.Time, it always marshals milliseconds, even if they
+// are all zeros, i.e. 2006-01-02T15:04:05.000Z instead of 2006-01-02T15:04:05Z
 func (u UTC) MarshalJSON() ([]byte, error) {
 	if u.IsZero() {
 		return []byte(`""`), nil
 	}
-	// see time.Time.MarshalJSON()
-	if y := u.Year(); y < 0 || y >= 10000 {
-		// RFC 3339 is clear that years are 4 digits exactly.
-		// See golang.org/issue/4556#c15 for more discussion.
-		return nil, errors.E("UTC.MarshalJSON", "reason", "year outside of range [0,9999]")
+	if err := u.ValidateISO8601(); err != nil {
+		return nil, err
 	}
 	return []byte(`"` + u.String() + `"`), nil
 }
 
+// UnmarshalJSON implements the json.Unmarshaler interface.
 func (u *UTC) UnmarshalJSON(data []byte) error {
 	var s string
 	err := json.Unmarshal(data, &s)
@@ -218,6 +173,7 @@ func (u *UTC) UnmarshalJSON(data []byte) error {
 	return u.UnmarshalText([]byte(s))
 }
 
+// UnmarshalText implements the encoding.TextUnmarshaler interface.
 func (u *UTC) UnmarshalText(data []byte) error {
 	utc, err := FromString(string(data))
 	if err != nil {
@@ -228,17 +184,14 @@ func (u *UTC) UnmarshalText(data []byte) error {
 	return nil
 }
 
-// MarshalText implements the encoding.TextMarshaler interface.
-// Contrary to time.Time, it always marshals milliseconds, even if they are all
-// zeros (i.e. 2006-01-02T15:04:05.000Z instead of 2006-01-02T15:04:05Z)
+// MarshalText implements the encoding.TextMarshaler interface. Unlike time.Time, it always marshals milliseconds,
+// even if they are all zeros (i.e. 2006-01-02T15:04:05.000Z instead of 2006-01-02T15:04:05Z)
 func (u UTC) MarshalText() ([]byte, error) {
 	if u.IsZero() {
-		return []byte(`""`), nil
+		return nil, nil
 	}
-	if y := u.Year(); y < 0 || y >= 10000 {
-		// RFC 3339 is clear that years are 4 digits exactly.
-		// See golang.org/issue/4556#c15 for more discussion.
-		return nil, errors.E("UTC.MarshalText", "reason", "year outside of range [0,9999]")
+	if err := u.ValidateISO8601(); err != nil {
+		return nil, err
 	}
 	return []byte(u.String()), nil
 }
@@ -248,15 +201,12 @@ func (u UTC) MarshalBinary() ([]byte, error) {
 	if u.IsZero() {
 		return nil, nil
 	}
-	if y := u.Year(); y < 0 || y >= 10000 {
-		// RFC 3339 is clear that years are 4 digits exactly.
-		// See golang.org/issue/4556#c15 for more discussion.
-		return nil, errors.E("UTC.MarshalJSON", "reason", "year outside of range [0,9999]")
+	if err := u.ValidateISO8601(); err != nil {
+		return nil, err
 	}
 
 	// marshal/unmarshal adapted from time.Time
-	// reduces binary form to 9 bytes (from 15) because of the limited year
-	// range.
+	// reduces binary form to 9 bytes (from 15) because of the limited year range.
 
 	// add the year zero offset in order to ensure that sec is 0 or positive
 	sec := uint64(u.Unix() + yearZeroOffsetSec)
@@ -292,10 +242,9 @@ func (u *UTC) UnmarshalBinary(data []byte) error {
 
 	expectedLen := /*sec*/ 5 + /*nsec*/ 4
 	if len(buf) != expectedLen {
-		return errors.E("UTC.UnmarshalBinary",
-			"reason", "invalid length",
-			"expected_length", expectedLen,
-			"actual_length", len(buf))
+		return errors.E("UTC.UnmarshalBinary", errors.K.Invalid,
+			"reason", "invalid length (expected 9)",
+			"length", len(buf))
 	}
 
 	sec := uint64(buf[4]) | uint64(buf[3])<<8 | uint64(buf[2])<<16 | uint64(buf[1])<<24 |
@@ -306,6 +255,17 @@ func (u *UTC) UnmarshalBinary(data []byte) error {
 
 	*(&u.Time) = time.Unix(int64(sec)-yearZeroOffsetSec, int64(nsec)).UTC()
 	*(&u.mono) = u.Time
+	return nil
+}
+
+// ValidateISO8601 validates that this UTC represents a valid ISO 8601 date, where the year is in [0000, 9999].
+func (u UTC) ValidateISO8601() error {
+	// see time.Time.MarshalJSON()
+	if y := u.Year(); y < 0 || y >= 10000 {
+		// ISO8601 / RFC3339 is clear that years are 4 digits exactly.
+		// See golang.org/issue/4556#c15 for more discussion.
+		return errors.E("UTC.ValidateISO8601", errors.K.Invalid, "reason", "year outside of range [0,9999]", "utc", u)
+	}
 	return nil
 }
 
@@ -325,8 +285,7 @@ func FromString(s string) (UTC, error) {
 	return Zero, errors.E("parse", err, "utc", s)
 }
 
-// MustParse parses the given time string according to ISO 8601 format,
-// panicking in case of errors.
+// MustParse parses the given time string according to ISO 8601 format, panicking in case of errors.
 func MustParse(s string) UTC {
 	utc, err := FromString(s)
 	if err != nil {
@@ -335,8 +294,7 @@ func MustParse(s string) UTC {
 	return utc
 }
 
-// Parse parses the given time value string with the provided layout - see
-// Time.Parse()
+// Parse parses the given time value string with the provided layout - see Time.Parse()
 func Parse(layout string, value string) (UTC, error) {
 	t, err := time.Parse(layout, value)
 	if err != nil {
@@ -345,26 +303,25 @@ func Parse(layout string, value string) (UTC, error) {
 	return New(t), nil
 }
 
-// Unix returns the local Time corresponding to the given Unix time,
-// sec seconds and nsec nanoseconds since January 1, 1970 UTC.
-// It is valid to pass nsec outside the range [0, 999999999].
-// Not all sec values have a corresponding time value. One such
-// value is 1<<63-1 (the largest int64 value).
+// Unix returns the local Time corresponding to the given Unix time, sec seconds and nsec nanoseconds since January 1,
+// 1970 UTC. It is valid to pass nsec outside the range [0, 999999999]. Not all sec values have a corresponding time
+// value. One such value is 1<<63-1 (the largest int64 value).
 func Unix(sec int64, nsec int64) UTC {
 	return New(time.Unix(sec, nsec))
 }
 
-// UnixMilli returns the local Time corresponding to the given Unix time in
-// milliseconds since January 1, 1970 UTC. This is the reverse operation of
-// UTC.UnixMilli()
+// UnixMilli returns the local Time corresponding to the given Unix time in milliseconds since January 1, 1970 UTC. This
+// is the reverse operation of UTC.UnixMilli()
 func UnixMilli(millis int64) UTC {
 	return New(time.Unix(millis/1000, int64(time.Millisecond)*(millis%1000)))
 }
 
+// Since returns Now().Sub(t)
 func Since(t UTC) time.Duration {
-	return time.Since(t.mono)
+	return Now().Sub(t)
 }
 
+// Until returns t.Sub(Now())
 func Until(t UTC) time.Duration {
-	return time.Until(t.mono)
+	return t.Sub(Now())
 }
