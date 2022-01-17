@@ -76,12 +76,12 @@ func TestContextStackReleaseReordering(t *testing.T) {
 	handler.Entries = nil // clear previous entries
 	release2()
 	require.Equal(t, "ContextStack: missing release calls detected!", handler.Entries[0].Message)
-	require.Equal(t, 1, handler.Entries[0].Fields["missing"])
+	require.Equal(t, 1, handler.Entries[0].Fields.Get("missing"))
 
 	handler.Entries = nil // clear previous entries
 	release3()
 	require.Equal(t, "ContextStack: released stack not found!", handler.Entries[0].Message)
-	require.Equal(t, 1, handler.Entries[0].Fields["remaining"])
+	require.Equal(t, 1, handler.Entries[0].Fields.Get("remaining"))
 
 	handler.Entries = nil // clear previous entries
 	release1()
