@@ -569,14 +569,14 @@ func assertTimezone(t *testing.T, val utc.UTC) {
 	require.Equal(t, "UTC", zone)
 }
 
-//  go test -v -bench "Benchmark" -benchtime 5s -run "none" github.com/qluvio/content-fabric/format/utc
+//  go test -v -bench "Benchmark" -benchtime 5s -run "none" github.com/eluv-io/utc
 //	goos: darwin
 //	goarch: amd64
-//	pkg: github.com/qluvio/content-fabric/format/utc
+//	pkg: github.com/eluv-io/utc
 //	BenchmarkString/time.Time.String-8         	20580853	       286 ns/op	      32 B/op	       1 allocs/op
 //	BenchmarkString/utc.UTC.StringOpt-8        	70914042	        82.5 ns/op	      32 B/op	       1 allocs/op
 //	PASS
-//	ok  	github.com/qluvio/content-fabric/format/utc	12.143s
+//	ok  	github.com/eluv-io/utc	12.143s
 func BenchmarkString(b *testing.B) {
 	now := utc.Now()
 	benchmarks := []struct {
