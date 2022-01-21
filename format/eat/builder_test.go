@@ -5,14 +5,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eluv-io/utc-go"
 	"github.com/stretchr/testify/require"
-
-	"github.com/qluvio/content-fabric/util/ethutil"
 
 	"github.com/qluvio/content-fabric/format/eat"
 	"github.com/qluvio/content-fabric/format/id"
 	"github.com/qluvio/content-fabric/format/structured"
-	"github.com/qluvio/content-fabric/format/utc"
+	"github.com/qluvio/content-fabric/util/ethutil"
 	"github.com/qluvio/content-fabric/util/jsonutil"
 )
 

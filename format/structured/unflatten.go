@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/qluvio/content-fabric/errors"
+	"github.com/eluv-io/errors-go"
 )
 
 // Unflatten reverses the process of flattening: it turns a flattened structure

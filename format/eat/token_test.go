@@ -12,16 +12,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qluvio/content-fabric/format/eat"
-	"github.com/qluvio/content-fabric/format/id"
-	"github.com/qluvio/content-fabric/format/utc"
-	"github.com/qluvio/content-fabric/util/ethutil"
-	"github.com/qluvio/content-fabric/util/jsonutil"
-
+	"github.com/eluv-io/utc-go"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/stretchr/testify/require"
+
+	"github.com/qluvio/content-fabric/format/eat"
+	"github.com/qluvio/content-fabric/format/id"
+	"github.com/qluvio/content-fabric/util/ethutil"
+	"github.com/qluvio/content-fabric/util/jsonutil"
 )
 
 var (

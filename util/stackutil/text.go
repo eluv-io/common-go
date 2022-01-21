@@ -5,9 +5,8 @@ import (
 	"io"
 	"text/template"
 
+	"github.com/eluv-io/utc-go"
 	"github.com/maruel/panicparse/v2/stack"
-
-	"github.com/qluvio/content-fabric/format/utc"
 )
 
 const textTmpl = `

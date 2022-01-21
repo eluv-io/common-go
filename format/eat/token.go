@@ -11,19 +11,19 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/log-go"
+	"github.com/eluv-io/utc-go"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/mattn/go-runewidth"
 	"github.com/mr-tron/base58"
 	"github.com/multiformats/go-varint"
 
-	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/id"
 	"github.com/qluvio/content-fabric/format/sign"
 	"github.com/qluvio/content-fabric/format/structured"
 	"github.com/qluvio/content-fabric/format/types"
-	"github.com/qluvio/content-fabric/format/utc"
-	"github.com/qluvio/content-fabric/log"
 	"github.com/qluvio/content-fabric/util/jsonutil"
 	"github.com/qluvio/content-fabric/util/stringutil"
 )

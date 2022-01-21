@@ -4,10 +4,9 @@ import (
 	"context"
 	"strings"
 
-	"github.com/qluvio/content-fabric/errors"
-
 	"github.com/PaesslerAG/gval"
 	"github.com/PaesslerAG/jsonpath"
+	"github.com/eluv-io/errors-go"
 )
 
 // Query queries the given target data structure.

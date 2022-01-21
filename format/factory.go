@@ -3,17 +3,16 @@ package format
 import (
 	"crypto/sha256"
 
-	"github.com/qluvio/content-fabric/errors"
+	"github.com/eluv-io/errors-go"
+
+	mc "github.com/multiformats/go-multicodec"
+
 	"github.com/qluvio/content-fabric/format/codecs"
 	"github.com/qluvio/content-fabric/format/encryption"
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/id"
 	"github.com/qluvio/content-fabric/format/token"
-
-	// types only contains type definitions - no other logic or code
 	. "github.com/qluvio/content-fabric/format/types"
-
-	mc "github.com/multiformats/go-multicodec"
 )
 
 // Factory provides all format-related constructors and generators like codecs,

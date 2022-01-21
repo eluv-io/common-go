@@ -1,6 +1,6 @@
 package bitutil
 
-import "github.com/qluvio/content-fabric/errors"
+import "github.com/eluv-io/errors-go"
 
 // axor (array xor) calculates the xor across two byte slices.
 // Returns an error if the slices are of different lengths.

@@ -3,7 +3,8 @@ package link
 import (
 	"encoding/base64"
 
-	"github.com/qluvio/content-fabric/errors"
+	"github.com/eluv-io/errors-go"
+
 	"github.com/qluvio/content-fabric/format/encryption"
 )
 

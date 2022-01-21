@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/utc-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/id"
-	"github.com/qluvio/content-fabric/format/utc"
 )
 
 var hsh *hash.Hash

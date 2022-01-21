@@ -1,11 +1,11 @@
 package syncutil
 
 import (
-	"github.com/qluvio/content-fabric/errors"
 	"sync"
 	"time"
 
-	elog "github.com/qluvio/content-fabric/log"
+	"github.com/eluv-io/errors-go"
+	elog "github.com/eluv-io/log-go"
 )
 
 var log = elog.Get("/eluvio/util/syncutil")

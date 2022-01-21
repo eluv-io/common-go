@@ -4,10 +4,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eluv-io/utc-go"
 	"github.com/stretchr/testify/require"
 
 	"github.com/qluvio/content-fabric/format/duration"
-	"github.com/qluvio/content-fabric/format/utc"
 	"github.com/qluvio/content-fabric/util/lru"
 )
 

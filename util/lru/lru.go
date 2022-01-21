@@ -7,15 +7,14 @@ package lru
 import (
 	"sync"
 
+	"github.com/eluv-io/errors-go"
 	"github.com/hashicorp/golang-lru/simplelru"
 	"go.opentelemetry.io/otel/api/kv"
 	"go.opentelemetry.io/otel/api/trace"
 
-	"github.com/qluvio/content-fabric/util/stringutil"
-
-	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/duration"
 	"github.com/qluvio/content-fabric/util/jsonutil"
+	"github.com/qluvio/content-fabric/util/stringutil"
 	"github.com/qluvio/content-fabric/util/syncutil"
 	"github.com/qluvio/content-fabric/util/traceutil"
 )

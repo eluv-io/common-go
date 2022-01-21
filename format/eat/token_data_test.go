@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eluv-io/utc-go"
 	"github.com/stretchr/testify/require"
 
 	"github.com/qluvio/content-fabric/constants"
@@ -13,7 +14,6 @@ import (
 	"github.com/qluvio/content-fabric/format/eat"
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/types"
-	"github.com/qluvio/content-fabric/format/utc"
 	"github.com/qluvio/content-fabric/util/byteutil"
 )
 

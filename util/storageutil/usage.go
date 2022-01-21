@@ -1,9 +1,9 @@
 package storageutil
 
 import (
+	"github.com/eluv-io/errors-go"
 	"github.com/ricochet2200/go-disk-usage/du"
 
-	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/bytesize"
 )
 

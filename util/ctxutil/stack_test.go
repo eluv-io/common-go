@@ -6,11 +6,11 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/apex/log/handlers/memory"
+	"github.com/eluv-io/apexlog-go/handlers/memory"
+	"github.com/eluv-io/log-go"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/api/trace"
 
-	"github.com/qluvio/content-fabric/log"
 	"github.com/qluvio/content-fabric/util/ctxutil"
 	"github.com/qluvio/content-fabric/util/jsonutil"
 	"github.com/qluvio/content-fabric/util/traceutil"

@@ -4,9 +4,8 @@ import (
 	"encoding/json"
 	"sync"
 
+	"github.com/eluv-io/errors-go"
 	"github.com/gammazero/deque"
-
-	"github.com/qluvio/content-fabric/errors"
 )
 
 // Future is a placeholder for a [value, error] pair that is potentially only

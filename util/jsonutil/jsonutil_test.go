@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/eluv-io/errors-go"
 	"github.com/stretchr/testify/assert"
-
-	"github.com/qluvio/content-fabric/errors"
 )
 
 func TestIsJson(t *testing.T) {

@@ -5,9 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/eluv-io/errors-go"
 	"github.com/spf13/afero"
-
-	"github.com/qluvio/content-fabric/errors"
 )
 
 // MoveFile moves the given source file to the destination path. First, the file is attempted to be renamed. If that

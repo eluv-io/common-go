@@ -6,10 +6,10 @@ import (
 	"io/ioutil"
 	"testing"
 
+	"github.com/eluv-io/log-go"
 	"github.com/stretchr/testify/require"
 
 	"github.com/qluvio/content-fabric/format/structured"
-	"github.com/qluvio/content-fabric/log"
 	"github.com/qluvio/content-fabric/util/jsonutil"
 )
 

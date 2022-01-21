@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/qluvio/content-fabric/errors"
+	"github.com/eluv-io/errors-go"
 )
 
 type FileInfo struct {

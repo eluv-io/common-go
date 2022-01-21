@@ -4,15 +4,14 @@ import (
 	"io"
 	"sync"
 
+	"github.com/eluv-io/log-go"
 	"github.com/hashicorp/golang-lru/simplelru"
 	"go.opentelemetry.io/otel/api/kv"
 	"go.opentelemetry.io/otel/api/trace"
 
+	"github.com/qluvio/content-fabric/util/jsonutil"
 	"github.com/qluvio/content-fabric/util/stringutil"
 	"github.com/qluvio/content-fabric/util/traceutil"
-
-	"github.com/qluvio/content-fabric/log"
-	"github.com/qluvio/content-fabric/util/jsonutil"
 )
 
 func NewRefCache(

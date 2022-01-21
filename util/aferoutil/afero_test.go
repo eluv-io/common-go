@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/eluv-io/errors-go"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/util"
 	"github.com/qluvio/content-fabric/util/testutil"
 )

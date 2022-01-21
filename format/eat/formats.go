@@ -1,7 +1,7 @@
 package eat
 
 import (
-	"github.com/qluvio/content-fabric/errors"
+	"github.com/eluv-io/errors-go"
 )
 
 // Formats defines the available encoding formats for auth tokens

@@ -7,16 +7,16 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/utc-go"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/qluvio/content-fabric/constants"
-	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/sign"
 	"github.com/qluvio/content-fabric/format/types"
-	"github.com/qluvio/content-fabric/format/utc"
 	"github.com/qluvio/content-fabric/util/ethutil"
 )
 

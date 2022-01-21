@@ -6,10 +6,9 @@ import (
 	"testing"
 	"unicode"
 
+	"github.com/eluv-io/errors-go"
+	elog "github.com/eluv-io/log-go"
 	"github.com/stretchr/testify/require"
-
-	"github.com/qluvio/content-fabric/errors"
-	elog "github.com/qluvio/content-fabric/log"
 )
 
 func TestStripFunc(t *testing.T) {

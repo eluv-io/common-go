@@ -3,11 +3,12 @@ package codecs
 import (
 	"reflect"
 
-	"github.com/qluvio/content-fabric/errors"
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/utc-go"
+
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/id"
 	"github.com/qluvio/content-fabric/format/link"
-	"github.com/qluvio/content-fabric/format/utc"
 )
 
 // HashStringConverter marshals/unmarshals a hash.Hash object to/from a string.

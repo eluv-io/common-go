@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/qluvio/content-fabric/log"
+	"github.com/eluv-io/log-go"
 )
 
 // TestDir creates a new, unique test directory with the given prefix in default

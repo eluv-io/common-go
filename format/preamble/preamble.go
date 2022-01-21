@@ -7,9 +7,9 @@ import (
 	"math"
 	"strings"
 
+	"github.com/eluv-io/errors-go"
 	"github.com/multiformats/go-multicodec"
 
-	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/util/ioutil"
 )
 

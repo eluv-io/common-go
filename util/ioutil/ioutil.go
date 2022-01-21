@@ -5,8 +5,8 @@ import (
 	"io/ioutil"
 	"sync"
 
-	"github.com/qluvio/content-fabric/errors"
-	"github.com/qluvio/content-fabric/log"
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/log-go"
 )
 
 type ReadWriteSeekCloser interface {

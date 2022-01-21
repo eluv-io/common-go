@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/qluvio/content-fabric/errors"
-	"github.com/qluvio/content-fabric/format/bytesize"
-
+	"github.com/eluv-io/errors-go"
 	. "github.com/smartystreets/goconvey/convey"
+
+	"github.com/qluvio/content-fabric/format/bytesize"
 )
 
 func TestMarshalText(t *testing.T) {

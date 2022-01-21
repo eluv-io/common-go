@@ -3,7 +3,7 @@ package timeutil
 import (
 	"time"
 
-	"github.com/qluvio/content-fabric/format/utc"
+	"github.com/eluv-io/utc-go"
 )
 
 // Periodic is a helper that calls a provided function at most once every

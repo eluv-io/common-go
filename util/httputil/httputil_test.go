@@ -9,15 +9,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/qluvio/content-fabric/constants"
-	"github.com/qluvio/content-fabric/errors"
-	"github.com/qluvio/content-fabric/format/id"
-	"github.com/qluvio/content-fabric/util/httputil"
-	"github.com/qluvio/content-fabric/util/jsonutil"
-
+	"github.com/eluv-io/errors-go"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/qluvio/content-fabric/constants"
+	"github.com/qluvio/content-fabric/format/id"
+	"github.com/qluvio/content-fabric/util/httputil"
+	"github.com/qluvio/content-fabric/util/jsonutil"
 )
 
 func TestParseBytesRange(t *testing.T) {

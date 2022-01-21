@@ -6,7 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/qluvio/content-fabric/errors"
+	"github.com/eluv-io/errors-go"
+
 	"github.com/qluvio/content-fabric/util/maputil"
 )
 

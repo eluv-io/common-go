@@ -3,8 +3,9 @@ package netutil
 import (
 	"net"
 
-	"github.com/qluvio/content-fabric/errors"
-	"github.com/qluvio/content-fabric/log"
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/log-go"
+
 	"github.com/qluvio/content-fabric/util/filterutil"
 )
 

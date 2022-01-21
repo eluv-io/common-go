@@ -3,7 +3,7 @@ package timeutil
 import (
 	"time"
 
-	"github.com/qluvio/content-fabric/format/utc"
+	"github.com/eluv-io/utc-go"
 )
 
 // Timer is a wrapper around the standard time.Timer that provides additional state information.

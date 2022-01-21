@@ -11,13 +11,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/qluvio/content-fabric/errors"
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/log-go"
+	"github.com/eluv-io/utc-go"
+	"github.com/mr-tron/base58/base58"
+
 	ei "github.com/qluvio/content-fabric/format/id"
 	"github.com/qluvio/content-fabric/format/preamble"
-	"github.com/qluvio/content-fabric/format/utc"
-	"github.com/qluvio/content-fabric/log"
-
-	"github.com/mr-tron/base58/base58"
 )
 
 // Code is the code of a hash

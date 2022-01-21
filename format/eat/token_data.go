@@ -5,14 +5,14 @@ import (
 	"encoding/binary"
 	"encoding/json"
 
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/utc-go"
+	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/qluvio/content-fabric/constants"
-	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/codecs"
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/types"
-	"github.com/qluvio/content-fabric/format/utc"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
 // TokenData is the structure containing the actual token data.

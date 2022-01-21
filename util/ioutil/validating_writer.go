@@ -3,7 +3,7 @@ package ioutil
 import (
 	"io"
 
-	"github.com/qluvio/content-fabric/errors"
+	"github.com/eluv-io/errors-go"
 )
 
 // NewValidatingWriter creates a writer that compares all bytes that are written

@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eluv-io/utc-go"
+	"github.com/stretchr/testify/require"
+
 	"github.com/qluvio/content-fabric/format"
 	"github.com/qluvio/content-fabric/format/codecs"
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/link"
-	"github.com/qluvio/content-fabric/format/utc"
 	"github.com/qluvio/content-fabric/util/maputil"
-
-	"github.com/stretchr/testify/require"
 )
 
 var codec = codecs.NewCborCodec()

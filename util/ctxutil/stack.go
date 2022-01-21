@@ -5,9 +5,9 @@ import (
 	"runtime/debug"
 	"sync"
 
+	elog "github.com/eluv-io/log-go"
 	"go.opentelemetry.io/otel/api/trace"
 
-	elog "github.com/qluvio/content-fabric/log"
 	"github.com/qluvio/content-fabric/util/goutil"
 )
 

@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/qluvio/content-fabric/errors"
-	"github.com/qluvio/content-fabric/util/maputil"
-
+	"github.com/eluv-io/errors-go"
 	"github.com/stretchr/testify/require"
+
+	"github.com/qluvio/content-fabric/util/maputil"
 )
 
 func TestResolve(t *testing.T) {

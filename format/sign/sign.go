@@ -3,12 +3,11 @@ package sign
 import (
 	"bytes"
 
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/log-go"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/mr-tron/base58/base58"
-
-	"github.com/qluvio/content-fabric/errors"
-	"github.com/qluvio/content-fabric/log"
 )
 
 // SigCode is the type of an Sig

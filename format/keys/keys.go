@@ -3,9 +3,8 @@ package keys
 import (
 	"bytes"
 
-	"github.com/qluvio/content-fabric/errors"
-	"github.com/qluvio/content-fabric/log"
-
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/log-go"
 	"github.com/mr-tron/base58/base58"
 )
 

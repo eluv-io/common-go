@@ -8,15 +8,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qluvio/content-fabric/errors"
+	"github.com/eluv-io/errors-go"
+	. "github.com/smartystreets/goconvey/convey"
+	"github.com/stretchr/testify/require"
+
 	"github.com/qluvio/content-fabric/format/duration"
 	"github.com/qluvio/content-fabric/format/structured"
 	"github.com/qluvio/content-fabric/util/codecutil"
 	"github.com/qluvio/content-fabric/util/jsonutil"
 	"github.com/qluvio/content-fabric/util/maputil"
-
-	. "github.com/smartystreets/goconvey/convey"
-	"github.com/stretchr/testify/require"
 )
 
 func TestValue_Manip(t *testing.T) {

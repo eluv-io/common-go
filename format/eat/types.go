@@ -1,7 +1,7 @@
 package eat
 
 import (
-	"github.com/qluvio/content-fabric/errors"
+	"github.com/eluv-io/errors-go"
 )
 
 // Types defines the different types of the auth tokens

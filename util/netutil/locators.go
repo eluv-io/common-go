@@ -4,7 +4,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/qluvio/content-fabric/errors"
+	"github.com/eluv-io/errors-go"
 )
 
 // FindLocator returns true if the provided list of locators contains the

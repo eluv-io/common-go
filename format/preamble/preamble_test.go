@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eluv-io/errors-go"
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/preamble"
 	"github.com/qluvio/content-fabric/util/byteutil"
 	"github.com/qluvio/content-fabric/util/stringutil"

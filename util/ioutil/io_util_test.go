@@ -1,13 +1,14 @@
 package ioutil_test
 
 import (
-	"github.com/qluvio/content-fabric/errors"
-	"github.com/qluvio/content-fabric/util/ioutil"
 	"io"
 	"math/rand"
 	"testing"
 
+	"github.com/eluv-io/errors-go"
 	"github.com/stretchr/testify/require"
+
+	"github.com/qluvio/content-fabric/util/ioutil"
 )
 
 var _ io.ReaderAt = (*testReader)(nil)

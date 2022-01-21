@@ -4,16 +4,14 @@ import (
 	"crypto/ecdsa"
 	"time"
 
+	"github.com/eluv-io/utc-go"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/qluvio/content-fabric/format/id"
-	"github.com/qluvio/content-fabric/util/ethutil"
-
 	"github.com/qluvio/content-fabric/format/structured"
-
 	"github.com/qluvio/content-fabric/format/types"
-	"github.com/qluvio/content-fabric/format/utc"
+	"github.com/qluvio/content-fabric/util/ethutil"
 )
 
 type Encoder interface {

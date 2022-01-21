@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/qluvio/content-fabric/errors"
+	"github.com/eluv-io/errors-go"
+
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/structured"
 	"github.com/qluvio/content-fabric/util/httputil"

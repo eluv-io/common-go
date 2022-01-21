@@ -4,14 +4,14 @@ import (
 	"encoding/json"
 	"sync"
 
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/utc-go"
 	sdktrace "go.opentelemetry.io/otel/api/trace"
 	"go.opentelemetry.io/otel/sdk/export/trace"
 	"go.opentelemetry.io/otel/sdk/resource"
 	"google.golang.org/grpc/codes"
 
-	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/duration"
-	"github.com/qluvio/content-fabric/format/utc"
 	"github.com/qluvio/content-fabric/util/jsonutil"
 )
 

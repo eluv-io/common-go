@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/qluvio/content-fabric/errors"
+	"github.com/eluv-io/errors-go"
 )
 
 // FieldTracker is a map that can be used to track which fields (keys) in a JSON

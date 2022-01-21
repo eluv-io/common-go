@@ -8,15 +8,15 @@ import (
 	"io"
 	"reflect"
 
-	"github.com/qluvio/content-fabric/errors"
-	"github.com/qluvio/content-fabric/format/hash"
-	"github.com/qluvio/content-fabric/format/id"
-	"github.com/qluvio/content-fabric/format/link"
-	"github.com/qluvio/content-fabric/format/utc"
-
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/utc-go"
 	mc "github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-multicodec/base"
 	cd "github.com/ugorji/go/codec"
+
+	"github.com/qluvio/content-fabric/format/hash"
+	"github.com/qluvio/content-fabric/format/id"
+	"github.com/qluvio/content-fabric/format/link"
 	// cbor "github.com/whyrusleeping/cbor/go"
 )
 

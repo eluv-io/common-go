@@ -3,8 +3,8 @@ package multiqueue
 import (
 	"sync"
 
-	"github.com/qluvio/content-fabric/errors"
-	elog "github.com/qluvio/content-fabric/log"
+	"github.com/eluv-io/errors-go"
+	elog "github.com/eluv-io/log-go"
 )
 
 var log = elog.Get("/eluvio/util/multiqueue")

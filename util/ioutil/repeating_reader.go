@@ -3,7 +3,7 @@ package ioutil
 import (
 	"io"
 
-	"github.com/qluvio/content-fabric/errors"
+	"github.com/eluv-io/errors-go"
 )
 
 // NewRepeatingReader returns a reader that generates len bytes in total,

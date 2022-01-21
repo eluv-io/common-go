@@ -6,10 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/qluvio/content-fabric/errors"
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/utc-go"
+
 	"github.com/qluvio/content-fabric/format/duration"
 	"github.com/qluvio/content-fabric/format/id"
-	"github.com/qluvio/content-fabric/format/utc"
 	"github.com/qluvio/content-fabric/util/codecutil"
 	"github.com/qluvio/content-fabric/util/ifutil"
 	"github.com/qluvio/content-fabric/util/numberutil"

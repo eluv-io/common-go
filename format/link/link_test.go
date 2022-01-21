@@ -8,17 +8,16 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/eluv-io/errors-go"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/codecs"
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/link"
 	"github.com/qluvio/content-fabric/format/structured"
 	"github.com/qluvio/content-fabric/util/jsonutil"
 	"github.com/qluvio/content-fabric/util/maputil"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 type testCase struct {

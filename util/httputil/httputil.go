@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/eluv-io/errors-go"
 	"github.com/gin-gonic/gin/binding"
 	mc "github.com/multiformats/go-multicodec"
 	cbor "github.com/multiformats/go-multicodec/cbor"
@@ -21,7 +22,6 @@ import (
 	mux "github.com/multiformats/go-multicodec/mux"
 
 	"github.com/qluvio/content-fabric/constants"
-	"github.com/qluvio/content-fabric/errors"
 	"github.com/qluvio/content-fabric/format/id"
 	eioutil "github.com/qluvio/content-fabric/util/ioutil"
 )

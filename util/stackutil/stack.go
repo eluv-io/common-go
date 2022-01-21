@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/qluvio/content-fabric/log"
+	"github.com/eluv-io/log-go"
 )
 
 var full = struct {

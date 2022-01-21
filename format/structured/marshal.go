@@ -7,11 +7,11 @@ import (
 	"io"
 	"strings"
 
-	"github.com/qluvio/content-fabric/errors"
-	"github.com/qluvio/content-fabric/util/maputil"
-
 	"github.com/beevik/etree"
+	"github.com/eluv-io/errors-go"
 	"github.com/ghodss/yaml"
+
+	"github.com/qluvio/content-fabric/util/maputil"
 )
 
 func NewMarshaler() *Marshaler {

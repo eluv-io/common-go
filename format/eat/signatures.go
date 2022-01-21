@@ -1,6 +1,6 @@
 package eat
 
-import "github.com/qluvio/content-fabric/errors"
+import "github.com/eluv-io/errors-go"
 
 // SigTypes defines the different signature types of auth tokens
 const SigTypes enumSigType = 0

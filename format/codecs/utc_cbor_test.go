@@ -6,9 +6,8 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/eluv-io/utc-go"
 	"github.com/stretchr/testify/require"
-
-	"github.com/qluvio/content-fabric/format/utc"
 )
 
 var oneBillion = time.Unix(1000000000, 0)

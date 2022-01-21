@@ -6,7 +6,7 @@ import (
 	url "net/url"
 	"strconv"
 
-	"github.com/qluvio/content-fabric/errors"
+	"github.com/eluv-io/errors-go"
 )
 
 type URL struct {

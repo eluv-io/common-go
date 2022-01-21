@@ -6,10 +6,9 @@ import (
 	"testing"
 	"time"
 
+	log2 "github.com/eluv-io/log-go"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
-
-	log2 "github.com/qluvio/content-fabric/log"
 )
 
 // log with relative timestamps for easier visualization

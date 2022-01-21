@@ -5,11 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/qluvio/content-fabric/log"
-
-	"github.com/qluvio/content-fabric/errors"
-
 	"github.com/davecgh/go-spew/spew"
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/log-go"
 )
 
 // MarshalCompactString marshals the given value as compact JSON (no indenting,
