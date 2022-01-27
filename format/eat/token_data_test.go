@@ -9,7 +9,6 @@ import (
 	"github.com/eluv-io/utc-go"
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/constants"
 	"github.com/qluvio/content-fabric/format"
 	"github.com/qluvio/content-fabric/format/eat"
 	"github.com/qluvio/content-fabric/format/hash"
@@ -39,9 +38,9 @@ func TestTokenDataJSON(t *testing.T) {
 			IssuedAt:      utc.Now().Truncate(time.Millisecond),
 			Expires:       utc.Now().Truncate(time.Millisecond).Add(time.Hour),
 			Ctx: map[string]interface{}{
-				"key1":             "val1",
-				"key2":             "val2",
-				constants.ElvIPGeo: "eu-west",
+				"key1":       "val1",
+				"key2":       "val2",
+				eat.ElvIPGeo: "eu-west",
 			},
 		},
 	}

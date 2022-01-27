@@ -21,14 +21,17 @@ import (
 	mcjson "github.com/multiformats/go-multicodec/json"
 	mux "github.com/multiformats/go-multicodec/mux"
 
-	"github.com/qluvio/content-fabric/constants"
 	"github.com/qluvio/content-fabric/format/id"
 	eioutil "github.com/qluvio/content-fabric/util/ioutil"
 )
 
-const customHeaderPrefix = "X-Content-Fabric-"
-const customHeaderMultiCodecPrefix = "X-Content-Fabric-Mc-"
-const customQueryPrefix = "header-x_"
+const (
+	DecryptModeHeader            = "X-Content-Fabric-Decryption-Mode"         // HTTP header for specifying mode for decryption
+	SetContentDispositionHeader  = "X-Content-Fabric-Set-Content-Disposition" // HTTP header for directive to return a Content-Disposition header
+	customHeaderPrefix           = "X-Content-Fabric-"
+	customHeaderMultiCodecPrefix = "X-Content-Fabric-Mc-"
+	customQueryPrefix            = "header-x_"
+)
 
 var (
 	// codec used for custom headers
@@ -413,7 +416,7 @@ func GetCombinedHeader(header http.Header, query url.Values, queryFirst bool, he
 // PENDING(LUK): move simple.DecryptionMode to format/encryption
 func GetDecryptionMode(header http.Header, query url.Values, def string) (string, error) {
 	res := make([]string, 0)
-	if v, ok := header[http.CanonicalHeaderKey(constants.DecryptModeHeader)]; ok {
+	if v, ok := header[http.CanonicalHeaderKey(DecryptModeHeader)]; ok {
 		for _, s := range v {
 			res = append(res, s)
 		}
@@ -453,7 +456,7 @@ func GetRequestSetContentDisposition(r *http.Request) (string, error) {
 // parameter.
 func GetSetContentDisposition(header http.Header, query url.Values, def string) (string, error) {
 	res := make([]string, 0)
-	if v, ok := header[http.CanonicalHeaderKey(constants.SetContentDispositionHeader)]; ok {
+	if v, ok := header[http.CanonicalHeaderKey(SetContentDispositionHeader)]; ok {
 		for _, s := range v {
 			res = append(res, s)
 		}

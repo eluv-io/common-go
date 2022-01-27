@@ -8,7 +8,6 @@ import (
 	"github.com/eluv-io/utc-go"
 
 	"github.com/qluvio/content-fabric/format/duration"
-	"github.com/qluvio/content-fabric/qfab/daemon/monitor"
 	"github.com/qluvio/content-fabric/util/jsonutil"
 	"github.com/qluvio/content-fabric/util/lru"
 )
@@ -22,7 +21,7 @@ type Tracker interface {
 	Purge()
 	SessionMetrics() SessionMetrics
 	Metrics() lru.Metrics
-	Register(name string, monitor monitor.CacheMonitor) Tracker
+	CollectMetrics() jsonutil.GenericMarshaler
 }
 
 type SessionInfo struct {
@@ -69,10 +68,8 @@ type tracker struct {
 	name     string
 }
 
-func (t *tracker) Register(name string, cacheMon monitor.CacheMonitor) Tracker {
-	t.name = name
-	cacheMon.Register(name, t.sessions)
-	return t
+func (t *tracker) CollectMetrics() jsonutil.GenericMarshaler {
+	return t.sessions.CollectMetrics()
 }
 
 func (t *tracker) Metrics() lru.Metrics {

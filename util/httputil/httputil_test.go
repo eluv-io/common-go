@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/constants"
 	"github.com/qluvio/content-fabric/format/id"
 	"github.com/qluvio/content-fabric/util/httputil"
 	"github.com/qluvio/content-fabric/util/jsonutil"
@@ -180,7 +179,7 @@ func TestGetSetContentDisposition(t *testing.T) {
 	for _, tcase := range []*testCase{
 		{
 			hdr: http.Header{
-				constants.SetContentDispositionHeader: {"attachment; filename=genomex.jpeg;"},
+				httputil.SetContentDispositionHeader: {"attachment; filename=genomex.jpeg;"},
 			},
 			query: url.Values{
 				"header-x_set_content_disposition": []string{"attachment; filename=genomey.jpeg;"},
@@ -189,7 +188,7 @@ func TestGetSetContentDisposition(t *testing.T) {
 		},
 		{
 			hdr: http.Header{
-				constants.SetContentDispositionHeader: {"attachment; filename=genome.jpeg;"},
+				httputil.SetContentDispositionHeader: {"attachment; filename=genome.jpeg;"},
 			},
 			query: url.Values{
 				"header-x_set_content_disposition": []string{"attachment; filename=genome.jpeg;"},
@@ -198,7 +197,7 @@ func TestGetSetContentDisposition(t *testing.T) {
 		},
 		{
 			hdr: http.Header{
-				constants.SetContentDispositionHeader: {"attachment; filename=genome.jpeg;"},
+				httputil.SetContentDispositionHeader: {"attachment; filename=genome.jpeg;"},
 			},
 			query:  url.Values{},
 			expect: "attachment; filename=genome.jpeg;",

@@ -4,9 +4,11 @@ import (
 	"sync"
 
 	"github.com/eluv-io/log-go"
-
-	"github.com/qluvio/content-fabric/metrics"
 )
+
+type Counter interface {
+	Add(delta float64)
+}
 
 // Pool is a buffer pool that allows for re-using previously allocated buffers
 // of a set size. Buffers that have been completely released from use are cycled
@@ -22,10 +24,11 @@ import (
 // that has been re-sliced. Pool is designed to be a drop-in replacement for
 // sync.Pool, without having to cast interface{} as []byte.
 type Pool struct {
-	BufSize    int                 // Size of buffers
-	p          *sync.Pool          // Backing pool
-	q          chan []byte         // Queue of released buffers
-	bufMetrics metrics.DualCounter // Metrics for created/released buffers
+	BufSize  int         // Size of buffers
+	p        *sync.Pool  // Backing pool
+	q        chan []byte // Queue of released buffers
+	created  Counter     // Metric for created buffers
+	released Counter     // Metrics for released buffers
 }
 
 // NewPool creates a new buffer pool to service buffers of size bufSize
@@ -42,8 +45,8 @@ func NewPool(bufSize int) *Pool {
 			if p.decrCounter(buf) {
 				// Release buffer back into pool
 				p.p.Put(buf)
-				if p.bufMetrics != nil {
-					p.bufMetrics.Close().Add(1)
+				if p.released != nil {
+					p.released.Add(1)
 				}
 			}
 		}
@@ -93,15 +96,16 @@ func (p *Pool) Close() error {
 	return nil
 }
 
-func (p *Pool) SetMetrics(bufMetrics metrics.DualCounter) {
-	p.bufMetrics = bufMetrics
+func (p *Pool) SetMetrics(created, released Counter) {
+	p.created = created
+	p.released = released
 }
 
 // Creates a byte buffer of configured size.
 func (p *Pool) new() interface{} {
 	buf := make([]byte, p.BufSize+1)[:p.BufSize]
-	if p.bufMetrics != nil {
-		p.bufMetrics.Open().Add(1)
+	if p.created != nil {
+		p.created.Add(1)
 	}
 	return buf
 }

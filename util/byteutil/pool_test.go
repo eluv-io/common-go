@@ -9,9 +9,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/atomic"
 
-	"github.com/qluvio/content-fabric/metrics"
-	"github.com/qluvio/content-fabric/test"
 	"github.com/qluvio/content-fabric/util/byteutil"
 )
 
@@ -25,7 +24,8 @@ func init() {
 }
 
 type testCtx struct {
-	NetBuffers metrics.QPartsNetBuffers
+	created  counter
+	released counter
 }
 
 func TestPool(t *testing.T) {
@@ -34,16 +34,10 @@ func TestPool(t *testing.T) {
 	zeroBuf := make([]byte, bufSize)
 	var openCount, closeCount int
 
-	c, cleanup := test.CreateDebugAppConfig()
-	defer cleanup()
-	m := test.ModuleFromAppConfig(c)
-	inj := test.TestInjector(m)
 	ctx := &testCtx{}
-	err := inj.Populate(ctx)
-	require.NoError(t, err)
 
 	p := byteutil.NewPool(bufSize)
-	p.SetMetrics(ctx.NetBuffers)
+	p.SetMetrics(&ctx.created, &ctx.released)
 
 	buf := p.New()
 	// New (zero-ed) buffer of size 8 with refCount 1 should be created
@@ -145,8 +139,8 @@ func TestPool(t *testing.T) {
 		time.Sleep(time.Millisecond)
 	}
 
-	require.Equal(t, float64(openCount), ctx.NetBuffers.Open().Get())
-	require.Equal(t, float64(closeCount), ctx.NetBuffers.Close().Get())
+	require.Equal(t, float64(openCount), ctx.created.val.Load())
+	require.Equal(t, float64(closeCount), ctx.released.val.Load())
 }
 
 // go test -tags "avpipe LLVM byollvm" -count=1 -v -bench=Benchmark* -run=Benchmark ./util/byteutil
@@ -218,4 +212,12 @@ func task(b *testing.B, buf []byte) error {
 		return err
 	}
 	return nil
+}
+
+type counter struct {
+	val atomic.Float64
+}
+
+func (c *counter) Add(delta float64) {
+	c.val.Add(delta)
 }

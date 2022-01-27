@@ -13,11 +13,15 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 
-	"github.com/qluvio/content-fabric/constants"
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/sign"
 	"github.com/qluvio/content-fabric/format/types"
 	"github.com/qluvio/content-fabric/util/ethutil"
+)
+
+const (
+	// ElvIPGeo is the key for the 'ip geo' in auth tokens
+	ElvIPGeo = "elv:ip-geo"
 )
 
 func (t *Token) encodeLegacy() (s string, err error) {
@@ -305,7 +309,7 @@ func (l *TokenDataLegacy) CopyToTokenData(t *Token, typ TokenType) {
 		if t.Ctx == nil {
 			t.Ctx = map[string]interface{}{}
 		}
-		t.Ctx[constants.ElvIPGeo] = l.IPGeo
+		t.Ctx[ElvIPGeo] = l.IPGeo
 	}
 }
 
@@ -337,7 +341,7 @@ func (l *TokenDataLegacy) CopyFromTokenData(t *Token) {
 	}
 	l.IPGeo = t.IPGeo()
 	for k, v := range t.Ctx {
-		if k != constants.ElvIPGeo {
+		if k != ElvIPGeo {
 			if l.Ctx == nil {
 				l.Ctx = map[string]interface{}{}
 			}

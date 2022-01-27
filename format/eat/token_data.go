@@ -9,7 +9,6 @@ import (
 	"github.com/eluv-io/utc-go"
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/qluvio/content-fabric/constants"
 	"github.com/qluvio/content-fabric/format/codecs"
 	"github.com/qluvio/content-fabric/format/hash"
 	"github.com/qluvio/content-fabric/format/types"
@@ -166,7 +165,7 @@ func (t *TokenData) Decode(bts []byte) error {
 }
 
 func (t *TokenData) IPGeo() string {
-	if obj, ok := t.Ctx[constants.ElvIPGeo]; ok {
+	if obj, ok := t.Ctx[ElvIPGeo]; ok {
 		return obj.(string)
 	}
 	return ""
