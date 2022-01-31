@@ -8,6 +8,7 @@ import (
 
 	"github.com/eluv-io/errors-go"
 	elog "github.com/eluv-io/log-go"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -163,4 +164,52 @@ func TestMatchRunes(t *testing.T) {
 	require.True(t, MatchRunes("abc", unicode.IsLetter, unicode.IsLower))
 
 	require.False(t, MatchRunes("abc", unicode.IsUpper, unicode.IsLower))
+}
+
+func TestPrefixLines(t *testing.T) {
+	tests := []struct {
+		s    string
+		want string
+	}{
+		{"", "#"},
+		{"\n", "#\n#"},
+		{"1\n2\n3\n", "#1\n#2\n#3\n#"},
+	}
+	for i, test := range tests {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			assert.Equal(t, test.want, PrefixLines(test.s, "#"))
+		})
+	}
+}
+
+func TestPostfixLines(t *testing.T) {
+	tests := []struct {
+		s    string
+		want string
+	}{
+		{"", "#"},
+		{"\n", "#\n#"},
+		{"1\n2\n3\n", "1#\n2#\n3#\n#"},
+	}
+	for i, test := range tests {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			assert.Equal(t, test.want, PostfixLines(test.s, "#"))
+		})
+	}
+}
+
+func TestWrapLines(t *testing.T) {
+	tests := []struct {
+		s    string
+		want string
+	}{
+		{"", "##"},
+		{"\n", "##\n##"},
+		{"1\n2\n3\n", "#1#\n#2#\n#3#\n##"},
+	}
+	for i, test := range tests {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			assert.Equal(t, test.want, WrapLines(test.s, "#"))
+		})
+	}
 }

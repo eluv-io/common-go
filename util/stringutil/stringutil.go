@@ -183,8 +183,18 @@ func IndentLines(s string, spaces int) string {
 }
 
 // PrefixLines prefixes each line in the given string with the given prefix.
-func PrefixLines(v, prefix string) string {
-	return prefix + strings.Replace(v, "\n", "\n"+prefix, -1)
+func PrefixLines(s, prefix string) string {
+	return prefix + strings.Replace(s, "\n", "\n"+prefix, -1)
+}
+
+// PostfixLines postfixes each line in the given string with the given prefix.
+func PostfixLines(s, postfix string) string {
+	return strings.Replace(s, "\n", postfix+"\n", -1) + postfix
+}
+
+// WrapLines pre- and postfixes each line in s with w.
+func WrapLines(s, w string) string {
+	return w + strings.Replace(s, "\n", w+"\n"+w, -1) + w
 }
 
 // Stringer decorates any parameter-less function that returns a string as a
