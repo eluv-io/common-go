@@ -12,11 +12,11 @@ import (
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/format/duration"
-	"github.com/qluvio/content-fabric/format/structured"
-	"github.com/qluvio/content-fabric/util/codecutil"
-	"github.com/qluvio/content-fabric/util/jsonutil"
-	"github.com/qluvio/content-fabric/util/maputil"
+	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/format/structured"
+	"github.com/eluv-io/common-go/util/codecutil"
+	"github.com/eluv-io/common-go/util/jsonutil"
+	"github.com/eluv-io/common-go/util/maputil"
 )
 
 func TestValue_Manip(t *testing.T) {

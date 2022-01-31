@@ -9,9 +9,9 @@ import (
 	"go.opentelemetry.io/otel/api/kv"
 	"go.opentelemetry.io/otel/api/trace"
 
-	"github.com/qluvio/content-fabric/util/jsonutil"
-	"github.com/qluvio/content-fabric/util/stringutil"
-	"github.com/qluvio/content-fabric/util/traceutil"
+	"github.com/eluv-io/common-go/util/jsonutil"
+	"github.com/eluv-io/common-go/util/stringutil"
+	"github.com/eluv-io/common-go/util/traceutil"
 )
 
 func NewRefCache(

@@ -1,7 +1,7 @@
 package link
 
 import (
-	"github.com/qluvio/content-fabric/format/structured"
+	"github.com/eluv-io/common-go/format/structured"
 )
 
 // Extra are additional link features. They are stored in "." in the JSON

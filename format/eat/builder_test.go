@@ -8,11 +8,11 @@ import (
 	"github.com/eluv-io/utc-go"
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/format/eat"
-	"github.com/qluvio/content-fabric/format/id"
-	"github.com/qluvio/content-fabric/format/structured"
-	"github.com/qluvio/content-fabric/util/ethutil"
-	"github.com/qluvio/content-fabric/util/jsonutil"
+	"github.com/eluv-io/common-go/format/eat"
+	"github.com/eluv-io/common-go/format/id"
+	"github.com/eluv-io/common-go/format/structured"
+	"github.com/eluv-io/common-go/util/ethutil"
+	"github.com/eluv-io/common-go/util/jsonutil"
 )
 
 var sub = "token subject"

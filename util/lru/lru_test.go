@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qluvio/content-fabric/format/duration"
-	"github.com/qluvio/content-fabric/util/jsonutil"
+	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/util/jsonutil"
 
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/stretchr/testify/require"

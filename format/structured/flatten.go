@@ -8,7 +8,7 @@ import (
 
 	"github.com/eluv-io/errors-go"
 
-	"github.com/qluvio/content-fabric/util/maputil"
+	"github.com/eluv-io/common-go/util/maputil"
 )
 
 // Flatten converts the given data structure into a list of flattened paths,

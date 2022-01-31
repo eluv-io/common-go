@@ -7,12 +7,12 @@ import (
 
 	mc "github.com/multiformats/go-multicodec"
 
-	"github.com/qluvio/content-fabric/format/codecs"
-	"github.com/qluvio/content-fabric/format/encryption"
-	"github.com/qluvio/content-fabric/format/hash"
-	"github.com/qluvio/content-fabric/format/id"
-	"github.com/qluvio/content-fabric/format/token"
-	. "github.com/qluvio/content-fabric/format/types"
+	"github.com/eluv-io/common-go/format/codecs"
+	"github.com/eluv-io/common-go/format/encryption"
+	"github.com/eluv-io/common-go/format/hash"
+	"github.com/eluv-io/common-go/format/id"
+	"github.com/eluv-io/common-go/format/token"
+	. "github.com/eluv-io/common-go/format/types"
 )
 
 // Factory provides all format-related constructors and generators like codecs,

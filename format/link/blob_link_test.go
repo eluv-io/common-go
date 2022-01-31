@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/qluvio/content-fabric/format/encryption"
-	"github.com/qluvio/content-fabric/format/link"
+	"github.com/eluv-io/common-go/format/encryption"
+	"github.com/eluv-io/common-go/format/link"
 
 	"github.com/stretchr/testify/require"
 )

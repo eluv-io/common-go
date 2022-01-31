@@ -7,14 +7,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/qluvio/content-fabric/format"
-	"github.com/qluvio/content-fabric/format/hash"
-	"github.com/qluvio/content-fabric/format/id"
-	"github.com/qluvio/content-fabric/format/link"
-	"github.com/qluvio/content-fabric/format/token"
-	"github.com/qluvio/content-fabric/util/codecutil"
-	"github.com/qluvio/content-fabric/util/jsonutil"
-	"github.com/qluvio/content-fabric/util/stringutil"
+	"github.com/eluv-io/common-go/format"
+	"github.com/eluv-io/common-go/format/hash"
+	"github.com/eluv-io/common-go/format/id"
+	"github.com/eluv-io/common-go/format/link"
+	"github.com/eluv-io/common-go/format/token"
+	"github.com/eluv-io/common-go/util/codecutil"
+	"github.com/eluv-io/common-go/util/jsonutil"
+	"github.com/eluv-io/common-go/util/stringutil"
 
 	"github.com/stretchr/testify/require"
 )

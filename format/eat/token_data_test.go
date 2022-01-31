@@ -9,11 +9,11 @@ import (
 	"github.com/eluv-io/utc-go"
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/format"
-	"github.com/qluvio/content-fabric/format/eat"
-	"github.com/qluvio/content-fabric/format/hash"
-	"github.com/qluvio/content-fabric/format/types"
-	"github.com/qluvio/content-fabric/util/byteutil"
+	"github.com/eluv-io/common-go/format"
+	"github.com/eluv-io/common-go/format/eat"
+	"github.com/eluv-io/common-go/format/hash"
+	"github.com/eluv-io/common-go/format/types"
+	"github.com/eluv-io/common-go/util/byteutil"
 )
 
 var qph = func() types.QPHash {

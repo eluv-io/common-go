@@ -13,10 +13,10 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 
-	"github.com/qluvio/content-fabric/format/hash"
-	"github.com/qluvio/content-fabric/format/sign"
-	"github.com/qluvio/content-fabric/format/types"
-	"github.com/qluvio/content-fabric/util/ethutil"
+	"github.com/eluv-io/common-go/format/hash"
+	"github.com/eluv-io/common-go/format/sign"
+	"github.com/eluv-io/common-go/format/types"
+	"github.com/eluv-io/common-go/util/ethutil"
 )
 
 const (

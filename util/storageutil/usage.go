@@ -4,7 +4,7 @@ import (
 	"github.com/eluv-io/errors-go"
 	"github.com/ricochet2200/go-disk-usage/du"
 
-	"github.com/qluvio/content-fabric/format/bytesize"
+	"github.com/eluv-io/common-go/format/bytesize"
 )
 
 // GetUsage returns utilization for the storage volume at the given path.

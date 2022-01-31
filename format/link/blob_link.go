@@ -5,7 +5,7 @@ import (
 
 	"github.com/eluv-io/errors-go"
 
-	"github.com/qluvio/content-fabric/format/encryption"
+	"github.com/eluv-io/common-go/format/encryption"
 )
 
 // NewBlobLink creates a blob link from the given link.

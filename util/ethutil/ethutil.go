@@ -14,9 +14,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 
-	"github.com/qluvio/content-fabric/format/id"
-	"github.com/qluvio/content-fabric/format/keys"
-	"github.com/qluvio/content-fabric/format/types"
+	"github.com/eluv-io/common-go/format/id"
+	"github.com/eluv-io/common-go/format/keys"
+	"github.com/eluv-io/common-go/format/types"
 )
 
 func HashFromHex(hash string) (*common.Hash, error) {

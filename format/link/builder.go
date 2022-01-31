@@ -1,8 +1,8 @@
 package link
 
 import (
-	"github.com/qluvio/content-fabric/format/hash"
-	"github.com/qluvio/content-fabric/format/structured"
+	"github.com/eluv-io/common-go/format/hash"
+	"github.com/eluv-io/common-go/format/structured"
 )
 
 // NewBuilder creates a link builder that can be used to build a link:

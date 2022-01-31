@@ -12,9 +12,9 @@ import (
 	"github.com/eluv-io/errors-go"
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/format/preamble"
-	"github.com/qluvio/content-fabric/util/byteutil"
-	"github.com/qluvio/content-fabric/util/stringutil"
+	"github.com/eluv-io/common-go/format/preamble"
+	"github.com/eluv-io/common-go/util/byteutil"
+	"github.com/eluv-io/common-go/util/stringutil"
 )
 
 var data, data2 []byte

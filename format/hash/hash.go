@@ -16,8 +16,8 @@ import (
 	"github.com/eluv-io/utc-go"
 	"github.com/mr-tron/base58/base58"
 
-	ei "github.com/qluvio/content-fabric/format/id"
-	"github.com/qluvio/content-fabric/format/preamble"
+	ei "github.com/eluv-io/common-go/format/id"
+	"github.com/eluv-io/common-go/format/preamble"
 )
 
 // Code is the code of a hash

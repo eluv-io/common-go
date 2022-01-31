@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 
-	"github.com/qluvio/content-fabric/util/byteutil"
+	"github.com/eluv-io/common-go/util/byteutil"
 )
 
 var bufSize = 64 * 1024
@@ -146,12 +146,12 @@ func TestPool(t *testing.T) {
 // go test -tags "avpipe LLVM byollvm" -count=1 -v -bench=Benchmark* -run=Benchmark ./util/byteutil
 // goos: darwin
 // goarch: amd64
-// pkg: github.com/qluvio/content-fabric/util/byteutil
+// pkg: github.com/eluv-io/common-go/util/byteutil
 // BenchmarkPool-8       	  421527	      2413 ns/op	      33 B/op	       1 allocs/op
 // BenchmarkSyncPool-8   	 1000000	      1971 ns/op	      32 B/op	       1 allocs/op
 // BenchmarkNoPool-8     	  156228	      7671 ns/op	   65536 B/op	       1 allocs/op
 // PASS
-// ok  	github.com/qluvio/content-fabric/util/byteutil	5.404s
+// ok  	github.com/eluv-io/common-go/util/byteutil	5.404s
 
 func BenchmarkPool(b *testing.B) {
 	p := byteutil.NewPool(bufSize)

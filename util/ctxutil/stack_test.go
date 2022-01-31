@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/api/trace"
 
-	"github.com/qluvio/content-fabric/util/ctxutil"
-	"github.com/qluvio/content-fabric/util/jsonutil"
-	"github.com/qluvio/content-fabric/util/traceutil"
+	"github.com/eluv-io/common-go/util/ctxutil"
+	"github.com/eluv-io/common-go/util/jsonutil"
+	"github.com/eluv-io/common-go/util/traceutil"
 )
 
 func TestContextStack(t *testing.T) {

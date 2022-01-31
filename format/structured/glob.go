@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strconv"
 
-	"github.com/qluvio/content-fabric/util/jsonutil"
+	"github.com/eluv-io/common-go/util/jsonutil"
 )
 
 const wildcard = "*"

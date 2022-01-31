@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/format/bytesize"
+	"github.com/eluv-io/common-go/format/bytesize"
 )
 
 func TestHumanReadable(t *testing.T) {

@@ -18,10 +18,10 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/secp256k1"
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/format/eat"
-	"github.com/qluvio/content-fabric/format/id"
-	"github.com/qluvio/content-fabric/util/ethutil"
-	"github.com/qluvio/content-fabric/util/jsonutil"
+	"github.com/eluv-io/common-go/format/eat"
+	"github.com/eluv-io/common-go/format/id"
+	"github.com/eluv-io/common-go/util/ethutil"
+	"github.com/eluv-io/common-go/util/jsonutil"
 )
 
 var (

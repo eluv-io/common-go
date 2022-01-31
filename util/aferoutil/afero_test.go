@@ -11,8 +11,8 @@ import (
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/util"
-	"github.com/qluvio/content-fabric/util/testutil"
+	"github.com/eluv-io/common-go/util"
+	"github.com/eluv-io/common-go/util/testutil"
 )
 
 func TestMoveFile(t *testing.T) {

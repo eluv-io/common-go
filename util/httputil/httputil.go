@@ -21,8 +21,8 @@ import (
 	mcjson "github.com/multiformats/go-multicodec/json"
 	mux "github.com/multiformats/go-multicodec/mux"
 
-	"github.com/qluvio/content-fabric/format/id"
-	eioutil "github.com/qluvio/content-fabric/util/ioutil"
+	"github.com/eluv-io/common-go/format/id"
+	eioutil "github.com/eluv-io/common-go/util/ioutil"
 )
 
 const (

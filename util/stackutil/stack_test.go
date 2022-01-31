@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/util/stackutil"
+	"github.com/eluv-io/common-go/util/stackutil"
 )
 
 // TestLargeStack creates many goroutines with a deep stack and then generates

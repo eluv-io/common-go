@@ -14,9 +14,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/format/id"
-	"github.com/qluvio/content-fabric/util/httputil"
-	"github.com/qluvio/content-fabric/util/jsonutil"
+	"github.com/eluv-io/common-go/format/id"
+	"github.com/eluv-io/common-go/util/httputil"
+	"github.com/eluv-io/common-go/util/jsonutil"
 )
 
 func TestParseBytesRange(t *testing.T) {

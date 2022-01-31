@@ -9,12 +9,12 @@ import (
 	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/utc-go"
 
-	"github.com/qluvio/content-fabric/format/duration"
-	"github.com/qluvio/content-fabric/format/id"
-	"github.com/qluvio/content-fabric/util/codecutil"
-	"github.com/qluvio/content-fabric/util/ifutil"
-	"github.com/qluvio/content-fabric/util/numberutil"
-	"github.com/qluvio/content-fabric/util/stringutil"
+	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/format/id"
+	"github.com/eluv-io/common-go/util/codecutil"
+	"github.com/eluv-io/common-go/util/ifutil"
+	"github.com/eluv-io/common-go/util/numberutil"
+	"github.com/eluv-io/common-go/util/stringutil"
 )
 
 // Wrap wraps the given data structure as a structured Value object, offering

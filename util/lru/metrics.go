@@ -3,7 +3,7 @@ package lru
 import (
 	"encoding/json"
 
-	"github.com/qluvio/content-fabric/format/duration"
+	"github.com/eluv-io/common-go/format/duration"
 )
 
 // Metrics collects runtime metrics of the LRU cache.

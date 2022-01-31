@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/qluvio/content-fabric/util/jsonutil"
+	"github.com/eluv-io/common-go/util/jsonutil"
 
 	"github.com/stretchr/testify/require"
 )

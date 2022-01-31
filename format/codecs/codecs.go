@@ -14,9 +14,9 @@ import (
 	"github.com/multiformats/go-multicodec/base"
 	cd "github.com/ugorji/go/codec"
 
-	"github.com/qluvio/content-fabric/format/hash"
-	"github.com/qluvio/content-fabric/format/id"
-	"github.com/qluvio/content-fabric/format/link"
+	"github.com/eluv-io/common-go/format/hash"
+	"github.com/eluv-io/common-go/format/id"
+	"github.com/eluv-io/common-go/format/link"
 	// cbor "github.com/whyrusleeping/cbor/go"
 )
 

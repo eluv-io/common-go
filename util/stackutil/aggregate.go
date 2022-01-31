@@ -8,7 +8,7 @@ import (
 	"github.com/eluv-io/errors-go"
 	"github.com/maruel/panicparse/v2/stack"
 
-	"github.com/qluvio/content-fabric/util/numberutil"
+	"github.com/eluv-io/common-go/util/numberutil"
 )
 
 const (

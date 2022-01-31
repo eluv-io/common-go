@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/qluvio/content-fabric/util/stringutil"
+	"github.com/eluv-io/common-go/util/stringutil"
 )
 
 // SortedStringKeys returns a slice with the sorted keys of the given

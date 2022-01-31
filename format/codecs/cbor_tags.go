@@ -6,9 +6,9 @@ import (
 	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/utc-go"
 
-	"github.com/qluvio/content-fabric/format/hash"
-	"github.com/qluvio/content-fabric/format/id"
-	"github.com/qluvio/content-fabric/format/link"
+	"github.com/eluv-io/common-go/format/hash"
+	"github.com/eluv-io/common-go/format/id"
+	"github.com/eluv-io/common-go/format/link"
 )
 
 // HashStringConverter marshals/unmarshals a hash.Hash object to/from a string.

@@ -20,12 +20,12 @@ import (
 	"github.com/mr-tron/base58"
 	"github.com/multiformats/go-varint"
 
-	"github.com/qluvio/content-fabric/format/id"
-	"github.com/qluvio/content-fabric/format/sign"
-	"github.com/qluvio/content-fabric/format/structured"
-	"github.com/qluvio/content-fabric/format/types"
-	"github.com/qluvio/content-fabric/util/jsonutil"
-	"github.com/qluvio/content-fabric/util/stringutil"
+	"github.com/eluv-io/common-go/format/id"
+	"github.com/eluv-io/common-go/format/sign"
+	"github.com/eluv-io/common-go/format/structured"
+	"github.com/eluv-io/common-go/format/types"
+	"github.com/eluv-io/common-go/util/jsonutil"
+	"github.com/eluv-io/common-go/util/stringutil"
 )
 
 const prefixLen = 6 // length of entire prefix including type, sig-type and format

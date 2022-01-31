@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/qluvio/content-fabric/util/maputil"
+	"github.com/eluv-io/common-go/util/maputil"
 )
 
 func NewMemScanRegistry() MemScanRegistry {

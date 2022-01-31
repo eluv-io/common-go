@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 
-	"github.com/qluvio/content-fabric/util/syncutil"
+	"github.com/eluv-io/common-go/util/syncutil"
 )
 
 func TestPromise(t *testing.T) {

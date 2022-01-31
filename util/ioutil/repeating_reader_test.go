@@ -6,7 +6,7 @@ import (
 	stdioutil "io/ioutil"
 	"testing"
 
-	"github.com/qluvio/content-fabric/util/ioutil"
+	"github.com/eluv-io/common-go/util/ioutil"
 
 	"github.com/stretchr/testify/require"
 )

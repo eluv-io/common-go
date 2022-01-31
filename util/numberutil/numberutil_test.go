@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/qluvio/content-fabric/util/numberutil"
+	"github.com/eluv-io/common-go/util/numberutil"
 
 	"github.com/stretchr/testify/require"
 )

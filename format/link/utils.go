@@ -1,6 +1,6 @@
 package link
 
-import "github.com/qluvio/content-fabric/format/structured"
+import "github.com/eluv-io/common-go/format/structured"
 
 // ConvertLinks scans the target structure for links represented as a map with a
 // single "/" key, and converts them to link objects.

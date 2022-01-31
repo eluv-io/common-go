@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"net/http"
 
-	"github.com/qluvio/content-fabric/format/structured"
+	"github.com/eluv-io/common-go/format/structured"
 )
 
 var (

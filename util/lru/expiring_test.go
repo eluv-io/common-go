@@ -7,8 +7,8 @@ import (
 	"github.com/eluv-io/utc-go"
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/format/duration"
-	"github.com/qluvio/content-fabric/util/lru"
+	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/util/lru"
 )
 
 func TestExpiringCache(t *testing.T) {

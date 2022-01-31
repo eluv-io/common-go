@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/qluvio/content-fabric/format/link"
-	"github.com/qluvio/content-fabric/format/structured"
-	"github.com/qluvio/content-fabric/util/jsonutil"
-	"github.com/qluvio/content-fabric/util/maputil"
+	"github.com/eluv-io/common-go/format/link"
+	"github.com/eluv-io/common-go/format/structured"
+	"github.com/eluv-io/common-go/util/jsonutil"
+	"github.com/eluv-io/common-go/util/maputil"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

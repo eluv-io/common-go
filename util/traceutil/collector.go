@@ -11,8 +11,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	"google.golang.org/grpc/codes"
 
-	"github.com/qluvio/content-fabric/format/duration"
-	"github.com/qluvio/content-fabric/util/jsonutil"
+	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/util/jsonutil"
 )
 
 type TraceCollector struct {

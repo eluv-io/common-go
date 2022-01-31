@@ -9,7 +9,7 @@ import (
 	"go.opentelemetry.io/otel/api/kv"
 	"go.opentelemetry.io/otel/api/trace"
 
-	"github.com/qluvio/content-fabric/util/ctxutil"
+	"github.com/eluv-io/common-go/util/ctxutil"
 )
 
 func TestNoop(t *testing.T) {

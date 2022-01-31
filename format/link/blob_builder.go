@@ -3,7 +3,7 @@ package link
 import (
 	"encoding/base64"
 
-	"github.com/qluvio/content-fabric/format/encryption"
+	"github.com/eluv-io/common-go/format/encryption"
 )
 
 // NewBlobBuilder creates a link builder that can be used to build a blob link:

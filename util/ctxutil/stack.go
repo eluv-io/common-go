@@ -8,7 +8,7 @@ import (
 	elog "github.com/eluv-io/log-go"
 	"go.opentelemetry.io/otel/api/trace"
 
-	"github.com/qluvio/content-fabric/util/goutil"
+	"github.com/eluv-io/common-go/util/goutil"
 )
 
 var log = elog.Get("/eluvio/util/ctxutil")

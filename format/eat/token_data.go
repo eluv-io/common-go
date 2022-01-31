@@ -9,9 +9,9 @@ import (
 	"github.com/eluv-io/utc-go"
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/qluvio/content-fabric/format/codecs"
-	"github.com/qluvio/content-fabric/format/hash"
-	"github.com/qluvio/content-fabric/format/types"
+	"github.com/eluv-io/common-go/format/codecs"
+	"github.com/eluv-io/common-go/format/hash"
+	"github.com/eluv-io/common-go/format/types"
 )
 
 // TokenData is the structure containing the actual token data.

@@ -11,12 +11,12 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/atomic"
 
-	"github.com/qluvio/content-fabric/util/syncutil"
+	"github.com/eluv-io/common-go/util/syncutil"
 
-	"github.com/qluvio/content-fabric/format/duration"
-	"github.com/qluvio/content-fabric/format/structured"
-	"github.com/qluvio/content-fabric/util/jsonutil"
-	"github.com/qluvio/content-fabric/util/lru"
+	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/format/structured"
+	"github.com/eluv-io/common-go/util/jsonutil"
+	"github.com/eluv-io/common-go/util/lru"
 )
 
 func TestNewRefCacheBasic(t *testing.T) {

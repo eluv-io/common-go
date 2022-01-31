@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/util/stackutil"
+	"github.com/eluv-io/common-go/util/stackutil"
 )
 
 func TestAggregate(t *testing.T) {

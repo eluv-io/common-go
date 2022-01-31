@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/otel/api/kv"
 	"go.opentelemetry.io/otel/api/kv/value"
 
-	"github.com/qluvio/content-fabric/util/traceutil"
+	"github.com/eluv-io/common-go/util/traceutil"
 )
 
 func TestStartSubSpan(t *testing.T) {

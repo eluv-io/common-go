@@ -3,7 +3,7 @@ package encryption
 import (
 	"github.com/eluv-io/errors-go"
 
-	"github.com/qluvio/content-fabric/format/hash"
+	"github.com/eluv-io/common-go/format/hash"
 )
 
 // Scheme is the encryption scheme of a resource.

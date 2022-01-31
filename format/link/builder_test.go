@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/qluvio/content-fabric/format"
-	"github.com/qluvio/content-fabric/format/hash"
-	"github.com/qluvio/content-fabric/format/link"
-	"github.com/qluvio/content-fabric/format/structured"
-	"github.com/qluvio/content-fabric/format/types"
-	"github.com/qluvio/content-fabric/util/byteutil"
+	"github.com/eluv-io/common-go/format"
+	"github.com/eluv-io/common-go/format/hash"
+	"github.com/eluv-io/common-go/format/link"
+	"github.com/eluv-io/common-go/format/structured"
+	"github.com/eluv-io/common-go/format/types"
+	"github.com/eluv-io/common-go/util/byteutil"
 
 	"github.com/stretchr/testify/require"
 )

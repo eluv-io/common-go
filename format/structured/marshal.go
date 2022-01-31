@@ -11,7 +11,7 @@ import (
 	"github.com/eluv-io/errors-go"
 	"github.com/ghodss/yaml"
 
-	"github.com/qluvio/content-fabric/util/maputil"
+	"github.com/eluv-io/common-go/util/maputil"
 )
 
 func NewMarshaler() *Marshaler {

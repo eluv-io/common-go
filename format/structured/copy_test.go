@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/format/structured"
+	"github.com/eluv-io/common-go/format/structured"
 )
 
 type copyTestStruct struct {

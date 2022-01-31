@@ -8,10 +8,10 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 
-	"github.com/qluvio/content-fabric/format/id"
-	"github.com/qluvio/content-fabric/format/structured"
-	"github.com/qluvio/content-fabric/format/types"
-	"github.com/qluvio/content-fabric/util/ethutil"
+	"github.com/eluv-io/common-go/format/id"
+	"github.com/eluv-io/common-go/format/structured"
+	"github.com/eluv-io/common-go/format/types"
+	"github.com/eluv-io/common-go/util/ethutil"
 )
 
 type Encoder interface {

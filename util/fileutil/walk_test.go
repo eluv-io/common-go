@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/qluvio/content-fabric/util/fileutil"
-	"github.com/qluvio/content-fabric/util/testutil"
+	"github.com/eluv-io/common-go/util/fileutil"
+	"github.com/eluv-io/common-go/util/testutil"
 
 	"github.com/stretchr/testify/require"
 )

@@ -13,9 +13,9 @@ import (
 	"github.com/eluv-io/log-go"
 	"github.com/mr-tron/base58/base58"
 
-	"github.com/qluvio/content-fabric/format/encryption"
-	"github.com/qluvio/content-fabric/format/id"
-	"github.com/qluvio/content-fabric/util/byteutil"
+	"github.com/eluv-io/common-go/format/encryption"
+	"github.com/eluv-io/common-go/format/id"
+	"github.com/eluv-io/common-go/util/byteutil"
 )
 
 func NewObject(code Code, qid id.ID, nid id.ID, bytes ...byte) (*Token, error) {

@@ -10,11 +10,11 @@ import (
 	"github.com/eluv-io/utc-go"
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/format"
-	"github.com/qluvio/content-fabric/format/codecs"
-	"github.com/qluvio/content-fabric/format/hash"
-	"github.com/qluvio/content-fabric/format/link"
-	"github.com/qluvio/content-fabric/util/maputil"
+	"github.com/eluv-io/common-go/format"
+	"github.com/eluv-io/common-go/format/codecs"
+	"github.com/eluv-io/common-go/format/hash"
+	"github.com/eluv-io/common-go/format/link"
+	"github.com/eluv-io/common-go/util/maputil"
 )
 
 var codec = codecs.NewCborCodec()

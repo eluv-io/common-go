@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/util/syncutil"
+	"github.com/eluv-io/common-go/util/syncutil"
 )
 
 func TestWorkerPoolFairExecution(t *testing.T) {

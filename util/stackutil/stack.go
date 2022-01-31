@@ -53,7 +53,7 @@ func FullStack() (stack string) {
 // followed by (file-name:line-number) of the caller.
 // Example:
 // file:     Users/xx/eluv.io/ws/src/content-fabric/util/stackutil/stack_test.go
-// function: github.com/qluvio/content-fabric/util/stackutil_test.TestCaller
+// function: github.com/eluv-io/common-go/util/stackutil_test.TestCaller
 // results:
 // stackutil_test.TestCaller (stack_test.go:66)
 func Caller(index int) string {

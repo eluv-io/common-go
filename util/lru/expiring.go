@@ -5,9 +5,9 @@ import (
 
 	"github.com/eluv-io/utc-go"
 
-	"github.com/qluvio/content-fabric/format/duration"
-	"github.com/qluvio/content-fabric/util/jsonutil"
-	"github.com/qluvio/content-fabric/util/traceutil"
+	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/util/jsonutil"
+	"github.com/eluv-io/common-go/util/traceutil"
 )
 
 // NewExpiringCache creates a new ExpiringCache.

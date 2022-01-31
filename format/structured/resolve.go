@@ -8,9 +8,9 @@ import (
 
 	"github.com/eluv-io/errors-go"
 
-	"github.com/qluvio/content-fabric/util/ifutil"
-	"github.com/qluvio/content-fabric/util/maputil"
-	"github.com/qluvio/content-fabric/util/stringutil"
+	"github.com/eluv-io/common-go/util/ifutil"
+	"github.com/eluv-io/common-go/util/maputil"
+	"github.com/eluv-io/common-go/util/stringutil"
 )
 
 var stringType = reflect.TypeOf("")

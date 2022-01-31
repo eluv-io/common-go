@@ -7,9 +7,9 @@ import (
 	"github.com/eluv-io/log-go"
 	"github.com/eluv-io/utc-go"
 
-	"github.com/qluvio/content-fabric/format/duration"
-	"github.com/qluvio/content-fabric/util/jsonutil"
-	"github.com/qluvio/content-fabric/util/lru"
+	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/util/jsonutil"
+	"github.com/eluv-io/common-go/util/lru"
 )
 
 // Tracker is the interface for a generic session tracker. It manages a list of

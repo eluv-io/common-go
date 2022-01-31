@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/qluvio/content-fabric/format/duration"
-	"github.com/qluvio/content-fabric/format/structured"
+	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/format/structured"
 )
 
 // StringQuery retrieves the given query parameter from the query as a string. Returns the default value if the query

@@ -8,7 +8,7 @@ import (
 	"github.com/eluv-io/errors-go"
 	. "github.com/smartystreets/goconvey/convey"
 
-	"github.com/qluvio/content-fabric/format/bytesize"
+	"github.com/eluv-io/common-go/format/bytesize"
 )
 
 func TestMarshalText(t *testing.T) {

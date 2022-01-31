@@ -8,7 +8,7 @@ import (
 	"github.com/eluv-io/errors-go"
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/util/ioutil"
+	"github.com/eluv-io/common-go/util/ioutil"
 )
 
 var _ io.ReaderAt = (*testReader)(nil)

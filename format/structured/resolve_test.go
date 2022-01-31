@@ -8,7 +8,7 @@ import (
 	"github.com/eluv-io/errors-go"
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/util/maputil"
+	"github.com/eluv-io/common-go/util/maputil"
 )
 
 func TestResolve(t *testing.T) {

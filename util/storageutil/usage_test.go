@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/util/storageutil"
+	"github.com/eluv-io/common-go/util/storageutil"
 )
 
 func TestGetUsage(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/util/multiqueue"
+	"github.com/eluv-io/common-go/util/multiqueue"
 )
 
 func TestEmpty(t *testing.T) {

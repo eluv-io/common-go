@@ -9,8 +9,8 @@ import (
 	"github.com/eluv-io/log-go"
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/format/structured"
-	"github.com/qluvio/content-fabric/util/jsonutil"
+	"github.com/eluv-io/common-go/format/structured"
+	"github.com/eluv-io/common-go/util/jsonutil"
 )
 
 func TestFilterGlob(t *testing.T) {

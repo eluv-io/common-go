@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/qluvio/content-fabric/util/syncutil"
+	"github.com/eluv-io/common-go/util/syncutil"
 )
 
 func TestConcurrencyLimiter(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 
 	"github.com/eluv-io/errors-go"
 
-	"github.com/qluvio/content-fabric/format/duration"
+	"github.com/eluv-io/common-go/format/duration"
 )
 
 // AsInt64 returns the given value as an int.

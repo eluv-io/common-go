@@ -6,7 +6,7 @@ import (
 	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/log-go"
 
-	"github.com/qluvio/content-fabric/util/filterutil"
+	"github.com/eluv-io/common-go/util/filterutil"
 )
 
 func NewUdpForwarder(listenAddress string, targetAddress string, filter filterutil.Filter) *UdpForwarder {

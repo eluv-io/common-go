@@ -7,9 +7,9 @@ import (
 
 	"github.com/eluv-io/errors-go"
 
-	"github.com/qluvio/content-fabric/format/hash"
-	"github.com/qluvio/content-fabric/format/structured"
-	"github.com/qluvio/content-fabric/util/httputil"
+	"github.com/eluv-io/common-go/format/hash"
+	"github.com/eluv-io/common-go/format/structured"
+	"github.com/eluv-io/common-go/util/httputil"
 )
 
 const ABSOLUTE_LINK_PREFIX = "/qfab/"

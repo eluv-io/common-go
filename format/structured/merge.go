@@ -1,7 +1,7 @@
 package structured
 
 import (
-	"github.com/qluvio/content-fabric/util/maputil"
+	"github.com/eluv-io/common-go/util/maputil"
 )
 
 // standards:
