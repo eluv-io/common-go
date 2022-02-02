@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"math"
 	"strings"
 
 	"github.com/eluv-io/common-go/util/ioutil"
