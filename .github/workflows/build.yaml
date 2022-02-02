@@ -29,7 +29,9 @@ jobs:
       - name: Run tests
         run: go test -race ./...
 
-      - id: results
+      - name: Prepare Results
+        id: results
+        if: always()
         shell: bash
         env:
           FULL_REVISION: ${{ github.event.after }}
@@ -47,6 +49,7 @@ jobs:
 
       - name: Post to Slack
         id: slack
+        if: always()
         uses: slackapi/slack-github-action@v1.16.0
         with:
           # Slack channel id, channel name, or user id to post message.
