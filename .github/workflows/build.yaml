@@ -1,0 +1,122 @@
+name: Build & Test
+
+on: [ push ]
+jobs:
+  tests:
+    name: Build & Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest ]
+        go-version: [ 1.17.x ]
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go-version }}
+
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 1
+
+      - name: Get dependencies
+        run: go get -v -t -d ./...
+
+      - name: Build project
+        run: go build ./...
+
+      - name: Run tests
+        run: go test -race ./...
+
+      - id: results
+        shell: bash
+        env:
+          FULL_REVISION: ${{ github.event.after }}
+        run: |
+          echo "::set-output name=rev::${FULL_REVISION:0:8}"
+          echo "::set-output name=branch::${GITHUB_REF#refs/heads/}"
+          echo "::set-output name=os::$(uname -sr)"
+          echo "::set-output name=go_version::$(go version | cut -d " " -f 3-)"
+
+          if [[ "${{ job.status }}" == "success" ]]; then
+            echo "::set-output name=status:::moneybag: SUCCESS"
+          else
+            echo "::set-output name=status:::hankey: FAILURE"
+          fi
+
+      - name: Post to Slack
+        id: slack
+        uses: slackapi/slack-github-action@v1.16.0
+        with:
+          # Slack channel id, channel name, or user id to post message.
+          # See also: https://api.slack.com/methods/chat.postMessage#channels
+          channel-id: '${{ secrets.SLACK_CHANNEL }}'
+          # For posting a rich message using Block Kit
+          payload: |
+            {
+              "text": "GitHub Action build result: ${{ job.status }}\n${{ github.event.head_commit.url }}",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "${{ steps.results.outputs.status }}"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Repository:* `${{ github.repository }}`"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:* `${{ steps.results.outputs.branch }}`"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Revision:* `${{ steps.results.outputs.rev }}`"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Committer:* `${{ github.actor }}`"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Go Version:* `${{ steps.results.outputs.go_version }}`"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*OS:* `${{ steps.results.outputs.os }}`"
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "Build log",
+                        "emoji": true
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "Commit Details",
+                        "emoji": true
+                      },
+                      "url": "${{ github.event.head_commit.url }}"
+                    }
+                  ]
+                }
+              ]
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
