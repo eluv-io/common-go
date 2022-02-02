@@ -4,13 +4,12 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
-	"math"
 	"strings"
 
+	"github.com/eluv-io/common-go/util/ioutil"
+	"github.com/eluv-io/common-go/util/stringutil"
 	"github.com/eluv-io/errors-go"
 	"github.com/multiformats/go-multicodec"
-
-	"github.com/eluv-io/common-go/util/ioutil"
 )
 
 // Write writes the given preamble to the specified writer
@@ -27,6 +26,9 @@ func Write(w io.Writer, preambleData []byte, preambleFormat ...string) (int64, e
 		preambleFmt = "/raw"
 	} else if !strings.HasPrefix(preambleFmt, "/") {
 		preambleFmt = "/" + preambleFmt
+	}
+	if !isFormat(preambleFmt) {
+		return 0, errors.E("preamble write", errors.K.Invalid, "reason", "invalid preamble format", "format", preambleFmt)
 	}
 	header := multicodec.Header([]byte(preambleFmt))
 	sz := make([]byte, binary.MaxVarintLen64)
@@ -105,13 +107,17 @@ func Read(r io.ReadSeeker, noSeek bool, sizeLimit ...int64) (preambleData []byte
 		err = errors.E("preamble read", errors.K.IO, err)
 		return
 	}
+	preambleFormat = string(multicodec.HeaderPath(header))
+	if !isFormat(preambleFormat) {
+		err = errors.E("preamble read", errors.K.NotExist, "reason", "preamble header not found")
+		return
+	}
 	preambleSize, err = r.Seek(0, io.SeekCurrent)
 	if err != nil {
 		err = errors.E("preamble read", err)
 		return
 	}
 	preambleData = buf.Bytes() // Remaining bytes
-	preambleFormat = string(multicodec.HeaderPath(header))
 	return
 }
 
@@ -156,6 +162,8 @@ func Seek(s io.Seeker, preambleSize int64, dataSize int64, currOffset int64, off
 	return off - preambleSize, nil
 }
 
+///////////////////////////////////////////////////////////////////////////////
+
 // Sizer provides an io.Writer that calculates the size of preamble data written to it
 // It is expected that Sizer.Size() is only called after the full preamble data has been written to
 // the Sizer. In the typical case, since the preamble size is not known beforehand (hence the use
@@ -192,4 +200,13 @@ func (s *Sizer) Size() (int64, error) {
 		return 0, errors.E("preamble size", errors.K.Invalid, "reason", "invalid uvarint", "n", n)
 	}
 	return int64(x) + int64(n), nil
+}
+
+///////////////////////////////////////////////////////////////////////////////
+
+const formatSymbols = "abcdefghijklmnopqrstuvwxyz1234567890-_"
+
+func isFormat(s string) bool {
+	return len(s) > 1 && strings.HasPrefix(s, "/") &&
+		stringutil.MatchRunes(s[1:], func(r rune) bool { return strings.ContainsRune(formatSymbols, r) })
 }
