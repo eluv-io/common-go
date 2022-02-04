@@ -11,8 +11,20 @@ import (
 
 var log = elog.Get("/eluvio/util/traceutil")
 
+type tracingContextKey struct{}
+type tracing struct {
+	enabled bool
+}
+
 // The currently used ContextStack
-var current = ctxutil.Noop()
+func current() ctxutil.ContextStack {
+	ret := ctxutil.Current()
+	tr, _ := ret.Ctx().Value(tracingContextKey{}).(*tracing)
+	if tr == nil || !tr.enabled {
+		return ctxutil.Noop()
+	}
+	return ret
+}
 
 // EnableTracing enables/disables tracing globally with a ContextStack. Returns
 // a reset function that can be used to reset the tracing state to what it was
@@ -21,20 +33,28 @@ var current = ctxutil.Noop()
 // Note: this function is not thread-safe and should only be called before any
 // 	     of the tracing functions are used.
 func EnableTracing(enable bool) func() {
+	current := ctxutil.Current()
 	if current == ctxutil.Noop() {
 		if enable {
 			log.Info("enabling performance tracing support")
-			current = ctxutil.NewStack()
+			c := ctxutil.NewStack()
+			c.WithValue(tracingContextKey{}, &tracing{enabled: true})
+			ctxutil.SetCurrent(c)
 			return func() {
-				current = ctxutil.Noop()
+				ctxutil.SetCurrent(current)
 			}
 		}
 	} else {
 		if !enable {
 			log.Info("disabling performance tracing support")
-			current = ctxutil.Noop()
+			pop := current.WithValue(tracingContextKey{}, &tracing{enabled: false})
 			return func() {
-				current = ctxutil.NewStack()
+				pop()
+			}
+		} else {
+			pop := current.WithValue(tracingContextKey{}, &tracing{enabled: true})
+			return func() {
+				pop()
 			}
 		}
 	}
@@ -43,7 +63,7 @@ func EnableTracing(enable bool) func() {
 
 // InitTracing initializes performance tracing for the current goroutine.
 func InitTracing(t trace.Tracer, spanName string, opts ...trace.StartOption) trace.Span {
-	return current.InitTracing(t, spanName, opts...)
+	return current().InitTracing(t, spanName, opts...)
 }
 
 // InitTestTracing initializes performance tracing for the purpose of testing.
@@ -59,13 +79,13 @@ func InitTracing(t trace.Tracer, spanName string, opts ...trace.StartOption) tra
 func InitTestTracing(spanName string) (*TestTracer, trace.Span) {
 	reset := EnableTracing(true)
 	t := NewTestTracer(reset)
-	return t, current.InitTracing(t, spanName)
+	return t, current().InitTracing(t, spanName)
 }
 
 // StartSpan creates new sub-span of the goroutine's current span or a noop
 // span if there is no current span.
 func StartSpan(spanName string, opts ...trace.StartOption) trace.Span {
-	return current.StartSpan(spanName, opts...)
+	return current().StartSpan(spanName, opts...)
 }
 
 // WithSpan creates a new sub-span of the goroutine's current span and executes
@@ -75,20 +95,20 @@ func WithSpan(
 	fn func() error,
 	opts ...trace.StartOption) error {
 
-	span := current.StartSpan(spanName, opts...)
+	span := current().StartSpan(spanName, opts...)
 	defer span.End()
 	return fn()
 }
 
 // Span retrieves the current span of this goroutine.
 func Span() trace.Span {
-	return current.Span()
+	return current().Span()
 }
 
 // Ctx returns the current tracing context. Should only be used for backwards
 // compatibility until old code is converted to use StartSpan directly.
 func Ctx() context.Context {
-	return current.Ctx()
+	return current().Ctx()
 }
 
 // StartSubSpan creates new sub-span of the context's current span or a noop

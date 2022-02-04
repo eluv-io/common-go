@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-// Discard is an Writer on which all Write calls succeed without doing anything.
+// Discard is a Writer on which all Write calls succeed without doing anything.
 // Discard is like io.Discard but reports the count of written bytes
 type Discard struct {
 	BytesCount int64

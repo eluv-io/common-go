@@ -5,13 +5,10 @@ import (
 	"runtime/debug"
 	"sync"
 
-	elog "github.com/eluv-io/log-go"
 	"go.opentelemetry.io/otel/api/trace"
 
 	"github.com/eluv-io/common-go/util/goutil"
 )
-
-var log = elog.Get("/eluvio/util/ctxutil")
 
 // NewStack creates a new ContextStack.
 func NewStack() ContextStack {
