@@ -56,6 +56,7 @@ const (
 	CachedResultSet
 	Tenant
 	Group
+	Key
 )
 
 const codeLen = 1
@@ -78,6 +79,7 @@ var prefixToCode = map[string]Code{
 	"icrs": CachedResultSet,
 	"iten": Tenant,
 	"igrp": Group,
+	"ikey": Key,
 }
 var codeToName = map[Code]string{
 	UNKNOWN:         "unknown",
@@ -95,6 +97,7 @@ var codeToName = map[Code]string{
 	CachedResultSet: "cached result set",
 	Tenant:          "tenant",
 	Group:           "group",
+	Key:             "key",
 }
 
 func init() {
@@ -282,4 +285,25 @@ func FormatId(id string, idType Code) (string, error) {
 		qid = append([]byte{0}, data...)
 		return qid.As(idType).String(), nil
 	}
+}
+
+func FromStringValidate(s string, valCode Code) (ID, error) {
+	id, err := FromString(s)
+	if err != nil {
+		return nil, err
+	}
+	if id.Code() != valCode {
+		return nil, errors.E("invalid code", errors.K.Invalid,
+			"expect", valCode,
+			"actual", id.Code())
+	}
+	return id, nil
+}
+
+func CodeFromPrefix(maybePrefix string) Code {
+	maybeCode, ok := prefixToCode[strings.ToLower(maybePrefix)]
+	if !ok {
+		return UNKNOWN
+	}
+	return maybeCode
 }
