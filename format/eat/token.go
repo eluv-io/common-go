@@ -1059,6 +1059,16 @@ func (t *Token) GetQLibID() types.QLibID {
 	return nil
 }
 
+func (t *Token) GetQID() types.QID {
+	if t.QID != nil {
+		return t.QID
+	}
+	if t.Embedded != nil {
+		return t.Embedded.GetQID()
+	}
+	return nil
+}
+
 func (t *Token) VerifySignedLink(srcQID, linkPath string) error {
 	log.Debug("verifying signed link",
 		"src", srcQID,
