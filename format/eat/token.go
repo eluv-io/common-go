@@ -11,9 +11,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/eluv-io/errors-go"
-	"github.com/eluv-io/log-go"
-	"github.com/eluv-io/utc-go"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/mattn/go-runewidth"
@@ -26,6 +23,9 @@ import (
 	"github.com/eluv-io/common-go/format/types"
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/common-go/util/stringutil"
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/log-go"
+	"github.com/eluv-io/utc-go"
 )
 
 const prefixLen = 6 // length of entire prefix including type, sig-type and format
@@ -291,6 +291,33 @@ func (t *Token) Validate() (err error) {
 		// keys since a token should always be granted to someone ...
 		if t.Subject == "" && (len(t.Ctx) == 0 || t.Type != Types.StateChannel()) {
 			return e("reason", "subject missing")
+		}
+		if t.Type == Types.EditorSigned() {
+			// EditorSigned token were originally legacy.ElvClientToken signed
+			// by a user/editor of the content. These client tokens were
+			// embedding a legacy.ElvAuthToken token where EthAddr was set to
+			// the address of the user/editor the token was delivered to.
+			// Hence the verification code was checking that the client token was
+			// signed by the user whose address was in EthAddr. As a result an
+			// editor signed token was signed twice: once as the authority
+			// signing the ElvAuthToken and once as the user ElvClientToken.
+			// As the 'subject' field did not exist in previous tokens but was
+			// computed from the EthAddr field in the server token, this resulted
+			// in the subject being also the signer.
+
+			// we now want editor signed tokens able to carry a 'subject' that
+			// is not necessarily the signer (use case: water-marking).
+
+			//uid := ethutil.AddressToID(t.EthAddr, id.User)
+			//subjid, err := id.User.FromString(t.Subject)
+			//if err != nil {
+			//	subjid, _ = ethutil.AddrToID(t.Subject, id.User)
+			//}
+			//if !uid.Equal(subjid) {
+			//	return e("reason", "subject differs from signer",
+			//		"subject", subjid,
+			//		"signer", uid)
+			//}
 		}
 		if t.Grant == "" {
 			return e("reason", "grant missing")

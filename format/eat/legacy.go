@@ -7,8 +7,6 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/eluv-io/errors-go"
-	"github.com/eluv-io/utc-go"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -17,6 +15,8 @@ import (
 	"github.com/eluv-io/common-go/format/sign"
 	"github.com/eluv-io/common-go/format/types"
 	"github.com/eluv-io/common-go/util/ethutil"
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/utc-go"
 )
 
 const (
@@ -297,8 +297,11 @@ func (l *TokenDataLegacy) CopyToTokenData(t *Token, typ TokenType) {
 	}
 	t.Ctx = l.Ctx
 	switch typ {
-	case Types.StateChannel(), Types.EditorSigned():
+	case Types.StateChannel():
 		t.Subject = l.EthAddr
+	case Types.EditorSigned():
+		t.Subject = l.EthAddr
+		fallthrough
 	default:
 		// ignore the error at this point
 		t.EthAddr, _ = ethutil.HexToAddress(l.EthAddr)

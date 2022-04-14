@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eluv-io/utc-go"
 	"github.com/stretchr/testify/require"
 
 	"github.com/eluv-io/common-go/format/eat"
@@ -13,6 +12,7 @@ import (
 	"github.com/eluv-io/common-go/format/structured"
 	"github.com/eluv-io/common-go/util/ethutil"
 	"github.com/eluv-io/common-go/util/jsonutil"
+	"github.com/eluv-io/utc-go"
 )
 
 var sub = "token subject"
@@ -123,12 +123,14 @@ func TestTokenBuilders(t *testing.T) {
 		{
 			encoder: eat.NewEditorSigned(sid, lid, qid).
 				WithGrant(eat.Grants.Read).
+				WithAfgh("afgh-pk").
 				WithCtx(map[string]interface{}{"additional": "context"}).
 				Sign(clientSK),
 			wantType: eat.Types.EditorSigned(),
 			validate: func(t *testing.T, data *eat.TokenData) {
 				editorSignedDefault(t, data)
 				require.Equal(t, qid, data.QID)
+				require.Equal(t, "afgh-pk", data.AFGHPublicKey)
 			},
 		},
 		{

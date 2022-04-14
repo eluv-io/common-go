@@ -5,34 +5,36 @@ import (
 	"encoding/binary"
 	"encoding/json"
 
-	"github.com/eluv-io/errors-go"
-	"github.com/eluv-io/utc-go"
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/eluv-io/common-go/format/codecs"
 	"github.com/eluv-io/common-go/format/hash"
+	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/types"
+	"github.com/eluv-io/common-go/util/ethutil"
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/utc-go"
 )
 
 // TokenData is the structure containing the actual token data.
 type TokenData struct {
 	// Client-provided
-	EthTxHash     common.Hash    // ethereum transaction hash - stored as []byte to enable 'nil'
-	EthAddr       common.Address // ethereum address of the user who signed the token - stored as []byte to enable 'nil'
-	AFGHPublicKey string         // AFGH public key
-	QPHash        types.QPHash   // qpart hash for node 2 node
+	EthTxHash     common.Hash    `json:"txh,omitempty"` // ethereum transaction hash - stored as []byte to enable 'nil'
+	EthAddr       common.Address `json:"adr,omitempty"` // ethereum address of the user who signed the token - stored as []byte to enable 'nil'
+	AFGHPublicKey string         `json:"apk,omitempty"` // AFGH public key
+	QPHash        types.QPHash   `json:"qph,omitempty"` // qpart hash for node 2 node
 
 	// Common
-	SID types.QSpaceID // space ID
-	LID types.QLibID   // lib ID
+	SID types.QSpaceID `json:"spc,omitempty"` // space ID
+	LID types.QLibID   `json:"lib,omitempty"` // lib ID
 
 	// ElvAuthToken ==> elv-master
-	QID      types.QID              // content ID
-	Subject  string                 // the entity the token was granted to
-	Grant    Grant                  // type of grant
-	IssuedAt utc.UTC                // Issued At
-	Expires  utc.UTC                // Expiration Time
-	Ctx      map[string]interface{} // additional, arbitrary information conveyed in the token
+	QID      types.QID              `json:"qid,omitempty"` // content ID
+	Subject  string                 `json:"sub,omitempty"` // the entity the token was granted to
+	Grant    Grant                  `json:"gra,omitempty"` // type of grant
+	IssuedAt utc.UTC                `json:"iat,omitempty"` // Issued At
+	Expires  utc.UTC                `json:"exp,omitempty"` // Expiration Time
+	Ctx      map[string]interface{} `json:"ctx,omitempty"` // additional, arbitrary information conveyed in the token
 }
 
 // EncodeJSON encodes the token data to JSON in its optimized form.
@@ -169,6 +171,13 @@ func (t *TokenData) IPGeo() string {
 		return obj.(string)
 	}
 	return ""
+}
+
+func (t *TokenData) Signer() types.UserID {
+	if t.EthAddr == zeroAddr {
+		return nil
+	}
+	return ethutil.AddressToID(t.EthAddr, id.User)
 }
 
 // -----------------------------------------------------------------------------
