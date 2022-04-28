@@ -9,11 +9,13 @@ import (
 	"github.com/eluv-io/common-go/util/httputil"
 	"github.com/eluv-io/common-go/util/stackutil"
 	"github.com/eluv-io/errors-go"
-	"github.com/eluv-io/log-go"
+	elog "github.com/eluv-io/log-go"
 )
 
-// Abort aborts the current HTTP request with the given error. The HTTP status
-// code is set according to the error type.
+// Abort aborts the current HTTP request with the given error. The HTTP status code is set according to the error type.
+// If the error is an eluv-io/errors-go with kind "Other" or a non-eluv-io/errors-go, the call also logs the stacktrace
+// of all goroutines. The logger (an instance of eluv-io/log-go) can be set in the gin context under the "LOGGER" key.
+// If not set, the root logger will be used.
 func Abort(c *gin.Context, err error) {
 	c.Abort()
 	code := http.StatusInternalServerError
@@ -36,36 +38,45 @@ func Abort(c *gin.Context, err error) {
 		case errors.K.Unavailable:
 			code = http.StatusServiceUnavailable
 		case errors.K.Other:
-			dumpGoRoutines()
+			dumpGoRoutines(c)
 		}
 	} else {
-		dumpGoRoutines()
+		dumpGoRoutines(c)
 	}
 	SendError(c, code, err)
 }
 
-// AbortWithStatus aborts the current HTTP request with the given status code
-// and error.
+// AbortWithStatus aborts the current HTTP request with the given status code and error.
 func AbortWithStatus(c *gin.Context, code int, err error) {
 	c.Abort()
 	SendError(c, code, err)
 }
 
-func dumpGoRoutines() {
+func dumpGoRoutines(c *gin.Context) {
+	log := getLog(c)
 	if !log.IsDebug() {
 		return
 	}
 	log.Error("dumping go-routines", "dump", stackutil.FullStack())
 }
 
-// SendError sends back an HTTP response with the given HTTP status code and the
-// data marshaled to JSON or XML depending on the "accept" headers of the
-// request. The data is marshaled to JSON if no accept headers are specified. No
-// data is marshaled if an accept headers other than 'application/json' or
-// 'application/xml' is specified.
+// getLog returns the logger from the gin context or the root logger.
+func getLog(c *gin.Context) (log *elog.Log) {
+	if clg, ok := c.Get("LOGGER"); ok {
+		log, _ = clg.(*elog.Log)
+	}
+	if log == nil {
+		log = elog.Get("/")
+	}
+	return log
+}
+
+// SendError sends back an HTTP response with the given HTTP status code and the data marshaled to JSON or XML depending
+// on the "accept" headers of the request. The data is marshaled to JSON if no accept headers are specified. No data is
+// marshaled if an accept headers other than 'application/json' or 'application/xml' is specified.
 func SendError(c *gin.Context, code int, err error) {
 	if err != nil {
-		log.Debug("api error", "code", code, "error", err)
+		elog.Debug("api error", "code", code, "error", err)
 	}
 	c.Writer.Header().Del("Content-Type")
 	c.Writer.Header().Del("Cache-Control")
@@ -79,11 +90,9 @@ func SendError(c *gin.Context, code int, err error) {
 	}
 }
 
-// Send send back an HTTP response with the given HTTP status code and the data
-// marshaled to JSON or XML depending on the "accept" headers of the request.
-// The data is marshaled to JSON if no accept headers are specified.
-// If an incompatible accept header is specified an error is returned with code
-// '406 - Not Acceptable'
+// Send send back an HTTP response with the given HTTP status code and the data marshaled to JSON or XML depending on
+// the "accept" headers of the request. The data is marshaled to JSON if no accept headers are specified. If an
+// incompatible accept header is specified an error is returned with code '406 - Not Acceptable'
 func Send(c *gin.Context, code int, data interface{}) {
 	c.Writer.Header().Del("Content-Type")
 	switch c.NegotiateFormat(gin.MIMEJSON, gin.MIMEXML) {

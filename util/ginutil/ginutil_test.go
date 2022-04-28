@@ -7,8 +7,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/eluv-io/apexlog-go/handlers/memory"
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/log-go"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -114,6 +116,20 @@ func TestAbortWithStatus(t *testing.T) {
 			)
 		})
 	}
+}
+
+func TestAbort_WithLog(t *testing.T) {
+	lg := log.New(&log.Config{
+		Level:   "debug",
+		Handler: "memory",
+	})
+	require.Len(t, lg.Handler().(*memory.Handler).Entries, 0)
+
+	_, c := testCtx(t)
+	c.Set("LOGGER", lg)
+	Abort(c, io.EOF)
+
+	require.Len(t, lg.Handler().(*memory.Handler).Entries, 1)
 }
 
 func TestSendError_Xml(t *testing.T) {
