@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/eluv-io/errors-go"
-	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -18,6 +17,44 @@ import (
 	"github.com/eluv-io/common-go/util/httputil"
 	"github.com/eluv-io/common-go/util/jsonutil"
 )
+
+func TestGetBytesRange(t *testing.T) {
+	tests := []struct {
+		query     string
+		header    string
+		want      string
+		wantError bool
+	}{
+		{"", "", "", false},
+		{"bytes=3-8", "", "3-8", false},
+		{"", "bytes=3-8", "3-8", false},
+		{"bytes=-4", "bytes=3-8", "-4", false},
+		{"", "not a byte range", "", true},
+	}
+
+	for _, test := range tests {
+		url := "http://localhost/path"
+		if test.query != "" {
+			url = url + "?" + test.query
+		}
+		req, err := http.NewRequest("GET", url, nil)
+		require.NoError(t, err)
+
+		if test.header != "" {
+			req.Header.Set("Range", test.header)
+		}
+
+		got, err := httputil.GetBytesRange(req)
+
+		if test.wantError {
+			require.Error(t, err)
+		} else {
+			require.NoError(t, err)
+			require.Equal(t, test.want, got)
+		}
+	}
+
+}
 
 func TestParseBytesRange(t *testing.T) {
 	tests := []struct {
@@ -53,7 +90,6 @@ func TestParseBytesRange(t *testing.T) {
 }
 
 func TestCustomHeaders(t *testing.T) {
-	gin.SetMode(gin.ReleaseMode)
 	var err error
 
 	{ // no headers
