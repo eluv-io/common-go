@@ -52,6 +52,7 @@ func AbortWithStatus(c *gin.Context, code int, err error) {
 	SendError(c, code, err)
 }
 
+// dumpGoRoutines prints the stack of all goroutines to the log.
 func dumpGoRoutines(c *gin.Context) {
 	log := getLog(c)
 	if !log.IsDebug() {
@@ -76,7 +77,7 @@ func getLog(c *gin.Context) (log *elog.Log) {
 // marshaled if an accept headers other than 'application/json' or 'application/xml' is specified.
 func SendError(c *gin.Context, code int, err error) {
 	if err != nil {
-		elog.Debug("api error", "code", code, "error", err)
+		getLog(c).Debug("api error", "code", code, "error", err)
 	}
 	c.Writer.Header().Del("Content-Type")
 	c.Writer.Header().Del("Cache-Control")
