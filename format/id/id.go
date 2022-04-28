@@ -57,6 +57,7 @@ const (
 	Tenant
 	Group
 	Key
+	Ed25519
 )
 
 const codeLen = 1
@@ -79,7 +80,8 @@ var prefixToCode = map[string]Code{
 	"icrs": CachedResultSet,
 	"iten": Tenant,
 	"igrp": Group,
-	"ikey": Key,
+	"ikey": Key,     // last 20 bytes of the keccak256 of a bls381 ecp
+	"ied2": Ed25519, // 32 byte ed25519 public key
 }
 var codeToName = map[Code]string{
 	UNKNOWN:         "unknown",
@@ -98,6 +100,7 @@ var codeToName = map[Code]string{
 	Tenant:          "tenant",
 	Group:           "group",
 	Key:             "key",
+	Ed25519:         "ed25519 public key",
 }
 
 func init() {
