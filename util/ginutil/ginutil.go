@@ -12,6 +12,8 @@ import (
 	elog "github.com/eluv-io/log-go"
 )
 
+const loggerKey = "ginutil.LOGGER"
+
 // Abort aborts the current HTTP request with the given error. The HTTP status code is set according to the error type.
 // If the error is an eluv-io/errors-go with kind "Other" or a non-eluv-io/errors-go, the call also logs the stacktrace
 // of all goroutines. The logger (an instance of eluv-io/log-go) can be set in the gin context under the "LOGGER" key.
@@ -52,26 +54,6 @@ func AbortWithStatus(c *gin.Context, code int, err error) {
 	SendError(c, code, err)
 }
 
-// dumpGoRoutines prints the stack of all goroutines to the log.
-func dumpGoRoutines(c *gin.Context) {
-	log := getLog(c)
-	if !log.IsDebug() {
-		return
-	}
-	log.Error("dumping go-routines", "dump", stackutil.FullStack())
-}
-
-// getLog returns the logger from the gin context or the root logger.
-func getLog(c *gin.Context) (log *elog.Log) {
-	if clg, ok := c.Get("LOGGER"); ok {
-		log, _ = clg.(*elog.Log)
-	}
-	if log == nil {
-		log = elog.Get("/")
-	}
-	return log
-}
-
 // SendError sends back an HTTP response with the given HTTP status code and the data marshaled to JSON or XML depending
 // on the "accept" headers of the request. The data is marshaled to JSON if no accept headers are specified. No data is
 // marshaled if an accept headers other than 'application/json' or 'application/xml' is specified.
@@ -110,4 +92,29 @@ func Send(c *gin.Context, code int, data interface{}) {
 		}
 		_ = c.AbortWithError(http.StatusNotAcceptable, errors.Str("the accepted formats are not offered by the server"))
 	}
+}
+
+// SetLogger sets the logger for all logging performed in this package on the given gin context.
+func SetLogger(c *gin.Context, logger *elog.Log) {
+	c.Set(loggerKey, logger)
+}
+
+// dumpGoRoutines prints the stack of all goroutines to the log.
+func dumpGoRoutines(c *gin.Context) {
+	log := getLog(c)
+	if !log.IsDebug() {
+		return
+	}
+	log.Error("dumping go-routines", "dump", stackutil.FullStack())
+}
+
+// getLog returns the logger from the gin context or the root logger.
+func getLog(c *gin.Context) (log *elog.Log) {
+	if clg, ok := c.Get(loggerKey); ok {
+		log, _ = clg.(*elog.Log)
+	}
+	if log == nil {
+		log = elog.Get("/")
+	}
+	return log
 }

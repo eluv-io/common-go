@@ -126,10 +126,10 @@ func TestAbort_WithLog(t *testing.T) {
 	require.Len(t, lg.Handler().(*memory.Handler).Entries, 0)
 
 	_, c := testCtx(t)
-	c.Set("LOGGER", lg)
+	SetLogger(c, lg)
 	Abort(c, io.EOF)
 
-	require.Len(t, lg.Handler().(*memory.Handler).Entries, 1)
+	require.Len(t, lg.Handler().(*memory.Handler).Entries, 2)
 }
 
 func TestSendError_Xml(t *testing.T) {
