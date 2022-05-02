@@ -54,6 +54,37 @@ func init() {
 	customHeaderMultiCodec.Wrap = false
 }
 
+// GetBytesRange extracts "byte range" as verbatim string from an
+// HTTP Range Request (https://tools.ietf.org/html/rfc7233)
+//
+// The spec defines range requests with a special header "Range: bytes=x-y". In
+// addition, this function also attempts to extract the range from a URL query:
+// "...?bytes=x-y".
+//
+// Only "byte" ranges are supported (the spec allows for additional types).
+// The returned string is whatever follows the "bytes=" prefix.
+//
+// Returns the URL query definition if both query and header are specified.
+// Returns an empty string "" if no byte range is specified.
+// Returns an error in case of an invalid "Range" header.
+func GetBytesRange(request *http.Request) (string, error) {
+	query := request.URL.Query()["bytes"]
+	if len(query) > 0 {
+		return query[0], nil
+	}
+
+	header := request.Header.Get("Range")
+	if len(header) > 0 {
+		if strings.HasPrefix(header, "bytes=") {
+			return strings.TrimPrefix(header, "bytes="), nil
+		} else {
+			return "", errors.E("byte range", errors.K.Invalid, "range_header", header)
+		}
+	}
+
+	return "", nil
+}
+
 // ParseByteRange parses a (single) byte-range in the form "start-end" as
 // defined for HTTP Range Request (https://tools.ietf.org/html/rfc7233)
 // returns it as offset and size.
