@@ -49,9 +49,14 @@ type Token struct {
 }
 
 type encodingDetails struct {
+	full                     int    // length of full encoded token including signature
+	encLegacyBody            int    // length of encoded legacy body
+	decLegacyBody            int    // length of decoded legacy body
+	encLegacySignature       int    // length of encoded signature (for legacy tokens only - regular tokens have sig in body)
+	decLegacySignature       int    // length of decoded signature
 	uncompressedTokenDataLen int    // length of encoded, uncompressed token data
 	compressedTokenDataLen   int    // length of encoded, compressed token data
-	payloadLen               int    // length of payload: optional embedded token + token data
+	payloadLen               int    // length of payload: compressed token data + optional embedded token
 	embeddedLength           int    // length of embedded token's length varint
 	embeddedPrefix           int    // length of embedded token's prefix
 	embeddedBody             int    // length of embedded token's body
@@ -173,6 +178,8 @@ func (t *Token) Encode() (s string, err error) {
 	s = base58.Encode(data)
 
 	t.encoded = t.encodePrefix() + s
+
+	t.encDetails.full = len(t.encoded)
 	return t.encoded, nil
 }
 
@@ -183,6 +190,8 @@ func (t *Token) Decode(s string) (err error) {
 	}
 
 	e := errors.Template("decode auth token", errors.K.Invalid, "token_string", s)
+
+	t.encDetails.full = len(s)
 
 	var isLegacy bool
 	isLegacy, err = t.decodePrefix(s, true)
@@ -217,11 +226,20 @@ func (t *Token) decodeLegacySigned(token string) (bool, error) {
 		return false, nil
 	}
 
-	e := errors.Template("decode legacy signed token")
+	e := errors.Template("decode legacy signed token", errors.K.Invalid.Default())
 
 	// mixed legacy: new token, but client-signed the old-fashion way
 	sctString := token[:dotIdx]
 	legacySig := token[dotIdx+1:]
+
+	if strings.Contains(sctString, ".") {
+		// additional dots in the token, which probably correspond to multiple signatures...
+		// refuse multiple embeddings!
+		return false, e("reason", "multiple legacy signatures!")
+	}
+
+	t.encDetails.encLegacyBody = len(sctString)
+	t.encDetails.encLegacySignature = len(legacySig) + 1 // includes the dot "."
 
 	sct, err := Parse(sctString)
 	if err != nil {
@@ -229,7 +247,7 @@ func (t *Token) decodeLegacySigned(token string) (bool, error) {
 	}
 
 	t.embedLegacyStateChannelToken(sct)
-	t.Format = Formats.Legacy()
+	t.Format = Formats.LegacySigned()
 	t.Type = Types.Client()
 	t.TokenBytes = []byte(sctString)
 	t.encoded = token
@@ -279,7 +297,7 @@ func (t *Token) Validate() (err error) {
 	case Types.StateChannel(), Types.EditorSigned(), Types.SignedLink():
 		// required
 		if t.SigType != SigTypes.ES256K() {
-			return e("reason", "signature missing")
+			return e("reason", "unacceptable signature", "sig_type", t.SigType)
 		}
 		if t.QID.IsNil() {
 			return e("reason", "qid missing")
@@ -445,7 +463,7 @@ func (t *Token) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// As returns a copy of this auth token with the given format.
+// With returns a copy of this auth token with the given format.
 func (t *Token) With(f *tokenFormat) *Token {
 	if t.IsNil() {
 		return t
@@ -585,7 +603,11 @@ func (t *Token) explain(indent string, isEmbedded bool) (res string) {
 			desc += " | " + extra[0]
 		}
 		desc = runewidth.Truncate(desc, 100, "...")
-		sb.WriteString(fmt.Sprintf("%s%-20s %5db  %s\n", indent, label, size, desc))
+		sizeStr := ""
+		if size > 0 {
+			sizeStr = fmt.Sprintf("%5db", size)
+		}
+		sb.WriteString(fmt.Sprintf("%s%-20s %-6s  %s\n", indent, label, sizeStr, desc))
 	}
 	writeNoTrunc := func(label string, size int, desc string, extra ...string) {
 		if len(extra) > 0 {
@@ -644,10 +666,19 @@ func (t *Token) explain(indent string, isEmbedded bool) (res string) {
 		return
 	}
 
-	if t.Format == Formats.Legacy() {
+	// encode the token to
+	// a) get it's encoded form
+	// b) make sure we have the encoding stats
+	encoded := t.String()
+	tokenLen := len(encoded)
+	bodyLen := tokenLen - prefixLen
+	sigLen := len(t.Signature)
+
+	switch t.Format {
+	case Formats.Legacy():
 		sb.WriteString("legacy token: ")
 		sb.WriteString(indent)
-		sb.WriteString(t.String())
+		sb.WriteString(encoded)
 		sb.WriteString("\n")
 		jsn := string(t.encDetails.uncompressedTokenData)
 		pretty, err := jsonutil.Pretty(jsn)
@@ -657,24 +688,41 @@ func (t *Token) explain(indent string, isEmbedded bool) (res string) {
 			sb.WriteString(stringutil.PrefixLines(pretty, indent))
 		}
 		sb.WriteString("\n")
+		write("MAPPED PREFIX", 0, t.encodePrefix(), prefix(t))
+		write("TOKEN", tokenLen, "BODY.SIGNATURE", encoded)
+		write("BODY", t.encDetails.encLegacyBody, "base64(PAYLOAD)")
+		write("PAYLOAD", t.encDetails.decLegacyBody, t.Format.String()+" (json)")
+		if t.SigType == SigTypes.Unsigned() {
+			write("SIGNATURE", 0, "none")
+		} else {
+			write("SIGNATURE", t.encDetails.encLegacySignature, "base64(SIG)")
+			write("SIG", t.encDetails.decLegacySignature, t.Signature.String())
+		}
 		if t.Embedded != nil {
 			sb.WriteString("EMBEDDED\n")
 			indent = indent + "    "
+			write("MAPPED PREFIX", 0, t.Embedded.encodePrefix(), prefix(t.Embedded))
 			sb.WriteString(indent)
 			sb.WriteString(t.Embedded.AsJSONIndent(indent, "  "))
 			sb.WriteString("\n")
 		}
 		return
+	case Formats.LegacySigned():
+		sb.WriteString("legacy-signed token: ")
+		sb.WriteString(indent)
+		sb.WriteString(encoded)
+		sb.WriteString("\n")
+		write("MAPPED PREFIX", 0, t.encodePrefix(), prefix(t))
+		write("TOKEN", tokenLen, "BODY.SIGNATURE", encoded)
+		write("BODY", t.encDetails.encLegacyBody, "embedded non-legacy token")
+		write("SIGNATURE", t.encDetails.encLegacySignature, "base64(SIG)")
+		write("SIG", t.encDetails.decLegacySignature, t.Signature.String())
+		if t.Embedded != nil {
+			sb.WriteString("EMBEDDED\n")
+			sb.WriteString(t.Embedded.explain(indent+"    ", false))
+		}
+		return
 	}
-
-	// encode the token to
-	// a) get it's encoded form
-	// b) make sure we have the encoding stats
-	encoded := t.String()
-
-	tokenLen := len(encoded)
-	bodyLen := tokenLen - prefixLen
-	sigLen := len(t.Signature)
 
 	if !isEmbedded {
 		writeTokenAndData(t)
@@ -866,6 +914,13 @@ func (t *Token) decodeTokenAndSigBytes(bts []byte) (err error) {
 
 	switch t.SigType {
 	case SigTypes.ES256K():
+		if len(bts) <= 65 {
+			return e("reason", "token too short")
+		}
+		t.Signature = sign.NewSig(sign.ES256K, bts[:65])
+		bts = bts[65:]
+		t.TokenBytes = bts
+	case SigTypes.EthPersonalSign():
 		if len(bts) <= 65 {
 			return e("reason", "token too short")
 		}

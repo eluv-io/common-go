@@ -337,9 +337,11 @@ func TestLegacyTokens(t *testing.T) {
 			require.NotNil(t, tok)
 			require.Equal(t, test.wantType, tok.Type, tok.Type)
 
+			fmt.Println(eat.Describe(test.token))
+
 			leg := &eat.TokenDataLegacy{}
 			leg.CopyFromTokenData(tok)
-			fmt.Println(leg)
+			// fmt.Println(leg)
 
 			err = tok.VerifySignature()
 			require.NoError(t, err)
@@ -477,6 +479,8 @@ func TestLegacySignedToken(t *testing.T) {
 
 	require.NotNil(t, tokDecoded.Embedded.TokenBytes)
 	require.Equal(t, st, tokDecoded.Embedded)
+
+	fmt.Println(eat.Describe(legacySigned))
 }
 
 func TestLegacySignedTokenParseError(t *testing.T) {

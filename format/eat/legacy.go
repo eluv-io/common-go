@@ -105,13 +105,15 @@ func (t *Token) decodeLegacyString(s string) (err error) {
 	ts := strings.SplitN(s, ".", 2) // split token & signature
 	hasSignature := len(ts) > 1
 
+	t.encDetails.encLegacyBody = len(ts[0])
+
 	// parse token
 	var tokenBytes []byte
 	tokenBytes, err = base64.StdEncoding.DecodeString(ts[0])
+	t.encDetails.decLegacyBody = len(tokenBytes)
 	t.encDetails.uncompressedTokenData = tokenBytes
-	t.encDetails.uncompressedTokenDataLen = len(tokenBytes)
 
-	legData := NewTokenDataLegacy()
+	legData := &TokenDataLegacy{}
 	if err == nil {
 		err = json.Unmarshal(tokenBytes, legData)
 	}
@@ -125,6 +127,7 @@ func (t *Token) decodeLegacyString(s string) (err error) {
 	}
 
 	if hasSignature {
+		t.encDetails.encLegacySignature = len(ts[1]) + 1 // includes the dot "."
 		err = t.decodeLegacySignature(ts[1])
 		if err != nil {
 			return e(err)
@@ -208,10 +211,6 @@ func (t *Token) embedLegacyStateChannelToken(sct *Token) {
 	t.LID = sct.LID
 }
 
-func NewTokenDataLegacy() *TokenDataLegacy {
-	return &TokenDataLegacy{}
-}
-
 func (t *Token) decodeLegacySignature(sig string) (err error) {
 	t.SigType = SigTypes.ES256K()
 	var sigBytes []byte
@@ -222,6 +221,7 @@ func (t *Token) decodeLegacySignature(sig string) (err error) {
 	if err != nil {
 		return errors.E("decode legacy token signature", errors.K.Invalid, err)
 	}
+	t.encDetails.decLegacySignature = len(t.Signature)
 	return nil
 }
 

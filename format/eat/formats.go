@@ -34,22 +34,24 @@ func (f *tokenFormat) Validate() error {
 var allFormats = []*tokenFormat{
 	{"nk", "unknown"},         // 0
 	{"__", "legacy"},          // 1
-	{"j_", "json"},            // 2
-	{"jc", "json-compressed"}, // 3
-	{"c_", "cbor"},            // 4
-	{"cc", "cbor-compressed"}, // 5
-	{"b_", "custom"},          // 6
+	{"__", "legacy-signed"},   // 2
+	{"j_", "json"},            // 3
+	{"jc", "json-compressed"}, // 4
+	{"c_", "cbor"},            // 5
+	{"cc", "cbor-compressed"}, // 6
+	{"b_", "custom"},          // 7
 }
 
 type enumFormat int
 
 func (enumFormat) Unknown() TokenFormat        { return allFormats[0] }
 func (enumFormat) Legacy() TokenFormat         { return allFormats[1] } // base64(JSON)
-func (enumFormat) Json() TokenFormat           { return allFormats[2] } // prefix+base58(JSON)
-func (enumFormat) JsonCompressed() TokenFormat { return allFormats[3] } // prefix+base58(deflate(JSON))
-func (enumFormat) Cbor() TokenFormat           { return allFormats[4] } // prefix+base58(CBOR)
-func (enumFormat) CborCompressed() TokenFormat { return allFormats[5] } // prefix+base58(deflate(CBOR))
-func (enumFormat) Custom() TokenFormat         { return allFormats[6] } // prefix+base58(binary-custom)
+func (enumFormat) LegacySigned() TokenFormat   { return allFormats[2] } // a non-legacy token with legacy signature ==> a empty legacy client token with an embedded token
+func (enumFormat) Json() TokenFormat           { return allFormats[3] } // prefix+base58(JSON)
+func (enumFormat) JsonCompressed() TokenFormat { return allFormats[4] } // prefix+base58(deflate(JSON))
+func (enumFormat) Cbor() TokenFormat           { return allFormats[5] } // prefix+base58(CBOR)
+func (enumFormat) CborCompressed() TokenFormat { return allFormats[6] } // prefix+base58(deflate(CBOR))
+func (enumFormat) Custom() TokenFormat         { return allFormats[7] } // prefix+base58(binary-custom)
 
 var prefixToFormat = map[string]*tokenFormat{}
 
