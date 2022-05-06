@@ -7,8 +7,6 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/eluv-io/errors-go"
-	"github.com/eluv-io/utc-go"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -17,6 +15,8 @@ import (
 	"github.com/eluv-io/common-go/format/sign"
 	"github.com/eluv-io/common-go/format/types"
 	"github.com/eluv-io/common-go/util/ethutil"
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/utc-go"
 )
 
 const (
@@ -111,7 +111,7 @@ func (t *Token) decodeLegacyString(s string) (err error) {
 	var tokenBytes []byte
 	tokenBytes, err = base64.StdEncoding.DecodeString(ts[0])
 	t.encDetails.decLegacyBody = len(tokenBytes)
-	t.encDetails.uncompressedTokenData = tokenBytes
+	t.uncompressedTokenData = tokenBytes
 
 	legData := &TokenDataLegacy{}
 	if err == nil {
@@ -132,7 +132,7 @@ func (t *Token) decodeLegacyString(s string) (err error) {
 		if err != nil {
 			return e(err)
 		}
-		t.TokenBytes = []byte(ts[0])
+		t.payload = []byte(ts[0])
 	} else {
 		t.SigType = SigTypes.Unsigned()
 	}
@@ -147,14 +147,14 @@ func (t *Token) decodeLegacyString(s string) (err error) {
 		if !legData.AuthSig.IsNil() {
 			sct.SigType = SigTypes.ES256K()
 			sct.Signature = legData.AuthSig
-			sct.TokenBytes, _ = sct.encodeLegacySigBytes()
+			sct.payload, _ = sct.encodeLegacySigBytes()
 
 			if hasSignature {
-				tokenSigAddr, err := t.Signature.SignerAddress(t.TokenBytes)
+				tokenSigAddr, err := t.Signature.SignerAddress(t.payload)
 				if err != nil {
 					return e(err)
 				}
-				embeddedSigAddr, err := sct.Signature.SignerAddress(sct.TokenBytes)
+				embeddedSigAddr, err := sct.Signature.SignerAddress(sct.payload)
 				if err != nil {
 					return e(err)
 				}

@@ -3,11 +3,12 @@ package sign
 import (
 	"bytes"
 
-	"github.com/eluv-io/errors-go"
-	"github.com/eluv-io/log-go"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/mr-tron/base58/base58"
+
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/log-go"
 )
 
 // SigCode is the type of an Sig
@@ -29,8 +30,10 @@ func (c SigCode) ToString(b []byte) string {
 
 // lint disable
 const (
-	SUNKNOWN SigCode = iota
-	ES256K           //ECDSA Signature with secp256k1 Curve
+	SUNKNOWN        SigCode = iota
+	ES256K                  // ECDSA Signature with secp256k1 Curve - https://tools.ietf.org/id/draft-jones-webauthn-secp256k1-00.html
+	EIP191Personal          // Ethereum personal sign - https://eips.ethereum.org/EIPS/eip-191
+	EIP712TypedData         // Ethereum type data signatures - https://eips.ethereum.org/EIPS/eip-712
 )
 
 const sigCodeLen = 1
@@ -38,8 +41,10 @@ const sigPrefixLen = 7
 
 var sigCodeToPrefix = map[SigCode]string{}
 var sigPrefixToCode = map[string]SigCode{
-	"sunk___": SUNKNOWN, // unknown
-	"ES256K_": ES256K,   // ECDSA w/ secp256k1 Curve - https://tools.ietf.org/id/draft-jones-webauthn-secp256k1-00.html
+	"sunk___": SUNKNOWN,
+	"ES256K_": ES256K,
+	"EIP191P": EIP191Personal,
+	"EIP712T": EIP712TypedData,
 }
 
 func init() {
@@ -106,10 +111,12 @@ func (sig Sig) Bytes() []byte {
 	return sig[1:]
 }
 
-// Signatures that are created with ETH-compatible tools insist on adding a constant 27 to the v value (byte ordinal 64)
-//  of the signature. I have yet to see a good explanation why this was done except that it is a 'legacy' value.
-// We want our signatures to conform to the standard but rather than insist that all libraries our clients (including us)
-//  use understand and account for this mismatch, it's saner for us to just adjust where necessary on the server.
+// EthAdjustBytes adjusts ECDSA Signatures to be compatible with ETH tools.
+//
+// PaulO: ETH-compatible tools insist on adding a constant 27 to the v value (byte ordinal 64) of the signature. I have
+// yet to see a good explanation why this was done except that it is a 'legacy' value. We want our signatures to conform
+// to the standard but rather than insist that all libraries our clients (including us) use understand and account for
+// this mismatch, it's saner for us to just adjust where necessary on the server.
 func (sig Sig) EthAdjustBytes() []byte {
 	if len(sig) == 0 {
 		return []byte{}
@@ -124,7 +131,7 @@ func (sig Sig) EthAdjustBytes() []byte {
 	}
 }
 
-// UnmarshalText implements custom unmarshaling from the string representation.
+// UnmarshalText implements custom unmarshalling from the string representation.
 func (sig *Sig) UnmarshalText(text []byte) error {
 	parsed, err := FromString(string(text))
 	if err != nil {

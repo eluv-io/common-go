@@ -11,9 +11,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/eluv-io/errors-go"
-	"github.com/eluv-io/log-go"
-	"github.com/eluv-io/utc-go"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/mattn/go-runewidth"
@@ -26,6 +23,9 @@ import (
 	"github.com/eluv-io/common-go/format/types"
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/common-go/util/stringutil"
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/log-go"
+	"github.com/eluv-io/utc-go"
 )
 
 const prefixLen = 6 // length of entire prefix including type, sig-type and format
@@ -34,37 +34,48 @@ const prefixLen = 6 // length of entire prefix including type, sig-type and form
 type Token struct {
 	Type    TokenType
 	Format  *tokenFormat
-	SigType *tokenSigType
+	SigType *TokenSigType
 	TokenData
-	TokenBytes []byte
-	Signature  sign.Sig
-	// SignerAddr common.Address
+	Signature sign.Sig
 
+	// the fully encoded token, including signature
+	//
+	// This is set only once, either during decoding, or during creation/signing.
 	encoded string // cache for the token's encoded string form
+	// The encoded & optionally compressed json/cbor token data. If there is an embedded token, it also includes its
+	// payload (i.e. including the embedded token's signature). This byte slice is used to calculate the token signature
+	// with ES256K.
+	//
+	// This is set only once, either during decoding, or during signing.
+	payload []byte
+	// The marshalled, but non-compressed json/cbor token data. This byte slice is used to calculate the token signature
+	// with EIP191Personal.
+	//
+	// This is set only once, either during decoding, or during signing.
+	uncompressedTokenData []byte
 
 	Embedded       *Token
-	EmbeddedLength int // the length of the embedded token within the TokenBytes
+	EmbeddedLength int // the length of the embedded token within the payload
 
 	encDetails encodingDetails // details collected during encoding used in Explain()
 }
 
 type encodingDetails struct {
-	full                     int    // length of full encoded token including signature
-	encLegacyBody            int    // length of encoded legacy body
-	decLegacyBody            int    // length of decoded legacy body
-	encLegacySignature       int    // length of encoded signature (for legacy tokens only - regular tokens have sig in body)
-	decLegacySignature       int    // length of decoded signature
-	uncompressedTokenDataLen int    // length of encoded, uncompressed token data
-	compressedTokenDataLen   int    // length of encoded, compressed token data
-	payloadLen               int    // length of payload: compressed token data + optional embedded token
-	embeddedLength           int    // length of embedded token's length varint
-	embeddedPrefix           int    // length of embedded token's prefix
-	embeddedBody             int    // length of embedded token's body
-	uncompressedTokenData    []byte // the original uncompressed token data (if decoded from a string)
+	full                     int // length of full encoded token including signature
+	encLegacyBody            int // length of encoded legacy body
+	decLegacyBody            int // length of decoded legacy body
+	encLegacySignature       int // length of encoded signature (for legacy tokens only - regular tokens have sig in body)
+	decLegacySignature       int // length of decoded signature
+	uncompressedTokenDataLen int // length of encoded, uncompressed token data
+	compressedTokenDataLen   int // length of encoded, compressed token data
+	payloadLen               int // length of payload: compressed token data + optional embedded token
+	embeddedLength           int // length of embedded token's length varint
+	embeddedPrefix           int // length of embedded token's prefix
+	embeddedBody             int // length of embedded token's body
 }
 
 // New creates a new auth token with the given type, digest, size, and ID
-func New(typ TokenType, format *tokenFormat, sig *tokenSigType) *Token {
+func New(typ TokenType, format *tokenFormat, sig *TokenSigType) *Token {
 	return &Token{
 		Type:    typ,
 		Format:  format,
@@ -249,7 +260,7 @@ func (t *Token) decodeLegacySigned(token string) (bool, error) {
 	t.embedLegacyStateChannelToken(sct)
 	t.Format = Formats.LegacySigned()
 	t.Type = Types.Client()
-	t.TokenBytes = []byte(sctString)
+	t.payload = []byte(sctString)
 	t.encoded = token
 
 	return true, e.IfNotNil(t.decodeLegacySignature(legacySig))
@@ -276,8 +287,8 @@ func (t *Token) Validate() (err error) {
 	}
 
 	switch t.SigType {
-	case SigTypes.ES256K():
-		if t.Signature.IsNil() || len(t.TokenBytes) == 0 {
+	case SigTypes.ES256K(), SigTypes.EIP191Personal(), SigTypes.EIP712TypedData():
+		if t.Signature.IsNil() || len(t.payload) == 0 {
 			return e(
 				"reason", "token requires signature, but has no signature data",
 				"sig_type", t.SigType)
@@ -295,10 +306,11 @@ func (t *Token) Validate() (err error) {
 
 	switch t.Type {
 	case Types.StateChannel(), Types.EditorSigned(), Types.SignedLink():
-		// required
-		if t.SigType != SigTypes.ES256K() {
-			return e("reason", "unacceptable signature", "sig_type", t.SigType)
+		// require signature
+		if !t.SigType.HasSig() {
+			return e("reason", "signature missing")
 		}
+
 		if t.QID.IsNil() {
 			return e("reason", "qid missing")
 		}
@@ -351,6 +363,19 @@ func (t *Token) Validate() (err error) {
 		// additional editor-signed & signed link requirements are checked in
 		// auth provider
 		return nil
+	case Types.ClientSigned():
+		if !t.SigType.HasSig() {
+			return e("reason", "signature missing")
+		}
+		// PENDING(LUK): add additional validations for ClientSigned tokens!
+
+		//if t.IssuedAt.IsZero() {
+		//	return e("reason", "issued at missing")
+		//}
+		//if t.Expires.IsZero() {
+		//	return e("reason", "expires missing")
+		//}
+		return
 	}
 
 	// not allowed for all other types
@@ -389,7 +414,7 @@ func (t *Token) Validate() (err error) {
 		if !t.HasEthTxHash() {
 			return e("reason", "tx hash missing")
 		}
-		if t.SigType != SigTypes.ES256K() {
+		if !t.SigType.HasSig() {
 			return e("reason", "signature missing")
 		}
 		// no allowed
@@ -401,7 +426,7 @@ func (t *Token) Validate() (err error) {
 		}
 	case Types.Plain():
 		// required
-		if t.SigType != SigTypes.ES256K() {
+		if !t.SigType.HasSig() {
 			return e("reason", "signature missing")
 		}
 		// not allowed
@@ -427,7 +452,7 @@ func (t *Token) Validate() (err error) {
 		}
 	case Types.Node():
 		// required
-		if t.SigType != SigTypes.ES256K() {
+		if !t.SigType.HasSig() {
 			return e("reason", "signature missing")
 		}
 		if t.QPHash.IsNil() {
@@ -486,44 +511,35 @@ func (t *Token) Equal(o *Token) bool {
 	return t.String() == o.String()
 }
 
-// SignWith signs this token with the given private key.
+// SignWith signs this token with the given private key, producing a signature of type ES256K.
 func (t *Token) SignWith(clientSK *ecdsa.PrivateKey) (err error) {
+	return t.SignWithT(clientSK, SigTypes.ES256K())
+}
+
+// SignWithT signs this token with the given private key, producing a signature of the given type.
+func (t *Token) SignWithT(clientSK *ecdsa.PrivateKey, sigType *TokenSigType) (err error) {
 	signFunc := func(digestHash []byte) (sig []byte, err error) {
 		return crypto.Sign(digestHash, clientSK)
 	}
 	signAddr := crypto.PubkeyToAddress(clientSK.PublicKey)
-	return t.SignWithFunc(signAddr, signFunc)
+	return t.SignWithFuncT(signAddr, signFunc, sigType)
 }
 
-// SignWith signs this token using the provided signing function.
+// SignWithFunc signs this token using the provided signing function, producing a signature of type ES256K.
 func (t *Token) SignWithFunc(
 	signAddr common.Address,
-	signFunc func(digestHash []byte) (sig []byte, err error)) (err error) {
+	calcECDSA CalcECDSA) (err error) {
 
-	e := errors.Template("signWith", errors.K.Invalid)
+	return t.SignWithFuncT(signAddr, calcECDSA, SigTypes.ES256K())
+}
 
-	t.EthAddr = signAddr
+// SignWithFuncT signs this token using the provided signing function, producing a signature of the given type.
+func (t *Token) SignWithFuncT(
+	signAddr common.Address,
+	calcECDSA CalcECDSA,
+	sigType *TokenSigType) (err error) {
 
-	// clear the encoded cache
-	t.encoded = ""
-
-	t.TokenBytes, err = t.encodeBytes()
-	if err != nil {
-		return e(err)
-	}
-	hsh := crypto.Keccak256(t.TokenBytes)
-	sig, err := signFunc(hsh)
-	if err != nil {
-		return e(err)
-	}
-	if len(sig) != 65 {
-		return e("reason", "signature must be 65 bytes long",
-			"len", len(sig))
-	}
-	ns := sign.NewSig(sign.ES256K, sig)
-	t.Signature = sign.NewSig(sign.ES256K, ns.EthAdjustBytes())
-	t.SigType = SigTypes.ES256K()
-	return nil
+	return signToken(t, signAddr, calcECDSA, sigType)
 }
 
 func (t *Token) VerifySignatureFrom(trusted common.Address) (err error) {
@@ -539,11 +555,9 @@ func (t *Token) Verify(
 	getTrustedAddress func(qid types.QID) (common.Address, error),
 	maxValidity, timeSkew time.Duration) (err error) {
 
-	e := errors.Template("verify")
+	e := errors.Template("verify token")
 
-	switch t.SigType {
-	case SigTypes.ES256K():
-	default:
+	if !t.SigType.HasSig() {
 		// this should never happen and be caught in token.Validate()
 		return e(errors.K.Permission, "reason", "token not signed")
 	}
@@ -552,9 +566,11 @@ func (t *Token) Verify(
 	if err != nil {
 		return e(err)
 	}
-	if err = t.verifySignatureFrom(trusted); err != nil {
+
+	if err = VerifySignatureFrom(t, trusted); err != nil {
 		return e(err)
 	}
+
 	if maxValidity != -1 || timeSkew != -1 {
 		if err = t.VerifyTimes(maxValidity, timeSkew); err != nil {
 			return e(err)
@@ -564,6 +580,7 @@ func (t *Token) Verify(
 	return nil
 }
 
+// VerifySignature validates the token and verifies its signature (if any).
 func (t *Token) VerifySignature() error {
 	e := errors.Template("verify token", errors.K.Permission)
 
@@ -576,17 +593,7 @@ func (t *Token) VerifySignature() error {
 		return nil
 	}
 
-	if !t.HasEthAddr() {
-		//  a signature but no address - only allowed for legacy tokens
-		signerAddress, err := t.Signature.SignerAddress(t.TokenBytes)
-		if err != nil {
-			return e(err)
-		}
-		t.EthAddr = signerAddress
-		return nil
-	}
-
-	return t.verifySignatureFrom(t.EthAddr)
+	return VerifySignature(t)
 }
 
 func (t *Token) Explain() (res string) {
@@ -680,7 +687,7 @@ func (t *Token) explain(indent string, isEmbedded bool) (res string) {
 		sb.WriteString(indent)
 		sb.WriteString(encoded)
 		sb.WriteString("\n")
-		jsn := string(t.encDetails.uncompressedTokenData)
+		jsn := string(t.uncompressedTokenData)
 		pretty, err := jsonutil.Pretty(jsn)
 		if err != nil {
 			sb.WriteString(stringutil.PrefixLines(jsn, indent))
@@ -767,12 +774,26 @@ func (t *Token) encodeTokenAndSigBytes() (data []byte, err error) {
 			return nil, err
 		}
 	} else {
-		data = append(t.Signature.Bytes(), t.TokenBytes...)
+		data = append(t.Signature.Bytes(), t.payload...)
 	}
 	return data, nil
 }
 
+func (t *Token) getPayload() ([]byte, error) {
+	_, err := t.encodeBytes()
+	return t.payload, err
+}
+
+func (t *Token) getUncompressedTokenData() ([]byte, error) {
+	_, err := t.encodeBytes()
+	return t.uncompressedTokenData, err
+}
+
 func (t *Token) encodeBytes() ([]byte, error) {
+	if len(t.payload) > 0 {
+		return t.payload, nil
+	}
+
 	e := errors.Template("encode auth token", errors.K.Invalid, "format", t.Format.Name)
 
 	var err error
@@ -789,7 +810,7 @@ func (t *Token) encodeBytes() ([]byte, error) {
 		return nil, e(err)
 	}
 
-	t.encDetails.uncompressedTokenData = data
+	t.uncompressedTokenData = data
 	t.encDetails.uncompressedTokenDataLen = len(data)
 
 	switch t.Format {
@@ -817,12 +838,13 @@ func (t *Token) encodeBytes() ([]byte, error) {
 
 	t.encDetails.payloadLen = len(data)
 
+	t.payload = data
 	return data, nil
 }
 
 func (t *Token) encodeBytesNoCompression() (data []byte, err error) {
-	if t.encoded != "" {
-		return t.encDetails.uncompressedTokenData, nil
+	if len(t.uncompressedTokenData) > 0 {
+		return t.uncompressedTokenData, nil
 	}
 
 	switch t.Format {
@@ -913,20 +935,12 @@ func (t *Token) decodeTokenAndSigBytes(bts []byte) (err error) {
 	e := errors.Template("decode auth token", errors.K.Invalid)
 
 	switch t.SigType {
-	case SigTypes.ES256K():
+	case SigTypes.ES256K(), SigTypes.EIP191Personal(), SigTypes.EIP712TypedData():
 		if len(bts) <= 65 {
 			return e("reason", "token too short")
 		}
-		t.Signature = sign.NewSig(sign.ES256K, bts[:65])
+		t.Signature = sign.NewSig(t.SigType.Code, bts[:65])
 		bts = bts[65:]
-		t.TokenBytes = bts
-	case SigTypes.EthPersonalSign():
-		if len(bts) <= 65 {
-			return e("reason", "token too short")
-		}
-		t.Signature = sign.NewSig(sign.ES256K, bts[:65])
-		bts = bts[65:]
-		t.TokenBytes = bts
 	}
 
 	err = t.decodeBytes(bts)
@@ -940,6 +954,7 @@ func (t *Token) decodeTokenAndSigBytes(bts []byte) (err error) {
 func (t *Token) decodeBytes(bts []byte) error {
 	e := errors.Template("decode bytes", errors.K.Invalid)
 
+	t.payload = bts
 	t.encDetails.payloadLen = len(bts)
 
 	var err error
@@ -964,7 +979,7 @@ func (t *Token) decodeBytes(bts []byte) error {
 		}
 	}
 
-	t.encDetails.uncompressedTokenData = bts
+	t.uncompressedTokenData = bts
 	t.encDetails.uncompressedTokenDataLen = len(bts)
 
 	switch t.Format {
@@ -1018,29 +1033,6 @@ func (t *Token) decodeEmbedded(bts []byte) (n int, err error) {
 
 	t.Embedded = embedded
 	return int(size) + n, e.IfNotNil(err)
-}
-
-func (t *Token) verifySignatureFrom(trusted common.Address) error {
-	e := errors.Template("verify token signature", errors.K.Permission)
-	if t == nil {
-		return e("reason", "token is nil")
-	}
-	if t.Signature == nil {
-		return e("reason", "signature is nil")
-	}
-
-	signerAddress, err := t.Signature.SignerAddress(t.TokenBytes)
-	if err != nil {
-		return e(err)
-	}
-
-	// verify that auth data is from trusted address
-	if !bytes.Equal(trusted.Bytes(), signerAddress.Bytes()) {
-		return e("reason", "EAT invalid trust address or token tampered with",
-			"trust_address", trusted.String(),
-			"signer_address", signerAddress.String())
-	}
-	return nil
 }
 
 func (t *Token) VerifyTimes(maxValidity, timeSkew time.Duration) error {
