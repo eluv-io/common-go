@@ -30,6 +30,10 @@ func signToken(
 	if !sigType.HasSig() {
 		return e("reason", "invalid signature type", "sig_type", token.SigType)
 	}
+	if !token.Signature.IsNil() {
+		return e("reason", "token already signed", "signature", token.Signature)
+	}
+	token.clearCaches()
 	helper := SignatureHelper{
 		token: token,
 	}
@@ -75,24 +79,11 @@ type SignatureHelper struct {
 }
 
 func (s *SignatureHelper) VerifySignature() error {
-	e := errors.Template("VerifySignature", errors.K.Permission, "sig_type", s.token.SigType)
-
-	if !s.token.HasEthAddr() {
-		// a signature but no address - retrieve the address from the signature and set it as EthAddr
-		// only allowed for legacy tokens
-		signerAddress, err := s.signerAddress()
-		if err != nil {
-			return e(err)
-		}
-		s.token.EthAddr = signerAddress
-		return nil
-	}
-
 	return s.VerifySignatureFrom(s.token.EthAddr)
 }
 
 func (s *SignatureHelper) VerifySignatureFrom(trusted common.Address) error {
-	e := errors.Template("verify token signature", errors.K.Permission, "trusted", trusted.String())
+	e := errors.Template("verify token signature", errors.K.Permission)
 	signerAddress, err := s.signerAddress()
 	if err != nil {
 		return e(err)
@@ -100,7 +91,8 @@ func (s *SignatureHelper) VerifySignatureFrom(trusted common.Address) error {
 
 	// verify that auth data is from trusted address
 	if !bytes.Equal(trusted.Bytes(), signerAddress.Bytes()) {
-		return e("reason", "EAT invalid trust address or token tampered with",
+		return e("reason", "invalid trust address or auth token tampered with",
+			"expect_address", trusted.String(),
 			"signer_address", signerAddress.String())
 	}
 

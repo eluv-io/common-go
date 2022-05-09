@@ -114,11 +114,18 @@ func FromString(s string) (*Token, error) {
 
 // Parse parses the given string as a token.
 func Parse(s string) (*Token, error) {
-	t := New(Types.Unknown(), Formats.Unknown(), SigTypes.Unknown())
-	err := t.Decode(s)
+	t, err := parse(s)
 	if err != nil {
 		return nil, err
 	}
+	return t, nil
+}
+
+// parse parses a token from the given string and returns the both the parsed token and any parsing/validation error.
+// In case of errors, the token is still returned: it will be invalid and probably only partially decoded.
+func parse(s string) (*Token, error) {
+	t := New(Types.Unknown(), Formats.Unknown(), SigTypes.Unknown())
+	err := t.Decode(s)
 	return t, err
 }
 
@@ -211,7 +218,7 @@ func (t *Token) Decode(s string) (err error) {
 	}
 	if isLegacy {
 		// legacy token was already parsed completely in decodePrefix
-		return nil
+		return t.Validate()
 	}
 
 	isLegacySigned, err := t.decodeLegacySigned(s)
@@ -219,7 +226,7 @@ func (t *Token) Decode(s string) (err error) {
 		return e(err)
 	}
 	if isLegacySigned {
-		return nil
+		return t.Validate()
 	}
 
 	err = t.decodeString(s[prefixLen:])
@@ -269,6 +276,8 @@ func (t *Token) decodeLegacySigned(token string) (bool, error) {
 func (t *Token) Validate() (err error) {
 	e := errors.Template("validate auth token", errors.K.Invalid,
 		"type", t.Type,
+		"sig_type", t.SigType,
+		"format", t.Format,
 		"token", stringutil.Stringer(t.AsJSON))
 
 	err = t.Type.Validate()
@@ -286,185 +295,157 @@ func (t *Token) Validate() (err error) {
 		return e(err)
 	}
 
-	switch t.SigType {
-	case SigTypes.ES256K(), SigTypes.EIP191Personal(), SigTypes.EIP712TypedData():
-		if t.Signature.IsNil() || len(t.payload) == 0 {
-			return e(
-				"reason", "token requires signature, but has no signature data",
-				"sig_type", t.SigType)
-		}
+	validator := tokenValidator{
+		token:            t,
+		errTemplate:      errors.Template("validate field", errors.K.Invalid.Default()),
+		accumulateErrors: true,
 	}
 
-	if t.SID.IsNil() {
-		return e("reason", "space id missing")
+	// signature checks
+	clientTokenWithSignature := t.Type == Types.Client() && t.SigType.HasSig() // client tokens have an optional sig - verify it if they do
+	if t.Type.SignatureRequired || clientTokenWithSignature {
+		if !t.SigType.HasSig() {
+			validator.error(validator.errTemplate("reason", "invalid signature type"))
+		} else if validator.require("signature", t.Signature) {
+			// state channel tokens are signed by a "trusted authority" (i.e. KMS), whose address is not stored in
+			// the token itself. Hence the signature cannot be checked here and must be checked downstream.
+			if t.Type != Types.StateChannel() {
+				// legacy tokens may have a missing eth addr, in which case we extract it from the signature itself...
+				if !t.HasEthAddr() && (t.Format == Formats.Legacy() || t.Format == Formats.LegacySigned()) {
+					sh, _ := newSignatureHelper(t)
+					t.EthAddr, err = sh.signerAddress()
+					validator.error(err)
+				}
+				if validator.require("adr", t.EthAddr) {
+					validator.error(VerifySignature(t))
+				}
+			}
+		}
+	} else {
+		if t.SigType.HasSig() {
+			validator.error(validator.errTemplate("reason", "invalid signature type"))
+		}
+		validator.refuse("signature", t.Signature)
+		validator.refuse("address", t.EthAddr)
 	}
+
+	validator.require("space id", t.SID)
 
 	// lib seems optional... (because it can be specified in the URL?)
-	//if t.LID.IsNil() {
-	//	return e("reason", "lib id missing")
-	//}
+	// valid.require("lib id", t.LID)
 
 	switch t.Type {
-	case Types.StateChannel(), Types.EditorSigned(), Types.SignedLink():
-		// require signature
-		if !t.SigType.HasSig() {
-			return e("reason", "signature missing")
+	case Types.StateChannel():
+		// require
+		validator.require("signature", t.SigType.HasSig())
+		validator.require("qid", t.QID)
+		// don't always require a subject since the actual subject might be 'something else' in the context. Note that
+		// here we don't know what could be in the context but (in the future) we might (should ?) require the context
+		// to have some known keys since a token should always be granted to someone ...
+		if t.Subject == "" && (len(t.Ctx) == 0) {
+			validator.require("subject", t.Subject)
 		}
+		validator.require("grant", t.Grant)
+		validator.require("issued at", t.IssuedAt)
+		validator.require("expires", t.Expires)
+		if t.Expires.Before(t.IssuedAt) {
+			validator.errorReason("expires before issued at",
+				"expires", t.Expires,
+				"issued_at", t.IssuedAt)
+		}
+		// refuse
+		validator.refuse("tx-hash", t.EthTxHash)
+		validator.refuse("qp-hash", t.QPHash)
+		// additional state channel requirements are checked in auth provider
+		return e.IfNotNil(validator.err)
 
-		if t.QID.IsNil() {
-			return e("reason", "qid missing")
+	case Types.EditorSigned():
+		// require
+		validator.require("qid", t.QID)
+		validator.require("subject", t.Subject)
+		validator.require("grant", t.Grant)
+		validator.require("issued at", t.IssuedAt)
+		validator.require("expires", t.Expires)
+		if t.Expires.Before(t.IssuedAt) {
+			validator.errorReason("expires before issued at",
+				"expires", t.Expires,
+				"issued_at", t.IssuedAt)
 		}
-		// for state-channel: don't always require a subject since the actual
-		// subject might be 'something else' in the context.
-		// Note that here we don't know what could be in the context but (in the
-		// future) we might (should ?) require the context to have some known
-		// keys since a token should always be granted to someone ...
-		if t.Subject == "" && (len(t.Ctx) == 0 || t.Type != Types.StateChannel()) {
-			return e("reason", "subject missing")
-		}
-		if t.Grant == "" {
-			return e("reason", "grant missing")
-		}
-		if t.IssuedAt.IsZero() {
-			return e("reason", "issued at missing")
-		}
-		if t.Type != Types.SignedLink() {
-			if t.Expires.IsZero() {
-				return e("reason", "expires missing")
-			}
-			if t.Expires.Before(t.IssuedAt) {
-				return e("reason", "expires before issued at",
-					"expires", t.Expires,
-					"issued_at", t.IssuedAt)
-			}
-		}
-		// not allowed
-		if t.HasEthTxHash() {
-			return e("reason", "tx hash not allowed")
-		}
-		if !t.QPHash.IsNil() {
-			return e("reason", "qphash not allowed")
-		}
+		// refuse
+		validator.refuse("tx-hash", t.EthTxHash)
+		validator.refuse("qp-hash", t.QPHash)
+		// additional editor-signed requirements are checked in auth provider
+		return e.IfNotNil(validator.err)
 
-		if t.Type == Types.SignedLink() {
-			ctx := structured.Wrap(t.Ctx).Get("elv")
-			if ctx.Get("lnk").IsError() {
-				return e("reason", "ctx/elv/lnk missing")
-			}
-			src := ctx.Get("src").String()
-			if src == "" {
-				return e("reason", "ctx/elv/src missing")
-			}
+	case Types.SignedLink():
+		// require
+		validator.require("qid", t.QID)
+		validator.require("subject", t.Subject)
+		validator.require("grant", t.Grant)
+		validator.require("issued at", t.IssuedAt)
+		// check presence of context values
+		ctx := structured.Wrap(t.Ctx).Get("elv")
+		validator.require("ctx/elv/lnk", ctx.Get("lnk").Data)
+		src := ctx.Get("src").String()
+		validator.require("ctx/elv/src", src)
+		if src != "" {
 			if _, err2 := id.Q.FromString(src); err2 != nil {
-				return e(err2, "reason", "ctx/elv/src invalid")
+				validator.errorReason("ctx/elv/src invalid", err2)
 			}
 		}
 
-		// additional editor-signed & signed link requirements are checked in
-		// auth provider
-		return nil
+		// refuse
+		validator.refuse("tx-hash", t.EthTxHash)
+		validator.refuse("qp-hash", t.QPHash)
+
+		// additional signed link requirements are checked in auth provider
+		return e.IfNotNil(validator.err)
+
 	case Types.ClientSigned():
-		if !t.SigType.HasSig() {
-			return e("reason", "signature missing")
-		}
 		// PENDING(LUK): add additional validations for ClientSigned tokens!
-
-		//if t.IssuedAt.IsZero() {
-		//	return e("reason", "issued at missing")
-		//}
-		//if t.Expires.IsZero() {
-		//	return e("reason", "expires missing")
-		//}
-		return
+		return e.IfNotNil(validator.err)
 	}
 
-	// not allowed for all other types
-	if t.Subject != "" {
-		return e("reason", "subject not allowed")
-	}
-	if t.Grant != "" {
-		return e("reason", "grant not allowed")
-	}
-	if !t.IssuedAt.IsZero() {
-		return e("reason", "issued at not allowed")
-	}
-	if !t.Expires.IsZero() {
-		return e("reason", "expires not allowed")
-	}
-	if len(t.Ctx) > 0 {
-		return e("reason", "ctx not allowed")
-	}
+	// refused for all other types
+	validator.refuse("subject", t.Subject)
+	validator.refuse("grant", t.Grant)
+	validator.refuse("issued at", t.IssuedAt)
+	validator.refuse("expires", t.Expires)
+	validator.refuse("ctx", t.Ctx)
 
 	switch t.Type {
 	case Types.Client():
-		// required
-		if t.Embedded == nil {
-			return e("reason", "embedded token missing")
-		}
-		// no allowed
-		if t.HasEthTxHash() {
-			return e("reason", "tx hash not allowed")
-		}
-		if !t.QPHash.IsNil() {
-			return e("reason", "qphash not allowed")
-		}
-		return e.IfNotNil(t.Embedded.Validate())
+		// require
+		validator.require("embedded token", t.Embedded)
+		// refuse
+		validator.refuse("tx-hash", t.EthTxHash)
+		validator.refuse("qp-hash", t.QPHash)
+		validator.error(t.Embedded.Validate())
+		return e.IfNotNil(validator.err)
 	case Types.Tx():
-		// required
-		if !t.HasEthTxHash() {
-			return e("reason", "tx hash missing")
-		}
-		if !t.SigType.HasSig() {
-			return e("reason", "signature missing")
-		}
-		// no allowed
-		if !t.QPHash.IsNil() {
-			return e("reason", "qphash not allowed")
-		}
-		if !t.QID.IsNil() {
-			return e("reason", "qid not allowed")
-		}
+		// require
+		validator.require("tx-hash", t.EthTxHash)
+		// refuse
+		validator.refuse("qp-hash", t.QPHash)
+		validator.refuse("qid", t.QID)
 	case Types.Plain():
-		// required
-		if !t.SigType.HasSig() {
-			return e("reason", "signature missing")
-		}
-		// not allowed
-		if t.HasEthTxHash() {
-			return e("reason", "tx hash not allowed")
-		}
-		if !t.QPHash.IsNil() {
-			return e("reason", "qphash not allowed")
-		}
+		// refuse
+		validator.refuse("tx-hash", t.EthTxHash)
+		validator.refuse("qp-hash", t.QPHash)
 	case Types.Anonymous():
-		// not allowed
-		if t.SigType != SigTypes.Unsigned() {
-			return e("reason", "signature not allowed")
-		}
-		if t.HasEthTxHash() {
-			return e("reason", "tx hash not allowed")
-		}
-		if !t.QPHash.IsNil() {
-			return e("reason", "qphash not allowed")
-		}
-		if t.HasEthAddr() {
-			return e("reason", "address not allowed")
-		}
+		// refuse
+		validator.refuse("signature", t.SigType.HasSig())
+		validator.refuse("tx-hash", t.EthTxHash)
+		validator.refuse("qp-hash", t.QPHash)
+		validator.refuse("address", t.EthAddr)
 	case Types.Node():
-		// required
-		if !t.SigType.HasSig() {
-			return e("reason", "signature missing")
-		}
-		if t.QPHash.IsNil() {
-			return e("reason", "qphash missing")
-		}
-		// not allowed
-		if t.HasEthTxHash() {
-			return e("reason", "tx hash not allowed")
-		}
+		// require
+		validator.require("qp-hash", t.QPHash)
+		// refuse
+		validator.refuse("tx-hash", t.EthTxHash)
 	}
 
-	return nil
+	return e.IfNotNil(validator.err)
 }
 
 func (t *Token) IsNil() bool {
@@ -497,6 +478,8 @@ func (t *Token) With(f *tokenFormat) *Token {
 	}
 	var res = *t   // copy the token
 	res.Format = f // set the format
+	res.Embedded = nil
+	res.clearCaches()
 	return &res
 }
 
@@ -582,18 +565,11 @@ func (t *Token) Verify(
 
 // VerifySignature validates the token and verifies its signature (if any).
 func (t *Token) VerifySignature() error {
-	e := errors.Template("verify token", errors.K.Permission)
-
 	err := t.Validate()
 	if err != nil {
-		return e(err)
+		return errors.E("verify token", errors.K.Permission, err)
 	}
-
-	if t.Signature.IsNil() {
-		return nil
-	}
-
-	return VerifySignature(t)
+	return nil
 }
 
 func (t *Token) Explain() (res string) {
@@ -1144,10 +1120,16 @@ func (t *Token) VerifySignedLink(srcQID, linkPath string) error {
 	return nil
 }
 
-func Describe(tok string) string {
-	t, err := Parse(tok)
+func (t *Token) clearCaches() {
+	t.encoded = ""
+	t.payload = nil
+	t.uncompressedTokenData = nil
+}
+
+func Describe(tok string) (res string) {
+	t, err := parse(tok)
 	if err != nil {
-		return errors.E("describe", err).Error()
+		res = errors.E("describe", err).Error() + "\n"
 	}
-	return t.Explain()
+	return res + t.Explain()
 }

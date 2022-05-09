@@ -336,6 +336,7 @@ func (l *TokenDataLegacy) CopyFromTokenData(t *Token) {
 	l.EthTxHash = t.LegacyTxID()
 	l.EthAddr = t.LegacyAddr()
 	l.QPHash = t.QPHash.String()
+	// PENDING(LUK): is this correct if it's a legacy token signed by the client?!?
 	if !t.Signature.IsNil() {
 		l.AuthSig = t.Signature
 	}

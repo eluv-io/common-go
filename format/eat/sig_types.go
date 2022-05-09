@@ -20,7 +20,7 @@ func (s *TokenSigType) String() string {
 
 func (s *TokenSigType) HasSig() bool {
 	switch s {
-	case nil, SigTypes.Unsigned(), SigTypes.Unknown():
+	case nil, SigTypes.Unsigned():
 		return false
 	}
 	return true

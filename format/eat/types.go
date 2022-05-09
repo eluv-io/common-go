@@ -10,8 +10,9 @@ const Types enumType = 0
 type TokenType = *tokenType
 
 type tokenType struct {
-	Prefix string
-	Name   string
+	Prefix            string `json:"prefix"`
+	Name              string `json:"name"`
+	SignatureRequired bool   `json:"-"`
 }
 
 func (t *tokenType) String() string {
@@ -30,16 +31,16 @@ func (t *tokenType) Validate() error {
 }
 
 var allTypes = []TokenType{
-	{"aun", "unknown"},       // 0
-	{"aan", "anonymous"},     // 1
-	{"atx", "tx"},            // 2
-	{"asc", "state-channel"}, // 3
-	{"acl", "client"},        // 4
-	{"apl", "plain"},         // 5
-	{"aes", "editor-signed"}, // 6
-	{"ano", "node"},          // 7
-	{"asl", "signed-link"},   // 8
-	{"acs", "client-signed"}, // 9
+	{"aun", "unknown", false},      // 0
+	{"aan", "anonymous", false},    // 1
+	{"atx", "tx", true},            // 2
+	{"asc", "state-channel", true}, // 3
+	{"acl", "client", false},       // 4
+	{"apl", "plain", true},         // 5
+	{"aes", "editor-signed", true}, // 6
+	{"ano", "node", true},          // 7
+	{"asl", "signed-link", true},   // 8
+	{"acs", "client-signed", true}, // 9
 }
 
 type enumType int
