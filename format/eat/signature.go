@@ -30,9 +30,9 @@ func signToken(
 	if !sigType.HasSig() {
 		return e("reason", "invalid signature type", "sig_type", token.SigType)
 	}
-	if !token.Signature.IsNil() {
-		return e("reason", "token already signed", "signature", token.Signature)
-	}
+	//if !token.Signature.IsNil() {
+	//	return e("reason", "token already signed", "signature", token.Signature)
+	//}
 	token.clearCaches()
 	helper := SignatureHelper{
 		token: token,
