@@ -11,6 +11,7 @@ import (
 	"github.com/eluv-io/common-go/format/eat"
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/structured"
+	"github.com/eluv-io/common-go/format/types"
 	"github.com/eluv-io/common-go/util/ethutil"
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/errors-go"
@@ -50,7 +51,7 @@ func TestTokenBuilders(t *testing.T) {
 				token       *eat.Token
 				wantFailure bool
 				wantType    eat.TokenType
-				validate    func(t *testing.T, data *eat.Token)
+				validate    func(t *testing.T, token *eat.Token)
 			}{
 
 				{
@@ -72,10 +73,10 @@ func TestTokenBuilders(t *testing.T) {
 				{
 					encoder:  sign(eat.NewStateChannel(sid, lid, qid, sub).WithAfgh("afgh-pk"), serverSK),
 					wantType: eat.Types.StateChannel(),
-					validate: func(t *testing.T, data *eat.Token) {
-						stateChannelDefault(t, data)
-						require.Equal(t, "afgh-pk", data.AFGHPublicKey)
-						require.Equal(t, now, data.IssuedAt)
+					validate: func(t *testing.T, token *eat.Token) {
+						stateChannelDefault(t, token)
+						require.Equal(t, "afgh-pk", token.AFGHPublicKey)
+						require.Equal(t, now, token.IssuedAt)
 					},
 				},
 				{
@@ -86,12 +87,12 @@ func TestTokenBuilders(t *testing.T) {
 						WithExpires(anHourFromNow),
 						serverSK),
 					wantType: eat.Types.StateChannel(),
-					validate: func(t *testing.T, data *eat.Token) {
-						stateChannelDefault(t, data)
-						require.Equal(t, "afgh-pk", data.AFGHPublicKey)
-						require.Equal(t, anHourAgo, data.IssuedAt)
-						require.Equal(t, anHourFromNow, data.Expires)
-						require.Equal(t, ctx1, data.Ctx)
+					validate: func(t *testing.T, token *eat.Token) {
+						stateChannelDefault(t, token)
+						require.Equal(t, "afgh-pk", token.AFGHPublicKey)
+						require.Equal(t, anHourAgo, token.IssuedAt)
+						require.Equal(t, anHourFromNow, token.Expires)
+						require.Equal(t, ctx1, token.Ctx)
 					},
 				},
 				{
@@ -102,9 +103,9 @@ func TestTokenBuilders(t *testing.T) {
 				{
 					encoder:  sign(eat.NewTx(sid, lid, txh).WithAfgh("afgh-pk"), clientSK),
 					wantType: eat.Types.Tx(),
-					validate: func(t *testing.T, data *eat.Token) {
-						txDefault(t, data)
-						require.Equal(t, "afgh-pk", data.AFGHPublicKey)
+					validate: func(t *testing.T, token *eat.Token) {
+						txDefault(t, token)
+						require.Equal(t, "afgh-pk", token.AFGHPublicKey)
 					},
 				},
 				{
@@ -115,9 +116,9 @@ func TestTokenBuilders(t *testing.T) {
 				{
 					encoder:  sign(eat.NewPlain(sid, lid).WithQID(qid), clientSK),
 					wantType: eat.Types.Plain(),
-					validate: func(t *testing.T, data *eat.Token) {
-						plainDefault(t, data)
-						require.Equal(t, qid, data.QID)
+					validate: func(t *testing.T, token *eat.Token) {
+						plainDefault(t, token)
+						require.Equal(t, qid, token.QID)
 					},
 				},
 				{
@@ -128,9 +129,9 @@ func TestTokenBuilders(t *testing.T) {
 				{
 					encoder:  eat.NewAnonymous(sid, lid).WithQID(qid),
 					wantType: eat.Types.Anonymous(),
-					validate: func(t *testing.T, data *eat.Token) {
-						anonymousDefault(t, data)
-						require.Equal(t, qid, data.QID)
+					validate: func(t *testing.T, token *eat.Token) {
+						anonymousDefault(t, token)
+						require.Equal(t, qid, token.QID)
 					},
 				},
 				{
@@ -140,10 +141,10 @@ func TestTokenBuilders(t *testing.T) {
 						WithCtx(map[string]interface{}{"additional": "context"}),
 						clientSK),
 					wantType: eat.Types.EditorSigned(),
-					validate: func(t *testing.T, data *eat.Token) {
-						editorSignedDefault(t, data)
-						require.Equal(t, qid, data.QID)
-						require.Equal(t, "afgh-pk", data.AFGHPublicKey)
+					validate: func(t *testing.T, token *eat.Token) {
+						editorSignedDefault(t, token)
+						require.Equal(t, qid, token.QID)
+						require.Equal(t, "afgh-pk", token.AFGHPublicKey)
 					},
 				},
 				{
@@ -152,9 +153,9 @@ func TestTokenBuilders(t *testing.T) {
 						MergeCtx(map[string]interface{}{"additional": "context"}),
 						clientSK),
 					wantType: eat.Types.SignedLink(),
-					validate: func(t *testing.T, data *eat.Token) {
-						signedLinkDefault(t, data)
-						ctx := structured.Wrap(data.Ctx)
+					validate: func(t *testing.T, token *eat.Token) {
+						signedLinkDefault(t, token)
+						ctx := structured.Wrap(token.Ctx)
 						require.Equal(t, "context", ctx.At("additional").String())
 						require.Equal(t, lnk, ctx.At("elv/lnk").String())
 						require.Equal(t, srcQID.String(), ctx.At("elv/src").String())
@@ -180,9 +181,8 @@ func TestTokenBuilders(t *testing.T) {
 						WithCtx(map[string]interface{}{"additional": "context"}),
 						clientSK),
 					wantType: eat.Types.ClientSigned(),
-					validate: func(t *testing.T, data *eat.Token) {
-						clientSignedDefault(t, data)
-						require.Equal(t, qid, data.QID)
+					validate: func(t *testing.T, token *eat.Token) {
+						clientSignedDefault(t, token)
 					},
 				},
 			}
@@ -221,65 +221,81 @@ func TestTokenBuilders(t *testing.T) {
 	}
 }
 
-func stateChannelDefault(t *testing.T, data *eat.Token) {
-	require.Equal(t, sid, data.SID)
-	require.Equal(t, lid, data.LID)
-	require.Equal(t, qid, data.QID)
-	require.Equal(t, sub, data.Subject)
-	require.NotEqual(t, utc.Zero, data.IssuedAt)
+func stateChannelDefault(t *testing.T, token *eat.Token) {
+	require.Equal(t, sid, token.SID)
+	require.Equal(t, lid, token.LID)
+	require.Equal(t, qid, token.QID)
+	require.Equal(t, sub, token.Subject)
+	require.NotEqual(t, utc.Zero, token.IssuedAt)
+	assertAuthorization(t, token, sub, nil)
 }
 
-func stateChannelNoSubject(t *testing.T, data *eat.Token) {
-	require.Equal(t, sid, data.SID)
-	require.Equal(t, lid, data.LID)
-	require.Equal(t, qid, data.QID)
-	require.Equal(t, "", data.Subject)
-	require.NotEqual(t, utc.Zero, data.IssuedAt)
+func stateChannelNoSubject(t *testing.T, token *eat.Token) {
+	require.Equal(t, sid, token.SID)
+	require.Equal(t, lid, token.LID)
+	require.Equal(t, qid, token.QID)
+	require.Equal(t, "", token.Subject)
+	require.NotEqual(t, utc.Zero, token.IssuedAt)
+	assertAuthorization(t, token, "", nil)
 }
 
-func txDefault(t *testing.T, data *eat.Token) {
-	require.Equal(t, sid, data.SID)
-	require.Equal(t, lid, data.LID)
-	require.Equal(t, txh, data.EthTxHash)
+func txDefault(t *testing.T, token *eat.Token) {
+	require.Equal(t, sid, token.SID)
+	require.Equal(t, lid, token.LID)
+	require.Equal(t, txh, token.EthTxHash)
+	assertAuthorization(t, token, clientID.String(), clientID)
 }
 
-func plainDefault(t *testing.T, data *eat.Token) {
-	require.Equal(t, sid, data.SID)
-	require.Equal(t, lid, data.LID)
+func plainDefault(t *testing.T, token *eat.Token) {
+	require.Equal(t, sid, token.SID)
+	require.Equal(t, lid, token.LID)
+	assertAuthorization(t, token, clientID.String(), clientID)
 }
 
-func anonymousDefault(t *testing.T, data *eat.Token) {
-	require.Equal(t, sid, data.SID)
-	require.Equal(t, lid, data.LID)
+func anonymousDefault(t *testing.T, token *eat.Token) {
+	require.Equal(t, sid, token.SID)
+	require.Equal(t, lid, token.LID)
+	assertAuthorization(t, token, "", nil)
 }
 
-func editorSignedDefault(t *testing.T, data *eat.Token) {
-	require.Equal(t, sid, data.SID)
-	require.Equal(t, lid, data.LID)
-	require.Equal(t, qid, data.QID)
-	require.Equal(t, ethutil.AddressToID(data.EthAddr, id.User).String(), data.Subject)
-	require.NotEqual(t, utc.Zero, data.IssuedAt)
+func editorSignedDefault(t *testing.T, token *eat.Token) {
+	require.Equal(t, sid, token.SID)
+	require.Equal(t, lid, token.LID)
+	require.Equal(t, qid, token.QID)
+	require.Equal(t, ethutil.AddressToID(token.EthAddr, id.User).String(), token.Subject)
+	require.NotEqual(t, utc.Zero, token.IssuedAt)
+	assertAuthorization(t, token, clientID.String(), clientID)
 }
 
-func signedLinkDefault(t *testing.T, data *eat.Token) {
-	require.Equal(t, sid, data.SID)
-	require.Equal(t, lid, data.LID)
-	require.Equal(t, qid, data.QID)
-	require.Equal(t, ethutil.AddressToID(data.EthAddr, id.User).String(), data.Subject)
-	ctx := structured.Wrap(data.Ctx).At("elv")
+func signedLinkDefault(t *testing.T, token *eat.Token) {
+	require.Equal(t, sid, token.SID)
+	require.Equal(t, lid, token.LID)
+	require.Equal(t, qid, token.QID)
+	require.Equal(t, ethutil.AddressToID(token.EthAddr, id.User).String(), token.Subject)
+	ctx := structured.Wrap(token.Ctx).At("elv")
 	require.NotZero(t, ctx.At("lnk").String())
 	require.NotZero(t, ctx.At("src").String())
-	require.NotEqual(t, utc.Zero, data.IssuedAt)
+	require.NotEqual(t, utc.Zero, token.IssuedAt)
+	assertAuthorization(t, token, clientID.String(), clientID)
 }
 
-func clientDefault(t *testing.T, data *eat.Token) {
-	stateChannelDefault(t, data.Embedded)
+func clientDefault(t *testing.T, token *eat.Token) {
+	stateChannelDefault(t, token.Embedded)
+	assertAuthorization(t, token, sub, nil)
 }
 
-func clientSignedDefault(t *testing.T, data *eat.Token) {
-	require.Equal(t, sid, data.SID)
-	require.Equal(t, lid, data.LID)
-	require.Equal(t, qid, data.QID)
-	require.Equal(t, ethutil.AddressToID(data.EthAddr, id.User).String(), data.Subject)
-	require.NotEqual(t, utc.Zero, data.IssuedAt)
+func clientSignedDefault(t *testing.T, token *eat.Token) {
+	require.Equal(t, sid, token.SID)
+	require.Equal(t, lid, token.LID)
+	require.Equal(t, qid, token.QID)
+	require.Equal(t, ethutil.AddressToID(token.EthAddr, id.User).String(), token.Subject)
+	require.NotEqual(t, utc.Zero, token.IssuedAt)
+	assertAuthorization(t, token, clientID.String(), clientID)
+}
+
+func assertAuthorization(t *testing.T, tok *eat.Token, wantUser string, wantUserId types.UserID) {
+	auth, err := eat.NewAuthorization(tok)
+	require.NoError(t, err)
+	require.Equal(t, wantUser, auth.User())
+	require.Equal(t, wantUserId, auth.UserId())
 }

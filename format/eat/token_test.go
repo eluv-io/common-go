@@ -33,6 +33,7 @@ var (
 		addr := crypto.PubkeyToAddress(sk.PublicKey)
 		return sk, addr
 	}()
+	clientID             = ethutil.AddressToID(clientAddr, id.User)
 	serverSK, serverAddr = func() (*ecdsa.PrivateKey, common.Address) {
 		sk, _ := ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
 		addr := crypto.PubkeyToAddress(sk.PublicKey)

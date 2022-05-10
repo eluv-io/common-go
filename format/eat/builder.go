@@ -7,8 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 
-	"github.com/eluv-io/utc-go"
-
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/structured"
 	"github.com/eluv-io/common-go/format/types"

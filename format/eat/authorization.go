@@ -4,11 +4,15 @@ import (
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/types"
 	"github.com/eluv-io/common-go/util/ethutil"
+	"github.com/eluv-io/errors-go"
 )
 
 // NewAuthorization returns an authorization or an error.
 // An error is possibly returned only in the case where the token was not encoded
 func NewAuthorization(tok *Token) (*Authorization, error) {
+	if tok == nil {
+		return nil, errors.E("NewAuthorization", errors.K.Invalid, "reason", "token is nil")
+	}
 	data := tok.TokenData
 	// when an embedded exists this is a state channel, hence it has precedence
 	if tok.Embedded != nil {
@@ -60,7 +64,7 @@ func (a *Authorization) UserId() types.UserID {
 			uid, _ = ethutil.AddrToID(a.Subject, id.User)
 		}
 
-	case Types.Tx(), Types.Plain(), Types.Node():
+	case Types.Tx(), Types.Plain(), Types.Node(), Types.ClientSigned():
 		if a.EthAddr != zeroAddr {
 			uid = ethutil.AddressToID(a.EthAddr, id.User)
 		}
