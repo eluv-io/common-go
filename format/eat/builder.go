@@ -20,6 +20,10 @@ type Encoder interface {
 	Encode() (string, error)
 	// MustEncode encodes the token as a string - panics in case of error.
 	MustEncode() string
+	// Token returns the token as struct.
+	Token() (*Token, error)
+	// MustToken returns the token as struct or panics if an error occurred previously (e.g. during signing).
+	MustToken() *Token
 }
 
 type Signer interface {
@@ -32,6 +36,16 @@ type Signer interface {
 type TokenBuilder interface {
 	Encoder
 	Signer
+}
+
+// -----------------------------------------------------------------------------
+
+// Must is a helper that returns the given token or panics if err is not nil.
+func Must(t *Token, err error) *Token {
+	if err != nil {
+		panic(err)
+	}
+	return t
 }
 
 // -----------------------------------------------------------------------------
@@ -78,6 +92,17 @@ func (b *encoder) MustEncode() string {
 	return s
 }
 
+func (b *encoder) Token() (*Token, error) {
+	return b.token, b.err
+}
+
+func (b *encoder) MustToken() *Token {
+	if b.err != nil {
+		panic(b.err)
+	}
+	return b.token
+}
+
 // -----------------------------------------------------------------------------
 
 var _ Signer = (*signer)(nil)
@@ -107,7 +132,7 @@ func (b *signer) SignEIP912Personal(pk *ecdsa.PrivateKey) Encoder {
 }
 
 func (b *signer) Token() *Token {
-	return b.enc.Token()
+	return b.enc.token
 }
 
 // -----------------------------------------------------------------------------

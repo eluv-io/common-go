@@ -680,18 +680,22 @@ func TestEditorSignedSubject(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	ess := eat.NewEditorSigned(sid, lid, qid).
-		WithSubject("me").
-		WithExpires(utc.Now().Add(time.Hour))
-	_, err := ess.Sign(clientSK).Encode()
-	require.NoError(t, err)
-	require.Equal(t, "me", ess.Token().Subject)
+	{
+		ess := eat.NewEditorSigned(sid, lid, qid).
+			WithSubject("me").
+			WithExpires(utc.Now().Add(time.Hour))
+		tok, err := ess.Sign(clientSK).Token()
+		require.NoError(t, err)
+		require.Equal(t, "me", tok.Subject)
+	}
 
-	ess = eat.NewEditorSigned(sid, lid, qid).
-		WithExpires(utc.Now().Add(time.Hour))
-	_, err = ess.Sign(clientSK).Encode()
-	require.NoError(t, err)
-	require.Equal(t, ethutil.AddressToID(clientAddr, id.User).String(), ess.Token().Subject)
+	{
+		ess := eat.NewEditorSigned(sid, lid, qid).
+			WithExpires(utc.Now().Add(time.Hour))
+		tok, err := ess.Sign(clientSK).Token()
+		require.NoError(t, err)
+		require.Equal(t, ethutil.AddressToID(clientAddr, id.User).String(), tok.Subject)
+	}
 }
 
 func TestClientSigned(t *testing.T) {

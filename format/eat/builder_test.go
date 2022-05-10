@@ -48,9 +48,10 @@ func TestTokenBuilders(t *testing.T) {
 
 			tests := []struct {
 				encoder     eat.Encoder
+				token       *eat.Token
 				wantFailure bool
 				wantType    eat.TokenType
-				validate    func(t *testing.T, data *eat.TokenData)
+				validate    func(t *testing.T, data *eat.Token)
 			}{
 
 				{
@@ -72,7 +73,7 @@ func TestTokenBuilders(t *testing.T) {
 				{
 					encoder:  sign(eat.NewStateChannel(sid, lid, qid, sub).WithAfgh("afgh-pk"), serverSK),
 					wantType: eat.Types.StateChannel(),
-					validate: func(t *testing.T, data *eat.TokenData) {
+					validate: func(t *testing.T, data *eat.Token) {
 						stateChannelDefault(t, data)
 						require.Equal(t, "afgh-pk", data.AFGHPublicKey)
 						require.Equal(t, now, data.IssuedAt)
@@ -86,7 +87,7 @@ func TestTokenBuilders(t *testing.T) {
 						WithExpires(anHourFromNow),
 						serverSK),
 					wantType: eat.Types.StateChannel(),
-					validate: func(t *testing.T, data *eat.TokenData) {
+					validate: func(t *testing.T, data *eat.Token) {
 						stateChannelDefault(t, data)
 						require.Equal(t, "afgh-pk", data.AFGHPublicKey)
 						require.Equal(t, anHourAgo, data.IssuedAt)
@@ -102,7 +103,7 @@ func TestTokenBuilders(t *testing.T) {
 				{
 					encoder:  sign(eat.NewTx(sid, lid, txh).WithAfgh("afgh-pk"), clientSK),
 					wantType: eat.Types.Tx(),
-					validate: func(t *testing.T, data *eat.TokenData) {
+					validate: func(t *testing.T, data *eat.Token) {
 						txDefault(t, data)
 						require.Equal(t, "afgh-pk", data.AFGHPublicKey)
 					},
@@ -115,7 +116,7 @@ func TestTokenBuilders(t *testing.T) {
 				{
 					encoder:  sign(eat.NewPlain(sid, lid).WithQID(qid), clientSK),
 					wantType: eat.Types.Plain(),
-					validate: func(t *testing.T, data *eat.TokenData) {
+					validate: func(t *testing.T, data *eat.Token) {
 						plainDefault(t, data)
 						require.Equal(t, qid, data.QID)
 					},
@@ -128,7 +129,7 @@ func TestTokenBuilders(t *testing.T) {
 				{
 					encoder:  eat.NewAnonymous(sid, lid).WithQID(qid),
 					wantType: eat.Types.Anonymous(),
-					validate: func(t *testing.T, data *eat.TokenData) {
+					validate: func(t *testing.T, data *eat.Token) {
 						anonymousDefault(t, data)
 						require.Equal(t, qid, data.QID)
 					},
@@ -139,7 +140,7 @@ func TestTokenBuilders(t *testing.T) {
 						WithCtx(map[string]interface{}{"additional": "context"}),
 						clientSK),
 					wantType: eat.Types.EditorSigned(),
-					validate: func(t *testing.T, data *eat.TokenData) {
+					validate: func(t *testing.T, data *eat.Token) {
 						editorSignedDefault(t, data)
 						require.Equal(t, qid, data.QID)
 					},
@@ -150,7 +151,7 @@ func TestTokenBuilders(t *testing.T) {
 						MergeCtx(map[string]interface{}{"additional": "context"}),
 						clientSK),
 					wantType: eat.Types.SignedLink(),
-					validate: func(t *testing.T, data *eat.TokenData) {
+					validate: func(t *testing.T, data *eat.Token) {
 						signedLinkDefault(t, data)
 						ctx := structured.Wrap(data.Ctx)
 						require.Equal(t, "context", ctx.At("additional").String())
@@ -160,12 +161,25 @@ func TestTokenBuilders(t *testing.T) {
 					},
 				},
 				{
+					token: eat.Must(
+						eat.NewClientToken(
+							sign(
+								eat.NewStateChannel(sid, lid, qid, sub).
+									WithAfgh("afgh-pk").
+									WithCtx(ctx1).
+									WithIssuedAt(anHourAgo).
+									WithExpires(anHourFromNow),
+								clientSK).MustToken())),
+					wantType: eat.Types.Client(),
+					validate: clientDefault,
+				},
+				{
 					encoder: sign(eat.NewClientSigned(sid, lid, qid).
 						WithGrant(eat.Grants.Read).
 						WithCtx(map[string]interface{}{"additional": "context"}),
 						clientSK),
 					wantType: eat.Types.ClientSigned(),
-					validate: func(t *testing.T, data *eat.TokenData) {
+					validate: func(t *testing.T, data *eat.Token) {
 						clientSignedDefault(t, data)
 						require.Equal(t, qid, data.QID)
 					},
@@ -174,7 +188,13 @@ func TestTokenBuilders(t *testing.T) {
 
 			for _, test := range tests {
 				t.Run(test.wantType.String(), func(t *testing.T) {
-					encoded, err := test.encoder.Encode()
+					var encoded string
+					var err error
+					if test.encoder != nil {
+						encoded, err = test.encoder.Encode()
+					} else {
+						encoded, err = test.token.Encode()
+					}
 					if test.wantFailure {
 						require.Error(t, err)
 						return
@@ -188,7 +208,7 @@ func TestTokenBuilders(t *testing.T) {
 					require.NoError(t, tok.VerifySignature())
 
 					require.Equal(t, test.wantType, tok.Type)
-					test.validate(t, &tok.TokenData)
+					test.validate(t, tok)
 					// fmt.Println(jsonutil.MarshalString(tok.TokenData))
 					jsn, err := tok.TokenData.EncodeJSON()
 					require.NoError(t, err)
@@ -200,7 +220,7 @@ func TestTokenBuilders(t *testing.T) {
 	}
 }
 
-func stateChannelDefault(t *testing.T, data *eat.TokenData) {
+func stateChannelDefault(t *testing.T, data *eat.Token) {
 	require.Equal(t, sid, data.SID)
 	require.Equal(t, lid, data.LID)
 	require.Equal(t, qid, data.QID)
@@ -208,7 +228,7 @@ func stateChannelDefault(t *testing.T, data *eat.TokenData) {
 	require.NotEqual(t, utc.Zero, data.IssuedAt)
 }
 
-func stateChannelNoSubject(t *testing.T, data *eat.TokenData) {
+func stateChannelNoSubject(t *testing.T, data *eat.Token) {
 	require.Equal(t, sid, data.SID)
 	require.Equal(t, lid, data.LID)
 	require.Equal(t, qid, data.QID)
@@ -216,23 +236,23 @@ func stateChannelNoSubject(t *testing.T, data *eat.TokenData) {
 	require.NotEqual(t, utc.Zero, data.IssuedAt)
 }
 
-func txDefault(t *testing.T, data *eat.TokenData) {
+func txDefault(t *testing.T, data *eat.Token) {
 	require.Equal(t, sid, data.SID)
 	require.Equal(t, lid, data.LID)
 	require.Equal(t, txh, data.EthTxHash)
 }
 
-func plainDefault(t *testing.T, data *eat.TokenData) {
+func plainDefault(t *testing.T, data *eat.Token) {
 	require.Equal(t, sid, data.SID)
 	require.Equal(t, lid, data.LID)
 }
 
-func anonymousDefault(t *testing.T, data *eat.TokenData) {
+func anonymousDefault(t *testing.T, data *eat.Token) {
 	require.Equal(t, sid, data.SID)
 	require.Equal(t, lid, data.LID)
 }
 
-func editorSignedDefault(t *testing.T, data *eat.TokenData) {
+func editorSignedDefault(t *testing.T, data *eat.Token) {
 	require.Equal(t, sid, data.SID)
 	require.Equal(t, lid, data.LID)
 	require.Equal(t, qid, data.QID)
@@ -240,7 +260,7 @@ func editorSignedDefault(t *testing.T, data *eat.TokenData) {
 	require.NotEqual(t, utc.Zero, data.IssuedAt)
 }
 
-func signedLinkDefault(t *testing.T, data *eat.TokenData) {
+func signedLinkDefault(t *testing.T, data *eat.Token) {
 	require.Equal(t, sid, data.SID)
 	require.Equal(t, lid, data.LID)
 	require.Equal(t, qid, data.QID)
@@ -251,7 +271,11 @@ func signedLinkDefault(t *testing.T, data *eat.TokenData) {
 	require.NotEqual(t, utc.Zero, data.IssuedAt)
 }
 
-func clientSignedDefault(t *testing.T, data *eat.TokenData) {
+func clientDefault(t *testing.T, data *eat.Token) {
+	stateChannelDefault(t, data.Embedded)
+}
+
+func clientSignedDefault(t *testing.T, data *eat.Token) {
 	require.Equal(t, sid, data.SID)
 	require.Equal(t, lid, data.LID)
 	require.Equal(t, qid, data.QID)
