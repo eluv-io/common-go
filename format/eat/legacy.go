@@ -297,8 +297,11 @@ func (l *TokenDataLegacy) CopyToTokenData(t *Token, typ TokenType) {
 	}
 	t.Ctx = l.Ctx
 	switch typ {
-	case Types.StateChannel(), Types.EditorSigned():
+	case Types.StateChannel():
 		t.Subject = l.EthAddr
+	case Types.EditorSigned():
+		t.Subject = l.EthAddr
+		fallthrough
 	default:
 		// ignore the error at this point
 		t.EthAddr, _ = ethutil.HexToAddress(l.EthAddr)

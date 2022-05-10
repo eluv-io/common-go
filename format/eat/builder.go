@@ -13,6 +13,7 @@ import (
 	"github.com/eluv-io/common-go/format/structured"
 	"github.com/eluv-io/common-go/format/types"
 	"github.com/eluv-io/common-go/util/ethutil"
+	"github.com/eluv-io/utc-go"
 )
 
 type Encoder interface {

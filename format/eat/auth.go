@@ -1,6 +1,6 @@
 package eat
 
-// grant is the type of grant kinds for authorization access
+// Grant is the type of grant kinds for authorization access
 type Grant string
 
 // Grants defines the kinds of access authorizations.

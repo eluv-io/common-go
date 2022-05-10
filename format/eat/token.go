@@ -360,6 +360,33 @@ func (t *Token) Validate() (err error) {
 		return e.IfNotNil(validator.err)
 
 	case Types.EditorSigned():
+		// Comment by Gilles from auth-use-new-tokens branch:
+		// EditorSigned tokens were originally legacy.ElvClientToken signed
+		// by a user/editor of the content. These client tokens were
+		// embedding a legacy.ElvAuthToken token where EthAddr was set to
+		// the address of the user/editor the token was delivered to.
+		// Hence the verification code was checking that the client token was
+		// signed by the user whose address was in EthAddr. As a result an
+		// editor signed token was signed twice: once as the authority
+		// signing the ElvAuthToken and once as the user ElvClientToken.
+		// As the 'subject' field did not exist in previous tokens but was
+		// computed from the EthAddr field in the server token, this resulted
+		// in the subject being also the signer.
+
+		// we now want editor signed tokens able to carry a 'subject' that
+		// is not necessarily the signer (use case: water-marking).
+
+		//uid := ethutil.AddressToID(t.EthAddr, id.User)
+		//subjid, err := id.User.FromString(t.Subject)
+		//if err != nil {
+		//	subjid, _ = ethutil.AddrToID(t.Subject, id.User)
+		//}
+		//if !uid.Equal(subjid) {
+		//	return e("reason", "subject differs from signer",
+		//		"subject", subjid,
+		//		"signer", uid)
+		//}
+
 		// require
 		validator.require("qid", t.QID)
 		validator.require("subject", t.Subject)
