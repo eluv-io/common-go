@@ -41,17 +41,18 @@ var allSignatures = []*TokenSigType{
 	{"_", "unknown", sign.SUNKNOWN},
 	{"u", "unsigned", sign.SUNKNOWN},
 	{"s", "ES256K", sign.ES256K},
-	{"p", "EIP191Personal", sign.EIP191Personal},   // https://eips.ethereum.org/EIPS/eip-191
-	{"t", "EIP712TypedData", sign.EIP712TypedData}, // https://eips.ethereum.org/EIPS/eip-712
+	{"p", "EIP191Personal", sign.EIP191Personal}, // https://eips.ethereum.org/EIPS/eip-191
+	// {"t", "EIP712TypedData", sign.EIP712TypedData}, // https://eips.ethereum.org/EIPS/eip-712
 }
 
 type enumSigType int
 
-func (enumSigType) Unknown() *TokenSigType         { return allSignatures[0] }
-func (enumSigType) Unsigned() *TokenSigType        { return allSignatures[1] }
-func (enumSigType) ES256K() *TokenSigType          { return allSignatures[2] }
-func (enumSigType) EIP191Personal() *TokenSigType  { return allSignatures[3] }
-func (enumSigType) EIP712TypedData() *TokenSigType { return allSignatures[4] }
+func (enumSigType) Unknown() *TokenSigType        { return allSignatures[0] }
+func (enumSigType) Unsigned() *TokenSigType       { return allSignatures[1] }
+func (enumSigType) ES256K() *TokenSigType         { return allSignatures[2] }
+func (enumSigType) EIP191Personal() *TokenSigType { return allSignatures[3] }
+
+// func (enumSigType) EIP712TypedData() *TokenSigType { return allSignatures[4] }
 
 var prefixToSignature = map[string]*TokenSigType{}
 

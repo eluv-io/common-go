@@ -438,7 +438,6 @@ func TestClientTokens(t *testing.T) {
 
 	decoded := assertEncodeDecode(t, ct)
 
-	//require.NotNil(t, decoded.Embedded.payload)
 	require.NoError(t, decoded.Embedded.VerifySignatureFrom(serverAddr))
 	require.Equal(t, st, decoded.Embedded)
 }
@@ -481,7 +480,6 @@ func TestLegacySignedToken(t *testing.T) {
 	require.NoError(t, tokDecoded.Embedded.VerifySignatureFrom(serverAddr))
 	require.NoError(t, tokDecoded.VerifySignature())
 
-	//require.NotNil(t, tokDecoded.Embedded.payload)
 	require.Equal(t, st, tokDecoded.Embedded)
 
 	fmt.Println(eat.Describe(legacySigned))

@@ -367,7 +367,5 @@ func LegacySign(tok string, pk *ecdsa.PrivateKey) (string, error) {
 	}
 
 	sig := sign.NewSig(sign.ES256K, sigBytes)
-	sig = sign.NewSig(sign.ES256K, sig.EthAdjustBytes())
-
 	return tok + "." + base64.StdEncoding.EncodeToString([]byte(sig.String())), nil
 }

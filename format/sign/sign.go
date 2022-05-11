@@ -111,26 +111,6 @@ func (sig Sig) Bytes() []byte {
 	return sig[1:]
 }
 
-// EthAdjustBytes adjusts ECDSA Signatures to be compatible with ETH tools.
-//
-// PaulO: ETH-compatible tools insist on adding a constant 27 to the v value (byte ordinal 64) of the signature. I have
-// yet to see a good explanation why this was done except that it is a 'legacy' value. We want our signatures to conform
-// to the standard but rather than insist that all libraries our clients (including us) use understand and account for
-// this mismatch, it's saner for us to just adjust where necessary on the server.
-func (sig Sig) EthAdjustBytes() []byte {
-	if len(sig) == 0 {
-		return []byte{}
-	}
-	if sig.Code() != ES256K || len(sig.Bytes()) <= 64 || sig.Bytes()[64] < 4 {
-		return sig.Bytes()
-	} else {
-		adjSigBytes := make([]byte, 65)
-		copy(adjSigBytes, sig.Bytes())
-		adjSigBytes[64] -= 27
-		return adjSigBytes
-	}
-}
-
 // UnmarshalText implements custom unmarshalling from the string representation.
 func (sig *Sig) UnmarshalText(text []byte) error {
 	parsed, err := FromString(string(text))
@@ -149,12 +129,26 @@ func (sig Sig) Is(s string) bool {
 	return bytes.Equal(sig, sg)
 }
 
-// SignerAddress returns the address that was used to sign the given bytes,
-// yielding this signature.
+// SignerAddress returns the address that was used to sign the given bytes, yielding this signature. Returns an error if
+//   * the signature that doesn't allow signer recovery
+//   * or an error during recovery occurs
 func (sig *Sig) SignerAddress(signedBytes []byte) (common.Address, error) {
+	return sig.SignerAddressFromHash(crypto.Keccak256(signedBytes))
+}
+
+// SignerAddressFromHash returns the address that was used to sign the given hashed bytes, yielding this signature.
+// Returns an error if * the signature that doesn't allow signer recovery * or an error during recovery occurs
+func (sig *Sig) SignerAddressFromHash(hash []byte) (common.Address, error) {
 	e := errors.Template("SignerAddress", errors.K.Invalid)
-	hash := crypto.Keccak256(signedBytes)
-	recoverKMSPKBytes, err := crypto.Ecrecover(hash, sig.EthAdjustBytes())
+
+	switch sig.Code() {
+	case ES256K, EIP191Personal:
+		// continue
+	default:
+		return common.Address{}, e("reason", "address recovery not available for signature type", "sig_type", sig.Code())
+	}
+
+	recoverKMSPKBytes, err := crypto.Ecrecover(hash, EthAdjustBytes(sig.Code(), sig.Bytes()))
 	if err != nil {
 		return common.Address{}, e(err)
 	}
@@ -166,7 +160,7 @@ func (sig *Sig) SignerAddress(signedBytes []byte) (common.Address, error) {
 }
 
 func NewSig(code SigCode, codeBytes []byte) Sig {
-	return Sig(append([]byte{byte(code)}, codeBytes...))
+	return Sig(append([]byte{byte(code)}, EthAdjustBytes(code, codeBytes)...))
 }
 
 // FromString parses an Sig from the given string representation.
@@ -186,4 +180,41 @@ func FromString(s string) (Sig, error) {
 	}
 	b := []byte{byte(code)}
 	return Sig(append(b, dec...)), nil
+}
+
+// EthAdjustBytes adjusts ECDSA Signatures to be compatible with ETH tools. The signature must conform to the secp256k1
+// curve R, S and V values, where the V value must be 27 or 28 for legacy reasons.
+//
+// Resources:
+// * https://bitcoin.stackexchange.com/questions/38351/ecdsa-v-r-s-what-is-v
+//
+// * From "The Magic of Digital Signatures on Ethereum"
+//   https://medium.com/mycrypto/the-magic-of-digital-signatures-on-ethereum-98fe184dc9c7
+//
+//   The recovery identifier (“v”)
+//
+//   v is the last byte of the signature, and is either 27 (0x1b) or 28 (0x1c). This identifier is important because
+//   since we are working with elliptic curves, multiple points on the curve can be calculated from r and s alone. This
+//   would result in two different public keys (thus addresses) that can be recovered. The v simply indicates which one
+//   of these points to use.
+//
+//   In most implementations, the v is just 0 or 1 internally, but 27 was added as arbitrary number for signing Bitcoin
+//   messages and Ethereum adapted that as well.
+//
+//   Since EIP-155, we also use the chain ID to calculate the v value. This prevents replay attacks across different
+//   chains: A transaction signed for Ethereum cannot be used for Ethereum Classic, and vice versa. Currently, this is
+//   only used for signing transaction however, and is not used for signing messages.
+//
+func EthAdjustBytes(code SigCode, bts []byte) []byte {
+	if len(bts) == 0 {
+		return []byte{}
+	}
+	if (code != ES256K && code != EIP191Personal) || len(bts) <= 64 || bts[64] < 4 {
+		return bts
+	} else {
+		adjSigBytes := make([]byte, 65)
+		copy(adjSigBytes, bts)
+		adjSigBytes[64] -= 27
+		return adjSigBytes
+	}
 }

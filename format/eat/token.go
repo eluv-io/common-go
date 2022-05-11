@@ -121,8 +121,8 @@ func Parse(s string) (*Token, error) {
 	return t, nil
 }
 
-// parse parses a token from the given string and returns the both the parsed token and any parsing/validation error.
-// In case of errors, the token is still returned: it will be invalid and probably only partially decoded.
+// parse parses a token from the given string and returns both the parsed token and any parsing/validation error. In
+// case of errors, the token is still returned: it will be invalid and probably only partially decoded.
 func parse(s string) (*Token, error) {
 	t := New(Types.Unknown(), Formats.Unknown(), SigTypes.Unknown())
 	err := t.Decode(s)
@@ -302,7 +302,7 @@ func (t *Token) Validate() (err error) {
 	}
 
 	// signature checks
-	clientTokenWithSignature := t.Type == Types.Client() && t.SigType.HasSig() // client tokens have an optional sig - verify it if they do
+	clientTokenWithSignature := t.Type == Types.Client() && t.SigType.HasSig() // signature for client tokens is optional
 	if t.Type.SignatureRequired || clientTokenWithSignature {
 		if !t.SigType.HasSig() {
 			validator.error(validator.errTemplate("reason", "invalid signature type"))
@@ -312,12 +312,11 @@ func (t *Token) Validate() (err error) {
 			if t.Type != Types.StateChannel() {
 				// legacy tokens may have a missing eth addr, in which case we extract it from the signature itself...
 				if !t.HasEthAddr() && (t.Format == Formats.Legacy() || t.Format == Formats.LegacySigned()) {
-					sh, _ := newSignatureHelper(t)
-					t.EthAddr, err = sh.signerAddress()
+					t.EthAddr, err = t.SignerAddress()
 					validator.error(err)
 				}
 				if validator.require("adr", t.EthAddr) {
-					validator.error(VerifySignature(t))
+					validator.error(t.verifySignature())
 				}
 			}
 		}
@@ -549,18 +548,12 @@ func (t *Token) SignWithFuncT(
 	calcECDSA CalcECDSA,
 	sigType *TokenSigType) (err error) {
 
-	return signToken(t, signAddr, calcECDSA, sigType)
+	return t.sign(signAddr, calcECDSA, sigType)
 }
 
-func (t *Token) VerifySignatureFrom(trusted common.Address) (err error) {
-	return t.Verify(
-		func(qid types.QID) (common.Address, error) {
-			return trusted, nil
-		},
-		-1,
-		-1)
-}
-
+// Verify verifies that the token was signed by the trust address (as returned from getTrustedAddress) and that
+// the token's issued & expiration dates are valid with respect to the maximum validity time and accepted time skew.
+// Returns nil if valid, an error otherwise.
 func (t *Token) Verify(
 	getTrustedAddress func(qid types.QID) (common.Address, error),
 	maxValidity, timeSkew time.Duration) (err error) {
@@ -577,7 +570,7 @@ func (t *Token) Verify(
 		return e(err)
 	}
 
-	if err = VerifySignatureFrom(t, trusted); err != nil {
+	if err = t.VerifySignatureFrom(trusted); err != nil {
 		return e(err)
 	}
 
@@ -587,15 +580,6 @@ func (t *Token) Verify(
 		}
 	}
 
-	return nil
-}
-
-// VerifySignature validates the token and verifies its signature (if any).
-func (t *Token) VerifySignature() error {
-	err := t.Validate()
-	if err != nil {
-		return errors.E("verify token", errors.K.Permission, err)
-	}
 	return nil
 }
 
@@ -938,7 +922,7 @@ func (t *Token) decodeTokenAndSigBytes(bts []byte) (err error) {
 	e := errors.Template("decode auth token", errors.K.Invalid)
 
 	switch t.SigType {
-	case SigTypes.ES256K(), SigTypes.EIP191Personal(), SigTypes.EIP712TypedData():
+	case SigTypes.ES256K(), SigTypes.EIP191Personal():
 		if len(bts) <= 65 {
 			return e("reason", "token too short")
 		}
