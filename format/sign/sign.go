@@ -161,8 +161,8 @@ func (sig *Sig) SignerAddressFromHash(hash []byte) (common.Address, error) {
 
 // EthAdjustBytes remains for backward compatibility
 // deprecated - use standalone func EthAdjustBytes()
-func (sig *Sig) EthAdjustBytes(bts []byte) []byte {
-	return EthAdjustBytes(sig.Code(), bts)
+func (sig *Sig) EthAdjustBytes() []byte {
+	return EthAdjustBytes(sig.Code(), sig.Bytes())
 }
 
 func NewSig(code SigCode, codeBytes []byte) Sig {
