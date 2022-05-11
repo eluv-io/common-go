@@ -159,6 +159,12 @@ func (sig *Sig) SignerAddressFromHash(hash []byte) (common.Address, error) {
 	return crypto.PubkeyToAddress(*recoverTrustPK), nil
 }
 
+// EthAdjustBytes remains for backward compatibility
+// deprecated - use standalone func EthAdjustBytes()
+func (sig *Sig) EthAdjustBytes(bts []byte) []byte {
+	return EthAdjustBytes(sig.Code(), bts)
+}
+
 func NewSig(code SigCode, codeBytes []byte) Sig {
 	return Sig(append([]byte{byte(code)}, EthAdjustBytes(code, codeBytes)...))
 }
