@@ -107,7 +107,7 @@ func (t *Token) sign(
 			"len", len(sig))
 	}
 
-	t.Signature = sign.NewSig(sigType.Code, sign.EthAdjustBytes(sigType.Code, sig))
+	t.Signature = sign.NewSig(sigType.Code, sig)
 	t.SigType = sigType
 	return nil
 }
