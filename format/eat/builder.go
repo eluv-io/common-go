@@ -4,7 +4,6 @@ import (
 	"crypto/ecdsa"
 	"time"
 
-	"github.com/eluv-io/utc-go"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/eluv-io/common-go/format/structured"
 	"github.com/eluv-io/common-go/format/types"
 	"github.com/eluv-io/common-go/util/ethutil"
+	"github.com/eluv-io/utc-go"
 )
 
 type Encoder interface {
@@ -19,15 +19,32 @@ type Encoder interface {
 	Encode() (string, error)
 	// MustEncode encodes the token as a string - panics in case of error.
 	MustEncode() string
+	// Token returns the token as struct.
+	Token() (*Token, error)
+	// MustToken returns the token as struct or panics if an error occurred previously (e.g. during signing).
+	MustToken() *Token
 }
 
 type Signer interface {
+	// Sign signs the token with the given key, producing a ES256K signature on the token's encoded body.
 	Sign(pk *ecdsa.PrivateKey) Encoder
+	// SignEIP912Personal signs the token with the given key, producing a EIP191PersonalSign signature.
+	SignEIP912Personal(pk *ecdsa.PrivateKey) Encoder
 }
 
 type TokenBuilder interface {
 	Encoder
 	Signer
+}
+
+// -----------------------------------------------------------------------------
+
+// Must is a helper that returns the given token or panics if err is not nil.
+func Must(t *Token, err error) *Token {
+	if err != nil {
+		panic(err)
+	}
+	return t
 }
 
 // -----------------------------------------------------------------------------
@@ -74,6 +91,17 @@ func (b *encoder) MustEncode() string {
 	return s
 }
 
+func (b *encoder) Token() (*Token, error) {
+	return b.token, b.err
+}
+
+func (b *encoder) MustToken() *Token {
+	if b.err != nil {
+		panic(b.err)
+	}
+	return b.token
+}
+
 // -----------------------------------------------------------------------------
 
 var _ Signer = (*signer)(nil)
@@ -94,8 +122,16 @@ func (b *signer) Sign(pk *ecdsa.PrivateKey) Encoder {
 	return b.enc
 }
 
+func (b *signer) SignEIP912Personal(pk *ecdsa.PrivateKey) Encoder {
+	if b.enc.err != nil {
+		return b.enc
+	}
+	b.enc.err = b.enc.token.SignWithT(pk, SigTypes.EIP191Personal())
+	return b.enc
+}
+
 func (b *signer) Token() *Token {
-	return b.enc.Token()
+	return b.enc.token
 }
 
 // -----------------------------------------------------------------------------
@@ -243,6 +279,13 @@ func (b *EditorSignedBuilder) Sign(pk *ecdsa.PrivateKey) Encoder {
 	return b.signer.Sign(pk)
 }
 
+func (b *EditorSignedBuilder) SignEIP912Personal(pk *ecdsa.PrivateKey) Encoder {
+	if len(b.enc.token.Subject) == 0 {
+		b.enc.token.Subject = ethutil.AddressToID(crypto.PubkeyToAddress(pk.PublicKey), id.User).String()
+	}
+	return b.signer.SignEIP912Personal(pk)
+}
+
 // -----------------------------------------------------------------------------
 
 type PlainBuilder struct {
@@ -350,4 +393,75 @@ func (b *SignedLinkBuilder) MergeCtx(ctx map[string]interface{}) *SignedLinkBuil
 func (b *SignedLinkBuilder) Sign(pk *ecdsa.PrivateKey) Encoder {
 	b.enc.token.Subject = ethutil.AddressToID(crypto.PubkeyToAddress(pk.PublicKey), id.User).String()
 	return b.signer.Sign(pk)
+}
+
+func (b *SignedLinkBuilder) SignEIP912Personal(pk *ecdsa.PrivateKey) Encoder {
+	b.enc.token.Subject = ethutil.AddressToID(crypto.PubkeyToAddress(pk.PublicKey), id.User).String()
+	return b.signer.SignEIP912Personal(pk)
+}
+
+// -----------------------------------------------------------------------------
+
+// PENDING(LUK): review offered methods on ClientSignedBuilder
+
+type ClientSignedBuilder struct {
+	*signer
+}
+
+func NewClientSigned(
+	sid types.QSpaceID,
+	lid types.QLibID,
+	qid types.QID) *ClientSignedBuilder {
+
+	token := New(Types.ClientSigned(), defaultFormat, SigTypes.Unsigned())
+	token.SID = sid
+	token.LID = lid
+	token.QID = qid
+	token.IssuedAt = utc.Now()
+	token.Expires = token.IssuedAt.Add(time.Hour)
+	return &ClientSignedBuilder{newSigner(token)}
+}
+
+func (b *ClientSignedBuilder) WithAfgh(afghPublicKey string) *ClientSignedBuilder {
+	b.enc.token.AFGHPublicKey = afghPublicKey
+	return b
+}
+
+func (b *ClientSignedBuilder) WithGrant(grant Grant) *ClientSignedBuilder {
+	b.enc.token.Grant = grant
+	return b
+}
+
+func (b *ClientSignedBuilder) WithIssuedAt(issuedAt utc.UTC) *ClientSignedBuilder {
+	b.enc.token.IssuedAt = issuedAt
+	return b
+}
+
+func (b *ClientSignedBuilder) WithExpires(expiresAt utc.UTC) *ClientSignedBuilder {
+	b.enc.token.Expires = expiresAt
+	return b
+}
+
+func (b *ClientSignedBuilder) WithCtx(ctx map[string]interface{}) *ClientSignedBuilder {
+	b.enc.token.Ctx = ctx
+	return b
+}
+
+func (b *ClientSignedBuilder) WithSubject(s string) *ClientSignedBuilder {
+	b.enc.token.Subject = s
+	return b
+}
+
+func (b *ClientSignedBuilder) Sign(pk *ecdsa.PrivateKey) Encoder {
+	if len(b.enc.token.Subject) == 0 {
+		b.enc.token.Subject = ethutil.AddressToID(crypto.PubkeyToAddress(pk.PublicKey), id.User).String()
+	}
+	return b.signer.Sign(pk)
+}
+
+func (b *ClientSignedBuilder) SignEIP912Personal(pk *ecdsa.PrivateKey) Encoder {
+	if len(b.enc.token.Subject) == 0 {
+		b.enc.token.Subject = ethutil.AddressToID(crypto.PubkeyToAddress(pk.PublicKey), id.User).String()
+	}
+	return b.signer.SignEIP912Personal(pk)
 }

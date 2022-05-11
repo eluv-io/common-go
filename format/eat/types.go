@@ -10,8 +10,9 @@ const Types enumType = 0
 type TokenType = *tokenType
 
 type tokenType struct {
-	Prefix string
-	Name   string
+	Prefix            string `json:"prefix"`
+	Name              string `json:"name"`
+	SignatureRequired bool   `json:"-"`
 }
 
 func (t *tokenType) String() string {
@@ -30,15 +31,16 @@ func (t *tokenType) Validate() error {
 }
 
 var allTypes = []TokenType{
-	{"aun", "unknown"},
-	{"aan", "anonymous"},
-	{"atx", "tx"},
-	{"asc", "state-channel"},
-	{"acl", "client"},
-	{"apl", "plain"},
-	{"aes", "editor-signed"},
-	{"ano", "node"},
-	{"asl", "signed-link"},
+	{"aun", "unknown", false},      // 0
+	{"aan", "anonymous", false},    // 1
+	{"atx", "tx", true},            // 2
+	{"asc", "state-channel", true}, // 3
+	{"acl", "client", false},       // 4
+	{"apl", "plain", true},         // 5
+	{"aes", "editor-signed", true}, // 6
+	{"ano", "node", true},          // 7
+	{"asl", "signed-link", true},   // 8
+	{"acs", "client-signed", true}, // 9
 }
 
 type enumType int
@@ -56,6 +58,7 @@ func (enumType) Plain() TokenType        { return allTypes[5] } // a vanilla (si
 func (enumType) EditorSigned() TokenType { return allTypes[6] } // a token signed by a user who has edit access to the target content in the token
 func (enumType) Node() TokenType         { return allTypes[7] } // token for node-to-node communication
 func (enumType) SignedLink() TokenType   { return allTypes[8] } // token for signed-links (https://github.com/qluvio/proj-mgm/issues/14#issuecomment-724867064)
+func (enumType) ClientSigned() TokenType { return allTypes[9] } // client-signed token
 
 var prefixToType = map[string]*tokenType{}
 
