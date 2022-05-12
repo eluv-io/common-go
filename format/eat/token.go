@@ -116,7 +116,7 @@ func FromString(s string) (*Token, error) {
 func Parse(s string) (*Token, error) {
 	t, err := parse(s)
 	if err != nil {
-		return nil, err
+		return t, err
 	}
 	return t, nil
 }
