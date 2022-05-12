@@ -408,18 +408,22 @@ type ClientSignedBuilder struct {
 	*signer
 }
 
-func NewClientSigned(
-	sid types.QSpaceID,
-	lid types.QLibID,
-	qid types.QID) *ClientSignedBuilder {
-
+func NewClientSigned(sid types.QSpaceID) *ClientSignedBuilder {
 	token := New(Types.ClientSigned(), defaultFormat, SigTypes.Unsigned())
 	token.SID = sid
-	token.LID = lid
-	token.QID = qid
 	token.IssuedAt = utc.Now()
 	token.Expires = token.IssuedAt.Add(time.Hour)
 	return &ClientSignedBuilder{newSigner(token)}
+}
+
+func (b *ClientSignedBuilder) WithLID(lid types.QLibID) *ClientSignedBuilder {
+	b.enc.token.LID = lid
+	return b
+}
+
+func (b *ClientSignedBuilder) WithQID(qid types.QID) *ClientSignedBuilder {
+	b.enc.token.QID = qid
+	return b
 }
 
 func (b *ClientSignedBuilder) WithAfgh(afghPublicKey string) *ClientSignedBuilder {
