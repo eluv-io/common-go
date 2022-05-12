@@ -176,7 +176,7 @@ func TestTokenBuilders(t *testing.T) {
 					validate: clientDefault,
 				},
 				{
-					encoder: sign(eat.NewClientSigned(sid, lid, qid).
+					encoder: sign(eat.NewClientSigned(sid).
 						WithGrant(eat.Grants.Read).
 						WithCtx(map[string]interface{}{"additional": "context"}),
 						clientSK),
@@ -286,8 +286,6 @@ func clientDefault(t *testing.T, token *eat.Token) {
 
 func clientSignedDefault(t *testing.T, token *eat.Token) {
 	require.Equal(t, sid, token.SID)
-	require.Equal(t, lid, token.LID)
-	require.Equal(t, qid, token.QID)
 	require.Equal(t, ethutil.AddressToID(token.EthAddr, id.User).String(), token.Subject)
 	require.NotEqual(t, utc.Zero, token.IssuedAt)
 	assertAuthorization(t, token, clientID.String(), clientID)

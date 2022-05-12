@@ -700,12 +700,12 @@ func TestEditorSignedSubject(t *testing.T) {
 func TestClientSigned(t *testing.T) {
 	now := utc.Now()
 	encoders := []eat.Encoder{
-		eat.NewClientSigned(sid, lid, qid).
+		eat.NewClientSigned(sid).
 			WithIssuedAt(now).
 			WithExpires(now.Add(time.Hour)).
 			WithGrant(eat.Grants.Read).
 			Sign(clientSK),
-		eat.NewClientSigned(sid, lid, qid).
+		eat.NewClientSigned(sid).
 			WithIssuedAt(now).
 			WithExpires(now.Add(time.Hour)).
 			WithGrant(eat.Grants.Read).

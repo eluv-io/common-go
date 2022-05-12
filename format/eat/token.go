@@ -297,7 +297,7 @@ func (t *Token) Validate() (err error) {
 
 	validator := tokenValidator{
 		token:            t,
-		errTemplate:      errors.Template("validate field", errors.K.Invalid.Default()),
+		errTemplate:      errors.TemplateNoTrace("validate field", errors.K.Invalid.Default()),
 		accumulateErrors: true,
 	}
 
