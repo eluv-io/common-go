@@ -10,6 +10,7 @@ import (
 
 	"github.com/eluv-io/common-go/util/ifutil"
 	"github.com/eluv-io/common-go/util/maputil"
+	"github.com/eluv-io/common-go/util/sliceutil"
 	"github.com/eluv-io/common-go/util/stringutil"
 )
 
@@ -562,7 +563,7 @@ func shallowCopy(val interface{}) interface{} {
 	case map[string]interface{}:
 		return maputil.Copy(t)
 	case []interface{}:
-		return copySlice(t)
+		return sliceutil.Copy(t)
 	}
 	return val
 }
