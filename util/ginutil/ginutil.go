@@ -19,7 +19,16 @@ const loggerKey = "ginutil.LOGGER"
 // of all goroutines. The logger (an instance of eluv-io/log-go) can be set in the gin context under the "LOGGER" key.
 // If not set, the root logger will be used.
 func Abort(c *gin.Context, err error) {
-	c.Abort()
+	AbortWithStatus(c, abortCode(c, err), err)
+}
+
+// AbortHead aborts the current HTTP HEAD request with the HTTP status code set according to the
+// given error type.
+func AbortHead(c *gin.Context, err error) {
+	AbortHeadWithStatus(c, abortCode(c, err))
+}
+
+func abortCode(c *gin.Context, err error) int {
 	code := http.StatusInternalServerError
 	if e, ok := err.(*errors.Error); ok {
 		switch e.Kind() {
@@ -45,13 +54,21 @@ func Abort(c *gin.Context, err error) {
 	} else {
 		dumpGoRoutines(c)
 	}
-	SendError(c, code, err)
+	return code
 }
 
 // AbortWithStatus aborts the current HTTP request with the given status code and error.
 func AbortWithStatus(c *gin.Context, code int, err error) {
 	c.Abort()
 	SendError(c, code, err)
+}
+
+// AbortHeadWithStatus aborts the current HTTP HEAD request with the given status code.
+func AbortHeadWithStatus(c *gin.Context, code int) {
+	c.Abort()
+	c.Writer.Header().Del("Content-Type")
+	c.Writer.Header().Del("Cache-Control")
+	c.Writer.WriteHeader(code)
 }
 
 // SendError sends back an HTTP response with the given HTTP status code and the data marshaled to JSON or XML depending
