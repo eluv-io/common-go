@@ -2,7 +2,6 @@ package eat
 
 import (
 	"bytes"
-	"fmt"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -123,10 +122,7 @@ func (t *Token) hashToken(sigType *TokenSigType) (hsh []byte, err error) {
 	case SigTypes.EIP191Personal():
 		encoded, err = t.getUncompressedTokenData()
 		if err == nil {
-			// see github.com/ethereum/go-ethereum@v1.9.11/accounts/accounts.go:193 TextAndHash()
-			msg := "Eluvio Content Fabric Access Token 1.0\n" + string(encoded)
-			msg = fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(msg), msg)
-			hsh = crypto.Keccak256([]byte(msg))
+			hsh = sign.HashEIP191Personal(encoded)
 		}
 	default:
 		return nil, errors.E("hashToken", "reason", "invalid signature type", "sig_type", t.SigType)
@@ -138,24 +134,3 @@ func (t *Token) hashToken(sigType *TokenSigType) (hsh []byte, err error) {
 
 	return hsh, nil
 }
-
-/*
-PENDING(LUK): Typed Data hashing will look something like this...
-
-// HashTypedData hashes EIP-712 conforming typed data
-// hash = keccak256("\x19${byteVersion}${domainSeparator}${hashStruct(message)}")
-// Based on github.com/ethereum/go-ethereum@v1.9.11/signer/core/signed_data.go:316 SignTypedData()
-func (s *SignatureHelper) HashTypedData(typedData core.TypedData) (hexutil.Bytes, error) {
-	domainSeparator, err := typedData.HashStruct("EIP712Domain", typedData.Domain.Map())
-	if err != nil {
-		return nil, err
-	}
-	typedDataHash, err := typedData.HashStruct(typedData.PrimaryType, typedData.Message)
-	if err != nil {
-		return nil, err
-	}
-	rawData := []byte(fmt.Sprintf("\x19\x01%s%s", string(domainSeparator), string(typedDataHash)))
-	hsh := crypto.Keccak256(rawData)
-	return hsh, nil
-}
-*/
