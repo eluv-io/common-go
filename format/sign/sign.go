@@ -230,9 +230,7 @@ func EthAdjustBytes(code SigCode, bts []byte) []byte {
 // See https://eips.ethereum.org/EIPS/eip-191
 func HashEIP191Personal(message []byte) []byte {
 	// see github.com/ethereum/go-ethereum@v1.9.11/accounts/accounts.go:193 TextAndHash()
-	msg := "Eluvio Content Fabric Access Token 1.0\n" + string(message)
-	msg = fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(msg), msg)
-	return crypto.Keccak256([]byte(msg))
+	return crypto.Keccak256([]byte(fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(message), string(message))))
 }
 
 /* PENDING(LUK): Typed Data hashing will look something like this...
