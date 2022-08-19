@@ -2,12 +2,12 @@ package ctxutil
 
 import (
 	"context"
+	"encoding/json"
 	"runtime/debug"
 	"sync"
 
-	"go.opentelemetry.io/otel/api/trace"
-
 	"github.com/eluv-io/common-go/util/goutil"
+	"github.com/eluv-io/common-go/util/traceutil/trace"
 )
 
 // NewStack creates a new ContextStack.
@@ -82,7 +82,7 @@ type ContextStack interface {
 	Go(fn func())
 
 	// InitTracing initializes tracing for the current goroutine with a root span created through the given tracer.
-	InitTracing(tracer trace.Tracer, spanName string, opts ...trace.StartOption) trace.Span
+	InitTracing(spanName string) trace.Span
 
 	// StartSpan starts a new span and pushes its context onto the stack of the current goroutine. The span pops the
 	// context upon calling span.End().
@@ -90,9 +90,8 @@ type ContextStack interface {
 	// Usage:
 	// 	span := r.cs.StartSpan("my span")
 	//	defer span.End()
-	StartSpan(
-		spanName string,
-		opts ...trace.StartOption) trace.Span
+	StartSpan(spanName string) trace.Span
+
 	// Span retrieves the goroutine's current span.
 	Span() trace.Span
 }
@@ -166,9 +165,8 @@ func (c *contextStack) Go(fn func()) {
 
 }
 
-func (c *contextStack) InitTracing(tracer trace.Tracer, spanName string, opts ...trace.StartOption) trace.Span {
-	ctx := c.Ctx()
-	ctx, sp := tracer.Start(ctx, spanName, opts...)
+func (c *contextStack) InitTracing(spanName string) trace.Span {
+	ctx, sp := trace.StartRootSpan(c.Ctx(), spanName)
 	release := c.Push(ctx)
 	return &span{
 		gid:     goutil.GoID(),
@@ -177,17 +175,14 @@ func (c *contextStack) InitTracing(tracer trace.Tracer, spanName string, opts ..
 	}
 }
 
-func (c *contextStack) StartSpan(
-	spanName string,
-	opts ...trace.StartOption) trace.Span {
-
+func (c *contextStack) StartSpan(spanName string) trace.Span {
 	ctx := c.Ctx()
 	parentSpan := trace.SpanFromContext(ctx)
 	if !parentSpan.IsRecording() {
 		// fast path if tracing is disabled: no need to start a (noop) span and push its dummy ctx onto the stack...
 		return trace.NoopSpan{}
 	}
-	ctx, sp := parentSpan.Tracer().Start(ctx, spanName, opts...)
+	ctx, sp := parentSpan.Start(ctx, spanName)
 	release := c.Push(ctx)
 	return &span{
 		gid:     goutil.GoID(),
@@ -246,7 +241,7 @@ type span struct {
 }
 
 // End implements trace.Span.End()
-func (s *span) End(options ...trace.EndOption) {
+func (s *span) End() {
 	gid := goutil.GoID()
 	if s.gid != gid {
 		log.Warn(
@@ -264,6 +259,10 @@ func (s *span) End(options ...trace.EndOption) {
 		return
 	}
 	s.ended = true
-	s.Span.End(options...)
+	s.Span.End()
 	s.release()
+}
+
+func (s *span) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.Span)
 }

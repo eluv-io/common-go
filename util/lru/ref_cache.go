@@ -4,14 +4,12 @@ import (
 	"io"
 	"sync"
 
-	"github.com/eluv-io/log-go"
 	"github.com/hashicorp/golang-lru/simplelru"
-	"go.opentelemetry.io/otel/api/kv"
-	"go.opentelemetry.io/otel/api/trace"
 
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/common-go/util/stringutil"
 	"github.com/eluv-io/common-go/util/traceutil"
+	"github.com/eluv-io/log-go"
 )
 
 func NewRefCache(
@@ -89,23 +87,20 @@ func (c *RefCache) GetOrCreate(key string, constructor Constructor) (interface{}
 	var exists bool
 	var err error
 
-	span := traceutil.StartSpan(
-		"lru.RefCache.GetOrCreate",
-		func(sc *trace.StartConfig) {
-			// this is only called if tracing is enabled!
-			orgConstructor := constructor
-			constructor = func() (io.Closer, error) {
-				span := traceutil.StartSpan("constructor")
-				defer span.End()
-				return orgConstructor()
-			}
-			if c != nil {
-				sc.Attributes = append(sc.Attributes, kv.String("cache", c.metrics.Name))
-				sc.Attributes = append(sc.Attributes, kv.String("key", stringutil.ToString(key)))
-			}
-		},
-	)
+	span := traceutil.StartSpan("lru.RefCache.GetOrCreate")
 	defer span.End()
+	if span.IsRecording() {
+		orgConstructor := constructor
+		constructor = func() (io.Closer, error) {
+			span := traceutil.StartSpan("constructor")
+			defer span.End()
+			return orgConstructor()
+		}
+		if c != nil {
+			span.Attribute("cache", c.metrics.Name)
+			span.Attribute("key", stringutil.ToString(key))
+		}
+	}
 
 	// first check whether it's an active resource
 	c.mutex.Lock()
