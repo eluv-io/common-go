@@ -6,10 +6,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/api/kv"
-	"go.opentelemetry.io/otel/api/trace"
 
 	"github.com/eluv-io/common-go/util/ctxutil"
+	"github.com/eluv-io/common-go/util/traceutil/trace"
 )
 
 func TestNoop(t *testing.T) {
@@ -19,7 +18,7 @@ func TestNoop(t *testing.T) {
 
 	span := cs.StartSpan("blub")
 	defer span.End()
-	span.SetAttributes(kv.String("k2", "v2"))
+	span.Attribute("k2", "v2")
 
 	wg := &sync.WaitGroup{}
 	wg.Add(1)

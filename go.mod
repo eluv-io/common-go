@@ -32,9 +32,7 @@ require (
 	github.com/spf13/afero v1.3.2
 	github.com/stretchr/testify v1.7.0
 	github.com/ugorji/go/codec v1.1.7
-	go.opentelemetry.io/otel v0.6.0
 	go.uber.org/atomic v1.9.0
-	google.golang.org/grpc v1.35.0
 )
 
 require (

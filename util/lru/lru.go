@@ -7,16 +7,14 @@ package lru
 import (
 	"sync"
 
-	"github.com/eluv-io/errors-go"
 	"github.com/hashicorp/golang-lru/simplelru"
-	"go.opentelemetry.io/otel/api/kv"
-	"go.opentelemetry.io/otel/api/trace"
 
 	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/common-go/util/stringutil"
 	"github.com/eluv-io/common-go/util/syncutil"
 	"github.com/eluv-io/common-go/util/traceutil"
+	"github.com/eluv-io/errors-go"
 )
 
 type ConstructionMode string
@@ -220,23 +218,20 @@ func (c *Cache) GetOrCreate(
 	constructor func() (interface{}, error),
 	evict ...func(val interface{}) bool) (val interface{}, evicted bool, err error) {
 
-	span := traceutil.StartSpan(
-		"lru.Cache.GetOrCreate",
-		func(sc *trace.StartConfig) {
-			// this is only called if tracing is enabled!
-			orgConstructor := constructor
-			constructor = func() (interface{}, error) {
-				span := traceutil.StartSpan("constructor")
-				defer span.End()
-				return orgConstructor()
-			}
-			if c != nil {
-				sc.Attributes = append(sc.Attributes, kv.String("cache", c.metrics.Name))
-				sc.Attributes = append(sc.Attributes, kv.String("key", stringutil.ToString(key)))
-			}
-		},
-	)
+	span := traceutil.StartSpan("lru.Cache.GetOrCreate")
 	defer span.End()
+	if span.IsRecording() {
+		orgConstructor := constructor
+		constructor = func() (interface{}, error) {
+			span := traceutil.StartSpan("constructor")
+			defer span.End()
+			return orgConstructor()
+		}
+		if c != nil {
+			span.Attribute("cache", c.metrics.Name)
+			span.Attribute("key", stringutil.ToString(key))
+		}
+	}
 
 	if c == nil {
 		val, err = constructor()
