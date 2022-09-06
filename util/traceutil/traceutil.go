@@ -3,101 +3,37 @@ package traceutil
 import (
 	"context"
 
-	elog "github.com/eluv-io/log-go"
-	"go.opentelemetry.io/otel/api/trace"
-
 	"github.com/eluv-io/common-go/util/ctxutil"
+	"github.com/eluv-io/common-go/util/traceutil/trace"
 )
 
-var log = elog.Get("/eluvio/util/traceutil")
-
-type tracingContextKey struct{}
-type tracing struct {
-	enabled bool
-}
-
-// The currently used ContextStack
+// current returns the current ContextStack
 func current() ctxutil.ContextStack {
-	ret := ctxutil.Current()
-	tr, _ := ret.Ctx().Value(tracingContextKey{}).(*tracing)
-	if tr == nil || !tr.enabled {
-		return ctxutil.Noop()
-	}
-	return ret
-}
-
-// EnableTracing enables/disables tracing globally with a ContextStack. Returns
-// a reset function that can be used to reset the tracing state to what it was
-// before the call (mainly useful for testing).
-//
-// Note: this function is not thread-safe and should only be called before any
-// 	     of the tracing functions are used.
-func EnableTracing(enable bool) func() {
-	current := ctxutil.Current()
-	if current == ctxutil.Noop() {
-		if enable {
-			log.Info("enabling performance tracing support")
-			c := ctxutil.NewStack()
-			c.WithValue(tracingContextKey{}, &tracing{enabled: true})
-			ctxutil.SetCurrent(c)
-			return func() {
-				ctxutil.SetCurrent(current)
-			}
-		}
-	} else {
-		if !enable {
-			log.Info("disabling performance tracing support")
-			pop := current.WithValue(tracingContextKey{}, &tracing{enabled: false})
-			return func() {
-				pop()
-			}
-		} else {
-			pop := current.WithValue(tracingContextKey{}, &tracing{enabled: true})
-			return func() {
-				pop()
-			}
-		}
-	}
-	return func() {}
+	return ctxutil.Current()
 }
 
 // InitTracing initializes performance tracing for the current goroutine.
-func InitTracing(t trace.Tracer, spanName string, opts ...trace.StartOption) trace.Span {
-	return current().InitTracing(t, spanName, opts...)
-}
-
-// InitTestTracing initializes performance tracing for the purpose of testing.
-// The returned tracer exposes the collected trace through its Trace member
-// after the returned span's End() function has been called.
-// In order to cleanup after the test, call tracer.Cleanup()
-//
-//		tracer, span := ctxutil.InitTestTracing("my-test")
-//		defer tracer.Cleanup()
-//		...
-//		span.End()
-//		require.Contains(t, tracer.Trace.String(), `"name":"config"`)
-func InitTestTracing(spanName string) (*TestTracer, trace.Span) {
-	reset := EnableTracing(true)
-	t := NewTestTracer(reset)
-	return t, current().InitTracing(t, spanName)
+func InitTracing(spanName string) trace.Span {
+	return current().InitTracing(spanName)
 }
 
 // StartSpan creates new sub-span of the goroutine's current span or a noop
 // span if there is no current span.
-func StartSpan(spanName string, opts ...trace.StartOption) trace.Span {
-	return current().StartSpan(spanName, opts...)
+func StartSpan(spanName string) trace.Span {
+	return current().StartSpan(spanName)
 }
 
 // WithSpan creates a new sub-span of the goroutine's current span and executes
 // the given function within the sub-span.
-func WithSpan(
-	spanName string,
-	fn func() error,
-	opts ...trace.StartOption) error {
-
-	span := current().StartSpan(spanName, opts...)
+func WithSpan(spanName string, fn func() error) error {
+	span := current().StartSpan(spanName)
 	defer span.End()
-	return fn()
+
+	err := fn()
+	if err != nil {
+		span.Attribute("error", err)
+	}
+	return err
 }
 
 // Span retrieves the current span of this goroutine.
@@ -113,27 +49,24 @@ func Ctx() context.Context {
 
 // StartSubSpan creates new sub-span of the context's current span or a noop
 // span if there is no current span.
-func StartSubSpan(
-	ctx context.Context,
-	spanName string,
-	opts ...trace.StartOption) (context.Context, trace.Span) {
-
+func StartSubSpan(ctx context.Context, spanName string) (context.Context, trace.Span) {
 	if ctx == nil {
 		return nil, trace.NoopSpan{}
 	}
-	return trace.SpanFromContext(ctx).Tracer().Start(ctx, spanName, opts...)
+	return trace.SpanFromContext(ctx).Start(ctx, spanName)
 }
 
 // WithSubSpan executes the given function in a new sub-span of the context's
 // current span or a noop span if there is no current span.
-func WithSubSpan(
-	ctx context.Context,
-	spanName string,
-	fn func(ctx context.Context) error,
-	opts ...trace.StartOption) error {
-
+func WithSubSpan(ctx context.Context, spanName string, fn func(ctx context.Context) error) error {
 	if ctx == nil {
-		return fn(context.Background())
+		ctx = context.Background()
 	}
-	return trace.SpanFromContext(ctx).Tracer().WithSpan(ctx, spanName, fn, opts...)
+	ctx, span := trace.SpanFromContext(ctx).Start(ctx, spanName)
+	defer span.End()
+	err := fn(ctx)
+	if err != nil {
+		span.Attribute("error", err)
+	}
+	return err
 }

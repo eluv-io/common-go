@@ -3,17 +3,17 @@ package ctxutil_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
-	"github.com/eluv-io/apexlog-go/handlers/memory"
-	"github.com/eluv-io/log-go"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/api/trace"
 
+	"github.com/eluv-io/apexlog-go/handlers/memory"
 	"github.com/eluv-io/common-go/util/ctxutil"
 	"github.com/eluv-io/common-go/util/jsonutil"
-	"github.com/eluv-io/common-go/util/traceutil"
+	"github.com/eluv-io/common-go/util/traceutil/trace"
+	"github.com/eluv-io/log-go"
 )
 
 func TestContextStack(t *testing.T) {
@@ -22,15 +22,9 @@ func TestContextStack(t *testing.T) {
 }
 
 func TestContextStackTracing(t *testing.T) {
-	var trace *traceutil.TraceInfo
 	stack := ctxutil.NewStack()
 
-	span := stack.InitTracing(
-		traceutil.NewTracer("test-tracer", func(trcInfo *traceutil.TraceInfo) {
-			fmt.Println(jsonutil.MustPretty(trcInfo.MinimalString()))
-			trace = trcInfo
-		}),
-		"test-span")
+	span := stack.InitTracing("test-span")
 
 	obj := anObjectWithTracing{cs: stack}
 	obj.A()
@@ -40,8 +34,12 @@ func TestContextStackTracing(t *testing.T) {
 
 	span.End()
 
-	require.Len(t, trace.Spans, 13)
-	require.Contains(t, trace.MinimalString(), `"current-func":"C"`)
+	trc := span.Json()
+	fmt.Println(jsonutil.MustPretty(trc))
+
+	require.Equal(t, 13, strings.Count(trc, "name"))
+	require.Equal(t, 13, strings.Count(trc, "time"))
+	require.Contains(t, trc, `"current-func":"C"`)
 }
 
 func TestContextStackTracingDisabled(t *testing.T) {
@@ -143,7 +141,7 @@ func (r *anObjectWithTracing) B() {
 }
 
 func (r *anObjectWithTracing) C() {
-	r.cs.Span().SetAttribute("current-func", "C")
+	r.cs.Span().Attribute("current-func", "C")
 	r.D()
 }
 
@@ -157,9 +155,7 @@ func (r *anObjectWithTracing) SpawnAndWait() {
 	for i := 0; i < 3; i++ {
 		wg.Add(1)
 		parent := r.cs.Ctx()
-		// r.cs.Go(func() {})
 		go func() {
-			// r.cs.Ctx()
 			defer r.cs.Push(parent)()
 			r.D()
 			wg.Done()

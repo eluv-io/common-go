@@ -122,7 +122,7 @@ func (t *Token) hashToken(sigType *TokenSigType) (hsh []byte, err error) {
 	case SigTypes.EIP191Personal():
 		encoded, err = t.getUncompressedTokenData()
 		if err == nil {
-			hsh = sign.HashEIP191Personal(encoded)
+			hsh = sign.HashEIP191Personal(append([]byte("Eluvio Content Fabric Access Token 1.0\n"), encoded...))
 		}
 	default:
 		return nil, errors.E("hashToken", "reason", "invalid signature type", "sig_type", t.SigType)

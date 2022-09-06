@@ -3,11 +3,10 @@ package lru
 import (
 	"time"
 
-	"github.com/eluv-io/utc-go"
-
 	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/common-go/util/traceutil"
+	"github.com/eluv-io/utc-go"
 )
 
 // NewExpiringCache creates a new ExpiringCache.
@@ -116,7 +115,7 @@ func (c *ExpiringCache) checkAge(now utc.UTC, evict ...func(val interface{}) boo
 func (c *ExpiringCache) isExpired(val interface{}, now utc.UTC) bool {
 	age := now.Sub(val.(*expiringEntry).ts)
 	if age >= c.maxAge {
-		traceutil.Span().SetAttribute("expired_entry_age", age)
+		traceutil.Span().Attribute("expired_entry_age", age)
 		return true
 	}
 	return false

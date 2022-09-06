@@ -2,27 +2,17 @@ package traceutil_test
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/api/kv"
-	"go.opentelemetry.io/otel/api/kv/value"
 
 	"github.com/eluv-io/common-go/util/traceutil"
+	"github.com/eluv-io/common-go/util/traceutil/trace"
 )
 
 func TestStartSubSpan(t *testing.T) {
-	var trc *traceutil.TraceInfo
-
-	tracer := traceutil.NewTracer("test-tracer", func(trcInfo *traceutil.TraceInfo) {
-		trc = trcInfo
-		fmt.Println(trcInfo.MinimalString())
-		// fmt.Println(jsonutil.MustPretty(trc))
-	})
-
-	ctx, span := tracer.Start(context.Background(), "root-span")
+	ctx, span := trace.StartRootSpan(context.Background(), "root-span")
 	require.NotNil(t, ctx)
 	require.NotNil(t, span)
 
@@ -33,43 +23,38 @@ func TestStartSubSpan(t *testing.T) {
 	sub.End()
 	span.End()
 
-	require.Equal(t, "root-span", trc.RootSpan().Name)
-	require.Len(t, trc.RootSpan().Children, 1)
-	require.Equal(t, "sub-span", trc.RootSpan().Children[0].Name)
+	root := span.(*trace.RecordingSpan)
+	require.Equal(t, "root-span", root.Data.Name)
+	require.Len(t, root.Data.Subs, 1)
+	require.Equal(t, "sub-span", root.Data.Subs[0].(*trace.RecordingSpan).Data.Name)
 }
 
 func TestWithSubSpan(t *testing.T) {
-	var trc *traceutil.TraceInfo
 	var err error
 
-	tracer := traceutil.NewTracer("test-tracer", func(trcInfo *traceutil.TraceInfo) {
-		trc = trcInfo
-		fmt.Println(trcInfo.MinimalString())
-		// fmt.Println(jsonutil.MustPretty(trc))
-	})
+	ctx, span := trace.StartRootSpan(context.Background(), "root-span")
+	root := span.(*trace.RecordingSpan)
+	require.Equal(t, "root-span", root.Data.Name)
 
-	err = tracer.WithSpan(context.Background(), "root-span", func(ctx context.Context) error {
-		return nil
-	})
-	require.NoError(t, err)
-	require.Equal(t, "root-span", trc.RootSpan().Name)
-
-	err = tracer.WithSpan(context.Background(), "root-span", func(ctx context.Context) error {
+	err = traceutil.WithSubSpan(ctx, "sub", func(ctx context.Context) error {
 		return io.EOF
 	})
 	require.Error(t, io.EOF, err)
-	require.Equal(t, "root-span", trc.RootSpan().Name)
-	require.Equal(t, kv.Key("error"), trc.RootSpan().Attributes[0].Key)
-	require.Equal(t, value.BOOL, trc.RootSpan().Attributes[0].Value.Type())
-	require.Equal(t, true, trc.RootSpan().Attributes[0].Value.AsInterface())
 
-	err = tracer.WithSpan(context.Background(), "root-span", func(ctx context.Context) error {
-		return traceutil.WithSubSpan(ctx, "sub-span", func(ctx context.Context) error {
+	sub := root.Data.Subs[0].(*trace.RecordingSpan)
+	require.Equal(t, "sub", sub.Data.Name)
+	require.Equal(t, io.EOF, sub.Data.Attr["error"])
+
+	err = traceutil.WithSubSpan(ctx, "sub-a", func(ctx context.Context) error {
+		return traceutil.WithSubSpan(ctx, "sub-b", func(ctx context.Context) error {
 			return nil
 		})
 	})
 	require.NoError(t, err)
-	require.Equal(t, "root-span", trc.RootSpan().Name)
-	require.Len(t, trc.RootSpan().Children, 1)
-	require.Equal(t, "sub-span", trc.RootSpan().Children[0].Name)
+
+	subA := root.Data.Subs[1].(*trace.RecordingSpan)
+	subB := subA.Data.Subs[0].(*trace.RecordingSpan)
+
+	require.Equal(t, "sub-a", subA.Data.Name)
+	require.Equal(t, "sub-b", subB.Data.Name)
 }

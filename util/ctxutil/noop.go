@@ -3,7 +3,7 @@ package ctxutil
 import (
 	"context"
 
-	"go.opentelemetry.io/otel/api/trace"
+	"github.com/eluv-io/common-go/util/traceutil/trace"
 )
 
 var noopInstance = noop{}
@@ -30,11 +30,11 @@ func (n noop) Go(fn func()) {
 	go fn()
 }
 
-func (n noop) InitTracing(_ trace.Tracer, _ string, _ ...trace.StartOption) trace.Span {
+func (n noop) InitTracing(_ string) trace.Span {
 	return trace.NoopSpan{}
 }
 
-func (n noop) StartSpan(_ string, _ ...trace.StartOption) trace.Span {
+func (n noop) StartSpan(_ string) trace.Span {
 	return trace.NoopSpan{}
 }
 
