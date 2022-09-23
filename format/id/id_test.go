@@ -130,3 +130,25 @@ func TestEquivalent(t *testing.T) {
 	require.True(t, id1.Equivalent(id2))
 	require.True(t, id2.Equivalent(id1))
 }
+
+func ExampleID_Explain() {
+	qid := NewID(Q, []byte{1, 2, 3, 4})
+	tid := NewID(Tenant, []byte{99})
+	fmt.Println(qid.Explain())
+	fmt.Println(tid.Explain())
+
+	composed := Embed(qid, tid)
+	fmt.Println(composed.Explain())
+	fmt.Println(composed.ID().Explain())
+
+	// Output:
+	//
+	// iq__2VfUX content 0x01020304
+	// iten2i tenant 0x63
+	// itq_h42CL8T content with embedded tenant 0x016301020304
+	//   primary : iq__2VfUX content 0x01020304
+	//   embedded: iten2i tenant 0x63
+	// itq_h42CL8T content with embedded tenant 0x016301020304
+	//   primary : iq__2VfUX content 0x01020304
+	//   embedded: iten2i tenant 0x63
+}
