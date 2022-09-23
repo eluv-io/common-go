@@ -32,7 +32,7 @@ func (c SigCode) ToString(b []byte) string {
 // lint disable
 const (
 	SUNKNOWN        SigCode = iota
-	ES256K                  // ECDSA Signature with secp256k1 Curve - https://tools.ietf.org/id/draft-jones-webauthn-secp256k1-00.html
+	ES256K                  // ECDSA Signature with secp256k1 curve and SHA-256 hash function - https://datatracker.ietf.org/doc/rfc8812/
 	EIP191Personal          // Ethereum personal sign - https://eips.ethereum.org/EIPS/eip-191
 	EIP712TypedData         // Ethereum type data signatures - https://eips.ethereum.org/EIPS/eip-712
 )

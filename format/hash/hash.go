@@ -11,13 +11,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eluv-io/errors-go"
-	"github.com/eluv-io/log-go"
-	"github.com/eluv-io/utc-go"
 	"github.com/mr-tron/base58/base58"
 
 	ei "github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/preamble"
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/log-go"
+	"github.com/eluv-io/utc-go"
 )
 
 // Code is the code of a hash
@@ -179,7 +179,7 @@ func NewObject(htype Type, digest []byte, size int64, id ei.ID) (*Hash, error) {
 		return nil, e("reason", "invalid size", "size", size)
 	}
 
-	if id.AssertCode(ei.Q) != nil {
+	if !id.IsContent() {
 		return nil, e("reason", "invalid id", "id", id)
 	}
 
@@ -608,7 +608,7 @@ func (d *Digest) AsHash() *Hash {
 	}
 	if err != nil {
 		// errors must be caught by unit tests!
-		log.Fatal("invalid hash", "error", err)
+		panic(errors.E("asHash", errors.K.Invalid, err))
 	}
 	return h
 }

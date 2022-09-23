@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/eluv-io/errors-go"
-	"github.com/eluv-io/log-go"
 	"github.com/mr-tron/base58/base58"
 	uuid "github.com/satori/go.uuid"
+
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/log-go"
 )
 
 // Code is the type of an ID
@@ -58,6 +59,8 @@ const (
 	Group
 	Key
 	Ed25519
+	TQ
+	TLib
 )
 
 const codeLen = 1
@@ -82,6 +85,8 @@ var prefixToCode = map[string]Code{
 	"igrp": Group,
 	"ikey": Key,     // last 20 bytes of the keccak256 of a bls381 ecp
 	"ied2": Ed25519, // 32 byte ed25519 public key
+	"itq_": TQ,
+	"itl_": TLib,
 }
 var codeToName = map[Code]string{
 	UNKNOWN:         "unknown",
@@ -101,6 +106,8 @@ var codeToName = map[Code]string{
 	Group:           "group",
 	Key:             "key",
 	Ed25519:         "ed25519 public key",
+	TQ:              "content with embedded tenant",
+	TLib:            "library with embedded tenant",
 }
 
 func init() {
@@ -173,11 +180,15 @@ func (id *ID) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// As returns a copy of this ID with the given code as the type of the new ID.
+// As returns a copy of this ID with the given code as the type of the new ID. Special handling: if the code is Q, and
+// the ID has code TQ or TLib, then the returned ID will have code TQ.
 func (id ID) As(c Code) ID {
 	buf := make([]byte, len(id))
 	copy(buf, id)
 	buf[0] = byte(c)
+	if c == Q && id.Code() == TQ || id.Code() == TLib {
+		buf[0] = byte(TQ)
+	}
 	return buf
 }
 
@@ -205,6 +216,20 @@ func (id ID) Equal(other ID) bool {
 // code.
 func (id ID) Equivalent(other ID) bool {
 	return bytes.Equal(id.Bytes(), other.Bytes())
+}
+
+func (id ID) Explain() (res string) {
+	comp := Decompose(id)
+	return comp.Explain()
+}
+
+// IsContent returns true if the ID is content-like, e.g. its code is Q or TQ.
+func (id ID) IsContent() bool {
+	switch id.Code() {
+	case Q, TQ:
+		return true
+	}
+	return false
 }
 
 // Generate creates a random ID for the given ID type.

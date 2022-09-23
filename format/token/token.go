@@ -9,13 +9,13 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/eluv-io/errors-go"
-	"github.com/eluv-io/log-go"
 	"github.com/mr-tron/base58/base58"
 
 	"github.com/eluv-io/common-go/format/encryption"
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/util/byteutil"
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/log-go"
 )
 
 func NewObject(code Code, qid id.ID, nid id.ID, bytes ...byte) (*Token, error) {
@@ -31,11 +31,11 @@ func NewObject(code Code, qid id.ID, nid id.ID, bytes ...byte) (*Token, error) {
 	}
 	res.Bytes = bytes
 	if code == QWrite {
-		if qid.AssertCode(id.Q) != nil {
+		if !qid.IsContent() {
 			return nil, e("reason", "invalid qid", "qid", qid)
 		}
 		res.QID = qid
-		if nid.AssertCode(id.QNode) != nil {
+		if nid.Code() != id.QNode {
 			return nil, e("reason", "invalid nid", "nid", nid)
 		}
 		res.NID = nid
