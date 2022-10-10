@@ -400,7 +400,7 @@ func (v *Value) ID(code id.Code, def ...id.ID) (id.ID, error) {
 	}
 	switch r := raw.(type) {
 	case id.ID:
-		err := r.AssertCode(code)
+		err := r.AssertCompatible(code)
 		if err != nil {
 			return nil, err
 		}

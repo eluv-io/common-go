@@ -6,10 +6,11 @@ import (
 	"testing"
 	"unicode"
 
-	"github.com/eluv-io/errors-go"
-	elog "github.com/eluv-io/log-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/eluv-io/errors-go"
+	elog "github.com/eluv-io/log-go"
 )
 
 func TestStripFunc(t *testing.T) {
@@ -210,6 +211,27 @@ func TestWrapLines(t *testing.T) {
 	for i, test := range tests {
 		t.Run(fmt.Sprint(i), func(t *testing.T) {
 			assert.Equal(t, test.want, WrapLines(test.s, "#"))
+		})
+	}
+}
+
+func TestPrefixAndIndentLinesLines(t *testing.T) {
+	tests := []struct {
+		s      string
+		prefix string
+		want   string
+	}{
+		{"", "", ""},
+		{"\n", "", "\n"},
+		{"1\n2\n3\n", "", "1\n2\n3\n"},
+		{"", "###:", "###:"},
+		{"", "###:", "###:"},
+		{"\n", "###:", "###:\n    "},
+		{"1\n2\n3\n", "###:", "###:1\n    2\n    3\n    "},
+	}
+	for i, test := range tests {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			assert.Equal(t, test.want, PrefixAndIndentLines(test.s, test.prefix))
 		})
 	}
 }

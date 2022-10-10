@@ -11,13 +11,20 @@ import (
 	"github.com/eluv-io/common-go/format/encryption"
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/token"
+	"github.com/eluv-io/common-go/format/types"
 )
 
 var (
-	qid = id.MustParse("iq__99d4kp14eSDEP7HWfjU4W6qmqDw")
-	nid = id.MustParse("inod3Sa5p3czRyYi8GnVGnh8gBDLaqJr")
-	qwt = func() *token.Token {
+	qid  = id.MustParse("iq__99d4kp14eSDEP7HWfjU4W6qmqDw")
+	tqid = types.NewTQID(id.NewID(id.Q, []byte{1, 2, 3}), id.NewID(id.Tenant, []byte{99})).ID()
+	nid  = id.MustParse("inod3Sa5p3czRyYi8GnVGnh8gBDLaqJr")
+	qwt  = func() *token.Token {
 		t, _ := token.NewObject(token.QWrite, qid, nid)
+		t.Bytes = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+		return t
+	}()
+	tqwt = func() *token.Token {
+		t, _ := token.NewObject(token.QWrite, tqid, nid)
 		t.Bytes = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 		return t
 	}()
@@ -33,7 +40,10 @@ var (
 	}()
 )
 
-const expTokenString = "tqw__8UmhDD9cZah58THfAYPf3Shj9hVzfwT51Cf4ZHKpayajzZRyMwCPiSpfS5yqRZfjkDjrtXuRmDa"
+const (
+	expTokenString = "tqw__8UmhDD9cZah58THfAYPf3Shj9hVzfwT51Cf4ZHKpayajzZRyMwCPiSpfS5yqRZfjkDjrtXuRmDa"
+	expTqwtString  = "tqw__JUzjYYRw7qNCmuvfjRvC4QwRsYS3To9CZjeGKZqcrDy4ZGdY4aTY9W"
+)
 
 func TestBackwardsCompatibilityHack(t *testing.T) {
 	tok, err := token.Parse("tq__8UmhDD9cZah58THfAYPf3Shj9hVzfwT51Cf4ZHKpayajzZRyMwCPiSpfS5yqRZfjkDjrtXuRmDa")
@@ -47,6 +57,7 @@ func TestBackwardsCompatibilityHack(t *testing.T) {
 
 func TestConversion(t *testing.T) {
 	testConversion(t, qwt, token.QWrite, "tqw__")
+	testConversion(t, tqwt, token.QWrite, "tqw__")
 	testConversion(t, token.Generate(token.QWriteV1), token.QWriteV1, "tqw_")
 	testConversion(t, qpwt, token.QPartWrite, "tqp_")
 	testConversion(t, token.Generate(token.QPartWriteV1), token.QPartWriteV1, "tqpw")
@@ -120,15 +131,32 @@ func TestInvalidStringConversions2(t *testing.T) {
 }
 
 func TestJSON(t *testing.T) {
-	b, err := json.Marshal(qwt)
-	assert.NoError(t, err)
-	assert.Equal(t, "\""+expTokenString+"\"", string(b))
+	tests := []struct {
+		tok  *token.Token
+		want string
+	}{
+		{
+			tok:  qwt,
+			want: expTokenString,
+		},
+		{
+			tok:  tqwt,
+			want: expTqwtString,
+		},
+	}
+	for i, test := range tests {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			b, err := json.Marshal(test.tok)
+			assert.NoError(t, err)
+			assert.Equal(t, "\""+test.want+"\"", string(b))
 
-	var unmarshalled token.Token
-	err = json.Unmarshal(b, &unmarshalled)
-	assert.NoError(t, err)
-	assert.True(t, qwt.Equal(&unmarshalled))
-	assert.Equal(t, qwt.String(), unmarshalled.String())
+			var unmarshalled token.Token
+			err = json.Unmarshal(b, &unmarshalled)
+			assert.NoError(t, err)
+			assert.True(t, test.tok.Equal(&unmarshalled))
+			assert.Equal(t, test.tok.String(), unmarshalled.String())
+		})
+	}
 }
 
 type Wrapper struct {
@@ -151,37 +179,55 @@ func TestWrappedJSON(t *testing.T) {
 	assert.True(t, s.Token.Equal(unmarshalled.Token))
 }
 
-func ExampleToken_Describe_Object() {
+func ExampleToken_Describe_object() {
 	tok, _ := token.FromString("tq__3WhUFGKoJAzvqrDWiZtkcfQHiKp4Gda4KkiwuRgX6BTFfq7hNeji2hPDW6qZxLuk7xAju4bgm8iLwK")
 	fmt.Println(tok.Describe())
 
 	// Output:
 	//
-	// type:   content write token
-	// bytes:  0xe6ded2a798ac1f820fe871c6170b6d12
-	// qid:    iq__1Bhh3pU9gLXZiNDL6PEZuEP5ri
-	// nid:    inod2KRn6vRvn8U3gczhSMJwd1
+	// tq__3WhUFGKoJAzvqrDWiZtkcfQHiKp4Gda4KkiwuRgX6BTFfq7hNeji2hPDW6qZxLuk7xAju4bgm8iLwK
+	// type:    content write token
+	// bytes:   0xe6ded2a798ac1f820fe871c6170b6d12
+	// content: iq__1Bhh3pU9gLXZiNDL6PEZuEP5ri content 0x000102030405060708090a0b0c0d0e0f10111213
+	// node:    inod2KRn6vRvn8U3gczhSMJwd1 fabric node 0x0aabcbd87f414c0197efef1f52b305c8
 }
 
-func ExampleToken_Describe_Part() {
+func ExampleToken_Describe_object_2() {
+	tok, _ := token.FromString("tqw__JUzjYYRw7qNCmuvfjRvC4QwRsYS3To9CZjeGKZqcrDy4ZGdY4aTY9W")
+	fmt.Println(tok.Describe())
+
+	// Output:
+	//
+	// tqw__JUzjYYRw7qNCmuvfjRvC4QwRsYS3To9CZjeGKZqcrDy4ZGdY4aTY9W
+	// type:    content write token
+	// bytes:   0x00010203040506070809
+	// content: itq_A5JwgE content with embedded tenant 0x0163010203
+	//            primary : iq__Ldp content 0x010203
+	//            embedded: iten2i tenant 0x63
+	// node:    inod3Sa5p3czRyYi8GnVGnh8gBDLaqJr fabric node 0xaf33e7ed62938a0499453d419461ca9d598950a3
+}
+
+func ExampleToken_Describe_part() {
 	tok, _ := token.FromString("tqp_NHG92YAkoUg7dnCrWT8J3RLp6")
 	fmt.Println(tok.Describe())
 
 	// Output:
 	//
-	// type:   content part write token
-	// bytes:  0x5b28b6f7c5410bff09967db0e7e1a997
-	// scheme: cgck
-	// flags:  [preamble]
+	// tqp_NHG92YAkoUg7dnCrWT8J3RLp6
+	// type:    content part write token
+	// bytes:   0x5b28b6f7c5410bff09967db0e7e1a997
+	// scheme:  cgck
+	// flags:   [preamble]
 }
 
-func ExampleToken_Describe_LRO() {
+func ExampleToken_Describe_lro() {
 	tok, _ := token.FromString("tlro12hb4zikV2ArEoXXyUV6xKJPfC6Ff2siNKDKBVM6js8adif81")
 	fmt.Println(tok.Describe())
 
 	// Output:
 	//
-	// type:   bitcode LRO handle
-	// bytes:  0x2df2a5d3d6c4e0830a95e7f1e8c779f6
-	// nid:    inod2KRn6vRvn8U3gczhSMJwd1
+	// tlro12hb4zikV2ArEoXXyUV6xKJPfC6Ff2siNKDKBVM6js8adif81
+	// type:    bitcode LRO handle
+	// bytes:   0x2df2a5d3d6c4e0830a95e7f1e8c779f6
+	// node:    inod2KRn6vRvn8U3gczhSMJwd1 fabric node 0x0aabcbd87f414c0197efef1f52b305c8
 }

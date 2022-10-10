@@ -176,6 +176,12 @@ func StringSlice(v interface{}) []string {
 	return ret
 }
 
+// PrefixAndIndentLines prefixes the first line of the given string s with prefix, and indents all subsequent lines with
+// prefix-length spaces.
+func PrefixAndIndentLines(s string, prefix string) string {
+	return prefix + PrefixLines(s, strings.Repeat(" ", len(prefix)))[len(prefix):]
+}
+
 // IndentLines indents all lines in the given string with specified number of
 // spaces.
 func IndentLines(s string, spaces int) string {

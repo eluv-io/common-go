@@ -152,3 +152,27 @@ func ExampleID_Explain() {
 	//   primary : iq__2VfUX content 0x01020304
 	//   embedded: iten2i tenant 0x63
 }
+
+func TestIsCompatible(t *testing.T) {
+	tests := []struct {
+		c1         Code
+		c2         Code
+		compatible bool
+	}{
+		{Q, Q, true},
+		{Q, TQ, true},
+		{QLib, QLib, true},
+		{QLib, TLib, true},
+		{Tenant, Tenant, true},
+		{Q, QLib, false},
+		{Q, TLib, false},
+		{Q, Tenant, false},
+		{TLib, QNode, false},
+	}
+	for _, test := range tests {
+		t.Run(fmt.Sprint(test.c1, test.c2, test.compatible), func(t *testing.T) {
+			require.Equal(t, test.compatible, test.c1.IsCompatible(test.c2))
+			require.Equal(t, test.compatible, test.c2.IsCompatible(test.c1))
+		})
+	}
+}
