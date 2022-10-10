@@ -9,10 +9,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eluv-io/errors-go"
-	"github.com/eluv-io/utc-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/eluv-io/common-go/format/types"
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/utc-go"
 
 	"github.com/eluv-io/common-go/format/hash"
 	"github.com/eluv-io/common-go/format/id"
@@ -434,6 +436,46 @@ func TestAssertEqual(t *testing.T) {
 	require.NoError(t, nilHash.AssertEqual(nil))
 }
 
+func TestTQ(t *testing.T) {
+	h, err := hash.FromString(hashString)
+	require.NoError(t, err)
+
+	htq, err := h.As(hash.TQ, types.NewTQID(h.ID, id.NewID(id.Tenant, []byte{99})).ID())
+	require.NoError(t, err)
+
+	require.Equal(t, h.Digest, htq.Digest)
+	require.Equal(t, h.Size, htq.Size)
+	require.Equal(t, h.Type.Format, htq.Type.Format)
+	require.Equal(t, h.Expiration, htq.Expiration)
+	require.Equal(t, h.PreambleSize, htq.PreambleSize)
+
+	// re-create htq, but with "wrong" type hash.Q instead of hash.TQ
+	htq2, err := h.As(hash.Q, types.NewTQID(h.ID, id.NewID(id.Tenant, []byte{99})).ID())
+	// make sure type is corrected
+	require.Equal(t, htq, htq2)
+
+}
+
+func TestIsCompatible(t *testing.T) {
+	tests := []struct {
+		c1         hash.Code
+		c2         hash.Code
+		compatible bool
+	}{
+		{hash.Q, hash.Q, true},
+		{hash.Q, hash.TQ, true},
+		{hash.QPart, hash.QPart, true},
+		{hash.Q, hash.QPart, false},
+		{hash.TQ, hash.QPart, false},
+	}
+	for _, test := range tests {
+		t.Run(fmt.Sprint(test.c1, test.c2, test.compatible), func(t *testing.T) {
+			require.Equal(t, test.compatible, test.c1.IsCompatible(test.c2))
+			require.Equal(t, test.compatible, test.c2.IsCompatible(test.c1))
+		})
+	}
+}
+
 // PENDING: remove after old live parts are finally deleted
 func TestOldLivePart(t *testing.T) {
 	oldLivePart := "hql_Kaxnnu3M3fYT6HA2zkGE4qCWzmRkNECkz"
@@ -469,53 +511,72 @@ func TestOldLivePart(t *testing.T) {
 func ExampleHash_Describe() {
 
 	h, _ := hash.FromString(hashString)
-
-	fmt.Println(hashString)
 	fmt.Println(h.Describe())
+	fmt.Println()
 
 	ph, _ := h.As(hash.QPart, nil)
-	fmt.Println(ph.String())
 	fmt.Println(ph.Describe())
+	fmt.Println()
+
+	htq, _ := hash.FromString(hashString)
+	htq, _ = htq.As(hash.TQ, types.NewTQID(htq.ID, id.NewID(id.Tenant, []byte{99})).ID())
+	fmt.Println(htq.Describe())
+	fmt.Println()
 
 	hqpe, _ := hash.FromString("hqpedYvWGgmzmerRxa2Rzv6dqjDogfCZE7dwSuDnfgaSfGbMeXXnT")
-	fmt.Println(hqpe.String())
 	fmt.Println(hqpe.Describe())
+	fmt.Println()
 
 	hql, _ := hash.FromString("hql_7TmHLg49Qd4NtgfcPeWKAG7fsk7HujeMHaE33Bwm2kLYDdjqYJw")
-	fmt.Println(hql.String())
 	fmt.Println(hql.Describe())
+	fmt.Println()
 
 	hqt, _ := hash.FromString("hqt_2KhUoLeUJFR3pfBWpYzSqTWA3PoP6vBqEZGTLYu")
-	fmt.Println(hqt.String())
 	fmt.Println(hqt.Describe())
+	fmt.Println()
 
 	// Output:
 	//
 	// hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7
-	// type:          content, unencrypted
+	// type:          content (code 1), unencrypted
 	// digest:        0x9cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47
 	// size:          1024
-	// qid:           iq__WxoChT9EZU2PRdTdNU7Ldf
+	// qid:           iq__WxoChT9EZU2PRdTdNU7Ldf content 0xf2a366bab61847e9bd10b4ac5ed27bba
 	// part:          hqp_4YWKwzD4cymG9DodGRLphDg8fi2euXRgyYq9euQkjZx4a39
+	//                type:          content part (code 2), unencrypted
+	//                digest:        0x9cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47
+	//                size:          1024
 	//
 	// hqp_4YWKwzD4cymG9DodGRLphDg8fi2euXRgyYq9euQkjZx4a39
-	// type:          content part, unencrypted
+	// type:          content part (code 2), unencrypted
 	// digest:        0x9cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47
 	// size:          1024
 	//
+	// htq_3s4GEwC2Gjs4a9AZ4Tefp4TfAJ8ctV6gX8MsoZB4RvKF2uv8dHQJt3D8qd3vjB6wFNg3yAgpq
+	// type:          tenant content (code 5), unencrypted
+	// digest:        0x9cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47
+	// size:          1024
+	// qid:           itq_4M1DHfv8Wu1A2QmKWJG1WydB content with embedded tenant 0x0163f2a366bab61847e9bd10b4ac5ed27bba
+	//                  primary : iq__WxoChT9EZU2PRdTdNU7Ldf content 0xf2a366bab61847e9bd10b4ac5ed27bba
+	//                  embedded: iten2i tenant 0x63
+	// part:          hqp_4YWKwzD4cymG9DodGRLphDg8fi2euXRgyYq9euQkjZx4a39
+	//                type:          content part (code 2), unencrypted
+	//                digest:        0x9cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47
+	//                size:          1024
+	//
 	// hqpedYvWGgmzmerRxa2Rzv6dqjDogfCZE7dwSuDnfgaSfGbMeXXnT
-	// type:          content part, encrypted with AES-128, AFGHG BLS12-381, 1 MB block size
+	// type:          content part (code 2), encrypted with AES-128, AFGHG BLS12-381, 1 MB block size
 	// digest:        0x52fdfc072182654f163f5f0f9a621d729566c74d10037c4d7bbb0407d1e2c649
 	// size:          1234
 	// preamble_size: 567
 	//
 	// hql_7TmHLg49Qd4NtgfcPeWKAG7fsk7HujeMHaE33Bwm2kLYDdjqYJw
-	// type:          live content part, unencrypted
+	// type:          live part (code 3), unencrypted
 	// digest:        0xaffc42f44e3f73204569984e909d89a2086f2aba19c3866b7dd8b1861451f78c
 	// expiration:    2020-12-15T12:00:00.000Z
 	//
 	// hqt_2KhUoLeUJFR3pfBWpYzSqTWA3PoP6vBqEZGTLYu
-	// type:          transient live content part, unencrypted
+	// type:          transient live part (code 4), unencrypted
 	// digest:        0x6665bb007a6007781f4f4a0940a67dc4b0fadec2e6fa26
 	// expiration:    1992-08-04T00:00:00.000Z
 }

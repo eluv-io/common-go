@@ -14,6 +14,7 @@ import (
 	"github.com/eluv-io/common-go/format/encryption"
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/util/byteutil"
+	"github.com/eluv-io/common-go/util/stringutil"
 	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/log-go"
 )
@@ -330,8 +331,13 @@ func (t *Token) Equal(o *Token) bool {
 		t.Flags == o.Flags
 }
 
-// Describe returns a textual description of this token.
+// Describe is an alias for Explain.
 func (t *Token) Describe() string {
+	return t.Explain()
+}
+
+// Explain returns a textual description of this token.
+func (t *Token) Explain() string {
 	sb := strings.Builder{}
 
 	add := func(s string) {
@@ -339,17 +345,18 @@ func (t *Token) Describe() string {
 		sb.WriteString("\n")
 	}
 
-	add("type:   " + t.Code.Describe())
-	add("bytes:  0x" + hex.EncodeToString(t.Bytes))
+	add(t.String())
+	add("type:    " + t.Code.Describe())
+	add("bytes:   0x" + hex.EncodeToString(t.Bytes))
 	if t.Code == QWrite {
-		add("qid:    " + t.QID.String())
+		add(stringutil.PrefixAndIndentLines(t.QID.Explain(), "content: "))
 	}
 	if t.Code == QWrite || t.Code == LRO {
-		add("nid:    " + t.NID.String())
+		add(stringutil.PrefixAndIndentLines(t.NID.Explain(), "node:    "))
 	}
 	if t.Code == QPartWrite {
-		add("scheme: " + t.Scheme.String())
-		add("flags:  " + DescribeFlags(t.Flags, QPWFlagNames))
+		add("scheme:  " + t.Scheme.String())
+		add("flags:   " + DescribeFlags(t.Flags, QPWFlagNames))
 	}
 	return sb.String()
 }
@@ -357,7 +364,7 @@ func (t *Token) Describe() string {
 func (t *Token) Validate() (err error) {
 	e := errors.Template("validate token", errors.K.Invalid)
 	if t.Code == QWrite {
-		err = t.QID.AssertCode(id.Q)
+		err = t.QID.AssertContent()
 	}
 	if err == nil && (t.Code == QWrite || t.Code == LRO) {
 		err = t.NID.AssertCode(id.QNode)

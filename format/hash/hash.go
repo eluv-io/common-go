@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"hash"
 	"io"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 
 	ei "github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/preamble"
+	"github.com/eluv-io/common-go/util/stringutil"
 	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/log-go"
 	"github.com/eluv-io/utc-go"
@@ -30,7 +32,15 @@ const (
 	QPart                   // regular part hash
 	QPartLive               // live part that generates a regular part upon finalization for vod
 	QPartLiveTransient      // live part that doesn't generate a regular part upon finalization
+	TQ                      // content object hash with content ID being a id.TQ (instead of id.Q)
 )
+
+func (c Code) String() string {
+	if s, ok := codeToString[c]; ok {
+		return s
+	}
+	return fmt.Sprintf("unknown hash code %d", c)
+}
 
 func (c Code) IsLive() bool {
 	return c == QPartLive || c == QPartLiveTransient
@@ -43,7 +53,7 @@ func (c Code) FromString(s string) (*Hash, error) {
 	if err != nil {
 		return nil, err
 	}
-	return h, h.AssertCode(c)
+	return h, h.AssertCompatible(c)
 }
 
 // MustParse parses the given string and returns the hash.
@@ -56,7 +66,26 @@ func (c Code) MustParse(s string) *Hash {
 	return ret
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+func (c Code) IsContent() bool {
+	switch c {
+	case Q, TQ:
+		return true
+	}
+	return false
+}
+
+func (c Code) IsCompatible(other Code) bool {
+	if c == other {
+		return true
+	}
+	switch c {
+	case Q, TQ:
+		return other == Q || other == TQ
+	}
+	return false
+}
+
+///////////////////////////////////////////////////////////////////////////////
 
 // Format is the format of a hash
 type Format uint8
@@ -98,18 +127,7 @@ func (t Type) String() string {
 
 func (t Type) Describe() string {
 	var c, f string
-	switch t.Code {
-	case UNKNOWN:
-		c = "unknown"
-	case Q:
-		c = "content"
-	case QPart:
-		c = "content part"
-	case QPartLive:
-		c = "live content part"
-	case QPartLiveTransient:
-		c = "transient live content part"
-	}
+	c = t.Code.String()
 	switch t.Format {
 	case Unencrypted:
 		f = "unencrypted"
@@ -121,16 +139,25 @@ func (t Type) Describe() string {
 
 const prefixLen = 4
 
+var codeToString = map[Code]string{
+	Q:                  fmt.Sprintf("content (code %d)", Q),
+	QPart:              fmt.Sprintf("content part (code %d)", QPart),
+	QPartLive:          fmt.Sprintf("live part (code %d)", QPartLive),
+	QPartLiveTransient: fmt.Sprintf("transient live part (code %d)", QPartLiveTransient),
+	TQ:                 fmt.Sprintf("tenant content (code %d)", TQ),
+}
+
 var typeToPrefix = map[Type]string{}
 var prefixToType = map[string]Type{
-	"hunk": Type{UNKNOWN, Unencrypted},
-	"hq__": Type{Q, Unencrypted},
-	"hqp_": Type{QPart, Unencrypted},
-	"hqpe": Type{QPart, AES128AFGH},
-	"hql_": Type{QPartLive, Unencrypted},
-	"hqle": Type{QPartLive, AES128AFGH},
-	"hqt_": Type{QPartLiveTransient, Unencrypted},
-	"hqte": Type{QPartLiveTransient, AES128AFGH},
+	"hunk": {UNKNOWN, Unencrypted},
+	"hq__": {Q, Unencrypted},
+	"htq_": {TQ, Unencrypted},
+	"hqp_": {QPart, Unencrypted},
+	"hqpe": {QPart, AES128AFGH},
+	"hql_": {QPartLive, Unencrypted},
+	"hqle": {QPartLive, AES128AFGH},
+	"hqt_": {QPartLiveTransient, Unencrypted},
+	"hqte": {QPartLiveTransient, AES128AFGH},
 }
 
 func init() {
@@ -146,11 +173,12 @@ func init() {
 
 // Hash is the output of a cryptographic hash function and associated metadata, identifying a particular instance of an
 // immutable resource.
-//     Q format : type (1 byte) | digest (var bytes) | size (var bytes) | id (var bytes)
-//     QPart format : type (1 byte) | digest (var bytes) | size (var bytes) | preamble_size (var bytes, optional)
-//     QPartLive format : type (1 byte) | expiration (var bytes) | digest (var bytes)
-//     QPartLiveTransient format: type (1 byte) | expiration (var bytes) | digest (var bytes)
-//     (Deprecated) QPartLive format : type (1 byte) | digest (24-25 bytes)
+//
+//	Q format : type (1 byte) | digest (var bytes) | size (var bytes) | id (var bytes)
+//	QPart format : type (1 byte) | digest (var bytes) | size (var bytes) | preamble_size (var bytes, optional)
+//	QPartLive format : type (1 byte) | expiration (var bytes) | digest (var bytes)
+//	QPartLiveTransient format: type (1 byte) | expiration (var bytes) | digest (var bytes)
+//	(Deprecated) QPartLive format : type (1 byte) | digest (24-25 bytes)
 type Hash struct {
 	Type         Type
 	Digest       []byte
@@ -168,7 +196,7 @@ func NewObject(htype Type, digest []byte, size int64, id ei.ID) (*Hash, error) {
 		return nil, e("reason", "invalid type", "code", htype.Code, "format", htype.Format)
 	} else if htype.Code == UNKNOWN {
 		return nil, nil
-	} else if htype.Code != Q {
+	} else if !htype.Code.IsContent() {
 		return nil, e("reason", "code not supported", "code", htype.Code)
 	}
 
@@ -180,7 +208,12 @@ func NewObject(htype Type, digest []byte, size int64, id ei.ID) (*Hash, error) {
 		return nil, e("reason", "invalid size", "size", size)
 	}
 
-	if !id.IsContent() {
+	switch id.Code() {
+	case ei.Q:
+		htype.Code = Q
+	case ei.TQ:
+		htype.Code = TQ
+	default:
 		return nil, e("reason", "invalid id", "id", id)
 	}
 
@@ -307,8 +340,11 @@ func FromString(s string) (*Hash, error) {
 				preambleSize = int64(sz)
 			}
 		} else if htype.Code == Q {
-			// Parse id
+			// assign id - it's stored without type, so add it
 			id = ei.NewID(ei.Q, b[n:])
+		} else if htype.Code == TQ {
+			// assign id - it's stored with type
+			id = b[n:]
 		}
 	} else if len(b[n:]) == 24 || len(b[n:]) == 25 {
 		// Legacy live part format, which did not include an expiration time. The size of the digest was 25 at first
@@ -352,6 +388,8 @@ func (h *Hash) String() string {
 				b = append(b, s[:n]...)
 			} else if h.Type.Code == Q && h.ID.IsValid() {
 				b = append(b, h.ID.Bytes()...)
+			} else if h.Type.Code == TQ && h.ID.IsValid() {
+				b = append(b, h.ID...)
 			}
 		} else {
 			b = make([]byte, binary.MaxVarintLen64)
@@ -393,6 +431,19 @@ func (h *Hash) AssertCode(c Code) error {
 		hcode = h.Type.Code
 	}
 	if hcode != c {
+		return errors.E("verify hash", errors.K.Invalid, "reason", "hash code doesn't match",
+			"expected", c,
+			"actual", hcode)
+	}
+	return nil
+}
+
+func (h *Hash) AssertCompatible(c Code) error {
+	hcode := UNKNOWN
+	if !h.IsNil() {
+		hcode = h.Type.Code
+	}
+	if !hcode.IsCompatible(c) {
 		return errors.E("verify hash", errors.K.Invalid, "reason", "hash code doesn't match",
 			"expected", c,
 			"actual", hcode)
@@ -446,24 +497,30 @@ func (h *Hash) UnmarshalText(text []byte) error {
 
 // As returns a copy of this hash with the given code as the type of the new hash.
 func (h *Hash) As(c Code, id ei.ID) (*Hash, error) {
-	if h.IsNil() || c == h.Type.Code {
+	if h.IsNil() {
 		return h, nil
 	} else if h.PreambleSize > 0 {
 		return nil, errors.E("convert hash", errors.K.Invalid, "reason", "no conversion for parts with preamble", "hash", h)
 	} else if h.IsLive() || c.IsLive() {
 		return nil, errors.E("convert hash", errors.K.Invalid, "reason", "no conversion for live parts", "hash", h, "code", c)
 	} else if _, ok := typeToPrefix[Type{c, h.Type.Format}]; !ok {
-		return nil, errors.E("convert hash", errors.K.Invalid, "reason", "invaid type", "code", c, "format", h.Type.Format)
+		return nil, errors.E("convert hash", errors.K.Invalid, "reason", "invalid type", "code", c, "format", h.Type.Format)
 	}
 	var res Hash = *h
 	res.Type.Code = c
 	res.s = ""
-	if c != Q {
+	if !c.IsContent() {
 		res.ID = nil
-	} else if id != nil && id.AssertCode(ei.Q) == nil {
-		res.ID = id
 	} else {
-		return nil, errors.E("convert hash", errors.K.Invalid, "reason", "invalid id", "id", id)
+		res.ID = id
+		switch id.Code() {
+		case ei.Q:
+			res.Type.Code = Q
+		case ei.TQ:
+			res.Type.Code = TQ
+		default:
+			return nil, errors.E("convert hash", errors.K.Invalid, "reason", "invalid id", "id", id)
+		}
 	}
 	res.s = res.String()
 	return &res, nil
@@ -513,7 +570,13 @@ func (h *Hash) DigestBytes() []byte {
 	return h.Digest
 }
 
+// Describe is an alias for Explain.
 func (h *Hash) Describe() string {
+	return h.Explain()
+}
+
+// Explain returns a textual description of this hash.
+func (h *Hash) Explain() string {
 	sb := strings.Builder{}
 
 	add := func(s string) {
@@ -521,6 +584,7 @@ func (h *Hash) Describe() string {
 		sb.WriteString("\n")
 	}
 
+	add(h.String())
 	add("type:          " + h.Type.Describe())
 	add("digest:        0x" + hex.EncodeToString(h.Digest))
 	if !h.IsLive() {
@@ -531,15 +595,16 @@ func (h *Hash) Describe() string {
 	} else {
 		add("expiration:    " + h.Expiration.String())
 	}
-	if h.Type.Code == Q {
-		add("qid:           " + h.ID.String())
+	if h.Type.Code.IsContent() {
+		add(stringutil.PrefixAndIndentLines(h.ID.Explain(), "qid:           "))
 		qphash, err := h.As(QPart, nil)
 		if err == nil {
-			add("part:          " + qphash.String())
+			add(stringutil.PrefixAndIndentLines(qphash.Explain(), "part:          "))
 		}
 	}
 
-	return sb.String()
+	res := sb.String()
+	return res[:len(res)-1]
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -583,7 +648,7 @@ func (d *Digest) WithPreamble(preambleSize int64) *Digest {
 }
 
 func (d *Digest) WithID(i ei.ID) *Digest {
-	if d.htype.Code == Q {
+	if d.htype.Code.IsContent() {
 		d.id = i
 	}
 	return d
@@ -608,7 +673,7 @@ func (d *Digest) AsHash() *Hash {
 	b := d.Hash.Sum(nil)
 	var h *Hash
 	var err error
-	if d.htype.Code == Q {
+	if d.htype.Code.IsContent() {
 		h, err = NewObject(d.htype, b, d.size, d.id)
 	} else {
 		h, err = NewPart(d.htype, b, d.size, d.psize)

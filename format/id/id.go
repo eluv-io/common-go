@@ -16,6 +16,10 @@ import (
 // Code is the type of an ID
 type Code uint8
 
+func (c Code) String() string {
+	return codeToPrefix[c]
+}
+
 // FromString parses the given string and returns the ID. Returns an error
 // if the string is not a ID or an ID of the wrong type.
 func (c Code) FromString(s string) (ID, error) {
@@ -27,7 +31,7 @@ func (c Code) FromString(s string) (ID, error) {
 		}
 		return nil, errors.E("parse ID", err, "expected_type", n)
 	}
-	return id, id.AssertCode(c)
+	return id, id.AssertCompatible(c)
 }
 
 // MustParse parses an ID from the given string representation. Panics if the
@@ -38,6 +42,27 @@ func (c Code) MustParse(s string) ID {
 		panic(err)
 	}
 	return res
+}
+
+func (c Code) IsContent() bool {
+	switch c {
+	case Q, TQ:
+		return true
+	}
+	return false
+}
+
+func (c Code) IsCompatible(other Code) bool {
+	if c == other {
+		return true
+	}
+	switch c {
+	case Q, TQ:
+		return other == Q || other == TQ
+	case QLib, TLib:
+		return other == QLib || other == TLib
+	}
+	return false
 }
 
 // lint disable
@@ -143,6 +168,26 @@ func (id ID) AssertCode(c Code) error {
 	return nil
 }
 
+// AssertCompatible checks whether the ID's code is compatible with the provided code
+func (id ID) AssertCompatible(c Code) error {
+	if id == nil || !id.Code().IsCompatible(c) {
+		return errors.E("ID code check", errors.K.Invalid,
+			"expected", codeToPrefix[c],
+			"actual", id.prefix())
+	}
+	return nil
+}
+
+// AssertContent checks whether the ID's code is content-like, e.g. its code is Q or TQ.
+func (id ID) AssertContent() error {
+	if !id.IsContent() {
+		return errors.E("ID code check", errors.K.Invalid,
+			"expected", codeToPrefix[Q],
+			"actual", id.prefix())
+	}
+	return nil
+}
+
 func (id ID) prefix() string {
 	p, found := codeToPrefix[id.Code()]
 	if !found {
@@ -225,11 +270,7 @@ func (id ID) Explain() (res string) {
 
 // IsContent returns true if the ID is content-like, e.g. its code is Q or TQ.
 func (id ID) IsContent() bool {
-	switch id.Code() {
-	case Q, TQ:
-		return true
-	}
-	return false
+	return id.Code().IsContent()
 }
 
 // Generate creates a random ID for the given ID type.

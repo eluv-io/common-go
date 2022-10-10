@@ -6,8 +6,8 @@ func ToTQID(qid id.ID) TQID {
 	return TQID{id.Decompose(qid)}
 }
 
-func NewTQID(lid QID, tid TenantID) TQID {
-	return TQID{id.Compose(id.TQ, lid.Bytes(), tid.Bytes())}
+func NewTQID(qid QID, tid TenantID) TQID {
+	return TQID{id.Compose(id.TQ, qid.Bytes(), tid.Bytes())}
 }
 
 // TQID is the type of content IDs with embedded tenant ID
