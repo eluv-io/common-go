@@ -35,6 +35,8 @@ const (
 	ES256K                  // ECDSA Signature with secp256k1 curve and SHA-256 hash function - https://datatracker.ietf.org/doc/rfc8812/
 	EIP191Personal          // Ethereum personal sign - https://eips.ethereum.org/EIPS/eip-191
 	EIP712TypedData         // Ethereum type data signatures - https://eips.ethereum.org/EIPS/eip-712
+	SR25519                 // Schnorr signatures on Ristretto compressed Ed25519 points https://github.com/w3f/schnorrkel
+	ED25519                 // EdDSA on Curve25519 https://en.wikipedia.org/wiki/EdDSA#Ed25519
 )
 
 const sigCodeLen = 1
@@ -46,6 +48,8 @@ var sigPrefixToCode = map[string]SigCode{
 	"ES256K_": ES256K,
 	"EIP191P": EIP191Personal,
 	"EIP712T": EIP712TypedData,
+	"SR25519": SR25519,
+	"ED25519": ED25519,
 }
 
 func init() {
