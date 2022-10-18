@@ -275,7 +275,7 @@ func (id ID) IsContent() bool {
 
 // Generate creates a random ID for the given ID type.
 func Generate(code Code) ID {
-	return ID(append([]byte{byte(code)}, uuid.NewV4().Bytes()...))
+	return ID(append([]byte{byte(code)}, uuid.NewV4().Bytes()[:10]...))
 }
 
 func NewID(code Code, codeBytes []byte) ID {
