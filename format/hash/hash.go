@@ -403,6 +403,10 @@ func (h *Hash) IsLive() bool {
 	return h != nil && h.Type.Code.IsLive()
 }
 
+func (h *Hash) IsContent() bool {
+	return h.Type.Code.IsContent()
+}
+
 // AssertType checks whether the hash's type equals the provided type
 func (h *Hash) AssertType(t Type) error {
 	if h.IsNil() || h.Type != t {

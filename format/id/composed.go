@@ -3,6 +3,7 @@ package id
 import (
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"strings"
 
 	"github.com/eluv-io/common-go/util/byteutil"
@@ -190,6 +191,7 @@ func (c Composed) Explain() (res string) {
 		sb.WriteString(codeToName[id.Code()])
 		sb.WriteString(" 0x")
 		sb.WriteString(hex.EncodeToString(id.Bytes()))
+		sb.WriteString(fmt.Sprintf(" (%d bytes)", len(id.Bytes())))
 	}
 
 	explain(c.full)
