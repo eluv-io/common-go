@@ -36,7 +36,7 @@ func TestCompose(t *testing.T) {
 
 	qid := Generate(Q)
 	tid := Generate(Tenant)
-	fullID = NewID(TQ, append(append([]byte{16}, tid.Bytes()...), qid.Bytes()...))
+	fullID = NewID(TQ, append(append([]byte{byte(len(tid.Bytes()))}, tid.Bytes()...), qid.Bytes()...))
 	require.Equal(
 		t,
 		Composed{

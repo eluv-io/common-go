@@ -143,14 +143,14 @@ func ExampleID_Explain() {
 
 	// Output:
 	//
-	// iq__2VfUX content 0x01020304
-	// iten2i tenant 0x63
-	// itq_h42CL8T content with embedded tenant 0x016301020304
-	//   primary : iq__2VfUX content 0x01020304
-	//   embedded: iten2i tenant 0x63
-	// itq_h42CL8T content with embedded tenant 0x016301020304
-	//   primary : iq__2VfUX content 0x01020304
-	//   embedded: iten2i tenant 0x63
+	// iq__2VfUX content 0x01020304 (4 bytes)
+	// iten2i tenant 0x63 (1 bytes)
+	// itq_h42CL8T content with embedded tenant 0x016301020304 (6 bytes)
+	//   primary : iq__2VfUX content 0x01020304 (4 bytes)
+	//   embedded: iten2i tenant 0x63 (1 bytes)
+	// itq_h42CL8T content with embedded tenant 0x016301020304 (6 bytes)
+	//   primary : iq__2VfUX content 0x01020304 (4 bytes)
+	//   embedded: iten2i tenant 0x63 (1 bytes)
 }
 
 func TestIsCompatible(t *testing.T) {

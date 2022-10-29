@@ -188,8 +188,8 @@ func ExampleToken_Describe_object() {
 	// tq__3WhUFGKoJAzvqrDWiZtkcfQHiKp4Gda4KkiwuRgX6BTFfq7hNeji2hPDW6qZxLuk7xAju4bgm8iLwK
 	// type:    content write token
 	// bytes:   0xe6ded2a798ac1f820fe871c6170b6d12
-	// content: iq__1Bhh3pU9gLXZiNDL6PEZuEP5ri content 0x000102030405060708090a0b0c0d0e0f10111213
-	// node:    inod2KRn6vRvn8U3gczhSMJwd1 fabric node 0x0aabcbd87f414c0197efef1f52b305c8
+	// content: iq__1Bhh3pU9gLXZiNDL6PEZuEP5ri content 0x000102030405060708090a0b0c0d0e0f10111213 (20 bytes)
+	// node:    inod2KRn6vRvn8U3gczhSMJwd1 fabric node 0x0aabcbd87f414c0197efef1f52b305c8 (16 bytes)
 }
 
 func ExampleToken_Describe_object_2() {
@@ -201,10 +201,10 @@ func ExampleToken_Describe_object_2() {
 	// tqw__JUzjYYRw7qNCmuvfjRvC4QwRsYS3To9CZjeGKZqcrDy4ZGdY4aTY9W
 	// type:    content write token
 	// bytes:   0x00010203040506070809
-	// content: itq_A5JwgE content with embedded tenant 0x0163010203
-	//            primary : iq__Ldp content 0x010203
-	//            embedded: iten2i tenant 0x63
-	// node:    inod3Sa5p3czRyYi8GnVGnh8gBDLaqJr fabric node 0xaf33e7ed62938a0499453d419461ca9d598950a3
+	// content: itq_A5JwgE content with embedded tenant 0x0163010203 (5 bytes)
+	//            primary : iq__Ldp content 0x010203 (3 bytes)
+	//            embedded: iten2i tenant 0x63 (1 bytes)
+	// node:    inod3Sa5p3czRyYi8GnVGnh8gBDLaqJr fabric node 0xaf33e7ed62938a0499453d419461ca9d598950a3 (20 bytes)
 }
 
 func ExampleToken_Describe_part() {
@@ -229,5 +229,5 @@ func ExampleToken_Describe_lro() {
 	// tlro12hb4zikV2ArEoXXyUV6xKJPfC6Ff2siNKDKBVM6js8adif81
 	// type:    bitcode LRO handle
 	// bytes:   0x2df2a5d3d6c4e0830a95e7f1e8c779f6
-	// node:    inod2KRn6vRvn8U3gczhSMJwd1 fabric node 0x0aabcbd87f414c0197efef1f52b305c8
+	// node:    inod2KRn6vRvn8U3gczhSMJwd1 fabric node 0x0aabcbd87f414c0197efef1f52b305c8 (16 bytes)
 }

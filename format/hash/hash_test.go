@@ -509,7 +509,7 @@ func ExampleHash_Describe() {
 	// type:          content (code 1), unencrypted
 	// digest:        0x9cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47
 	// size:          1024
-	// qid:           iq__WxoChT9EZU2PRdTdNU7Ldf content 0xf2a366bab61847e9bd10b4ac5ed27bba
+	// qid:           iq__WxoChT9EZU2PRdTdNU7Ldf content 0xf2a366bab61847e9bd10b4ac5ed27bba (16 bytes)
 	// part:          hqp_4YWKwzD4cymG9DodGRLphDg8fi2euXRgyYq9euQkjZx4a39
 	//                type:          content part (code 2), unencrypted
 	//                digest:        0x9cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47
@@ -524,9 +524,9 @@ func ExampleHash_Describe() {
 	// type:          tenant content (code 5), unencrypted
 	// digest:        0x9cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47
 	// size:          1024
-	// qid:           itq_4M1DHfv8Wu1A2QmKWJG1WydB content with embedded tenant 0x0163f2a366bab61847e9bd10b4ac5ed27bba
-	//                  primary : iq__WxoChT9EZU2PRdTdNU7Ldf content 0xf2a366bab61847e9bd10b4ac5ed27bba
-	//                  embedded: iten2i tenant 0x63
+	// qid:           itq_4M1DHfv8Wu1A2QmKWJG1WydB content with embedded tenant 0x0163f2a366bab61847e9bd10b4ac5ed27bba (18 bytes)
+	//                  primary : iq__WxoChT9EZU2PRdTdNU7Ldf content 0xf2a366bab61847e9bd10b4ac5ed27bba (16 bytes)
+	//                  embedded: iten2i tenant 0x63 (1 bytes)
 	// part:          hqp_4YWKwzD4cymG9DodGRLphDg8fi2euXRgyYq9euQkjZx4a39
 	//                type:          content part (code 2), unencrypted
 	//                digest:        0x9cbc07c3f991725836a3aa2a581ca2029198aa420b9d99bc0e131d9f3e2cbe47
