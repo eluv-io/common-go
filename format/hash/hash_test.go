@@ -434,6 +434,26 @@ func TestAssertEqual(t *testing.T) {
 	require.NoError(t, nilHash.AssertEqual(nil))
 }
 
+// PENDING: remove after old live parts are finally deleted
+func TestOldLivePart(t *testing.T) {
+	oldLivePart := "hql_Kaxnnu3M3fYT6HA2zkGE4qCWzmRkNECkz"
+
+	h, err := hash.FromString(oldLivePart)
+	require.NoError(t, err)
+	require.Equal(t, hash.QPartLiveV1, h.Type.Code)
+	require.Equal(t, hash.Unencrypted, h.Type.Format)
+	require.Positive(t, len(h.Digest))
+	require.True(t, h.Expiration.IsZero())
+	require.True(t, h.IsLive())
+
+	h = &hash.Hash{Type: hash.Type{hash.QPartLiveV1, hash.Unencrypted}, Digest: h.Digest}
+	require.Equal(t, oldLivePart, h.String())
+
+	h, err = hash.NewLive(hash.Type{hash.QPartLiveV1, hash.Unencrypted}, h.Digest, utc.Zero)
+	require.Error(t, err)
+	require.Nil(t, h)
+}
+
 func ExampleHash_Describe() {
 
 	h, _ := hash.FromString(hashString)
