@@ -30,11 +30,10 @@ const (
 	QPart                   // regular part hash
 	QPartLive               // live part that generates a regular part upon finalization for vod
 	QPartLiveTransient      // live part that doesn't generate a regular part upon finalization
-	QPartLiveV1             // initial live part implementation; PENDING: remove after old live parts are finally deleted
 )
 
 func (c Code) IsLive() bool {
-	return c == QPartLive || c == QPartLiveTransient || c == QPartLiveV1
+	return c == QPartLive || c == QPartLiveTransient
 }
 
 // FromString parses the given string and returns the hash.
@@ -110,8 +109,6 @@ func (t Type) Describe() string {
 		c = "live content part"
 	case QPartLiveTransient:
 		c = "transient live content part"
-	case QPartLiveV1:
-		c = "DEPRECATED live content part"
 	}
 	switch t.Format {
 	case Unencrypted:
@@ -143,8 +140,6 @@ func init() {
 		}
 		typeToPrefix[t] = p
 	}
-	typeToPrefix[Type{QPartLiveV1, Unencrypted}] = "hql_"
-	typeToPrefix[Type{QPartLiveV1, AES128AFGH}] = "hqle"
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -155,7 +150,7 @@ func init() {
 //	QPart format : type (1 byte) | digest (var bytes) | size (var bytes) | preamble_size (var bytes, optional)
 //	QPartLive format : type (1 byte) | expiration (var bytes) | digest (var bytes)
 //	QPartLiveTransient format: type (1 byte) | expiration (var bytes) | digest (var bytes)
-//  QPartLiveV1 format : type (1 byte) | digest (var bytes)
+//  (Deprecated) QPartLive format : type (1 byte) | digest (24-25 bytes)
 type Hash struct {
 	Type         Type
 	Digest       []byte
@@ -231,8 +226,10 @@ func NewLive(htype Type, digest []byte, expiration utc.UTC) (*Hash, error) {
 		return nil, e("reason", "invalid type", "code", htype.Code, "format", htype.Format)
 	} else if htype.Code == UNKNOWN {
 		return nil, nil
-	} else if !htype.Code.IsLive() || htype.Code == QPartLiveV1 {
+	} else if !htype.Code.IsLive() {
 		return nil, e("reason", "code not supported", "code", htype.Code)
+	} else if expiration.IsZero() { // Do not allow deprecated/legacy QPartLive format
+		return nil, e("reason", "invalid expiration", "expiration", expiration)
 	}
 
 	// Strip sub-second info from expiration, since it is stored as Unix time in hash string
@@ -313,17 +310,19 @@ func FromString(s string) (*Hash, error) {
 			// Parse id
 			id = ei.NewID(ei.Q, b[n:])
 		}
+	} else if len(b[n:]) == 24 || len(b[n:]) == 25 {
+		// Legacy live part format, which did not include an expiration time. The size of the digest was 25 at first
+		// with an incorrect 0 byte prefix that was later stripped and resulting in 24 bytes.
+		// See https://github.com/qluvio/content-fabric/commit/9c961f978e217bee97cb33e8d4288d43ea8c8ba6
+		digest = b[n:]
 	} else {
 		// Parse expiration
 		e, m := binary.Uvarint(b[n:])
 		if m <= 0 {
-			// PENDING: support old live part format
-			// return nil, errors.E("parse hash", errors.K.Invalid, "reason", "invalid expiration", "string", s)
-			htype.Code = QPartLiveV1
-		} else {
-			expiration = utc.Unix(int64(e), 0)
-			n += m
+			return nil, errors.E("parse hash", errors.K.Invalid, "reason", "invalid expiration", "string", s)
 		}
+		expiration = utc.Unix(int64(e), 0)
+		n += m
 
 		// Parse digest
 		digest = b[n:]
@@ -357,9 +356,8 @@ func (h *Hash) String() string {
 		} else {
 			b = make([]byte, binary.MaxVarintLen64)
 
-			// PENDING: support old live part format
 			var n int
-			if h.Type.Code != QPartLiveV1 {
+			if !h.Expiration.IsZero() {
 				n = binary.PutUvarint(b, uint64(h.Expiration.Unix()))
 			}
 
