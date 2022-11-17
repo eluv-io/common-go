@@ -146,11 +146,11 @@ func init() {
 
 // Hash is the output of a cryptographic hash function and associated metadata, identifying a particular instance of an
 // immutable resource.
-//	Q format : type (1 byte) | digest (var bytes) | size (var bytes) | id (var bytes)
-//	QPart format : type (1 byte) | digest (var bytes) | size (var bytes) | preamble_size (var bytes, optional)
-//	QPartLive format : type (1 byte) | expiration (var bytes) | digest (var bytes)
-//	QPartLiveTransient format: type (1 byte) | expiration (var bytes) | digest (var bytes)
-//  (Deprecated) QPartLive format : type (1 byte) | digest (24-25 bytes)
+//     Q format : type (1 byte) | digest (var bytes) | size (var bytes) | id (var bytes)
+//     QPart format : type (1 byte) | digest (var bytes) | size (var bytes) | preamble_size (var bytes, optional)
+//     QPartLive format : type (1 byte) | expiration (var bytes) | digest (var bytes)
+//     QPartLiveTransient format: type (1 byte) | expiration (var bytes) | digest (var bytes)
+//     (Deprecated) QPartLive format : type (1 byte) | digest (24-25 bytes)
 type Hash struct {
 	Type         Type
 	Digest       []byte
