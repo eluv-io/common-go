@@ -12,7 +12,7 @@ require (
 	github.com/eluv-io/inject-go v0.0.0-20211014192223-71ed1bcfb56d
 	github.com/eluv-io/log-go v1.0.1
 	github.com/eluv-io/utc-go v1.0.0
-	github.com/ethereum/go-ethereum v1.10.2
+	github.com/ethereum/go-ethereum v1.10.3
 	github.com/gammazero/deque v0.1.0
 	github.com/ghodss/yaml v1.0.0
 	github.com/gin-gonic/gin v1.7.7
