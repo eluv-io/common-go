@@ -14,6 +14,20 @@ import (
 
 const loggerKey = "ginutil.LOGGER"
 
+// Handle "extends" a regular gin.HandlerFunc with an error return value. If fn() returns an error, it calls Abort.
+// Otherwise, it does nothing and expects fn() to have sent an HTTP response itself.
+//
+// Handle allows handler functions to be coded with idiomatic error handling, instead of invoking ginutil.Abort(c, err)
+// in each error handling block.
+func Handle(fn func(c *gin.Context) error) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		err := fn(c)
+		if err != nil {
+			Abort(c, err)
+		}
+	}
+}
+
 // Abort aborts the current HTTP request with the given error. The HTTP status code is set according to the error type.
 // If the error is an eluv-io/errors-go with kind "Other" or a non-eluv-io/errors-go, the call also logs the stacktrace
 // of all goroutines. The logger (an instance of eluv-io/log-go) can be set in the gin context under the "LOGGER" key.

@@ -3,9 +3,10 @@ package keys
 import (
 	"bytes"
 
+	"github.com/mr-tron/base58/base58"
+
 	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/log-go"
-	"github.com/mr-tron/base58/base58"
 )
 
 // KeyCode is the type of an ID
@@ -39,6 +40,11 @@ const (
 	EthPrivateKey
 	FabricNodePublicKey
 	UserPublicKey
+
+	ED25519SecretKey
+	ED25519PublicKey
+	SR25519SecretKey
+	SR25519PublicKey
 )
 
 const codeLen = 1
@@ -63,6 +69,11 @@ var keyPrefixToCode = map[string]KeyCode{
 	"kesk": EthPrivateKey,       //
 	"knod": FabricNodePublicKey, // fabric node public key
 	"kupk": UserPublicKey,       // key user public key
+
+	"ksed": ED25519SecretKey, // regular ED25519
+	"kped": ED25519PublicKey, // regular ED25519
+	"kssc": SR25519SecretKey, // ED25519 with Schnorr signatures
+	"kpsc": SR25519PublicKey, // ED25519 with Schnorr signatures
 }
 
 func init() {
@@ -138,6 +149,10 @@ func (id KID) Is(s string) bool {
 		return false
 	}
 	return bytes.Equal(id, sID)
+}
+
+func (id KID) IsValid() bool {
+	return len(id) > codeLen
 }
 
 func NewKID(code KeyCode, codeBytes []byte) KID {

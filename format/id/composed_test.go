@@ -73,7 +73,9 @@ func TestDecompose(t *testing.T) {
 		Compose(TLib, []byte{1}, []byte{1}).ID(),
 		Compose(TLib, []byte{1, 2, 3}, []byte{4, 5, 6}).ID(),
 		Compose(TLib, Generate(Q), Generate(Tenant)).ID(),
+		MustParse("itl_Cyx5ka1UefXjJZ"), // invalid composed id: varint for embedded ID is 8917 bytes!
 		nil,
+		Compose(TLib, nil, Generate(Tenant)).ID(),
 	}
 
 	for _, test := range tests {
@@ -86,6 +88,9 @@ func TestDecompose(t *testing.T) {
 func TestDecomposeInvalid(t *testing.T) {
 	qid := Generate(Q)
 	tid := Generate(Tenant)
+	lid := MustParse("ilibCyx5ka1UefXjJZ")
+	invalidTlib := lid.As(TLib)
+
 	tests := []struct {
 		src  ID
 		want Composed
@@ -93,6 +98,7 @@ func TestDecomposeInvalid(t *testing.T) {
 		{nil, Composed{}},
 		{qid, Composed{full: qid, primary: qid, strCache: qid.String()}},
 		{tid, Composed{full: tid, primary: tid, strCache: tid.String()}},
+		{invalidTlib, Composed{full: invalidTlib, primary: invalidTlib, strCache: invalidTlib.String()}},
 	}
 
 	for _, test := range tests {

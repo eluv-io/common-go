@@ -34,6 +34,18 @@ func TestGenerate(t *testing.T) {
 	assert.False(t, nilID.Equal(generated))
 }
 
+func TestGenerateLen(t *testing.T) {
+	generated := GenerateLen(User, 5)
+	assert.Equal(t, byte(User), generated[0])
+	assert.Len(t, generated, 6)
+	assert.NotEqual(t, make([]byte, 5), generated[1:])
+
+	generated = GenerateLen(Q, 22)
+	assert.Equal(t, byte(Q), generated[0])
+	assert.Len(t, generated, 23)
+	assert.NotEqual(t, make([]byte, 22), generated[1:])
+}
+
 func TestStringConversion(t *testing.T) {
 	idString := tid.String()
 	assert.Equal(t, expIDString, idString)
@@ -140,6 +152,7 @@ func ExampleID_Explain() {
 	composed := Embed(qid, tid)
 	fmt.Println(composed.Explain())
 	fmt.Println(composed.ID().Explain())
+	fmt.Println(Compose(TLib, nil, tid).Explain())
 
 	// Output:
 	//
@@ -151,6 +164,9 @@ func ExampleID_Explain() {
 	// itq_h42CL8T content with embedded tenant 0x016301020304 (6 bytes)
 	//   primary : iq__2VfUX content 0x01020304 (4 bytes)
 	//   embedded: iten2i tenant 0x63 (1 bytes)
+	// itl_gyx library with embedded tenant 0x020d63 (3 bytes)
+	//   primary :  content library 0x (0 bytes)
+	//   embedded: iten226 tenant 0x0d63 (2 bytes)
 }
 
 func TestIsCompatible(t *testing.T) {

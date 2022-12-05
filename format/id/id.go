@@ -9,6 +9,7 @@ import (
 	"github.com/mr-tron/base58/base58"
 	uuid "github.com/satori/go.uuid"
 
+	"github.com/eluv-io/common-go/util/byteutil"
 	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/log-go"
 )
@@ -86,6 +87,7 @@ const (
 	Ed25519
 	TQ
 	TLib
+	PublishingJob
 )
 
 const codeLen = 1
@@ -112,6 +114,7 @@ var prefixToCode = map[string]Code{
 	"ied2": Ed25519, // 32 byte ed25519 public key
 	"itq_": TQ,
 	"itl_": TLib,
+	"ipub": PublishingJob,
 }
 var codeToName = map[Code]string{
 	UNKNOWN:         "unknown",
@@ -276,6 +279,13 @@ func (id ID) IsContent() bool {
 // Generate creates a random ID for the given ID type.
 func Generate(code Code) ID {
 	return ID(append([]byte{byte(code)}, uuid.NewV4().Bytes()[:10]...))
+}
+
+// GenerateLen creates a random ID for the given ID type with the given len (plus the code byte).
+func GenerateLen(code Code, len int) ID {
+	bts := byteutil.RandomBytes(len + 1)
+	bts[0] = byte(code)
+	return bts
 }
 
 func NewID(code Code, codeBytes []byte) ID {

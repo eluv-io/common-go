@@ -23,7 +23,7 @@ func Embed(primary ID, embed ID) Composed {
 // and in which the primary or tenant ID or both are nil.
 func Compose(code Code, primary []byte, embed []byte) Composed {
 	codeEmbedded := embeddedCode(code)
-	if codeEmbedded == UNKNOWN || len(embed) == 0 {
+	if codeEmbedded == UNKNOWN {
 		if len(primary) == 0 {
 			return Composed{} // invalid
 		}
@@ -36,17 +36,18 @@ func Compose(code Code, primary []byte, embed []byte) Composed {
 		}
 	}
 
-	if len(primary) == 0 {
-		// return a composed that has only the embedded ID set - important when creating composed IDs where for example
-		// the qid is nil, but the tenant id needs to be "transported" with the composed ID.
-		return Composed{
-			full:     nil,
-			primary:  nil,
-			embedded: NewID(codeEmbedded, embed),
-			strCache: "",
+	/*
+		if len(primary) == 0 {
+			// return a composed that has only the embedded ID set - important when creating composed IDs where for example
+			// the qid is nil, but the tenant id needs to be "transported" with the composed ID.
+			return Composed{
+				full:     nil,
+				primary:  nil,
+				embedded: NewID(codeEmbedded, embed),
+				strCache: "",
+			}
 		}
-	}
-
+	*/
 	embedSize := len(embed)
 	viSize := byteutil.LenUvarInt(uint64(embedSize))
 	bts := make([]byte, 1+viSize+embedSize+len(primary))
@@ -84,7 +85,7 @@ func Decompose(id ID) Composed {
 
 	// size of the embedded ID
 	sz, m := binary.Uvarint(bts)
-	if m <= 0 || len(bts) < m+1 {
+	if m <= 0 || len(bts) < m+int(sz) {
 		return res
 	}
 	bts = bts[m:]
@@ -160,6 +161,14 @@ func (c Composed) String() string {
 
 func (c Composed) IsValid() bool {
 	return c.full.IsValid() && c.embedded.IsValid()
+}
+
+func (c Composed) IsZero() bool {
+	return c.primary.IsNil() && c.embedded.IsNil()
+}
+
+func (c Composed) Equal(other Composed) bool {
+	return c.strCache == other.strCache
 }
 
 // MarshalText implements custom marshaling using the string representation.
