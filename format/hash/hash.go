@@ -46,8 +46,8 @@ func (c Code) IsLive() bool {
 	return c == QPartLive || c == QPartLiveTransient
 }
 
-// FromString parses the given string and returns the hash. Returns an error
-// if the string is not a hash or a hash of the wrong code.
+// FromString parses the given string and returns the hash.
+// Returns an error if the string is not a hash or a hash of the wrong code.
 func (c Code) FromString(s string) (*Hash, error) {
 	h, err := FromString(s)
 	if err != nil {
@@ -85,7 +85,7 @@ func (c Code) IsCompatible(other Code) bool {
 	return false
 }
 
-///////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Format is the format of a hash
 type Format uint8
@@ -95,8 +95,8 @@ const (
 	AES128AFGH                // SHA256, AES-128, AFGHG BLS12-381, 1 MB block size
 )
 
-// FromString parses the given string and returns the hash. Returns an error
-// if the string is not a hash or a hash of the wrong code.
+// FromString parses the given string and returns the hash.
+// Returns an error if the string is not a hash or a hash of the wrong code.
 func (f Format) FromString(s string) (*Hash, error) {
 	h, err := FromString(s)
 	if err != nil {
@@ -105,7 +105,7 @@ func (f Format) FromString(s string) (*Hash, error) {
 	return h, h.AssertFormat(f)
 }
 
-///////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Type, the composition of Code and Format, is the type of a hash
 type Type struct {
@@ -169,14 +169,15 @@ func init() {
 	}
 }
 
-///////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// Hash is the output of a cryptographic hash function and associated metadata,
-// identifying a particular instance of an immutable resource.
-//	Q format : type (1 byte) | digest (var bytes) | size (var bytes) | id (var bytes)
-//	QPart format : type (1 byte) | digest (var bytes) | size (var bytes) | preamble_size (var bytes, optional)
-//	QPartLive format : type (1 byte) | expiration (var bytes) | digest (var bytes)
-//	QPartLiveTransient format: type (1 byte) | expiration (var bytes) | digest (var bytes)
+// Hash is the output of a cryptographic hash function and associated metadata, identifying a particular instance of an
+// immutable resource.
+//     Q format : type (1 byte) | digest (var bytes) | size (var bytes) | id (var bytes)
+//     QPart format : type (1 byte) | digest (var bytes) | size (var bytes) | preamble_size (var bytes, optional)
+//     QPartLive format : type (1 byte) | expiration (var bytes) | digest (var bytes)
+//     QPartLiveTransient format: type (1 byte) | expiration (var bytes) | digest (var bytes)
+//     (Deprecated) QPartLive format : type (1 byte) | digest (24-25 bytes)
 type Hash struct {
 	Type         Type
 	Digest       []byte
@@ -259,6 +260,8 @@ func NewLive(htype Type, digest []byte, expiration utc.UTC) (*Hash, error) {
 		return nil, nil
 	} else if !htype.Code.IsLive() {
 		return nil, e("reason", "code not supported", "code", htype.Code)
+	} else if expiration.IsZero() { // Do not allow deprecated/legacy QPartLive format
+		return nil, e("reason", "invalid expiration", "expiration", expiration)
 	}
 
 	// Strip sub-second info from expiration, since it is stored as Unix time in hash string
@@ -270,8 +273,8 @@ func NewLive(htype Type, digest []byte, expiration utc.UTC) (*Hash, error) {
 	return h, nil
 }
 
-// MustParse parses a hash from the given string representation. Panics if the
-// string cannot be parsed.
+// MustParse parses a hash from the given string representation.
+// Panics if the string cannot be parsed.
 func MustParse(s string) *Hash {
 	res, err := Parse(s)
 	if err != nil {
@@ -342,6 +345,11 @@ func FromString(s string) (*Hash, error) {
 			// assign id - it's stored with type
 			id = b[n:]
 		}
+	} else if len(b[n:]) == 24 || len(b[n:]) == 25 {
+		// Legacy live part format, which did not include an expiration time. The size of the digest was 25 at first
+		// with an incorrect 0 byte prefix that was later stripped and resulting in 24 bytes.
+		// See https://github.com/qluvio/content-fabric/commit/9c961f978e217bee97cb33e8d4288d43ea8c8ba6
+		digest = b[n:]
 	} else {
 		// Parse expiration
 		e, m := binary.Uvarint(b[n:])
@@ -385,7 +393,10 @@ func (h *Hash) String() string {
 		} else {
 			b = make([]byte, binary.MaxVarintLen64)
 
-			n := binary.PutUvarint(b, uint64(h.Expiration.Unix()))
+			var n int
+			if !h.Expiration.IsZero() {
+				n = binary.PutUvarint(b, uint64(h.Expiration.Unix()))
+			}
 
 			b = append(b[:n], h.Digest...)
 		}
@@ -487,8 +498,7 @@ func (h *Hash) UnmarshalText(text []byte) error {
 	return nil
 }
 
-// As returns a copy of this hash with the given code as the type of the new
-// hash.
+// As returns a copy of this hash with the given code as the type of the new hash.
 func (h *Hash) As(c Code, id ei.ID) (*Hash, error) {
 	if h.IsNil() {
 		return h, nil
@@ -519,8 +529,7 @@ func (h *Hash) As(c Code, id ei.ID) (*Hash, error) {
 	return &res, nil
 }
 
-// Equal returns true if this hash is equal to the provided hash, false
-// otherwise.
+// Equal returns true if this hash is equal to the provided hash, false otherwise.
 func (h *Hash) Equal(h2 *Hash) bool {
 	if h == h2 {
 		return true
@@ -530,8 +539,7 @@ func (h *Hash) Equal(h2 *Hash) bool {
 	return h.String() == h2.String()
 }
 
-// AssertEqual returns nil if this hash is equal to the provided hash, an error
-// with detailed reason otherwise.
+// AssertEqual returns nil if this hash is equal to the provided hash, an error with detailed reason otherwise.
 func (h *Hash) AssertEqual(h2 *Hash) error {
 	e := errors.Template("hash.assert-equal", errors.K.Invalid, "expected", h, "actual", h2)
 	switch {
@@ -602,10 +610,9 @@ func (h *Hash) Explain() string {
 	return res[:len(res)-1]
 }
 
-///////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// Digest encapsulates a message digest function which produces a specific type
-// of Hash
+// Digest encapsulates a message digest function which produces a specific type of Hash
 type Digest struct {
 	hash.Hash
 	preamble *preamble.Sizer
@@ -663,8 +670,8 @@ func (d *Digest) Write(p []byte) (int, error) {
 	return n, err
 }
 
-// AsHash finalizes the digest calculation using all the bytes that were
-// previously written to this digest object and return the result as a Hash.
+// AsHash finalizes the digest calculation using all the bytes that were previously written to this digest object and
+// return the result as a Hash.
 func (d *Digest) AsHash() *Hash {
 	b := d.Hash.Sum(nil)
 	var h *Hash
@@ -681,7 +688,7 @@ func (d *Digest) AsHash() *Hash {
 	return h
 }
 
-///////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 func CalcHash(reader io.ReadSeeker, size ...int64) (*Hash, error) {
 	digest := NewDigest(sha256.New(), Type{QPart, Unencrypted})
