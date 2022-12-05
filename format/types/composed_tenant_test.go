@@ -19,10 +19,6 @@ func ExampleTQHash_String() {
 	h := hash.MustParse("htq_sSrYCbHxw2ycsSE3k4J9AHgsxBZZ5g1ZYrRDN8ZYZvnQ1wSzPPJTxu3tx2UH7N5wqais1RiceTZ")
 	fmt.Println(types.ToTQHash(h).String())
 
-	h.ID[0] = byte(id.Q)
-	as, err := hash.NewObject(hash.Type{hash.Q, hash.Unencrypted}, h.Digest, h.Size, h.ID)
-	fmt.Println(as.String(), err)
-
 	// Output:
 	//
 	// nil: []

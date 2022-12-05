@@ -136,6 +136,7 @@ var codeToName = map[Code]string{
 	Ed25519:         "ed25519 public key",
 	TQ:              "content with embedded tenant",
 	TLib:            "library with embedded tenant",
+	PublishingJob:   "publishing job",
 }
 
 func init() {
