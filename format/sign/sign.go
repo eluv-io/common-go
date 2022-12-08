@@ -100,6 +100,9 @@ func (sig Sig) prefix() string {
 }
 
 func (sig Sig) Code() SigCode {
+	if len(sig) == 0 {
+		return SUNKNOWN
+	}
 	return SigCode(sig[0])
 }
 
@@ -117,6 +120,9 @@ func (sig Sig) MarshalText() ([]byte, error) {
 }
 
 func (sig Sig) Bytes() []byte {
+	if len(sig) == 0 {
+		return nil
+	}
 	return sig[1:]
 }
 

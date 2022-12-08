@@ -41,6 +41,8 @@ const (
 	FabricNodePublicKey
 	UserPublicKey
 
+	ECDSASecretKey
+	ECDSAPublicKey
 	ED25519SecretKey
 	ED25519PublicKey
 	SR25519SecretKey
@@ -70,10 +72,28 @@ var keyPrefixToCode = map[string]KeyCode{
 	"knod": FabricNodePublicKey, // fabric node public key
 	"kupk": UserPublicKey,       // key user public key
 
-	"ksed": ED25519SecretKey, // regular ED25519
-	"kped": ED25519PublicKey, // regular ED25519
-	"kssc": SR25519SecretKey, // ED25519 with Schnorr signatures
-	"kpsc": SR25519PublicKey, // ED25519 with Schnorr signatures
+	"ksec": ECDSASecretKey,   // secret key for generating ECDSA signatures
+	"kpec": ECDSAPublicKey,   // public key for validating ECDSA signatures
+	"ksed": ED25519SecretKey, // secret key for generating ED25519 signatures
+	"kped": ED25519PublicKey, // public key for validating ED25519 signatures
+	"kssr": SR25519SecretKey, // secret key for generating Schnorr signatures
+	"kpsr": SR25519PublicKey, // public key for validating Schnorr signatures
+
+	// NOTES:
+	//
+	// ECDSA signatures:
+	//  - Elliptic Curve Digital Signature Algorithm with secp256k1 curve
+	//  - https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm
+	//
+	// ED25519 signatures:
+	//  - Edwards-curve Digital Signature Algorithm with SHA256 & curve 25519
+	//  - https://en.wikipedia.org/wiki/EdDSA#Ed25519
+	//  - https://www.rfc-editor.org/rfc/rfc8032
+	//
+	// Schnorr signatures:
+	//  - Similar to ED25519, but shorter signatures. Uses also curve 25519.
+	//  - https://en.wikipedia.org/wiki/Schnorr_signature,
+	//  - https://wiki.polkadot.network/docs/learn-cryptography#keypairs-and-signing
 }
 
 func init() {
@@ -91,6 +111,10 @@ func init() {
 // (String(), JSON) as a short text prefix instead of their encoded varint for
 // increased readability.
 type KID []byte
+
+// Key is an alias for KID. KID is somehow misleading since the bytes are the actual key, not just some identifier of a
+// key...
+type Key = KID
 
 func (id KID) String() string {
 	if len(id) <= codeLen {
