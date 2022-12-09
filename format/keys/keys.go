@@ -36,32 +36,16 @@ const (
 	RekEncKeyBytes              // re-encryption key: key bytes
 	TgtSecretKey                // re-encryption key: secret key
 	TgtPublicKey                // re-encryption key: public key
-	EthPublicKey                // @deprecated use ECDSAPublicKey
+	EthPublicKey                // @deprecated use ES256KPublicKey
 	EthPrivateKey               // @deprecated use ECDSAPrivateKey
-	FabricNodePublicKey         // @deprecated use ECDSAPublicKey
-	UserPublicKey               // @deprecated use ECDSAPublicKey
-	ECDSASecretKey              // secret key for generating ECDSA signatures
-	ECDSAPublicKey              // public key for validating ECDSA signatures
-	ED25519SecretKey            // secret key for generating ED25519 signatures
-	ED25519PublicKey            // public key for validating ED25519 signatures
-	SR25519SecretKey            // secret key for generating Schnorr signatures
-	SR25519PublicKey            // public key for validating Schnorr signatures
-
-	// NOTES:
-	//
-	// ECDSA signatures:
-	//  - Elliptic Curve Digital Signature Algorithm with secp256k1 curve
-	//  - https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm
-	//
-	// ED25519 signatures:
-	//  - Edwards-curve Digital Signature Algorithm with SHA256 & curve 25519
-	//  - https://en.wikipedia.org/wiki/EdDSA#Ed25519
-	//  - https://www.rfc-editor.org/rfc/rfc8032
-	//
-	// Schnorr signatures:
-	//  - Similar to ED25519, but shorter signatures. Uses also curve 25519.
-	//  - https://en.wikipedia.org/wiki/Schnorr_signature,
-	//  - https://wiki.polkadot.network/docs/learn-cryptography#keypairs-and-signing
+	FabricNodePublicKey         // @deprecated use ES256KPublicKey
+	UserPublicKey               // @deprecated use ES256KPublicKey
+	ES256KSecretKey             // secret key for generating Ethereum ECDSA signatures - see sign.ES256K
+	ES256KPublicKey             // public key for validating Ethereum ECDSA signatures - see sign.ES256K
+	ED25519SecretKey            // secret key for generating ED25519 signatures - see sign.ED25519
+	ED25519PublicKey            // public key for validating ED25519 signatures - see sign.ED25519
+	SR25519SecretKey            // secret key for generating Schnorr signatures - see sign.SR25519
+	SR25519PublicKey            // public key for validating Schnorr signatures - see sign.SR25519
 )
 
 const codeLen = 1
@@ -87,8 +71,8 @@ var keyPrefixToCode = map[string]KeyCode{
 	"knod": FabricNodePublicKey,
 	"kupk": UserPublicKey,
 
-	"ksec": ECDSASecretKey,
-	"kpec": ECDSAPublicKey,
+	"ksec": ES256KSecretKey,
+	"kpec": ES256KPublicKey,
 	"ksed": ED25519SecretKey,
 	"kped": ED25519PublicKey,
 	"kssr": SR25519SecretKey,

@@ -31,12 +31,36 @@ func (c SigCode) ToString(b []byte) string {
 
 // lint disable
 const (
-	SUNKNOWN        SigCode = iota
-	ES256K                  // ECDSA Signature with secp256k1 curve and SHA-256 hash function - https://datatracker.ietf.org/doc/rfc8812/
-	EIP191Personal          // Ethereum personal sign - https://eips.ethereum.org/EIPS/eip-191
-	EIP712TypedData         // Ethereum type data signatures - https://eips.ethereum.org/EIPS/eip-712
-	SR25519                 // Schnorr signatures on Ristretto compressed Ed25519 points https://github.com/w3f/schnorrkel
-	ED25519                 // EdDSA on Curve25519 https://en.wikipedia.org/wiki/EdDSA#Ed25519
+	SUNKNOWN SigCode = iota
+
+	// ES256K is a standard Ethereum ECDSA Signature with secp256k1 curve and SHA-256 hash function
+	// See:
+	//  - https://datatracker.ietf.org/doc/rfc8812/
+	ES256K
+
+	// EIP191Personal is an Ethereum "personal sign" signature
+	// See:
+	//  - https://eips.ethereum.org/EIPS/eip-191
+	EIP191Personal
+
+	// EIP712TypedData is an Ethereum "typed data" signature
+	// See:
+	//  - https://eips.ethereum.org/EIPS/eip-712
+	EIP712TypedData
+
+	// SR25519 is a Schnorr signature on Ristretto compressed Ed25519 points. Similar to ED25519, but with shorter
+	// signatures.
+	//  - https://github.com/w3f/schnorrkel
+	//  - https://en.wikipedia.org/wiki/Schnorr_signature,
+	//  - https://wiki.polkadot.network/docs/learn-cryptography#keypairs-and-signing
+	SR25519
+
+	// ED25519 is the Edwards-curve Digital Signature Algorithm (EdDSA) with SHA256 on curve 25519
+	// For details see:
+	//	- https://en.wikipedia.org/wiki/EdDSA#Ed25519
+	//  - https://en.wikipedia.org/wiki/EdDSA#Ed25519
+	//  - https://www.rfc-editor.org/rfc/rfc8032
+	ED25519
 )
 
 const sigCodeLen = 1
