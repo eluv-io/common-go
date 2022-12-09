@@ -68,26 +68,26 @@ func (c Code) IsCompatible(other Code) bool {
 
 // lint disable
 const (
-	UNKNOWN Code = iota
-	Account
-	User
-	QLib
-	Q
-	QStateStore
-	QSpace
-	QFileUpload
-	QFilesJob
-	QNode
-	Network
-	KMS
-	CachedResultSet
-	Tenant
-	Group
-	Key
-	Ed25519
-	TQ
-	TLib
-	PublishingJob
+	UNKNOWN         Code = iota // Unknown ID
+	Account                     // @deprecated
+	User                        // User ID. Usually
+	QLib                        // Content library ID
+	Q                           // Content ID
+	QStateStore                 // @deprecated should not be used anymore
+	QSpace                      // Space ID
+	QFileUpload                 // File upload job ID (V1 API)
+	QFilesJob                   // Files job (V2 API)
+	QNode                       // Node ID
+	Network                     // @deprecated not used anymore
+	KMS                         // ID of a node that acts as KMS
+	CachedResultSet             // @deprecated not used anymore
+	Tenant                      // Tenant ID
+	Group                       // Group ID
+	Key                         // @deprecated use format/keys/Key instead
+	Ed25519                     // @deprecated use format/keys/ED25519PublicKey instead
+	TQ                          // TQ is a content ID with embedded tenant ID. Use types.ToTQID() for decomposing.
+	TLib                        // TLib is a library ID with embedded tenant ID. Use types.ToTLID() for decomposing.
+	PublishingJob               // The ID for content publishing jobs.
 )
 
 const codeLen = 1
@@ -96,8 +96,8 @@ const prefixLen = 4
 var codeToPrefix = map[Code]string{}
 var prefixToCode = map[string]Code{
 	"iukn": UNKNOWN,
-	"iacc": Account, // @deprecated
-	"iusr": User,    // @deprecated
+	"iacc": Account,
+	"iusr": User,
 	"ilib": QLib,
 	"iq__": Q,
 	"iqss": QStateStore,

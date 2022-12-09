@@ -24,60 +24,28 @@ func (c KeyCode) FromString(s string) (KID, error) {
 
 // lint disable
 const (
-	KUNKNOWN KeyCode = iota
-	Primary
-	ReEncryption
-	Delegate
-	TargetReEncryption
-	Decryption
-	SymmetricKey
-	PrimSecretKey
-	PrimPublicKey
-	RekEncKeyBytes
-	TgtSecretKey
-	TgtPublicKey
-	EthPublicKey
-	EthPrivateKey
-	FabricNodePublicKey
-	UserPublicKey
-
-	ECDSASecretKey
-	ECDSAPublicKey
-	ED25519SecretKey
-	ED25519PublicKey
-	SR25519SecretKey
-	SR25519PublicKey
-)
-
-const codeLen = 1
-const prefixLen = 4
-
-var keyCodeToPrefix = map[KeyCode]string{}
-var keyPrefixToCode = map[string]KeyCode{
-	"kunk": KUNKNOWN,
-	"kp__": Primary,            // code of Primary key
-	"kre_": ReEncryption,       // @deprecated
-	"kde_": Delegate,           // @deprecated
-	"ktre": TargetReEncryption, // code of re-encryption key
-	"kdec": Decryption,         // code of decryption key
-	"kpsy": SymmetricKey,       // primary key: symmkey
-	"kpsk": PrimSecretKey,      // primary key: secret key
-	"kppk": PrimPublicKey,      // primary key: public key
-	"kreb": RekEncKeyBytes,     // re-encryption key: key bytes
-	"ktsk": TgtSecretKey,       // re-encryption key: secret key
-	"ktpk": TgtPublicKey,       // re-encryption key: public key
-
-	"kepk": EthPublicKey,        // ethereum public key - may or many not be compressed
-	"kesk": EthPrivateKey,       //
-	"knod": FabricNodePublicKey, // fabric node public key
-	"kupk": UserPublicKey,       // key user public key
-
-	"ksec": ECDSASecretKey,   // secret key for generating ECDSA signatures
-	"kpec": ECDSAPublicKey,   // public key for validating ECDSA signatures
-	"ksed": ED25519SecretKey, // secret key for generating ED25519 signatures
-	"kped": ED25519PublicKey, // public key for validating ED25519 signatures
-	"kssr": SR25519SecretKey, // secret key for generating Schnorr signatures
-	"kpsr": SR25519PublicKey, // public key for validating Schnorr signatures
+	KUNKNOWN            KeyCode = iota
+	Primary                     // code of Primary key
+	ReEncryption                // @deprecated
+	Delegate                    // @deprecated
+	TargetReEncryption          // code of re-encryption key
+	Decryption                  // code of decryption key
+	SymmetricKey                // primary key: symmkey
+	PrimSecretKey               // primary key: secret key
+	PrimPublicKey               // primary key: public key
+	RekEncKeyBytes              // re-encryption key: key bytes
+	TgtSecretKey                // re-encryption key: secret key
+	TgtPublicKey                // re-encryption key: public key
+	EthPublicKey                // @deprecated use ECDSAPublicKey
+	EthPrivateKey               // @deprecated use ECDSAPrivateKey
+	FabricNodePublicKey         // @deprecated use ECDSAPublicKey
+	UserPublicKey               // @deprecated use ECDSAPublicKey
+	ECDSASecretKey              // secret key for generating ECDSA signatures
+	ECDSAPublicKey              // public key for validating ECDSA signatures
+	ED25519SecretKey            // secret key for generating ED25519 signatures
+	ED25519PublicKey            // public key for validating ED25519 signatures
+	SR25519SecretKey            // secret key for generating Schnorr signatures
+	SR25519PublicKey            // public key for validating Schnorr signatures
 
 	// NOTES:
 	//
@@ -94,6 +62,37 @@ var keyPrefixToCode = map[string]KeyCode{
 	//  - Similar to ED25519, but shorter signatures. Uses also curve 25519.
 	//  - https://en.wikipedia.org/wiki/Schnorr_signature,
 	//  - https://wiki.polkadot.network/docs/learn-cryptography#keypairs-and-signing
+)
+
+const codeLen = 1
+const prefixLen = 4
+
+var keyCodeToPrefix = map[KeyCode]string{}
+var keyPrefixToCode = map[string]KeyCode{
+	"kunk": KUNKNOWN,
+	"kp__": Primary,
+	"kre_": ReEncryption,
+	"kde_": Delegate,
+	"ktre": TargetReEncryption,
+	"kdec": Decryption,
+	"kpsy": SymmetricKey,
+	"kpsk": PrimSecretKey,
+	"kppk": PrimPublicKey,
+	"kreb": RekEncKeyBytes,
+	"ktsk": TgtSecretKey,
+	"ktpk": TgtPublicKey,
+
+	"kepk": EthPublicKey,
+	"kesk": EthPrivateKey,
+	"knod": FabricNodePublicKey,
+	"kupk": UserPublicKey,
+
+	"ksec": ECDSASecretKey,
+	"kpec": ECDSAPublicKey,
+	"ksed": ED25519SecretKey,
+	"kped": ED25519PublicKey,
+	"kssr": SR25519SecretKey,
+	"kpsr": SR25519PublicKey,
 }
 
 func init() {
