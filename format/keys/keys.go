@@ -3,9 +3,10 @@ package keys
 import (
 	"bytes"
 
+	"github.com/mr-tron/base58/base58"
+
 	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/log-go"
-	"github.com/mr-tron/base58/base58"
 )
 
 // KeyCode is the type of an ID
@@ -23,22 +24,28 @@ func (c KeyCode) FromString(s string) (KID, error) {
 
 // lint disable
 const (
-	KUNKNOWN KeyCode = iota
-	Primary
-	ReEncryption
-	Delegate
-	TargetReEncryption
-	Decryption
-	SymmetricKey
-	PrimSecretKey
-	PrimPublicKey
-	RekEncKeyBytes
-	TgtSecretKey
-	TgtPublicKey
-	EthPublicKey
-	EthPrivateKey
-	FabricNodePublicKey
-	UserPublicKey
+	KUNKNOWN            KeyCode = iota
+	Primary                     // code of Primary key
+	ReEncryption                // @deprecated
+	Delegate                    // @deprecated
+	TargetReEncryption          // code of re-encryption key
+	Decryption                  // code of decryption key
+	SymmetricKey                // primary key: symmkey
+	PrimSecretKey               // primary key: secret key
+	PrimPublicKey               // primary key: public key
+	RekEncKeyBytes              // re-encryption key: key bytes
+	TgtSecretKey                // re-encryption key: secret key
+	TgtPublicKey                // re-encryption key: public key
+	EthPublicKey                // @deprecated use ES256KPublicKey
+	EthPrivateKey               // @deprecated use ECDSAPrivateKey
+	FabricNodePublicKey         // @deprecated use ES256KPublicKey
+	UserPublicKey               // @deprecated use ES256KPublicKey
+	ES256KSecretKey             // secret key for generating Ethereum ECDSA signatures - see sign.ES256K
+	ES256KPublicKey             // public key for validating Ethereum ECDSA signatures - see sign.ES256K
+	ED25519SecretKey            // secret key for generating ED25519 signatures - see sign.ED25519
+	ED25519PublicKey            // public key for validating ED25519 signatures - see sign.ED25519
+	SR25519SecretKey            // secret key for generating Schnorr signatures - see sign.SR25519
+	SR25519PublicKey            // public key for validating Schnorr signatures - see sign.SR25519
 )
 
 const codeLen = 1
@@ -47,22 +54,29 @@ const prefixLen = 4
 var keyCodeToPrefix = map[KeyCode]string{}
 var keyPrefixToCode = map[string]KeyCode{
 	"kunk": KUNKNOWN,
-	"kp__": Primary,            // code of Primary key
-	"kre_": ReEncryption,       // @deprecated
-	"kde_": Delegate,           // @deprecated
-	"ktre": TargetReEncryption, // code of re-encryption key
-	"kdec": Decryption,         // code of decryption key
-	"kpsy": SymmetricKey,       // primary key: symmkey
-	"kpsk": PrimSecretKey,      // primary key: secret key
-	"kppk": PrimPublicKey,      // primary key: public key
-	"kreb": RekEncKeyBytes,     // re-encryption key: key bytes
-	"ktsk": TgtSecretKey,       // re-encryption key: secret key
-	"ktpk": TgtPublicKey,       // re-encryption key: public key
+	"kp__": Primary,
+	"kre_": ReEncryption,
+	"kde_": Delegate,
+	"ktre": TargetReEncryption,
+	"kdec": Decryption,
+	"kpsy": SymmetricKey,
+	"kpsk": PrimSecretKey,
+	"kppk": PrimPublicKey,
+	"kreb": RekEncKeyBytes,
+	"ktsk": TgtSecretKey,
+	"ktpk": TgtPublicKey,
 
-	"kepk": EthPublicKey,        // ethereum public key - may or many not be compressed
-	"kesk": EthPrivateKey,       //
-	"knod": FabricNodePublicKey, // fabric node public key
-	"kupk": UserPublicKey,       // key user public key
+	"kepk": EthPublicKey,
+	"kesk": EthPrivateKey,
+	"knod": FabricNodePublicKey,
+	"kupk": UserPublicKey,
+
+	"ksec": ES256KSecretKey,
+	"kpec": ES256KPublicKey,
+	"ksed": ED25519SecretKey,
+	"kped": ED25519PublicKey,
+	"kssr": SR25519SecretKey,
+	"kpsr": SR25519PublicKey,
 }
 
 func init() {
@@ -80,6 +94,10 @@ func init() {
 // (String(), JSON) as a short text prefix instead of their encoded varint for
 // increased readability.
 type KID []byte
+
+// Key is an alias for KID. KID is somehow misleading since the bytes are the actual key, not just some identifier of a
+// key...
+type Key = KID
 
 func (id KID) String() string {
 	if len(id) <= codeLen {
@@ -138,6 +156,10 @@ func (id KID) Is(s string) bool {
 		return false
 	}
 	return bytes.Equal(id, sID)
+}
+
+func (id KID) IsValid() bool {
+	return len(id) > codeLen
 }
 
 func NewKID(code KeyCode, codeBytes []byte) KID {

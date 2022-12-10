@@ -31,10 +31,36 @@ func (c SigCode) ToString(b []byte) string {
 
 // lint disable
 const (
-	SUNKNOWN        SigCode = iota
-	ES256K                  // ECDSA Signature with secp256k1 Curve - https://tools.ietf.org/id/draft-jones-webauthn-secp256k1-00.html
-	EIP191Personal          // Ethereum personal sign - https://eips.ethereum.org/EIPS/eip-191
-	EIP712TypedData         // Ethereum type data signatures - https://eips.ethereum.org/EIPS/eip-712
+	SUNKNOWN SigCode = iota
+
+	// ES256K is a standard Ethereum ECDSA Signature with secp256k1 curve and SHA-256 hash function
+	// See:
+	//  - https://datatracker.ietf.org/doc/rfc8812/
+	ES256K
+
+	// EIP191Personal is an Ethereum "personal sign" signature
+	// See:
+	//  - https://eips.ethereum.org/EIPS/eip-191
+	EIP191Personal
+
+	// EIP712TypedData is an Ethereum "typed data" signature
+	// See:
+	//  - https://eips.ethereum.org/EIPS/eip-712
+	EIP712TypedData
+
+	// SR25519 is a Schnorr signature on Ristretto compressed Ed25519 points. Similar to ED25519, but with shorter
+	// signatures.
+	//  - https://github.com/w3f/schnorrkel
+	//  - https://en.wikipedia.org/wiki/Schnorr_signature,
+	//  - https://wiki.polkadot.network/docs/learn-cryptography#keypairs-and-signing
+	SR25519
+
+	// ED25519 is the Edwards-curve Digital Signature Algorithm (EdDSA) with SHA256 on curve 25519
+	// For details see:
+	//	- https://en.wikipedia.org/wiki/EdDSA#Ed25519
+	//  - https://en.wikipedia.org/wiki/EdDSA#Ed25519
+	//  - https://www.rfc-editor.org/rfc/rfc8032
+	ED25519
 )
 
 const sigCodeLen = 1
@@ -46,6 +72,8 @@ var sigPrefixToCode = map[string]SigCode{
 	"ES256K_": ES256K,
 	"EIP191P": EIP191Personal,
 	"EIP712T": EIP712TypedData,
+	"SR25519": SR25519,
+	"ED25519": ED25519,
 }
 
 func init() {
@@ -61,8 +89,8 @@ func init() {
 //
 // Signature prefixes should follow standard values for the 'alg' claim in JWT.
 // see:
-//	* JWA: https://tools.ietf.org/html/rfc7518
-//	* JWT: https://tools.ietf.org/html/rfc7519
+//   - JWA: https://tools.ietf.org/html/rfc7518
+//   - JWT: https://tools.ietf.org/html/rfc7519
 //
 // Sigs follow the multiformat principle and are prefixed with their type
 // (a varint). Unlike other multiformat implementations like multihash, the type
@@ -96,11 +124,18 @@ func (sig Sig) prefix() string {
 }
 
 func (sig Sig) Code() SigCode {
+	if len(sig) == 0 {
+		return SUNKNOWN
+	}
 	return SigCode(sig[0])
 }
 
 func (sig Sig) IsNil() bool {
 	return sig == nil || len(sig) <= sigCodeLen
+}
+
+func (sig Sig) IsValid() bool {
+	return len(sig) > sigCodeLen
 }
 
 // MarshalText implements custom marshaling using the string representation.
@@ -109,6 +144,9 @@ func (sig Sig) MarshalText() ([]byte, error) {
 }
 
 func (sig Sig) Bytes() []byte {
+	if len(sig) == 0 {
+		return nil
+	}
 	return sig[1:]
 }
 
@@ -131,8 +169,8 @@ func (sig Sig) Is(s string) bool {
 }
 
 // SignerAddress returns the address that was used to sign the given bytes, yielding this signature. Returns an error if
-//   * the signature that doesn't allow signer recovery
-//   * or an error during recovery occurs
+//   - the signature that doesn't allow signer recovery
+//   - or an error during recovery occurs
 func (sig *Sig) SignerAddress(signedBytes []byte) (common.Address, error) {
 	return sig.SignerAddressFromHash(crypto.Keccak256(signedBytes))
 }
@@ -195,23 +233,22 @@ func FromString(s string) (Sig, error) {
 // Resources:
 // * https://bitcoin.stackexchange.com/questions/38351/ecdsa-v-r-s-what-is-v
 //
-// * From "The Magic of Digital Signatures on Ethereum"
-//   https://medium.com/mycrypto/the-magic-of-digital-signatures-on-ethereum-98fe184dc9c7
+//   - From "The Magic of Digital Signatures on Ethereum"
+//     https://medium.com/mycrypto/the-magic-of-digital-signatures-on-ethereum-98fe184dc9c7
 //
-//   The recovery identifier (“v”)
+//     The recovery identifier (“v”)
 //
-//   v is the last byte of the signature, and is either 27 (0x1b) or 28 (0x1c). This identifier is important because
-//   since we are working with elliptic curves, multiple points on the curve can be calculated from r and s alone. This
-//   would result in two different public keys (thus addresses) that can be recovered. The v simply indicates which one
-//   of these points to use.
+//     v is the last byte of the signature, and is either 27 (0x1b) or 28 (0x1c). This identifier is important because
+//     since we are working with elliptic curves, multiple points on the curve can be calculated from r and s alone. This
+//     would result in two different public keys (thus addresses) that can be recovered. The v simply indicates which one
+//     of these points to use.
 //
-//   In most implementations, the v is just 0 or 1 internally, but 27 was added as arbitrary number for signing Bitcoin
-//   messages and Ethereum adapted that as well.
+//     In most implementations, the v is just 0 or 1 internally, but 27 was added as arbitrary number for signing Bitcoin
+//     messages and Ethereum adapted that as well.
 //
-//   Since EIP-155, we also use the chain ID to calculate the v value. This prevents replay attacks across different
-//   chains: A transaction signed for Ethereum cannot be used for Ethereum Classic, and vice versa. Currently, this is
-//   only used for signing transaction however, and is not used for signing messages.
-//
+//     Since EIP-155, we also use the chain ID to calculate the v value. This prevents replay attacks across different
+//     chains: A transaction signed for Ethereum cannot be used for Ethereum Classic, and vice versa. Currently, this is
+//     only used for signing transaction however, and is not used for signing messages.
 func EthAdjustBytes(code SigCode, bts []byte) []byte {
 	if len(bts) == 0 {
 		return []byte{}
