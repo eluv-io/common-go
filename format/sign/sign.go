@@ -231,7 +231,8 @@ func FromString(s string) (Sig, error) {
 // curve R, S and V values, where the V value must be 27 or 28 for legacy reasons.
 //
 // Resources:
-// * https://bitcoin.stackexchange.com/questions/38351/ecdsa-v-r-s-what-is-v
+//
+//   - https://bitcoin.stackexchange.com/questions/38351/ecdsa-v-r-s-what-is-v
 //
 //   - From "The Magic of Digital Signatures on Ethereum"
 //     https://medium.com/mycrypto/the-magic-of-digital-signatures-on-ethereum-98fe184dc9c7

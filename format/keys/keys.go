@@ -14,7 +14,7 @@ type KeyCode uint8
 
 // FromString parses the given string and returns the ID. Returns an error
 // if the string is not a ID or an ID of the wrong type.
-func (c KeyCode) FromString(s string) (KID, error) {
+func (c KeyCode) FromString(s string) (Key, error) {
 	id, err := KFromString(s)
 	if err != nil {
 		return nil, err
@@ -88,18 +88,16 @@ func init() {
 	}
 }
 
-// KID is the type representing a Key ID. IDs follow the multiformat principle
-// and are prefixed with their type (a varint). Unlike other multiformat
-// implementations like multihash, the type is serialized to textual form
-// (String(), JSON) as a short text prefix instead of their encoded varint for
-// increased readability.
-type KID []byte
+// Key is the type representing a cryptographic Key. Keys follow the multiformat principle and are prefixed with their
+// type (a varint). Unlike other multiformat implementations like multihash, the type is serialized to textual form
+// (String(), JSON) as a short text prefix instead of their encoded varint for increased readability.
+type Key []byte
 
-// Key is an alias for KID. KID is somehow misleading since the bytes are the actual key, not just some identifier of a
-// key...
-type Key = KID
+// KID is the legacy alias for Key.
+// @deprecated - use Key instead.
+type KID = Key
 
-func (id KID) String() string {
+func (id Key) String() string {
 	if len(id) <= codeLen {
 		return ""
 	}
@@ -107,7 +105,7 @@ func (id KID) String() string {
 }
 
 // AssertCode checks whether the ID's Code equals the provided Code
-func (id KID) AssertCode(c KeyCode) error {
+func (id Key) AssertCode(c KeyCode) error {
 	if len(id) < codeLen || id.Code() != c {
 		return errors.E("ID Code check", errors.K.Invalid,
 			"expected", keyCodeToPrefix[c],
@@ -116,7 +114,7 @@ func (id KID) AssertCode(c KeyCode) error {
 	return nil
 }
 
-func (id KID) prefix() string {
+func (id Key) prefix() string {
 	p, found := keyCodeToPrefix[id.Code()]
 	if !found {
 		return keyCodeToPrefix[KUNKNOWN]
@@ -124,16 +122,16 @@ func (id KID) prefix() string {
 	return p
 }
 
-func (id KID) Code() KeyCode {
+func (id Key) Code() KeyCode {
 	return KeyCode(id[0])
 }
 
 // MarshalText implements custom marshaling using the string representation.
-func (id KID) MarshalText() ([]byte, error) {
+func (id Key) MarshalText() ([]byte, error) {
 	return []byte(id.String()), nil
 }
 
-func (id KID) Bytes() []byte {
+func (id Key) Bytes() []byte {
 	if len(id) < 1 {
 		return nil
 	}
@@ -141,16 +139,16 @@ func (id KID) Bytes() []byte {
 }
 
 // UnmarshalText implements custom unmarshaling from the string representation.
-func (id *KID) UnmarshalText(text []byte) error {
+func (id *Key) UnmarshalText(text []byte) error {
 	parsed, err := KFromString(string(text))
 	if err != nil {
-		return errors.E("unmarshal KID", errors.K.Invalid, err)
+		return errors.E("unmarshal Key", errors.K.Invalid, err)
 	}
 	*id = parsed
 	return nil
 }
 
-func (id KID) Is(s string) bool {
+func (id Key) Is(s string) bool {
 	sID, err := KFromString(s)
 	if err != nil {
 		return false
@@ -158,32 +156,39 @@ func (id KID) Is(s string) bool {
 	return bytes.Equal(id, sID)
 }
 
-func (id KID) IsValid() bool {
+func (id Key) IsValid() bool {
 	return len(id) > codeLen
 }
 
-func NewKID(code KeyCode, codeBytes []byte) KID {
-	return KID(append([]byte{byte(code)}, codeBytes...))
+// New creates a new Key from the given code and key material.
+func New(code KeyCode, key []byte) Key {
+	return Key(append([]byte{byte(code)}, key...))
 }
 
-// KFromString parses an KID from the given string representation.
-func KFromString(s string) (KID, error) {
+// NewKID creates a new key - retained for backwards compatibility.
+// @deprecated - use New()
+func NewKID(code KeyCode, key []byte) Key {
+	return New(code, key)
+}
+
+// KFromString parses a Key from the given string representation.
+func KFromString(s string) (Key, error) {
 	if len(s) == 0 {
 		return nil, nil
 	}
 	if len(s) <= prefixLen {
-		return nil, errors.E("parse KID", errors.K.Invalid).With("string", s)
+		return nil, errors.E("parse Key", errors.K.Invalid).With("string", s)
 	}
 
 	code, found := keyPrefixToCode[s[:prefixLen]]
 	if !found {
-		return nil, errors.E("parse KID", errors.K.Invalid, "reason", "unknown prefix", "string", s)
+		return nil, errors.E("parse Key", errors.K.Invalid, "reason", "unknown prefix", "string", s)
 	}
 
 	dec, err := base58.Decode(s[prefixLen:])
 	if err != nil {
-		return nil, errors.E("parse KID", errors.K.Invalid, err, "string", s)
+		return nil, errors.E("parse Key", errors.K.Invalid, err, "string", s)
 	}
 	b := []byte{byte(code)}
-	return KID(append(b, dec...)), nil
+	return Key(append(b, dec...)), nil
 }
