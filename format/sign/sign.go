@@ -12,12 +12,20 @@ import (
 	"github.com/eluv-io/log-go"
 )
 
-// SigCode is the type of an Sig
-type SigCode uint8
+// Code is the type of a Sig
+type Code uint8
+
+// SigCode is the legacy alias of Code
+// @deprecated use Code instead
+type SigCode = Code
+
+func (c Code) String() string {
+	return codeToPrefix[c]
+}
 
 // FromString parses the given string and returns the Sig. Returns an error
 // if the string is not a Sig or an Sig of the wrong type.
-func (c SigCode) FromString(s string) (Sig, error) {
+func (c Code) FromString(s string) (Sig, error) {
 	sig, err := FromString(s)
 	if err != nil {
 		return nil, err
@@ -25,13 +33,31 @@ func (c SigCode) FromString(s string) (Sig, error) {
 	return sig, sig.AssertCode(c)
 }
 
-func (c SigCode) ToString(b []byte) string {
+func (c Code) ToString(b []byte) string {
 	return NewSig(c, b).String()
+}
+
+// SigLen returns the expected length of a signature for the given code. Returns -1 if unknown or not constant.
+func (c Code) SigLen() int {
+	switch c {
+	case ES256K:
+		return 64
+	case EIP191Personal:
+		return 64
+	case EIP712TypedData:
+		return 64
+	case SR25519:
+		return 32
+	case ED25519:
+		return 63
+	default:
+		return -1
+	}
 }
 
 // lint disable
 const (
-	SUNKNOWN SigCode = iota
+	UNKNOWN Code = iota
 
 	// ES256K is a standard Ethereum ECDSA Signature with secp256k1 curve and SHA-256 hash function
 	// See:
@@ -58,17 +84,20 @@ const (
 	// ED25519 is the Edwards-curve Digital Signature Algorithm (EdDSA) with SHA256 on curve 25519
 	// For details see:
 	//	- https://en.wikipedia.org/wiki/EdDSA#Ed25519
-	//  - https://en.wikipedia.org/wiki/EdDSA#Ed25519
 	//  - https://www.rfc-editor.org/rfc/rfc8032
 	ED25519
+
+	// SUNKNOWN is the legacy alias for UNKNOWN
+	// @deprecated use UNKNOWN instead
+	SUNKNOWN = UNKNOWN
 )
 
-const sigCodeLen = 1
-const sigPrefixLen = 7
+const codeLen = 1
+const prefixLen = 7
 
-var sigCodeToPrefix = map[SigCode]string{}
-var sigPrefixToCode = map[string]SigCode{
-	"sunk___": SUNKNOWN,
+var codeToPrefix = map[Code]string{}
+var prefixToCode = map[string]Code{
+	"sunk___": UNKNOWN,
 	"ES256K_": ES256K,
 	"EIP191P": EIP191Personal,
 	"EIP712T": EIP712TypedData,
@@ -77,11 +106,11 @@ var sigPrefixToCode = map[string]SigCode{
 }
 
 func init() {
-	for prefix, code := range sigPrefixToCode {
-		if len(prefix) != sigPrefixLen {
+	for prefix, code := range prefixToCode {
+		if len(prefix) != prefixLen {
 			log.Fatal("invalid Signature prefix definition", "prefix", prefix)
 		}
-		sigCodeToPrefix[code] = prefix
+		codeToPrefix[code] = prefix
 	}
 }
 
@@ -99,43 +128,43 @@ func init() {
 type Sig []byte
 
 func (sig Sig) String() string {
-	if len(sig) <= sigCodeLen {
+	if len(sig) <= codeLen {
 		return ""
 	}
-	return sig.prefix() + base58.Encode(sig[sigCodeLen:])
+	return sig.prefix() + base58.Encode(sig[codeLen:])
 }
 
-// AssertCode checks whether the Sig's SigCode equals the provided SigCode
-func (sig Sig) AssertCode(c SigCode) error {
+// AssertCode checks whether the Sig's Code equals the provided Code
+func (sig Sig) AssertCode(c Code) error {
 	if sig.Code() != c {
-		return errors.E("SIG SigCode check", errors.K.Invalid,
-			"expected", sigCodeToPrefix[c],
+		return errors.E("SIG Code check", errors.K.Invalid,
+			"expected", codeToPrefix[c],
 			"actual", sig.prefix())
 	}
 	return nil
 }
 
 func (sig Sig) prefix() string {
-	p, found := sigCodeToPrefix[sig.Code()]
+	p, found := codeToPrefix[sig.Code()]
 	if !found {
-		return sigCodeToPrefix[SUNKNOWN]
+		return codeToPrefix[UNKNOWN]
 	}
 	return p
 }
 
-func (sig Sig) Code() SigCode {
+func (sig Sig) Code() Code {
 	if len(sig) == 0 {
-		return SUNKNOWN
+		return UNKNOWN
 	}
-	return SigCode(sig[0])
+	return Code(sig[0])
 }
 
 func (sig Sig) IsNil() bool {
-	return sig == nil || len(sig) <= sigCodeLen
+	return sig == nil || len(sig) <= codeLen
 }
 
 func (sig Sig) IsValid() bool {
-	return len(sig) > sigCodeLen
+	return len(sig) > codeLen
 }
 
 // MarshalText implements custom marshaling using the string representation.
@@ -204,22 +233,22 @@ func (sig *Sig) EthAdjustBytes() []byte {
 	return EthAdjustBytes(sig.Code(), sig.Bytes())
 }
 
-func NewSig(code SigCode, codeBytes []byte) Sig {
+func NewSig(code Code, codeBytes []byte) Sig {
 	return Sig(append([]byte{byte(code)}, EthAdjustBytes(code, codeBytes)...))
 }
 
 // FromString parses an Sig from the given string representation.
 func FromString(s string) (Sig, error) {
-	if len(s) <= sigPrefixLen {
+	if len(s) <= prefixLen {
 		return nil, errors.E("parse Sig", errors.K.Invalid).With("string", s)
 	}
 
-	code, found := sigPrefixToCode[s[:sigPrefixLen]]
+	code, found := prefixToCode[s[:prefixLen]]
 	if !found {
 		return nil, errors.E("parse Sig", errors.K.Invalid, "reason", "unknown prefix", "string", s)
 	}
 
-	dec, err := base58.Decode(s[sigPrefixLen:])
+	dec, err := base58.Decode(s[prefixLen:])
 	if err != nil {
 		return nil, errors.E("parse Sig", errors.K.Invalid, err, "string", s)
 	}
@@ -250,7 +279,7 @@ func FromString(s string) (Sig, error) {
 //     Since EIP-155, we also use the chain ID to calculate the v value. This prevents replay attacks across different
 //     chains: A transaction signed for Ethereum cannot be used for Ethereum Classic, and vice versa. Currently, this is
 //     only used for signing transaction however, and is not used for signing messages.
-func EthAdjustBytes(code SigCode, bts []byte) []byte {
+func EthAdjustBytes(code Code, bts []byte) []byte {
 	if len(bts) == 0 {
 		return []byte{}
 	}
