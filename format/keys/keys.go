@@ -73,7 +73,7 @@ const (
 	FabricNodePublicKey      // @deprecated use ES256KPublicKey
 	UserPublicKey            // @deprecated use ES256KPublicKey
 	ES256KSecretKey          // secret key for generating Ethereum ECDSA signatures - see sign.ES256K
-	ES256KPublicKey          // public key for validating Ethereum ECDSA signatures - see sign.ES256K
+	ES256KPublicKey          // compressed public key for validating Ethereum ECDSA signatures - see sign.ES256K.
 	ED25519SecretKey         // secret key for generating ED25519 signatures - see sign.ED25519
 	ED25519PublicKey         // public key for validating ED25519 signatures - see sign.ED25519
 	SR25519SecretKey         // secret key for generating Schnorr signatures - see sign.SR25519

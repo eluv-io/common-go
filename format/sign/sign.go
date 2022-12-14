@@ -47,9 +47,15 @@ func (c Code) SigLen() int {
 	case EIP712TypedData:
 		return 64
 	case SR25519:
-		return 32
+		// see github.com/!chain!safe/go-schnorrkel@v1.0.0/sign.go:11
+		// 	// SignatureSize is the length in bytes of a signature
+		//	const SignatureSize = 64
+		return 64
 	case ED25519:
-		return 63
+		// see sgo@1.18/1.18.6/libexec/src/crypto/ed25519/ed25519.go:32
+		// 	// SignatureSize is the size, in bytes, of signatures generated and verified by this package.
+		//	SignatureSize = 64
+		return 64
 	default:
 		return -1
 	}
@@ -74,8 +80,15 @@ const (
 	//  - https://eips.ethereum.org/EIPS/eip-712
 	EIP712TypedData
 
-	// SR25519 is a Schnorr signature on Ristretto compressed Ed25519 points. Similar to ED25519, but with shorter
-	// signatures.
+	// SR25519 is a Schnorr signature on Ristretto compressed Ed25519 points.
+	//
+	// Schnorr signatures bring some noticeable features over the ECDSA/EdDSA schemes:
+	//  - better for hierarchical deterministic key derivations.
+	//  - allow for native multi-signature through signature aggregation
+	//  - generally more resistant to misuse.
+	// From https://doc.deepernetwork.org/v3/advanced/cryptography/#sr25519
+	//
+	// See also:
 	//  - https://github.com/w3f/schnorrkel
 	//  - https://en.wikipedia.org/wiki/Schnorr_signature,
 	//  - https://wiki.polkadot.network/docs/learn-cryptography#keypairs-and-signing
