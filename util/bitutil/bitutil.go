@@ -64,3 +64,40 @@ func ShiftR(src []byte, bits uint8) []byte {
 	ShiftRight(dst, src, bits)
 	return dst
 }
+
+// DecodeString decodes the given binary string to the represented bytes.
+// Expects a string of 0s and 1s, with length divisible by 8, with or without the "0b" prefix.
+func DecodeString(s string) ([]byte, error) {
+	if strings.HasPrefix(s, "0b") {
+		s = s[2:]
+	}
+
+	if len(s) % 8 != 0 {
+		return nil, errors.E("decode bit string", errors.K.Invalid,
+			"reason", "binary string length not divisible by 8",
+			"string", s)
+	}
+
+	b := make([]byte, 0, len(s) / 8)
+	for i := 0; i < len(s); i += 8 {
+		n, err := strconv.ParseUint(s[i:i+8], 2, 8)
+		if err != nil {
+			return nil, errors.E("decode bit string", errors.K.Invalid, err,
+				"string", s)
+		}
+		b = append(b, byte(n))
+	}
+
+	return b, nil
+}
+
+// EncodeToString encodes the given bytes into a binary string.
+// Does not add the "0b" prefix.
+func EncodeToString(b []byte) string {
+	s := ""
+	for _, n := range b {
+		x := strconv.FormatInt(int64(n), 2)
+		s += strings.Repeat("0", 8-len(x)) + x
+	}
+	return s
+}
