@@ -1,6 +1,11 @@
 package bitutil
 
-import "github.com/eluv-io/errors-go"
+import (
+	"strconv"
+	"strings"
+
+	"github.com/eluv-io/errors-go"
+)
 
 // axor (array xor) calculates the xor across two byte slices.
 // Returns an error if the slices are of different lengths.
@@ -72,13 +77,13 @@ func DecodeString(s string) ([]byte, error) {
 		s = s[2:]
 	}
 
-	if len(s) % 8 != 0 {
+	if len(s)%8 != 0 {
 		return nil, errors.E("decode bit string", errors.K.Invalid,
 			"reason", "binary string length not divisible by 8",
 			"string", s)
 	}
 
-	b := make([]byte, 0, len(s) / 8)
+	b := make([]byte, 0, len(s)/8)
 	for i := 0; i < len(s); i += 8 {
 		n, err := strconv.ParseUint(s[i:i+8], 2, 8)
 		if err != nil {
