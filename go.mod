@@ -1,6 +1,6 @@
 module github.com/eluv-io/common-go
 
-go 1.17
+go 1.18
 
 require (
 	github.com/PaesslerAG/gval v1.1.2
@@ -13,6 +13,7 @@ require (
 	github.com/eluv-io/log-go v1.0.1
 	github.com/eluv-io/utc-go v1.0.0
 	github.com/ethereum/go-ethereum v1.10.19
+	github.com/fxamacker/cbor/v2 v2.4.0
 	github.com/gammazero/deque v0.1.0
 	github.com/ghodss/yaml v1.0.0
 	github.com/gin-gonic/gin v1.7.7
@@ -59,6 +60,7 @@ require (
 	github.com/rjeczalik/notify v0.9.1 // indirect
 	github.com/smartystreets/assertions v1.2.0 // indirect
 	github.com/whyrusleeping/cbor v0.0.0-20171005072247-63513f603b11 // indirect
+	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/crypto v0.0.0-20211108221036-ceb1ce70b4fa // indirect
 	golang.org/x/sys v0.0.0-20211019181941-9d821ace8654 // indirect
 	golang.org/x/text v0.3.7 // indirect
@@ -67,3 +69,5 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )
+
+replace github.com/fxamacker/cbor/v2 => github.com/eluv-io/cbor/v2 v2.3.1-0.20221212130551-34f9d430617a

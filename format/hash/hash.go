@@ -11,13 +11,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/eluv-io/errors-go"
-	"github.com/eluv-io/log-go"
-	"github.com/eluv-io/utc-go"
+	"github.com/fxamacker/cbor/v2"
 	"github.com/mr-tron/base58/base58"
 
 	ei "github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/preamble"
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/log-go"
+	"github.com/eluv-io/utc-go"
 )
 
 // Code is the code of a hash
@@ -146,11 +147,14 @@ func init() {
 
 // Hash is the output of a cryptographic hash function and associated metadata, identifying a particular instance of an
 // immutable resource.
-//     Q format : type (1 byte) | digest (var bytes) | size (var bytes) | id (var bytes)
-//     QPart format : type (1 byte) | digest (var bytes) | size (var bytes) | preamble_size (var bytes, optional)
-//     QPartLive format : type (1 byte) | expiration (var bytes) | digest (var bytes)
-//     QPartLiveTransient format: type (1 byte) | expiration (var bytes) | digest (var bytes)
-//     (Deprecated) QPartLive format : type (1 byte) | digest (24-25 bytes)
+//
+// Formats:
+//
+//	Q:                  type (1 byte) | digest (var bytes) | size (var bytes) | id (var bytes)
+//	QPart:              type (1 byte) | digest (var bytes) | size (var bytes) | preamble_size (var bytes, optional)
+//	QPartLive:          type (1 byte) | expiration (var bytes) | digest (var bytes)
+//	QPartLiveTransient: type (1 byte) | expiration (var bytes) | digest (var bytes)
+//	(Old) QPartLive:    type (1 byte) | digest (24-25 bytes)
 type Hash struct {
 	Type         Type
 	Digest       []byte
@@ -292,7 +296,8 @@ func FromString(s string) (*Hash, error) {
 		n += m
 
 		// Parse size
-		sz, m := binary.Uvarint(b[n:])
+		var sz uint64
+		sz, m = binary.Uvarint(b[n:])
 		if m <= 0 {
 			return nil, errors.E("parse hash", errors.K.Invalid, "reason", "invalid size", "string", s)
 		}
@@ -423,6 +428,28 @@ func (h *Hash) prefix() string {
 		return typeToPrefix[Type{UNKNOWN, Unencrypted}]
 	}
 	return p
+}
+
+func (h *Hash) MarshalCBOR() ([]byte, error) {
+	return cbor.Marshal(h.String())
+}
+
+func (h *Hash) UnmarshalCBOR(b []byte) error {
+	var s string
+	err := cbor.Unmarshal(b, &s)
+	if err != nil {
+		return errors.E("unmarshal hash", err, errors.K.Invalid)
+	}
+	parsed, err := FromString(s)
+	if err != nil {
+		return errors.E("unmarshal hash", err, errors.K.Invalid)
+	}
+	if parsed == nil {
+		// empty string parses to nil hash... best we can do is ignore it...
+		return nil
+	}
+	*h = *parsed
+	return nil
 }
 
 // MarshalText converts this hash to text.

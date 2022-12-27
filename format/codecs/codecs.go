@@ -8,8 +8,7 @@ import (
 	"io"
 	"reflect"
 
-	"github.com/eluv-io/errors-go"
-	"github.com/eluv-io/utc-go"
+	"github.com/fxamacker/cbor/v2"
 	mc "github.com/multiformats/go-multicodec"
 	"github.com/multiformats/go-multicodec/base"
 	cd "github.com/ugorji/go/codec"
@@ -17,7 +16,9 @@ import (
 	"github.com/eluv-io/common-go/format/hash"
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/link"
-	// cbor "github.com/whyrusleeping/cbor/go"
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/log-go"
+	"github.com/eluv-io/utc-go"
 )
 
 type codecFactory interface {
@@ -198,23 +199,29 @@ func (c *cborFactory) makeDecoder(r io.Reader, path []byte) mc.Decoder {
 	return &wrappedDecoder{r: r, decoder: cd.NewDecoder(r, c), path: path}
 }
 
-// Start value for custom CBOR tags. 40-60 is currently unassigned, and they are
-// encoded in a single byte.
-// See https://www.iana.org/assignments/cbor-tags/cbor-tags.xhtml
-const CBORCustomTagsStart = 40
-
 // NewCborCodec creates a new streaming multicodec using the
 // CBOR format.
 func NewCborCodec() mc.Multicodec {
+	return NewMuxCodec(
+		&codec{cborV2FactoryInstance, []byte("/cborV2")},
+		&codec{cborFactoryInstance, []byte("/cbor")},
+	)
+}
+
+func NewCborCodecV1() mc.Multicodec {
 	return &codec{cborFactoryInstance, []byte("/cbor")}
 }
 
-func NewCborEncoder(w io.Writer) *cd.Encoder {
-	return cd.NewEncoder(w, cborFactoryInstance)
+// CborEncode encodes the given value as CBOR and writes it to the writer without multicodec support (i.e. no multicodec
+// header is written).
+func CborEncode(w io.Writer, v interface{}) error {
+	return cborV2FactoryInstance.encMode.NewEncoder(w).Encode(v)
 }
 
-func NewCborDecoder(r io.Reader) *cd.Decoder {
-	return cd.NewDecoder(r, cborFactoryInstance)
+// CborDecode decodes cbor-encoded data from the provided reader into the given data structure. The data is not expected
+// to have a multicodec header.
+func CborDecode(r io.Reader, v interface{}) error {
+	return cborV2FactoryInstance.decMode.NewDecoder(r).Decode(v)
 }
 
 var cborFactoryInstance = func() *cborFactory {
@@ -222,8 +229,8 @@ var cborFactoryInstance = func() *cborFactory {
 	f.MapType = reflect.TypeOf(map[string]interface{}(nil))
 	f.Canonical = true
 
-	for idx, con := range cborConverters {
-		err := f.SetInterfaceExt(con.t, uint64(CBORCustomTagsStart+idx), con.c)
+	for _, con := range cborConverters {
+		err := f.SetInterfaceExt(con.typ, con.tag, con.converter)
 		if err != nil {
 			panic(errors.E("create cbor factory", err))
 		}
@@ -232,15 +239,83 @@ var cborFactoryInstance = func() *cborFactory {
 }()
 
 type cborConverter struct {
-	t reflect.Type
-	c cd.InterfaceExt
+	tag       uint64
+	typ       reflect.Type
+	converter cd.InterfaceExt
 }
 
-// NOTE: do not remove or re-order the converters, since their position
-//       determines the CBOR tag ID! Only append to the end!
+// NOTE: do not change the CBOR tag ID of existing converters!
 var cborConverters = []cborConverter{
-	{reflect.TypeOf((*id.ID)(nil)), &IDConverter{}},
-	{reflect.TypeOf((*hash.Hash)(nil)), &HashConverter{}},
-	{reflect.TypeOf((*link.Link)(nil)), &LinkConverter{}},
-	{reflect.TypeOf((*utc.UTC)(nil)), &UTCConverter{}},
+	// Custom CBOR tags 40-60 are currently unassigned, and they are
+	// encoded in a single byte.
+	// See https://www.iana.org/assignments/cbor-tags/cbor-tags.xhtml
+	{40, reflect.TypeOf((*id.ID)(nil)), &IDConverter{}},
+	{41, reflect.TypeOf((*hash.Hash)(nil)), &HashConverter{}},
+	{42, reflect.TypeOf((*link.Link)(nil)), &LinkConverter{}},
+	{43, reflect.TypeOf((*utc.UTC)(nil)), &UTCConverter{}},
 }
+
+///////////////////////////////////////////////////////////////////////////////
+
+type cborV2Factory struct {
+	encMode cbor.EncMode
+	decMode cbor.DecMode
+}
+
+func (c *cborV2Factory) makeEncoder(w io.Writer, path []byte) mc.Encoder {
+	return &wrappedEncoder{w: w, encoder: c.encMode.NewEncoder(w), path: path}
+}
+
+func (c *cborV2Factory) makeDecoder(r io.Reader, path []byte) mc.Decoder {
+	return &wrappedDecoder{r: r, decoder: c.decMode.NewDecoder(r), path: path}
+}
+
+var cborV2FactoryInstance = func() *cborV2Factory {
+	var err error
+	tagSet := cbor.NewTagSet()
+	options := cbor.TagOptions{
+		DecTag: cbor.DecTagOptional, // allows en/decoding registered types to/from CBOR NULL
+		EncTag: cbor.EncTagRequired,
+	}
+
+	tags := []struct {
+		tag uint64
+		typ reflect.Type
+	}{
+		{40, reflect.TypeOf((*id.ID)(nil))},
+		{41, reflect.TypeOf((*hash.Hash)(nil))},
+		{42, reflect.TypeOf((*link.Link)(nil))},
+		{43, reflect.TypeOf((*utc.UTC)(nil))},
+	}
+
+	for _, tag := range tags {
+		err = tagSet.Add(options, tag.typ, tag.tag)
+		if err != nil {
+			log.Fatal("invalid cbor tag", err, "tag", tag)
+		}
+	}
+
+	encOptions := cbor.CoreDetEncOptions()
+	encOptions.HandleTagForMarshaler = true
+	enc, err := encOptions.EncModeWithTags(tagSet)
+	if err != nil {
+		log.Fatal("failed to create cbor encoder mode", err)
+	}
+
+	dec, err := cbor.DecOptions{
+		DefaultMapType:          reflect.TypeOf((map[string]interface{})(nil)),
+		HandleTagForUnmarshaler: true,
+	}.DecModeWithTags(tagSet)
+	if err != nil {
+		log.Fatal("failed to create cbor decoder mode", err)
+	}
+
+	f := &cborV2Factory{
+		encMode: enc,
+		decMode: dec,
+	}
+	return f
+}()
+
+var CborEncoder = cborV2FactoryInstance.encMode
+var CborDecoder = cborV2FactoryInstance.decMode

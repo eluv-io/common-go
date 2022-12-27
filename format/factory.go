@@ -62,7 +62,7 @@ type Factory interface {
 	// ParseQWriteToken parses the string as content write token
 	ParseQWriteToken(s string) (QWriteToken, error)
 
-	// GeneratePWriteToken creates a content write token
+	// GenerateQWriteToken creates a content write token
 	GenerateQWriteToken(qid QID, nid QNodeID) (QWriteToken, error)
 	// GenerateQPWriteToken creates a content part write token
 	GenerateQPWriteToken(scheme encryption.Scheme, flags byte) (QPWriteToken, error)
@@ -88,7 +88,7 @@ type Factory interface {
 	// ParseFilesJobID parses the given string as an upload job ID
 	ParseFilesJobID(s string) (FilesJobID, error)
 
-	// Returns the codec for serializing metadata
+	// NewMetadataCodec returns the codec for serializing metadata
 	NewMetadataCodec() mc.Multicodec
 }
 
@@ -247,7 +247,7 @@ func (f *factory) ParseQPHash(s string) (QPHash, error) {
 	}
 }
 
-// ParseQP:Hash parses the given string as live content part hash
+// ParseQPLHash parses the given string as live content part hash
 func (f *factory) ParseQPLHash(s string) (QPHash, error) {
 	h, err := hash.FromString(s)
 	if err != nil {
@@ -270,7 +270,7 @@ func (f *factory) ParseQType(s string) (QType, error) {
 	return hash.Q.FromString(s)
 }
 
-// Returns the codec for serializing metadata
+// NewMetadataCodec returns the codec for serializing metadata
 func (f *factory) NewMetadataCodec() mc.Multicodec {
 	return codecs.NewCborCodec()
 }

@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eluv-io/utc-go"
 	"github.com/stretchr/testify/require"
+
+	"github.com/eluv-io/utc-go"
 
 	"github.com/eluv-io/common-go/format"
 	"github.com/eluv-io/common-go/format/codecs"
@@ -73,7 +74,7 @@ func newLink(t *testing.T, linkString string) *link.Link {
 func runTests(t *testing.T, val interface{}) {
 	{ // simple
 		res := encodeDecode(val, t)
-		require.EqualValues(t, val, res, "expected %s actual %s", val, res)
+		require.Equal(t, val, res, "expected %s actual %s", val, res)
 	}
 
 	{ // wrapped
@@ -89,7 +90,8 @@ func encodeDecode(val interface{}, t *testing.T) interface{} {
 	err := codec.Encoder(buf).Encode(val)
 	require.NoError(t, err)
 
-	fmt.Println(hex.EncodeToString(buf.Bytes()[7:]))
+	bts := buf.Bytes()
+	fmt.Println(fmt.Sprintf("%T", val), hex.EncodeToString(bts[bytes.IndexByte(bts, '\n')+1:]))
 
 	var res interface{}
 	err = codec.Decoder(buf).Decode(&res)
