@@ -11,7 +11,7 @@ const SigTypes enumSigType = 0
 type TokenSigType struct {
 	Prefix string
 	Name   string
-	Code   sign.SigCode
+	Code   sign.Code
 }
 
 func (s *TokenSigType) String() string {
@@ -38,8 +38,8 @@ func (s *TokenSigType) Validate() error {
 }
 
 var allSignatures = []*TokenSigType{
-	{"_", "unknown", sign.SUNKNOWN},
-	{"u", "unsigned", sign.SUNKNOWN},
+	{"_", "unknown", sign.UNKNOWN},
+	{"u", "unsigned", sign.UNKNOWN},
 	{"s", "ES256K", sign.ES256K},
 	{"p", "EIP191Personal", sign.EIP191Personal}, // https://eips.ethereum.org/EIPS/eip-191
 	// {"t", "EIP712TypedData", sign.EIP712TypedData}, // https://eips.ethereum.org/EIPS/eip-712

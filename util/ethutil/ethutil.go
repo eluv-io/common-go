@@ -8,11 +8,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/eluv-io/errors-go"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+
+	"github.com/eluv-io/errors-go"
 
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/keys"
@@ -229,7 +230,7 @@ func ToUserPublicKey(privateKey *ecdsa.PrivateKey) (keys.KID, types.UserID) {
 }
 
 func ToPublicKeyAndID(privateKey *ecdsa.PrivateKey, c id.Code) (keys.KID, id.ID) {
-	var keyCode = keys.KUNKNOWN
+	var keyCode = keys.UNKNOWN
 	switch c {
 	case id.QNode:
 		keyCode = keys.FabricNodePublicKey
