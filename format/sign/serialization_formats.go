@@ -7,69 +7,60 @@ import (
 // SerializationFormats defines the available serialization formats for signed messages
 const SerializationFormats enumSerializationFormat = 0
 
-type SerializationFormat = *serializationFormat
+type SerializationFormat string
 
-type serializationFormat struct {
-	Prefix string
-	Name   string
+//goland:noinspection GoMixedReceiverTypes
+func (f SerializationFormat) Validate() error {
+	e := errors.Template("validate serialization format",
+		"format", f,
+		errors.K.Invalid)
+	if f == "" {
+		return e("reason", "format is empty")
+	}
+	if f.Unknown() {
+		return e("reason", "format is unknown")
+	}
+	return nil
 }
 
-func (f *serializationFormat) String() string {
-	return f.Name
-}
-
-func (f *serializationFormat) MarshalText() ([]byte, error) {
-	return []byte(f.String()), nil
-}
-
-func (f *serializationFormat) UnmarshalText(data []byte) error {
+//goland:noinspection GoMixedReceiverTypes
+func (f *SerializationFormat) UnmarshalText(data []byte) error {
 	s := string(data)
 	for _, sf := range allSerializationFormats {
-		if sf.Name == s || sf.Prefix == s {
-			*f = *sf
+		if string(sf) == s {
+			*f = sf
 			return nil
 		}
 	}
-	*f = *SerializationFormats.Unknown()
-	return nil
+	*f = SerializationFormats.Unknown()
+	// PENDING(GIL): not sure what's best
+	return nil //errors.NoTrace("invalid format", errors.K.Invalid, "format", s)
 }
 
-func (f *serializationFormat) Validate() error {
-	e := errors.Template("validate serialization format", errors.K.Invalid)
-	if f == nil {
-		return e("reason", "format is nil")
+//goland:noinspection GoMixedReceiverTypes
+func (f SerializationFormat) Unknown() bool {
+	for i := 1; i < len(allSerializationFormats); i++ {
+		if f == allSerializationFormats[i] {
+			return false
+		}
 	}
-	if *f == *SerializationFormats.Unknown() {
-		return e("format", f.Name)
-	}
-	return nil
+	return true
 }
 
-func (f *serializationFormat) Unknown() bool {
-	if f == nil {
-		return true
-	}
-	return *f == *SerializationFormats.Unknown()
+//goland:noinspection GoMixedReceiverTypes
+func (f SerializationFormat) Scale() bool {
+	return f == SerializationFormats.Scale()
 }
 
-func (f *serializationFormat) Scale() bool {
-	if f == nil {
-		return false
-	}
-	return *f == *SerializationFormats.Scale()
+//goland:noinspection GoMixedReceiverTypes
+func (f SerializationFormat) EthKeccak() bool {
+	return f == SerializationFormats.EthKeccak()
 }
 
-func (f *serializationFormat) EthKeccak() bool {
-	if f == nil {
-		return false
-	}
-	return *f == *SerializationFormats.EthKeccak()
-}
-
-var allSerializationFormats = []*serializationFormat{
-	{"uk", "unknown"},    // 0
-	{"sc", "scale"},      // 1
-	{"ek", "eth_keccak"}, // 2
+var allSerializationFormats = []SerializationFormat{
+	"unknown",    // 0
+	"scale",      // 1
+	"eth_keccak", // 2
 }
 
 type enumSerializationFormat int
@@ -77,16 +68,3 @@ type enumSerializationFormat int
 func (enumSerializationFormat) Unknown() SerializationFormat   { return allSerializationFormats[0] }
 func (enumSerializationFormat) Scale() SerializationFormat     { return allSerializationFormats[1] } // SCALE encoding
 func (enumSerializationFormat) EthKeccak() SerializationFormat { return allSerializationFormats[2] } // Ethereum Keccak
-
-var prefixToSerializationFormat = map[string]*serializationFormat{}
-
-func init() {
-	for _, f := range allSerializationFormats {
-		prefixToSerializationFormat[f.Prefix] = f
-		if len(f.Prefix) != 2 {
-			panic(errors.E("invalid format prefix definition",
-				"format", f.Name,
-				"prefix", f.Prefix))
-		}
-	}
-}

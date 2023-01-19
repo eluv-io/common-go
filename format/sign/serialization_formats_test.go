@@ -14,22 +14,26 @@ func TestSerializationFormat_MarshalText(t *testing.T) {
 	}
 
 	type testCase struct {
-		a      string
-		wantSF SerializationFormat
+		a       string
+		wantSF  SerializationFormat
+		wantErr bool
 	}
 
 	for i, tc := range []*testCase{
 		{a: `{"name": "a", "sf": "scale"}`, wantSF: SerializationFormats.Scale()},
-		{a: `{"name": "b", "sf": "sc"}`, wantSF: SerializationFormats.Scale()},
+		{a: `{"name": "c", "sf": "sc"}`, wantSF: SerializationFormats.Unknown()},
 		{a: `{"name": "c", "sf": "bla"}`, wantSF: SerializationFormats.Unknown()},
-		{a: `{"name": "d", "sf": "ek"}`, wantSF: SerializationFormats.EthKeccak()},
 		{a: `{"name": "e", "sf": "eth_keccak"}`, wantSF: SerializationFormats.EthKeccak()},
+		{a: `{"name": "e", "sf": "unknown"}`, wantSF: SerializationFormats.Unknown()},
 	} {
 		a := &A{}
 		err := json.Unmarshal([]byte(tc.a), a)
+		if tc.wantErr {
+			require.Error(t, err, "case %d: %s", i, tc.a)
+			continue
+		}
 		require.NoError(t, err, "case %d: %s", i, tc.a)
-		require.True(t, *tc.wantSF == *a.SF)
-		require.False(t, tc.wantSF == a.SF) // pointers !
+		require.True(t, tc.wantSF == a.SF)
 		switch tc.wantSF {
 		case SerializationFormats.Unknown():
 			require.True(t, a.SF.Unknown())
