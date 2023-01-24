@@ -9,9 +9,11 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/fxamacker/cbor/v2"
+	"github.com/mr-tron/base58/base58"
+
 	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/log-go"
-	"github.com/mr-tron/base58/base58"
 
 	"github.com/eluv-io/common-go/format/encryption"
 	"github.com/eluv-io/common-go/format/id"
@@ -40,6 +42,7 @@ func NewObject(code Code, qid id.ID, nid id.ID, bytes ...byte) (*Token, error) {
 		}
 		res.NID = nid
 	}
+	_ = res.String() // initialize string cache to simplify unit tests
 	return res, nil
 }
 
@@ -65,6 +68,7 @@ func NewPart(code Code, scheme encryption.Scheme, flags byte, bytes ...byte) (*T
 		}
 		res.Flags = flags
 	}
+	_ = res.String() // initialize string cache to simplify unit tests
 	return res, nil
 }
 
@@ -84,6 +88,7 @@ func NewLRO(code Code, nid id.ID, bytes ...byte) (*Token, error) {
 		return nil, e("reason", "invalid nid", "nid", nid)
 	}
 	res.NID = nid
+	_ = res.String() // initialize string cache to simplify unit tests
 	return res, nil
 }
 
@@ -296,6 +301,28 @@ func (t *Token) prefix() string {
 	return p
 }
 
+func (t *Token) MarshalCBOR() ([]byte, error) {
+	return cbor.Marshal(t.String())
+}
+
+func (t *Token) UnmarshalCBOR(b []byte) error {
+	var s string
+	err := cbor.Unmarshal(b, &s)
+	if err != nil {
+		return errors.E("unmarshal hash", err, errors.K.Invalid)
+	}
+	parsed, err := FromString(s)
+	if err != nil {
+		return errors.E("unmarshal hash", err, errors.K.Invalid)
+	}
+	if parsed == nil {
+		// empty string parses to nil token... best we can do is ignore it...
+		return nil
+	}
+	*t = *parsed
+	return nil
+}
+
 // MarshalText implements custom marshaling using the string representation.
 func (t *Token) MarshalText() ([]byte, error) {
 	return []byte(t.String()), nil
@@ -332,6 +359,10 @@ func (t *Token) Equal(o *Token) bool {
 
 // Describe returns a textual description of this token.
 func (t *Token) Describe() string {
+	if t == nil {
+		return "nil"
+	}
+
 	sb := strings.Builder{}
 
 	add := func(s string) {
@@ -356,6 +387,9 @@ func (t *Token) Describe() string {
 
 func (t *Token) Validate() (err error) {
 	e := errors.Template("validate token", errors.K.Invalid)
+	if t == nil {
+		return e("reason", "token is nil")
+	}
 	if t.Code == QWrite {
 		err = t.QID.AssertCode(id.Q)
 	}
@@ -444,7 +478,7 @@ func Parse(s string) (*Token, error) {
 		// prefix + base58(uvarint(len(QID) | QID |
 		//                 uvarint(len(NID) | NID |
 		//                 uvarint(len(RAND_BYTES) | RAND_BYTES)
-		res := &Token{Code: code, s: s}
+		res := &Token{Code: code}
 		r := bytes.NewReader(dec)
 
 		res.QID, err = decodeBytes(r)
@@ -467,6 +501,9 @@ func Parse(s string) (*Token, error) {
 			return nil, e(err)
 		}
 
+		// fill string cache here instead of using s in struct initializer to consistently generate a tqw__ instead of
+		// tq__ (as long as the qwPrefix hack is in use)
+		_ = res.String()
 		return res, nil
 	case QPartWrite:
 		// prefix + base58(byte(SCHEME) | byte(FLAGS) |

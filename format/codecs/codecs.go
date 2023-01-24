@@ -1,242 +1,115 @@
 package codecs
 
 import (
-	"bytes"
-	"encoding/base64"
 	"encoding/gob"
-	"fmt"
+	"encoding/json"
 	"io"
 	"reflect"
 
 	"github.com/fxamacker/cbor/v2"
-	mc "github.com/multiformats/go-multicodec"
-	"github.com/multiformats/go-multicodec/base"
 	cd "github.com/ugorji/go/codec"
 
 	"github.com/eluv-io/common-go/format/hash"
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/link"
+	"github.com/eluv-io/common-go/format/token"
 	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/log-go"
 	"github.com/eluv-io/utc-go"
 )
 
-type codecFactory interface {
-	makeEncoder(w io.Writer, path []byte) mc.Encoder
-	makeDecoder(r io.Reader, path []byte) mc.Decoder
+var (
+	GobCodec    = makeGobCodec()
+	JsonCodec   = makeJsonCodec()
+	CborV1Codec = makeCborV1Codec()
+	CborV2Codec = makeCborV2Codec()
+
+	GobMultiCodecPath    = "/gob"
+	JsonMultiCodecPath   = "/json"
+	CborV1MultiCodecPath = "/cbor"
+	CborV2MultiCodecPath = "/cborV2"
+
+	GobMultiCodec    = NewMultiCodec(GobCodec, GobMultiCodecPath)
+	JsonMultiCodec   = NewMultiCodec(JsonCodec, JsonMultiCodecPath)
+	CborV1MultiCodec = NewMultiCodec(CborV1Codec, CborV1MultiCodecPath)
+	CborV2MultiCodec = NewMultiCodec(CborV2Codec, CborV2MultiCodecPath)
+	CborMuxCodec     = NewMuxCodec(CborV2MultiCodec, CborV1MultiCodec.DisableVersions())
+)
+
+// NewGobCodec creates a new streaming MultiCodec using the encoding/gob format.
+func NewGobCodec() MultiCodec {
+	return GobMultiCodec
 }
 
-///////////////////////////////////////////////////////////////////////////////
-
-var _ mc.Multicodec = (*codec)(nil) // ensure codec implements Multicodec!
-
-type codec struct {
-	codecFactory
-	path []byte
+// NewJsonCodec creates a new streaming MultiCodec using the encoding/json format.
+func NewJsonCodec() MultiCodec {
+	return JsonMultiCodec
 }
 
-func (c *codec) Encoder(w io.Writer) mc.Encoder {
-	return c.makeEncoder(w, c.path)
+// NewCborCodec creates a new streaming MultiCodec using the CBOR format.
+func NewCborCodec() MultiCodec {
+	return CborMuxCodec
 }
 
-func (c *codec) Decoder(r io.Reader) mc.Decoder {
-	return c.makeDecoder(r, c.path)
+// MdsImexCodec returns the codec for metadata store exports / imports.
+func MdsImexCodec() MultiCodec {
+	return GobMultiCodec
 }
 
-func (c *codec) Header() []byte {
-	return mc.Header(c.path)
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
-type decoder struct {
-	r          io.Reader
-	path       []byte
-	headerRead bool
-}
-
-func (d *decoder) Decode(v interface{}) error {
-	out, ok := v.([]byte)
-	if !ok {
-		// return base.ErrExpectedByteSlice
-		return fmt.Errorf("expected []byte as input, but received %T", v)
-	}
-
-	if !d.headerRead {
-		header, err := mc.ReadHeader(d.r)
-		if err != nil {
-			return err
-		}
-		if !bytes.Equal(header[1:len(header)-1], d.path) {
-			return mc.ErrHeaderInvalid
-		}
-		d.headerRead = true
-	}
-
-	_, err := d.r.Read(out)
-
-	return err
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
-type encoder struct {
-	w             io.WriteCloser
-	path          []byte
-	headerWritten bool
-}
-
-func (e *encoder) Encode(v interface{}) error {
-	slice, ok := v.([]byte)
-	if !ok {
-		return base.ErrExpectedByteSlice
-	}
-	if !e.headerWritten {
-		err := mc.WriteHeader(e.w, e.path)
-		if err != nil {
-			return err
-		}
-		e.headerWritten = true
-	}
-	_, err := e.w.Write(slice)
-	if err != nil {
-		return err
-	}
-	return e.w.Close()
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
-type wrappedEncoder struct {
-	w             io.Writer
-	encoder       mc.Encoder
-	path          []byte
-	headerWritten bool
-}
-
-func (e *wrappedEncoder) Encode(v interface{}) error {
-	if !e.headerWritten {
-		err := mc.WriteHeader(e.w, e.path)
-		if err != nil {
-			return err
-		}
-		e.headerWritten = true
-	}
-	return e.encoder.Encode(v)
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
-type wrappedDecoder struct {
-	r          io.Reader
-	decoder    mc.Decoder
-	path       []byte
-	headerRead bool
-}
-
-func (d *wrappedDecoder) Decode(v interface{}) error {
-	if !d.headerRead {
-		header, err := mc.ReadHeader(d.r)
-		if err != nil {
-			return err
-		}
-		if !bytes.Equal(header[1:len(header)-1], d.path) {
-			return mc.ErrHeaderInvalid
-		}
-		d.headerRead = true
-	}
-
-	return d.decoder.Decode(v)
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
-// PENDING(LUK): doesn't currently work. Encoder must write separator (e.g. \n)
-// after base64 encoding of the value, so that decoder knows how far to read...
-type base64Factory struct{}
-
-func (c *base64Factory) makeEncoder(w io.Writer, path []byte) mc.Encoder {
-	return &encoder{w: base64.NewEncoder(base64.StdEncoding, w), path: path}
-}
-
-func (c *base64Factory) makeDecoder(r io.Reader, path []byte) mc.Decoder {
-	return &decoder{r: base64.NewDecoder(base64.StdEncoding, r), path: path}
-}
-
-// NewBase64Codec creates a new base 64 codec.
-func NewBase64Codec() mc.Multicodec {
-	return &codec{codecFactory: &base64Factory{}, path: []byte("/base64")}
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
-type gobFactory struct{}
-
-func (c *gobFactory) makeEncoder(w io.Writer, path []byte) mc.Encoder {
-	return &wrappedEncoder{w: w, encoder: gob.NewEncoder(w), path: path}
-}
-
-func (c *gobFactory) makeDecoder(r io.Reader, path []byte) mc.Decoder {
-	return &wrappedDecoder{r: r, decoder: gob.NewDecoder(r), path: path}
-}
-
-// NewGobCodec creates a new streaming multicodec using the encoding/gob format.
-func NewGobCodec() mc.Multicodec {
-	return &codec{&gobFactory{}, []byte("/gob")}
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
-type cborFactory struct {
-	cd.CborHandle
-}
-
-func (c *cborFactory) makeEncoder(w io.Writer, path []byte) mc.Encoder {
-	return &wrappedEncoder{w: w, encoder: cd.NewEncoder(w, c), path: path}
-}
-
-func (c *cborFactory) makeDecoder(r io.Reader, path []byte) mc.Decoder {
-	return &wrappedDecoder{r: r, decoder: cd.NewDecoder(r, c), path: path}
-}
-
-// NewCborCodec creates a new streaming multicodec using the
-// CBOR format.
-func NewCborCodec() mc.Multicodec {
-	return NewMuxCodec(
-		&codec{cborV2FactoryInstance, []byte("/cborV2")},
-		&codec{cborFactoryInstance, []byte("/cbor")},
-	)
-}
-
-func NewCborCodecV1() mc.Multicodec {
-	return &codec{cborFactoryInstance, []byte("/cbor")}
-}
-
-// CborEncode encodes the given value as CBOR and writes it to the writer without multicodec support (i.e. no multicodec
+// CborEncode encodes the given value as CBOR and writes it to the writer without MultiCodec support (i.e. no MultiCodec
 // header is written).
 func CborEncode(w io.Writer, v interface{}) error {
-	return cborV2FactoryInstance.encMode.NewEncoder(w).Encode(v)
+	return CborV2Codec.Encoder(w).Encode(v)
 }
 
 // CborDecode decodes cbor-encoded data from the provided reader into the given data structure. The data is not expected
-// to have a multicodec header.
+// to have a MultiCodec header.
 func CborDecode(r io.Reader, v interface{}) error {
-	return cborV2FactoryInstance.decMode.NewDecoder(r).Decode(v)
+	return CborV2Codec.Decoder(r).Decode(v)
 }
 
-var cborFactoryInstance = func() *cborFactory {
-	f := &cborFactory{}
-	f.MapType = reflect.TypeOf(map[string]interface{}(nil))
-	f.Canonical = true
+func makeGobCodec() Codec {
+	return NewCodec(
+		func(w io.Writer) Encoder {
+			return gob.NewEncoder(w)
+		},
+		func(r io.Reader) Decoder {
+			return gob.NewDecoder(r)
+		},
+	)
+}
+
+func makeJsonCodec() Codec {
+	return NewCodec(
+		func(w io.Writer) Encoder {
+			return json.NewEncoder(w)
+		},
+		func(r io.Reader) Decoder {
+			return json.NewDecoder(r)
+		},
+	)
+}
+
+func makeCborV1Codec() Codec {
+	handle := &cd.CborHandle{}
+	handle.MapType = reflect.TypeOf(map[string]interface{}(nil))
+	handle.Canonical = true
 
 	for _, con := range cborConverters {
-		err := f.SetInterfaceExt(con.typ, con.tag, con.converter)
+		err := handle.SetInterfaceExt(con.typ, con.tag, con.converter)
 		if err != nil {
 			panic(errors.E("create cbor factory", err))
 		}
 	}
-	return f
-}()
+	return NewCodec(
+		func(w io.Writer) Encoder {
+			return cd.NewEncoder(w, handle)
+		},
+		func(r io.Reader) Decoder {
+			return cd.NewDecoder(r, handle)
+		},
+	)
+}
 
 type cborConverter struct {
 	tag       uint64
@@ -244,6 +117,8 @@ type cborConverter struct {
 	converter cd.InterfaceExt
 }
 
+// cborConverters is the list of converters used for the CborV1Codec
+//
 // NOTE: do not change the CBOR tag ID of existing converters!
 var cborConverters = []cborConverter{
 	// Custom CBOR tags 40-60 are currently unassigned, and they are
@@ -255,22 +130,9 @@ var cborConverters = []cborConverter{
 	{43, reflect.TypeOf((*utc.UTC)(nil)), &UTCConverter{}},
 }
 
-///////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////
 
-type cborV2Factory struct {
-	encMode cbor.EncMode
-	decMode cbor.DecMode
-}
-
-func (c *cborV2Factory) makeEncoder(w io.Writer, path []byte) mc.Encoder {
-	return &wrappedEncoder{w: w, encoder: c.encMode.NewEncoder(w), path: path}
-}
-
-func (c *cborV2Factory) makeDecoder(r io.Reader, path []byte) mc.Decoder {
-	return &wrappedDecoder{r: r, decoder: c.decMode.NewDecoder(r), path: path}
-}
-
-var cborV2FactoryInstance = func() *cborV2Factory {
+func makeCborV2Codec() Codec {
 	var err error
 	tagSet := cbor.NewTagSet()
 	options := cbor.TagOptions{
@@ -281,11 +143,12 @@ var cborV2FactoryInstance = func() *cborV2Factory {
 	tags := []struct {
 		tag uint64
 		typ reflect.Type
-	}{
+	}{ // do not change existing tag IDs!
 		{40, reflect.TypeOf((*id.ID)(nil))},
 		{41, reflect.TypeOf((*hash.Hash)(nil))},
 		{42, reflect.TypeOf((*link.Link)(nil))},
 		{43, reflect.TypeOf((*utc.UTC)(nil))},
+		{44, reflect.TypeOf((*token.Token)(nil))},
 	}
 
 	for _, tag := range tags {
@@ -310,12 +173,10 @@ var cborV2FactoryInstance = func() *cborV2Factory {
 		log.Fatal("failed to create cbor decoder mode", err)
 	}
 
-	f := &cborV2Factory{
-		encMode: enc,
-		decMode: dec,
-	}
-	return f
-}()
-
-var CborEncoder = cborV2FactoryInstance.encMode
-var CborDecoder = cborV2FactoryInstance.decMode
+	return NewCodec(
+		func(w io.Writer) Encoder {
+			return enc.NewEncoder(w)
+		}, func(r io.Reader) Decoder {
+			return dec.NewDecoder(r)
+		})
+}

@@ -5,8 +5,6 @@ import (
 
 	"github.com/eluv-io/errors-go"
 
-	mc "github.com/multiformats/go-multicodec"
-
 	"github.com/eluv-io/common-go/format/codecs"
 	"github.com/eluv-io/common-go/format/encryption"
 	"github.com/eluv-io/common-go/format/hash"
@@ -89,7 +87,7 @@ type Factory interface {
 	ParseFilesJobID(s string) (FilesJobID, error)
 
 	// NewMetadataCodec returns the codec for serializing metadata
-	NewMetadataCodec() mc.Multicodec
+	NewMetadataCodec() codecs.MultiCodec
 }
 
 // NewFactory creates a new format factory.
@@ -271,7 +269,7 @@ func (f *factory) ParseQType(s string) (QType, error) {
 }
 
 // NewMetadataCodec returns the codec for serializing metadata
-func (f *factory) NewMetadataCodec() mc.Multicodec {
+func (f *factory) NewMetadataCodec() codecs.MultiCodec {
 	return codecs.NewCborCodec()
 }
 

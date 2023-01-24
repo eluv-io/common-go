@@ -8,7 +8,7 @@ import (
 	"github.com/eluv-io/common-go/format/encryption"
 	"github.com/eluv-io/common-go/format/hash"
 	"github.com/eluv-io/common-go/format/structured"
-	"github.com/eluv-io/common-go/util/httputil"
+	"github.com/eluv-io/common-go/util/httputil/byterange"
 	"github.com/eluv-io/errors-go"
 )
 
@@ -347,7 +347,7 @@ func (l *Link) parseByteRange(s string) (string, error) {
 	idx := strings.LastIndex(s, "#")
 	if idx != -1 {
 		bRange := s[idx+1:]
-		l.Off, l.Len, err = httputil.ParseByteRange(bRange)
+		l.Off, l.Len, err = byterange.Parse(bRange)
 		if err != nil {
 			// '#' is legal anywhere in the
 			for _, r := range bRange {

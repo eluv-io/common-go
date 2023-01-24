@@ -57,7 +57,7 @@ var snapshots = []snapshot{
 		data: dataV1,
 	},
 	{
-		// 2023-01-12: no type changes, new test links
+		// 2023-01-12: no type changes, added links to test data
 		dir:  "testdata/unmarshal_regression_test/v1_2",
 		data: dataV2,
 	},
