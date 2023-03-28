@@ -3,6 +3,7 @@ package id
 import (
 	"encoding/binary"
 	"encoding/hex"
+	"fmt"
 	"strings"
 
 	"github.com/eluv-io/common-go/util/byteutil"
@@ -35,16 +36,18 @@ func Compose(code Code, primary []byte, embed []byte) Composed {
 		}
 	}
 
-	if len(primary) == 0 {
-		// return a composed that has only the embedded ID set - important when creating composed IDs where for example
-		// the qid is nil, but the tenant id needs to be "transported" with the composed ID.
-		return Composed{
-			full:     nil,
-			primary:  nil,
-			embedded: NewID(codeEmbedded, embed),
-			strCache: "",
+	/*
+		if len(primary) == 0 {
+			// return a composed that has only the embedded ID set - important when creating composed IDs where for example
+			// the qid is nil, but the tenant id needs to be "transported" with the composed ID.
+			return Composed{
+				full:     nil,
+				primary:  nil,
+				embedded: NewID(codeEmbedded, embed),
+				strCache: "",
+			}
 		}
-	}
+	*/
 
 	embedSize := len(embed)
 	viSize := byteutil.LenUvarInt(uint64(embedSize))
@@ -83,7 +86,8 @@ func Decompose(id ID) Composed {
 
 	// size of the embedded ID
 	sz, m := binary.Uvarint(bts)
-	if m <= 0 || len(bts) < m+1 {
+	if m <= 0 || len(bts) < m+int(sz) {
+		res.embedded = []byte{byte(codeEmbedded)}
 		return res
 	}
 	bts = bts[m:]
@@ -161,6 +165,14 @@ func (c Composed) IsValid() bool {
 	return c.full.IsValid() && c.embedded.IsValid()
 }
 
+func (c Composed) IsZero() bool {
+	return c.primary.IsNil() && c.embedded.IsNil()
+}
+
+func (c Composed) Equal(other Composed) bool {
+	return c.strCache == other.strCache
+}
+
 // MarshalText implements custom marshaling using the string representation.
 func (c Composed) MarshalText() ([]byte, error) {
 	return []byte(c.String()), nil
@@ -190,6 +202,7 @@ func (c Composed) Explain() (res string) {
 		sb.WriteString(codeToName[id.Code()])
 		sb.WriteString(" 0x")
 		sb.WriteString(hex.EncodeToString(id.Bytes()))
+		sb.WriteString(fmt.Sprintf(" (%d bytes)", len(id.Bytes())))
 	}
 
 	explain(c.full)

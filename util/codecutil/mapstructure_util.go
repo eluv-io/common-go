@@ -2,6 +2,7 @@ package codecutil
 
 import (
 	"encoding"
+	"encoding/base64"
 	"reflect"
 
 	"github.com/mitchellh/mapstructure"
@@ -11,8 +12,11 @@ type MapUnmarshaler interface {
 	UnmarshalMap(m map[string]interface{}) error
 }
 
-var mapUnmarshaler = reflect.TypeOf((*MapUnmarshaler)(nil)).Elem()
-var textUnmarshaler = reflect.TypeOf((*encoding.TextUnmarshaler)(nil)).Elem()
+var (
+	mapUnmarshaler  = reflect.TypeOf((*MapUnmarshaler)(nil)).Elem()
+	textUnmarshaler = reflect.TypeOf((*encoding.TextUnmarshaler)(nil)).Elem()
+	byteSliceType   = reflect.TypeOf([]byte(nil))
+)
 
 // MapDecode decodes a parsed, generic source structure that was e.g.
 // produced by unmarshaling JSON
@@ -78,6 +82,9 @@ func decodeHook(f reflect.Type, t reflect.Type, data interface{}) (interface{}, 
 				return nil, err[0].Interface().(error)
 			}
 			return instance.Interface(), nil
+		} else if t == byteSliceType {
+			// byte arrays are marshaled to byte64 encoded string in JSON by default...
+			return base64.StdEncoding.DecodeString(dt)
 		}
 	}
 	return data, nil

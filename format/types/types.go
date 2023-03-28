@@ -34,6 +34,9 @@ type UploadJobID = id.ID
 // FilesJobID is the type of files jobs IDs
 type FilesJobID = id.ID
 
+// PublishingJobID is the ID type of content publishing jobs.
+type PublishingJobID = id.ID
+
 // QNodeID is the type of content node IDs
 type QNodeID = id.ID
 

@@ -9,6 +9,7 @@ import (
 	"github.com/mr-tron/base58/base58"
 	uuid "github.com/satori/go.uuid"
 
+	"github.com/eluv-io/common-go/util/byteutil"
 	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/log-go"
 )
@@ -67,25 +68,26 @@ func (c Code) IsCompatible(other Code) bool {
 
 // lint disable
 const (
-	UNKNOWN Code = iota
-	Account
-	User
-	QLib
-	Q
-	QStateStore
-	QSpace
-	QFileUpload
-	QFilesJob
-	QNode
-	Network
-	KMS
-	CachedResultSet
-	Tenant
-	Group
-	Key
-	Ed25519
-	TQ
-	TLib
+	UNKNOWN         Code = iota // Unknown ID
+	Account                     // @deprecated
+	User                        // User ID. Usually
+	QLib                        // Content library ID
+	Q                           // Content ID
+	QStateStore                 // @deprecated should not be used anymore
+	QSpace                      // Space ID
+	QFileUpload                 // File upload job ID (V1 API)
+	QFilesJob                   // Files job (V2 API)
+	QNode                       // Node ID
+	Network                     // @deprecated not used anymore
+	KMS                         // ID of a node that acts as KMS
+	CachedResultSet             // @deprecated not used anymore
+	Tenant                      // Tenant ID
+	Group                       // Group ID
+	Key                         // @deprecated use format/keys/Key instead
+	Ed25519                     // @deprecated use format/keys/ED25519PublicKey instead
+	TQ                          // TQ is a content ID with embedded tenant ID. Use types.ToTQID() for decomposing.
+	TLib                        // TLib is a library ID with embedded tenant ID. Use types.ToTLID() for decomposing.
+	PublishingJob               // The ID for content publishing jobs.
 )
 
 const codeLen = 1
@@ -94,8 +96,8 @@ const prefixLen = 4
 var codeToPrefix = map[Code]string{}
 var prefixToCode = map[string]Code{
 	"iukn": UNKNOWN,
-	"iacc": Account, // @deprecated
-	"iusr": User,    // @deprecated
+	"iacc": Account,
+	"iusr": User,
 	"ilib": QLib,
 	"iq__": Q,
 	"iqss": QStateStore,
@@ -112,6 +114,7 @@ var prefixToCode = map[string]Code{
 	"ied2": Ed25519, // 32 byte ed25519 public key
 	"itq_": TQ,
 	"itl_": TLib,
+	"ipub": PublishingJob,
 }
 var codeToName = map[Code]string{
 	UNKNOWN:         "unknown",
@@ -133,6 +136,7 @@ var codeToName = map[Code]string{
 	Ed25519:         "ed25519 public key",
 	TQ:              "content with embedded tenant",
 	TLib:            "library with embedded tenant",
+	PublishingJob:   "publishing job",
 }
 
 func init() {
@@ -275,7 +279,14 @@ func (id ID) IsContent() bool {
 
 // Generate creates a random ID for the given ID type.
 func Generate(code Code) ID {
-	return ID(append([]byte{byte(code)}, uuid.NewV4().Bytes()...))
+	return ID(append([]byte{byte(code)}, uuid.NewV4().Bytes()[:10]...))
+}
+
+// GenerateLen creates a random ID for the given ID type with the given len (plus the code byte).
+func GenerateLen(code Code, len int) ID {
+	bts := byteutil.RandomBytes(len + 1)
+	bts[0] = byte(code)
+	return bts
 }
 
 func NewID(code Code, codeBytes []byte) ID {

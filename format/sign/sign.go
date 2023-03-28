@@ -247,10 +247,10 @@ func (sig *Sig) EthAdjustBytes() []byte {
 }
 
 func NewSig(code Code, codeBytes []byte) Sig {
-	return Sig(append([]byte{byte(code)}, EthAdjustBytes(code, codeBytes)...))
+	return append([]byte{byte(code)}, EthAdjustBytes(code, codeBytes)...)
 }
 
-// FromString parses an Sig from the given string representation.
+// FromString parses a Sig from the given string representation.
 func FromString(s string) (Sig, error) {
 	if len(s) <= prefixLen {
 		return nil, errors.E("parse Sig", errors.K.Invalid).With("string", s)
@@ -266,7 +266,7 @@ func FromString(s string) (Sig, error) {
 		return nil, errors.E("parse Sig", errors.K.Invalid, err, "string", s)
 	}
 	b := []byte{byte(code)}
-	return Sig(append(b, dec...)), nil
+	return append(b, dec...), nil
 }
 
 // EthAdjustBytes adjusts ECDSA Signatures to be compatible with ETH tools. The signature must conform to the secp256k1
