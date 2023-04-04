@@ -5,11 +5,15 @@ import (
 	"reflect"
 	"sort"
 
+	"golang.org/x/exp/constraints"
+
 	"github.com/eluv-io/common-go/util/stringutil"
 )
 
 // SortedStringKeys returns a slice with the sorted keys of the given
 // map[string]*. Returns an empty slice if m is not a map.
+//
+// Deprecated: use SortedKeys as it supports generic maps now
 func SortedStringKeys(m interface{}) []string {
 	mv := reflect.ValueOf(m)
 	if mv.Kind() != reflect.Map {
@@ -28,18 +32,23 @@ func SortedStringKeys(m interface{}) []string {
 }
 
 // SortedKeys returns a slice with the sorted keys of the given map.
-func SortedKeys(m map[string]interface{}) []string {
-	keys := make([]string, len(m))
+func SortedKeys[K constraints.Ordered, V any](m map[K]V) []K {
+	keys := make([]K, len(m))
 	i := 0
 	for key, _ := range m {
 		keys[i] = key
 		i++
 	}
-	sort.Strings(keys)
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i] < keys[j] {
+			return true
+		}
+		return false
+	})
 	return keys
 }
 
-// From creates a map[string]interface{} and adds all name value pairs to it.
+// From creates a map[string]interface{} and adds all name/value pairs to it.
 // The arguments of the function are expected to be pairs of (string, interface{})
 // parameters, e.g. maputil.From("op", "add", "val1", 4, "val2", 32)
 func From(nameValuePairs ...interface{}) map[string]interface{} {
@@ -47,7 +56,7 @@ func From(nameValuePairs ...interface{}) map[string]interface{} {
 }
 
 // FromJsonStruct creates a generic map from a struct with JSON tags. The
-// purpose of this is to invoke the json.Marshaler hooks, albiet inefficiently.
+// purpose of this is to invoke the json.Marshaler hooks, albeit inefficiently.
 //
 // Note that mapstructure's Decoder can also do this conversion, but does not
 // convert the children (or children of children, and so on).
@@ -75,8 +84,11 @@ func Add(m map[string]interface{}, nameValuePairs ...interface{}) map[string]int
 }
 
 // Copy creates a shallow copy of the given map.
-func Copy(m map[string]interface{}) map[string]interface{} {
-	cp := make(map[string]interface{}, len(m))
+func Copy[K comparable, V any](m map[K]V) map[K]V {
+	if m == nil {
+		return nil
+	}
+	cp := make(map[K]V, len(m))
 	for k, v := range m {
 		cp[k] = v
 	}
@@ -85,6 +97,8 @@ func Copy(m map[string]interface{}) map[string]interface{} {
 
 // CopyMSI (MSI = Map String Interface) creates a shallow copy of the given map,
 // assumed to have string keys. Returns an empty map if m is not a map.
+//
+// Deprecated: use Copy as it supports generic maps now
 func CopyMSI(m interface{}) map[string]interface{} {
 	mv := reflect.ValueOf(m)
 	if mv.Kind() != reflect.Map {
@@ -98,4 +112,11 @@ func CopyMSI(m interface{}) map[string]interface{} {
 		ret[stringutil.ToString(kv.Interface())] = i.Interface()
 	}
 	return ret
+}
+
+// Clear clears the given map
+func Clear[K comparable, V any](m map[K]V) {
+	for k, _ := range m {
+		delete(m, k)
+	}
 }
