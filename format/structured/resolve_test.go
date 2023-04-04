@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/eluv-io/errors-go"
 	"github.com/stretchr/testify/require"
+
+	"github.com/eluv-io/errors-go"
 
 	"github.com/eluv-io/common-go/util/maputil"
 )
@@ -428,6 +429,15 @@ func TestResolveTransform(t *testing.T) {
 			},
 			want: "val2",
 		},
+		{
+			name: "map with custom string-like keys",
+			path: "/key2",
+			source: CustomMap{
+				"key1": "val1",
+				"key2": "val2",
+			},
+			want: "val2",
+		},
 	}
 	for _, tt := range tests {
 		name := tt.name
@@ -484,3 +494,6 @@ type nestedAnonymousSquashedStruct struct {
 type testStructWithPointers struct {
 	*ResRestStructWithTags `json:"nested"`
 }
+
+type CustomKey string
+type CustomMap map[CustomKey]interface{}
