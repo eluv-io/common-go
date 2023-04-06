@@ -27,6 +27,9 @@ func NewOrderedSetFn[T any](compare func(e1, e2 T) int, elements ...T) *OrderedS
 
 // An OrderedSet is a collection that a) is ordered and b) has no duplicate entries. It should be used with a small
 // number of elements only, since it is implemented as a simple slice.
+//
+// Use one of the constructor functions NewOrderedSet or NewOrderedSetFn to create an instance in order to ensure proper
+// initialization.
 type OrderedSet[T any] struct {
 	set     []T
 	compare func(e1, e2 T) int
@@ -39,7 +42,7 @@ func (s *OrderedSet[T]) Clone() *OrderedSet[T] {
 	return &res
 }
 
-// String  returns a string representation of this set in the standard go slice format.
+// String returns a string representation of this set in the standard go slice format.
 func (s *OrderedSet[T]) String() string {
 	return fmt.Sprint(s.set)
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/eluv-io/common-go/format/codecs"
 	"github.com/eluv-io/common-go/format/codecs/header"
+	"github.com/eluv-io/errors-go"
 )
 
 func TestMultiCodecs(t *testing.T) {
@@ -40,7 +41,7 @@ func TestMultiCodecs(t *testing.T) {
 
 	// encode/decode each object with separate encoder/decoder instance
 	for _, testCodec := range testCodecs {
-		t.Run(fmt.Sprintf("sepatate instances %s", header.Path(testCodec.Header())), func(t *testing.T) {
+		t.Run(fmt.Sprintf("separate instances %s", header.Path(testCodec.Header())), func(t *testing.T) {
 			for _, test := range tests {
 				t.Run(fmt.Sprintf("%T", test.obj), func(t *testing.T) {
 					var err error
@@ -96,4 +97,17 @@ func TestMultiCodecs(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEncoderDecoderMismatch(t *testing.T) {
+	buf := &bytes.Buffer{}
+	err := codecs.CborV1MultiCodec.Encoder(buf).Encode("test")
+	require.NoError(t, err)
+
+	var target string
+	err = codecs.CborV2MultiCodec.Decoder(buf).Decode(&target)
+	require.Error(t, err)
+	field, ok := errors.GetField(err, "reason")
+	require.True(t, ok)
+	require.Equal(t, "invalid header", field)
 }

@@ -117,9 +117,12 @@ type multiEncoder struct {
 func (e *multiEncoder) writeHeader() (err error) {
 	if !e.headerWritten {
 		err = header.WriteHeader(e.writer, e.header)
+		if err != nil {
+			return err
+		}
 		e.headerWritten = true
 	}
-	return err
+	return nil
 }
 
 func (e *multiEncoder) Encode(obj interface{}) error {

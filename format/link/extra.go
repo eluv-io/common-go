@@ -82,32 +82,6 @@ func (e *Extra) UnmarshalMap(m map[string]interface{}) {
 	e.EnforceAuth, _ = m["enforce_auth"].(bool)
 }
 
-// func (e *Extra) MarshalCBOR(m map[string]interface{}) {
-// 	if e.IsEmpty() {
-// 		return
-// 	}
-// 	if e.AutoUpdate != nil {
-// 		m["eau"] = e.AutoUpdate.MarshalMap()
-// 	}
-// 	if e.Authorization != "" {
-// 		m["ea"] = e.Authorization
-// 	}
-// 	if e.EnforceAuth {
-// 		m["eea"] = e.EnforceAuth
-// 	}
-// 	// container and resolution error are not stored in CBOR!
-// }
-//
-// func (e *Extra) UnmarshalCBOR(m map[string]interface{}) {
-// 	au := m["eau"].(map[string]interface{})
-// 	if au != nil {
-// 		e.AutoUpdate = &AutoUpdate{}
-// 		e.AutoUpdate.UnmarshalMap(au)
-// 	}
-// 	e.Authorization, _ = m["authorization"].(string)
-// 	e.EnforceAuth, _ = m["enforce_auth"].(bool)
-// }
-
 func (e *Extra) UnmarshalValue(val *structured.Value) error {
 	err := val.Decode(e)
 	if err != nil {

@@ -16,7 +16,8 @@ var (
 //   - a single byte encoding the length of the rest of the header
 //   - the "path" (an identifier) of the codec. By convention it starts with a slash and contains the codec's name, e.g.
 //     "/json" or "/cborV2"
-//   - a terminating newline to make the header more readable when looking at the encoded data
+//   - a terminating newline to make the header more readable when looking at the encoded data. The newline is part of
+//     the encoded header length.
 //
 // Create it with New(path)
 type Header []byte
@@ -35,7 +36,7 @@ func (h Header) String() string {
 func New(path string) Header {
 	b, err := NewNoPanic(path)
 	if err != nil {
-		panic(err.Error)
+		panic(err.Error())
 	}
 	return b
 }
@@ -44,7 +45,7 @@ func New(path string) Header {
 func NewNoPanic(path string) (Header, error) {
 	bts := []byte(path)
 	l := len(bts) + 1 // + \n
-	if l >= 127 {
+	if l > 127 {
 		return nil, ErrVarints
 	}
 

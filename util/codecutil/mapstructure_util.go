@@ -79,7 +79,7 @@ func decodeHook(f reflect.Type, t reflect.Type, data interface{}) (interface{}, 
 			}
 			return instance.Interface(), nil
 		} else if t == byteSliceType {
-			// byte arrays are marshaled to byte64 encoded string in JSON by default...
+			// byte arrays are marshaled to base64 encoded string in JSON by default...
 			return base64.StdEncoding.DecodeString(dt)
 		}
 	}

@@ -27,9 +27,9 @@ func SelectFirst(v interface{}, codecs []MultiCodec) MultiCodec {
 }
 
 // MuxCodec is a MultiCodec that multiplexes between a list of configured codecs. The codec for encoding is chosen with
-// a SelectCodec function called for the first object being encoded - the provided SelectFirst function the first codec
-// in the list is selected. The codec for decoding is chosen according to the MultiCodec header read from the data
-// stream.
+// a SelectCodec function called for the first object being encoded (the provided SelectFirst function simply selects
+// the first codec in the list). The codec for decoding is chosen according to the MultiCodec header read from the
+// beginning of the data stream.
 //
 // NOTE: the MultiCodec header is written only once at the very beginning even if the same encoder is used for encoding
 // multiple objects:

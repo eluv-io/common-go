@@ -6,7 +6,25 @@ import (
 	"golang.org/x/exp/constraints"
 )
 
+// CompareFn is a comparison function that returns
+//   - 0 if e1 == e2
+//   - -1 if e1 < e2
+//   - +1 if e1 > e2
 type CompareFn[T any] func(e1, e2 T) int
+
+// Compare compares two values of an ordered type, returning
+//   - 0 if e1 == e2
+//   - -1 if e1 < e2
+//   - +1 if e1 > e2
+func Compare[T constraints.Ordered](e1, e2 T) int {
+	if e1 == e2 {
+		return 0
+	}
+	if e1 < e2 {
+		return -1
+	}
+	return +1
+}
 
 // Contains return true if the ordered set contains the given element, false otherwise.
 func Contains[T constraints.Ordered](set []T, elem T) bool {
@@ -78,18 +96,4 @@ func RemoveFn[T any](cmp CompareFn[T], set []T, elements ...T) []T {
 		set = set[:len(set)-1]
 	}
 	return set
-}
-
-// Compare compares to values, returning
-//   - 0 if a == b
-//   - -1 if a < b
-//   - +1 if a > b
-func Compare[T constraints.Ordered](a, b T) int {
-	if a == b {
-		return 0
-	}
-	if a < b {
-		return -1
-	}
-	return +1
 }
