@@ -28,8 +28,11 @@ type MultiCodec interface {
 	VersionedDecoder(r io.Reader) VersionedMultiDecoder
 
 	// DisableVersions returns a copy of this MultiCodec that has versioning disabled. It will return a VersionedEncoder
-	// that simply ignores the version provided in its encode method, and a VersionDecoder that will always pass 0 as
+	// that simply ignores the version provided in its encode method, and a VersionedDecoder that will always pass 0 as
 	// the version during decoding.
+	//
+	// This feature is needed in order to support mux codecs where encoding uses versions, but where legacy data was
+	// encoded without versions. See CborMuxCodec and TestVersionedMux.
 	DisableVersions() MultiCodec
 }
 

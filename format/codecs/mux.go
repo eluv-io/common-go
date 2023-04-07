@@ -97,7 +97,11 @@ func (c *muxEncoderBase) init(v interface{}, selected func(codec MultiCodec)) er
 	}
 
 	e := errors.Template("MuxEncoder.init", errors.K.Invalid)
-	codec := c.mux.Select(v, c.mux.Codecs)
+	fnSelect := c.mux.Select
+	if fnSelect == nil {
+		fnSelect = SelectFirst
+	}
+	codec := fnSelect(v, c.mux.Codecs)
 	if codec == nil {
 		return e("reason", "no suitable encoder")
 	}
@@ -173,7 +177,7 @@ func (c *muxDecoderBase) init(selected func(c MultiCodec, r io.Reader)) error {
 
 	codec := c.codecForHeader(hdr)
 	if codec == nil {
-		return e("reason", "no suitable decoder", "codec", string(header.Path(hdr)))
+		return e("reason", "no suitable decoder", "codec", header.Path(hdr))
 	}
 
 	c.initialized = true

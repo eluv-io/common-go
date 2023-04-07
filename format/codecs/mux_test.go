@@ -12,6 +12,7 @@ import (
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/link"
 	"github.com/eluv-io/common-go/format/types"
+	"github.com/eluv-io/errors-go"
 )
 
 func TestMuxCodec(t *testing.T) {
@@ -62,6 +63,14 @@ type testStructV2 struct {
 	Link *link.Link  `json:"link"`
 }
 
+// TestVersionedMux tests a typical "upgrade" scenario:
+//   - An initial data structure is encoded with the cbor V1 codec.
+//   - Then the codec is upgraded to V2 for improved performance and versioning is added for future-proofing.
+//   - Then the data structure changes and now gets encoded in a new format (as a CBOR array instead of a map).
+//   - Finally, all three versions of the encoded data are decoded with the same CborMuxCodec.
+//
+// In order to make decoding of the initial encoded data work, the CborMuxCodec disables versions on the legacy
+// CborV1MultiCodec, since that data was encoded without version information.
 func TestVersionedMux(t *testing.T) {
 	hsh := hash.MustParse("hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7")
 	dataV1 := &testStruct{
@@ -88,18 +97,19 @@ func TestVersionedMux(t *testing.T) {
 
 	for i, buf := range []*bytes.Buffer{bufCbor, bufCborV2DataV1, bufCborV2DataV2} {
 		fmt.Println(buf.String())
-		obj, version, err := codecs.CborMuxCodec.VersionedDecoder(buf).DecodeVersioned(func(version uint, codec string) interface{} {
-			if codec == codecs.CborV1MultiCodec.Header().Path() {
-				return &testStruct{}
-			}
-			switch version {
-			case 1:
-				return &testStruct{}
-			case 2:
-				return &testStructV2{}
-			}
-			return nil
-		})
+		obj, version, err := codecs.CborMuxCodec.VersionedDecoder(buf).DecodeVersioned(
+			func(version uint, codec string) interface{} {
+				if codec == codecs.CborV1MultiCodec.Header().Path() {
+					return &testStruct{}
+				}
+				switch version {
+				case 1:
+					return &testStruct{}
+				case 2:
+					return &testStructV2{}
+				}
+				return nil
+			})
 		require.NoError(t, err)
 		require.Equal(t, uint(i), version)
 		switch i {
@@ -109,4 +119,65 @@ func TestVersionedMux(t *testing.T) {
 			require.Equal(t, dataV2, obj)
 		}
 	}
+}
+
+var twoCodecs = []codecs.MultiCodec{codecs.JsonMultiCodec, codecs.CborV1MultiCodec}
+
+func TestMuxCodecSelect(t *testing.T) {
+	buf := &bytes.Buffer{}
+	mux := codecs.MuxCodec{
+		Codecs: twoCodecs,
+		Select: nil,
+	}
+
+	t.Run("nil select function", func(t *testing.T) {
+		err := mux.Encoder(buf).Encode("test")
+		require.NoError(t, err)
+		require.Equal(t, string(byte(6))+"/json\n\"test\"\n", buf.String())
+	})
+
+	t.Run("select no encoder", func(t *testing.T) {
+		mux.Select = func(v interface{}, codecs []codecs.MultiCodec) codecs.MultiCodec {
+			return nil
+		}
+		buf.Reset()
+		err := mux.Encoder(buf).Encode("test")
+		require.Error(t, err)
+		require.Equal(t, "no suitable encoder", errors.Wrap(err).Field("reason"))
+	})
+
+}
+
+func TestMuxCodecWrap(t *testing.T) {
+	buf := &bytes.Buffer{}
+	mux := codecs.NewMuxCodec(twoCodecs...)
+	mux.Wrap = true
+
+	err := mux.Encoder(buf).Encode("test")
+	require.NoError(t, err)
+	require.Equal(t, string(byte(12))+"/multicodec\n"+string(byte(6))+"/json\n\"test\"\n", buf.String())
+
+	var decoded string
+	err = mux.Decoder(buf).Decode(&decoded)
+	require.NoError(t, err)
+	require.Equal(t, "test", decoded)
+}
+
+func TestMuxCodecDisableVersions(t *testing.T) {
+	buf := &bytes.Buffer{}
+	mux := codecs.NewMuxCodec(twoCodecs...).DisableVersions()
+
+	err := mux.VersionedEncoder(buf).EncodeVersioned(7, "test")
+	require.NoError(t, err)
+	require.Equal(t, string(byte(6))+"/json\n\"test\"\n", buf.String())
+
+	var decoded string
+	res, version, err := mux.VersionedDecoder(buf).DecodeVersioned(func(version uint, codec string) interface{} {
+		return &decoded
+	})
+	sres := res.(*string)
+	require.NoError(t, err)
+	require.Equal(t, "test", decoded)
+	require.Equal(t, "test", *sres)
+	require.Equal(t, uint(0), version)
 }

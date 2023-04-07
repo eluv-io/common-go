@@ -22,7 +22,7 @@ import (
 // links. Actual data encryption/decryption is out of scope of this struct and must be managed externally.
 type Blob struct {
 	// NOTE: DO NOT CHANGE FIELD TYPES, THEIR ORDER OR REMOVE ANY FIELDS SINCE STRUCT IS CBOR-ENCODED AS ARRAY!
-	_struct          bool              `cbor:",toarray"`             // encode struct as array
+	_struct          struct{}          `cbor:",toarray"`             // encode struct as array
 	Data             []byte            `json:"data"`                 // data encrypted according to encryption scheme
 	EncryptionScheme encryption.Scheme `json:"encryption,omitempty"` // the encryption scheme of the data
 	KID              string            `json:"kid,omitempty"`        // optional key ID. Empty means "default key".

@@ -33,7 +33,8 @@ var (
 	JsonMultiCodec   = NewMultiCodec(JsonCodec, JsonMultiCodecPath)
 	CborV1MultiCodec = NewMultiCodec(CborV1Codec, CborV1MultiCodecPath)
 	CborV2MultiCodec = NewMultiCodec(CborV2Codec, CborV2MultiCodecPath)
-	CborMuxCodec     = NewMuxCodec(CborV2MultiCodec, CborV1MultiCodec.DisableVersions())
+	// CborMuxCodec is the codec producing versioned V2 format and supports decoding un-versioned V1 format.
+	CborMuxCodec = NewMuxCodec(CborV2MultiCodec, CborV1MultiCodec.DisableVersions())
 )
 
 // NewGobCodec creates a new streaming MultiCodec using the encoding/gob format.
