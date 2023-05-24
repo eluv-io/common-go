@@ -9,24 +9,9 @@ TOKEN: PREFIX + BODY
 
 PREFIX: 6b
 * 3b Type: 1st byte "a" stands for "auth token" 
-	{"aun", "unknown"},
-	{"aan", "anonymous"},
-	{"atx", "tx"},
-	{"asc", "state-channel"},
-	{"acl", "client"},
 * 1b SigType
-	{"_", "unknown"},
-	{"u", "unsigned"},
-	{"s", "ES256K"},
 * 2b Format
-	{"nk", "unknown"},        
-	{"__", "legacy"},         
-	{"j_", "json"},           
-	{"jc", "json-compressed"},
-	{"c_", "cbor"},           
-	{"cc", "cbor-compressed"},
-	{"b_", "custom"},         
-
+	   
 BODY: base58(SIGNATURE + PAYLOAD)
 
 SIGNATURE: pure signature bytes - type is encoded in SigType of prefix above, and length is implied by type
@@ -42,6 +27,54 @@ TOKENDATA: proper token data encoded according to Format
 * cbor-compressed: deflate(cbor)
 ```
 
+
+### Token Type:
+
+defines the different types of the auth tokens.
+
+* 3 bytes of prefix
+* `a` stands for `auth token`
+
+| Prefix | Name          | SignatureRequired | Description | Fields required                                                                        | Fields optional | Signed by|
+|:-------|:--------------|:------------------|:--------------|:---------------------------------------------------------------------------------------|:------------------|:--------|
+| aun    | unknown       | false             |||||
+| aan    | anonymous     | false             |a vanilla, unsigned token without tx|sid, lid| qid| -|
+| atx    | tx            | true              |based on a blockchain transaction - aka EthAuthToken| sid, lid, txh | apk | client|
+| asc    | state-channel | true              |based on deferred blockchain tx - aka ElvAuthToken| sid, lid, qid, grant, iat, exp, ctx/sub               | apk| Server |
+| acl    | client        | false             |a state channel token embedded in a client token - aka ElvClientToken| sid,lid, embedded token signed by client                                                               | - |-|
+| apl    | plain         | true              |a vanilla (signed) token without tx ==> blockchain-based permissions via HasAccess()| sid, lid| qid| client|                                                          |
+| aes    | editor-signed | true              |a token signed by a user who has edit access to the target content in the token| sid, lib, qid, sub = clientID, grant, iat, exp                 |apk, ctx| client with editor access|
+| ano    | node          | true              |token for node-to-node communication| sid, qp-hash                                                  | - | server|
+| asl    | signed-link   | true              |token for signed-links| sid, lid, qid, subject = clientID, grant, iat, exp, ctx/elv/lnk, ctx/elv/src=qid |apk| client|
+| acs    | client-signed | true              |client-signed token| sid, lid, qid, subject = clientID, grant, iat, exp| ctx| client|                                                          |
+### Token SigType:
+defines the different signature types of auth tokens
+
+* 1 byte of prefix
+
+| Prefix 	| Name 	| Code 	|
+|:---:	|:---:	|:---:	|
+| _ 	| unknown 	| sign.UNKNOWN 	|
+| u 	| unsigned 	| sign.UNKNOWN 	|
+| s 	| E256K 	| sign.E256K 	|
+| p 	| EIP191Personal 	| sign.EIP191Personal 	|
+
+### Token Format:
+defines the available encoding formats for auth tokens
+
+* 2 bytes of prefix
+
+| Index | Prefix | Name |
+|:---:|:---:|---|
+| 0 | nk | unknown |
+| 1 | __ | legacy |
+| 2 | __ | legacy-signed |
+| 3 | j_ | json |
+| 4 | jc | json-compressed |
+| 5 | c_ | cbor |
+| 6 | cc | cbor-compressed |
+| 7 | b_ | custom |
+
 ### Client Tokens with Embedded Server Token
 
 Client tokens ("ac") contain an embedded state channel token created by elvmaster. That embedded token is encoded
@@ -55,7 +88,7 @@ BODY: SIGNATURE + PAYLOAD
 ```
 
 The signature of a client token is calculated on the above PAYLOAD and therefore includes the server token and its
- signature.
+signature.
 
 ### Legacy-Signed Token
 
