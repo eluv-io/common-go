@@ -2,11 +2,14 @@ package header
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/eluv-io/errors-go"
 )
 
 func TestHeader(t *testing.T) {
@@ -65,9 +68,25 @@ func TestReadHeader(t *testing.T) {
 		wantErr  error
 	}{
 		{
+			bts:     []byte{},
+			wantErr: io.ErrUnexpectedEOF,
+		},
+		{
+			bts:     []byte{0},
+			wantErr: ErrHeaderInvalid,
+		},
+		{
+			bts:     []byte{0, 'a', 'b', 'c'},
+			wantErr: ErrHeaderInvalid,
+		},
+		{
 			bts:      []byte{6, '/', 'c', 'b', 'o', 'r', '\n'},
 			wantPath: "/cbor",
 			wantErr:  nil,
+		},
+		{
+			bts:     []byte{6, '/', 'c', 'b', 'o', 'r', '_'},
+			wantErr: ErrHeaderInvalid,
 		},
 		{
 			bts:      append(append([]byte{127}, bytes.Repeat([]byte{'a'}, 126)...), '\n'),
@@ -92,7 +111,8 @@ func TestReadHeader(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			hdr, err := ReadHeader(bytes.NewReader(test.bts))
 			if test.wantErr != nil {
-				require.Equal(t, test.wantErr, err)
+				require.Equal(t, test.wantErr, errors.GetRootCause(err))
+				fmt.Println(err)
 			} else {
 				require.Equal(t, test.wantPath, hdr.Path())
 			}

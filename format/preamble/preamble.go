@@ -103,11 +103,13 @@ func Read(r io.ReadSeeker, noSeek bool, sizeLimit ...int64) (preambleData []byte
 	}
 	buf := bytes.NewBuffer(data)
 	hdr, err := header.ReadHeader(buf)
-	if err == io.EOF || err == io.ErrUnexpectedEOF || err == header.ErrVarints || err == header.ErrHeaderInvalid {
-		err = errors.E("preamble read", errors.K.NotExist, err, "reason", "preamble header not found")
-		return
-	} else if err != nil {
-		err = errors.E("preamble read", errors.K.IO, err)
+	if err != nil {
+		root := errors.GetRootCause(err)
+		if root == io.EOF || root == io.ErrUnexpectedEOF || root == header.ErrVarints || root == header.ErrHeaderInvalid {
+			err = errors.E("preamble read", errors.K.NotExist, err, "reason", "preamble header not found")
+		} else {
+			err = errors.E("preamble read", errors.K.IO, err)
+		}
 		return
 	}
 	preambleFormat = hdr.Path()

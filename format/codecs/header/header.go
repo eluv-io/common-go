@@ -2,14 +2,16 @@ package header
 
 import (
 	"bytes"
-	"errors"
+	"encoding/hex"
 	"io"
+
+	"github.com/eluv-io/errors-go"
 )
 
 var (
-	ErrHeaderInvalid = errors.New("MultiCodec header invalid")
-	ErrMismatch      = errors.New("MultiCodec did not match")
-	ErrVarints       = errors.New("MultiCodec varints not yet implemented")
+	ErrHeaderInvalid = errors.Str("MultiCodec header invalid")
+	ErrMismatch      = errors.Str("MultiCodec did not match")
+	ErrVarints       = errors.Str("MultiCodec varints not yet implemented")
 )
 
 // Header is the header used by MultiCodecs to encode the codec type used to create an encoding. It's format is
@@ -78,21 +80,34 @@ func WriteHeader(w io.Writer, hdr Header) error {
 func ReadHeader(r io.Reader) (hdr Header, err error) {
 	lbuf := make([]byte, 1)
 	if _, err := r.Read(lbuf); err != nil {
+		if err == io.EOF {
+			return nil, io.ErrUnexpectedEOF
+		}
 		return nil, err
 	}
 
 	l := int(lbuf[0])
 	if l > 127 {
-		return nil, ErrVarints
+		return nil, errors.E("ReadHeader", errors.K.Invalid, ErrVarints, "len", l)
+	}
+	if l == 0 {
+		return nil, errors.E("ReadHeader", errors.K.Invalid, ErrHeaderInvalid, "len", l)
 	}
 
 	buf := make([]byte, l+1)
 	buf[0] = lbuf[0]
-	if _, err := io.ReadFull(r, buf[1:]); err != nil {
-		return nil, err
+	if read, err := io.ReadFull(r, buf[1:]); err != nil {
+		return nil, errors.E("ReadHeader", errors.K.Invalid, err,
+			"len", l,
+			"bytes_read", read,
+			"bytes", "0x"+hex.EncodeToString(buf[:read+1]))
 	}
 	if buf[l] != '\n' {
-		return nil, ErrHeaderInvalid
+		return nil, errors.E("ReadHeader", errors.K.Invalid, ErrHeaderInvalid,
+			"len", l,
+			"bytes_read", l,
+			"bytes", "0x"+hex.EncodeToString(buf[:l+1]),
+			"string", string(buf[1:l+1]))
 	}
 	return buf, nil
 }
