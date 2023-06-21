@@ -374,6 +374,62 @@ func TestRemove(t *testing.T) {
 	}
 }
 
+func TestRemoveIndex(t *testing.T) {
+	tests := []struct {
+		slice  []string
+		remove int
+		want   []string
+	}{
+		{
+			slice:  nil,
+			remove: 3,
+			want:   nil,
+		},
+		{
+			slice:  []string{},
+			remove: 3,
+			want:   []string{},
+		},
+		{
+			slice:  []string{"1", "2", "3", "4", "5"},
+			remove: 3,
+			want:   []string{"1", "2", "3", "5"},
+		},
+		{
+			slice:  []string{"1", "2", "3", "4", "5"},
+			remove: 99,
+			want:   []string{"1", "2", "3", "4", "5"},
+		},
+		{
+			slice:  []string{"1", "2", "3", "4", "5"},
+			remove: -1,
+			want:   []string{"1", "2", "3", "4", "5"},
+		},
+		{
+			slice:  []string{"1", "2", "3", "4", "5"},
+			remove: 6,
+			want:   []string{"1", "2", "3", "4", "5"},
+		},
+		{
+			slice:  []string{"1", "2", "1", "2", "1", "2", "3"},
+			remove: 2,
+			want:   []string{"1", "2", "2", "1", "2", "3"},
+		},
+		{
+			slice:  []string{"1", "1", "1", "1", "1"},
+			remove: 1,
+			want:   []string{"1", "1", "1", "1"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprint(test.slice, test.remove), func(t *testing.T) {
+			res := RemoveIndex(test.slice, test.remove)
+			require.Equal(t, test.want, res)
+		})
+	}
+}
+
 func TestReverse(t *testing.T) {
 	tests := []struct {
 		slce []string

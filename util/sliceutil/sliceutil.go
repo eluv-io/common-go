@@ -154,18 +154,35 @@ func Remove[T any](slice []T, element T) ([]T, int) {
 // RemoveFn removes all occurrences of an element from the given slice, using the provided function to compare elements.
 // Returns the new slice and the number of removed elements.
 func RemoveFn[T any](slice []T, element T, equal func(e1, e2 T) bool) ([]T, int) {
+	return RemoveMatch(slice, func(e T) bool {
+		return equal(e, element)
+	})
+}
+
+// RemoveMatch removes all occurrences of an element from the given slice that match according to the provided match
+// function. Returns the new slice and the number of removed elements.
+func RemoveMatch[T any](slice []T, match func(e T) bool) ([]T, int) {
 	orgLen := len(slice)
 	for i := 0; i < len(slice); {
-		if equal(slice[i], element) {
-			var zero T
-			copy(slice[i:], slice[i+1:])
-			slice[len(slice)-1] = zero
-			slice = slice[:len(slice)-1]
+		if match(slice[i]) {
+			slice = RemoveIndex(slice, i)
 		} else {
 			i++
 		}
 	}
 	return slice, orgLen - len(slice)
+}
+
+// RemoveIndex removes the element at the given index from the provided slice. Removes nothing if the index is
+// out-of-bounds.
+func RemoveIndex[T any](slice []T, idx int) []T {
+	if idx < 0 || idx >= len(slice) {
+		return slice
+	}
+	var zero T
+	copy(slice[idx:], slice[idx+1:])
+	slice[len(slice)-1] = zero
+	return slice[:len(slice)-1]
 }
 
 // Compare compares the elements of s1 and s2. The elements are compared sequentially, starting at index 0, until one
