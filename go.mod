@@ -55,7 +55,7 @@ require (
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
-	github.com/rjeczalik/notify v0.9.1 // indirect
+	github.com/rjeczalik/notify v0.9.3 // indirect
 	github.com/smartystreets/assertions v1.2.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/crypto v0.0.0-20211108221036-ceb1ce70b4fa // indirect
@@ -67,4 +67,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )
 
-replace github.com/fxamacker/cbor/v2 => github.com/eluv-io/cbor/v2 v2.3.1-0.20221212130551-34f9d430617a
+replace github.com/fxamacker/cbor/v2 => github.com/eluv-io/cbor/v2 v2.3.1-0.20230627215207-bd2cc685afdd
