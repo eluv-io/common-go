@@ -79,7 +79,7 @@ func WriteHeader(w io.Writer, hdr Header) error {
 // mismatched.
 func ReadHeader(r io.Reader) (hdr Header, err error) {
 	lbuf := make([]byte, 1)
-	if _, err := r.Read(lbuf); err != nil {
+	if _, err := io.ReadFull(r, lbuf); err != nil {
 		if err == io.EOF {
 			return nil, io.ErrUnexpectedEOF
 		}

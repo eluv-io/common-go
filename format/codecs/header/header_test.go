@@ -119,3 +119,25 @@ func TestReadHeader(t *testing.T) {
 		})
 	}
 }
+
+func TestZeroReads(t *testing.T) {
+	r := &zeroReader{byteReader: bytes.NewReader([]byte{6, '/', 'c', 'b', 'o', 'r', '\n'})}
+
+	hdr, err := ReadHeader(r)
+	require.NoError(t, err)
+	require.Equal(t, "/cbor", hdr.Path())
+}
+
+type zeroReader struct {
+	byteReader *bytes.Reader
+	zeroReads  int
+	off        int
+}
+
+func (z *zeroReader) Read(p []byte) (n int, err error) {
+	z.zeroReads++
+	if z.zeroReads < 5 {
+		return 0, nil
+	}
+	return z.byteReader.Read(p)
+}
