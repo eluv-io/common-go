@@ -258,26 +258,40 @@ func Parse(s string) (*Hash, error) {
 
 // FromString parses a hash from the given string representation.
 func FromString(s string) (*Hash, error) {
+	e := errors.Template("parse hash", errors.K.Invalid, "string", s)
+
 	if s == "" {
 		return nil, nil
 	}
-	e := errors.Template("parse hash", errors.K.Invalid, "string", s)
 
 	if len(s) <= prefixLen {
 		return nil, e("reason", "invalid token string")
 	}
 
 	htype, found := prefixToType[s[:prefixLen]]
-	if !found {
+	if !found || htype.Code == UNKNOWN {
 		return nil, e("reason", "invalid prefix")
 	}
 
 	b, err := base58.Decode(s[prefixLen:])
 	if err != nil {
-		return nil, e(err, "string", s)
+		return nil, e(err)
 	}
-	n := 0
 
+	h, err := FromDecodedBytes(htype, b)
+	if err != nil {
+		return nil, e(err)
+	}
+	h.s = s
+
+	return h, nil
+}
+
+// FromDecodedBytes parses a hash from the given base58-decoded bytes representation.
+func FromDecodedBytes(htype Type, b []byte) (*Hash, error) {
+	e := errors.Template("parse hash", errors.K.Invalid)
+
+	n := 0
 	var digest []byte
 	var size, preambleSize int64
 	var id ei.ID
@@ -286,7 +300,7 @@ func FromString(s string) (*Hash, error) {
 		// Parse digest
 		m := sha256.Size
 		if n+m > len(b) {
-			return nil, errors.E("parse hash", errors.K.Invalid, "reason", "invalid digest", "string", s)
+			return nil, e("reason", "invalid digest")
 		}
 		digest = b[n : n+m]
 		n += m
@@ -294,7 +308,7 @@ func FromString(s string) (*Hash, error) {
 		// Parse size
 		sz, m := binary.Uvarint(b[n:])
 		if m <= 0 {
-			return nil, errors.E("parse hash", errors.K.Invalid, "reason", "invalid size", "string", s)
+			return nil, e("reason", "invalid size")
 		}
 		size = int64(sz)
 		n += m
@@ -302,7 +316,7 @@ func FromString(s string) (*Hash, error) {
 		if htype.Code == QPart {
 			sz, m = binary.Uvarint(b[n:])
 			if m < 0 {
-				return nil, errors.E("parse hash", errors.K.Invalid, "reason", "invalid preamble size", "string", s)
+				return nil, e("reason", "invalid preamble size")
 			} else if m > 0 {
 				preambleSize = int64(sz)
 			}
@@ -317,18 +331,18 @@ func FromString(s string) (*Hash, error) {
 		digest = b[n:]
 	} else {
 		// Parse expiration
-		e, m := binary.Uvarint(b[n:])
+		exp, m := binary.Uvarint(b[n:])
 		if m <= 0 {
-			return nil, errors.E("parse hash", errors.K.Invalid, "reason", "invalid expiration", "string", s)
+			return nil, e("reason", "invalid expiration")
 		}
-		expiration = utc.Unix(int64(e), 0)
+		expiration = utc.Unix(int64(exp), 0)
 		n += m
 
 		// Parse digest
 		digest = b[n:]
 	}
 
-	return &Hash{Type: htype, Digest: digest, Size: size, PreambleSize: preambleSize, ID: id, Expiration: expiration, s: s}, nil
+	return &Hash{Type: htype, Digest: digest, Size: size, PreambleSize: preambleSize, ID: id, Expiration: expiration}, nil
 }
 
 func (h *Hash) String() string {
@@ -337,6 +351,15 @@ func (h *Hash) String() string {
 	}
 
 	if h.s == "" && len(h.Digest) > 0 {
+		h.s = h.prefix() + base58.Encode(h.DecodedBytes())
+	}
+
+	return h.s
+}
+
+// DecodedBytes converts this hash to base58-decoded bytes.
+func (h *Hash) DecodedBytes() []byte {
+	if len(h.Digest) > 0 {
 		var b []byte
 		if !h.IsLive() {
 			b = make([]byte, len(h.Digest))
@@ -363,10 +386,9 @@ func (h *Hash) String() string {
 
 			b = append(b[:n], h.Digest...)
 		}
-		h.s = h.prefix() + base58.Encode(b)
+		return b
 	}
-
-	return h.s
+	return nil
 }
 
 func (h *Hash) IsNil() bool {
