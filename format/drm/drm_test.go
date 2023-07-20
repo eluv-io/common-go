@@ -19,7 +19,7 @@ import (
 )
 
 var key *drm.KeyID
-const keyString = "drm_7kkjjSDgzcsMtVGWHZad74sRgzdtfBw4Qoz2SyHqswrqGDtgrNdWJTuGaXjZmsr4mK9Ggy3DyC4BxCEEJyokznvBJ1"
+const keyString = "drm_2qU32EeeHhVBxMF9vC8ABUsF5rmbfY1a6TvUGr3EYpYv1EvAc1FAM9tkACxiYmPoPxaEfbTNzHsAVh4TyKGJEFCd1gM"
 
 var khash *hash.Hash
 const khashString = "hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7"
@@ -125,12 +125,12 @@ func ExampleString() {
 	fmt.Println("key", "from data", k2)
 
 	// Output:
-	// key string drm_7kkjjSDgzcsMtVGWHZad74sRgzdtfBw4Qoz2SyHqswrqGDtgrNdWJTuGaXjZmsr4mK9Ggy3DyC4BxCEEJyokznvBJ1
-	// key object drm_7kkjjSDgzcsMtVGWHZad74sRgzdtfBw4Qoz2SyHqswrqGDtgrNdWJTuGaXjZmsr4mK9Ggy3DyC4BxCEEJyokznvBJ1
+	// key string drm_2qU32EeeHhVBxMF9vC8ABUsF5rmbfY1a6TvUGr3EYpYv1EvAc1FAM9tkACxiYmPoPxaEfbTNzHsAVh4TyKGJEFCd1gM
+	// key object drm_2qU32EeeHhVBxMF9vC8ABUsF5rmbfY1a6TvUGr3EYpYv1EvAc1FAM9tkACxiYmPoPxaEfbTNzHsAVh4TyKGJEFCd1gM
 	// key code drm_
 	// key id [17 87 89 18 6 191 136 142 131 156 105 189 28 159 165 77]
 	// key hash hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7
-	// key from data drm_7kkjjSDgzcsMtVGWHZad74sRgzdtfBw4Qoz2SyHqswrqGDtgrNdWJTuGaXjZmsr4mK9Ggy3DyC4BxCEEJyokznvBJ1
+	// key from data drm_2qU32EeeHhVBxMF9vC8ABUsF5rmbfY1a6TvUGr3EYpYv1EvAc1FAM9tkACxiYmPoPxaEfbTNzHsAVh4TyKGJEFCd1gM
 }
 
 type Wrapper struct {
@@ -210,7 +210,7 @@ func TestMaxLength(t *testing.T) {
 	hidbytes := make([]byte, 20)
 	rand.Read(hidbytes)
 	hid := id.NewID(id.Q, hidbytes)
-	khash := &hash.Hash{Type: hash.Type{Code: hash.Q, Format: hash.Unencrypted}, Digest: hdigest, ID: hid, Size: 1024*1024}
+	khash := &hash.Hash{Type: hash.Type{Code: hash.Q, Format: hash.Unencrypted}, Digest: hdigest, ID: hid, Size: 1024*1024*128}
 	kid := make([]byte, 16)
 	rand.Read(kid)
 	k, err := drm.New(drm.Key, kid, khash)

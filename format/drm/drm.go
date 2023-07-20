@@ -67,7 +67,7 @@ func init() {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // KeyID is the concatenation of a key ID and an associated content hash.
-//     Key format : id (16 bytes) | digest (var bytes) | size (var bytes) | id (var bytes)
+//     Key format : code (1 byte) | id (16 bytes) | digest (var bytes) | size (var bytes) | id (var bytes)
 type KeyID struct {
 	Code Code
 	ID   []byte
@@ -112,8 +112,16 @@ func FromString(s string) (*KeyID, error) {
 		return nil, e(err)
 	}
 	n := 0
+	// Parse code
+	m := 1
+	if n + m > len(b) {
+		return nil, e("reason", "invalid code")
+	} else if Code(b[n]) != c {
+		return nil, e("reason", "mismatched code", "prefix_code", c, "payload_code", b[n])
+	}
+	n += m
 	// Parse id
-	m := idSize
+	m = idSize
 	if n + m > len(b) {
 		return nil, e("reason", "invalid id")
 	}
@@ -156,8 +164,9 @@ func (k *KeyID) String() string {
 		return ""
 	}
 	if k.s == "" && len(k.ID) > 0 {
-		b := make([]byte, len(k.ID))
-		copy(b, k.ID)
+		b := make([]byte, len(k.ID)+1)
+		b[0] = byte(k.Code)
+		copy(b[1:], k.ID)
 		b = append(b, k.Hash.DecodedBytes()...)
 		k.s = codeToPrefix[k.Code] + base58.Encode(b)
 	}
