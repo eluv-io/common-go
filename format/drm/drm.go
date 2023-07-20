@@ -76,6 +76,7 @@ type KeyID struct {
 }
 
 // New creates a new DRM key with the given code, ID, and hash.
+// For code Key, id is expected to have a length of 16 bytes; h is expected to have a type of {Q, Unencrypted}
 func New(c Code, id []byte, h *hash.Hash) (*KeyID, error) {
 	e := errors.Template("init drm key", errors.K.Invalid)
 	if _, ok := codeToPrefix[c]; !ok {
