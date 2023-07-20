@@ -78,7 +78,7 @@ type KeyID struct {
 // New creates a new DRM key with the given code, ID, and hash.
 // For code Key, id is expected to have a length of 16 bytes; h is expected to have a type of {Q, Unencrypted}
 func New(c Code, id []byte, h *hash.Hash) (*KeyID, error) {
-	e := errors.Template("init drm key", errors.K.Invalid)
+	e := errors.TemplateNoTrace("init drm key", errors.K.Invalid)
 	if _, ok := codeToPrefix[c]; !ok {
 		return nil, e("reason", "invalid code", "code", c)
 	} else if c == UNKNOWN {
@@ -97,7 +97,7 @@ func New(c Code, id []byte, h *hash.Hash) (*KeyID, error) {
 
 // FromString parses a DRM key from the given string representation.
 func FromString(s string) (*KeyID, error) {
-	e := errors.Template("parse drm key", errors.K.Invalid, "string", s)
+	e := errors.TemplateNoTrace("parse drm key", errors.K.Invalid, "string", s)
 	if s == "" {
 		return nil, nil
 	} else if len(s) < prefixLen {
@@ -146,7 +146,7 @@ func (k *KeyID) AssertCode(c Code) error {
 		kcode = k.Code
 	}
 	if kcode != c {
-		return errors.E("verify drm key", errors.K.Invalid, "reason", "drm key code doesn't match", "expected", c, "actual", kcode)
+		return errors.NoTrace("verify drm key", errors.K.Invalid, "reason", "drm key code doesn't match", "expected", c, "actual", kcode)
 	}
 	return nil
 }
@@ -173,7 +173,7 @@ func (k KeyID) MarshalText() ([]byte, error) {
 func (k *KeyID) UnmarshalText(text []byte) error {
 	parsed, err := FromString(string(text))
 	if err != nil {
-		return errors.E("unmarshal drm key", err)
+		return errors.NoTrace("unmarshal drm key", err)
 	}
 	if parsed == nil {
 		// empty string parses to nil hash... best we can do is ignore it...
@@ -195,7 +195,7 @@ func (k *KeyID) Equal(k2 *KeyID) bool {
 
 // AssertEqual returns nil if this DRM key is equal to the provided DRM key, an error with detailed reason otherwise.
 func (k *KeyID) AssertEqual(k2 *KeyID) error {
-	e := errors.Template("assert drm keys equal", errors.K.Invalid, "expected", k, "actual", k2)
+	e := errors.TemplateNoTrace("assert drm keys equal", errors.K.Invalid, "expected", k, "actual", k2)
 	switch {
 	case k == k2:
 		return nil
