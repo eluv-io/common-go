@@ -23,7 +23,7 @@ func (c Code) String() string {
 
 // FromString parses the given string and returns the DRM key. Returns an error if the string is not a DRM key or a DRM
 // key ofthe wrong type.
-func (c Code) FromString(s string) (*Key, error) {
+func (c Code) FromString(s string) (*KeyID, error) {
 	k, err := FromString(s)
 	if err != nil {
 		return nil, err
@@ -32,7 +32,7 @@ func (c Code) FromString(s string) (*Key, error) {
 }
 
 // MustParse parses a DRM key from the given string representation. Panics if the string cannot be parsed.
-func (c Code) MustParse(s string) *Key {
+func (c Code) MustParse(s string) *KeyID {
 	res, err := c.FromString(s)
 	if err != nil {
 		panic(err)
@@ -43,7 +43,7 @@ func (c Code) MustParse(s string) *Key {
 // lint disable
 const (
 	UNKNOWN Code = iota
-	KeyV1
+	Key
 )
 
 const codeLen = 1
@@ -52,7 +52,7 @@ const prefixLen = 4
 var codeToPrefix = map[Code]string{}
 var prefixToCode = map[string]Code{
 	"dukn": UNKNOWN,
-	"drm_": KeyV1,
+	"drm_": Key,
 }
 
 func init() {
@@ -66,9 +66,9 @@ func init() {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-// Key is the concatenation of a key ID and an associated content hash.
-//     KeyV1 format : id (16 bytes) | digest (var bytes) | size (var bytes) | id (var bytes)
-type Key struct {
+// KeyID is the concatenation of a key ID and an associated content hash.
+//     Key format : id (16 bytes) | digest (var bytes) | size (var bytes) | id (var bytes)
+type KeyID struct {
 	Code Code
 	ID   []byte
 	Hash *hash.Hash
@@ -76,26 +76,26 @@ type Key struct {
 }
 
 // New creates a new DRM key with the given code, ID, and hash.
-func New(c Code, id []byte, h *hash.Hash) (*Key, error) {
+func New(c Code, id []byte, h *hash.Hash) (*KeyID, error) {
 	e := errors.Template("init drm key", errors.K.Invalid)
 	if _, ok := codeToPrefix[c]; !ok {
 		return nil, e("reason", "invalid code", "code", c)
 	} else if c == UNKNOWN {
 		return nil, nil
-	} else if c != KeyV1 {
+	} else if c != Key {
 		return nil, e("reason", "code not supported", "code", c)
 	} else if len(id) != idSize {
 		return nil, e("reason", "invalid id", "id", id)
 	} else if h == nil || h.IsNil() || h.Type.Code != hash.Q {
 		return nil, e("reason", "invalid hash", "hash", h)
 	}
-	k := &Key{Code: c, ID: id, Hash: h}
+	k := &KeyID{Code: c, ID: id, Hash: h}
 	k.s = k.String()
 	return k, nil
 }
 
 // FromString parses a DRM key from the given string representation.
-func FromString(s string) (*Key, error) {
+func FromString(s string) (*KeyID, error) {
 	e := errors.Template("parse drm key", errors.K.Invalid, "string", s)
 	if s == "" {
 		return nil, nil
@@ -123,11 +123,11 @@ func FromString(s string) (*Key, error) {
 	if err != nil {
 		return nil, e(err, "reason", "invalid hash")
 	}
-	return &Key{Code: c, ID: id, Hash: h, s: s}, nil
+	return &KeyID{Code: c, ID: id, Hash: h, s: s}, nil
 }
 
 // MustParse parses a DRM key from the given string representation. Panics if the string cannot be parsed.
-func MustParse(s string) *Key {
+func MustParse(s string) *KeyID {
 	res, err := FromString(s)
 	if err != nil {
 		panic(err)
@@ -135,11 +135,11 @@ func MustParse(s string) *Key {
 	return res
 }
 
-func (k *Key) IsNil() bool {
+func (k *KeyID) IsNil() bool {
 	return k == nil || k.Code == UNKNOWN
 }
 
-func (k *Key) AssertCode(c Code) error {
+func (k *KeyID) AssertCode(c Code) error {
 	kcode := UNKNOWN
 	if !k.IsNil() {
 		kcode = k.Code
@@ -150,7 +150,7 @@ func (k *Key) AssertCode(c Code) error {
 	return nil
 }
 
-func (k *Key) String() string {
+func (k *KeyID) String() string {
 	if k.IsNil() {
 		return ""
 	}
@@ -164,12 +164,12 @@ func (k *Key) String() string {
 }
 
 // MarshalText converts this DRM key to text.
-func (k Key) MarshalText() ([]byte, error) {
+func (k KeyID) MarshalText() ([]byte, error) {
 	return []byte(k.String()), nil
 }
 
 // UnmarshalText parses the DRM key from the given text.
-func (k *Key) UnmarshalText(text []byte) error {
+func (k *KeyID) UnmarshalText(text []byte) error {
 	parsed, err := FromString(string(text))
 	if err != nil {
 		return errors.E("unmarshal drm key", err)
@@ -183,7 +183,7 @@ func (k *Key) UnmarshalText(text []byte) error {
 }
 
 // Equal returns true if this DRM key is equal to the provided DRM key, false otherwise.
-func (k *Key) Equal(k2 *Key) bool {
+func (k *KeyID) Equal(k2 *KeyID) bool {
 	if k == k2 {
 		return true
 	} else if k == nil || k2 == nil {
@@ -193,7 +193,7 @@ func (k *Key) Equal(k2 *Key) bool {
 }
 
 // AssertEqual returns nil if this DRM key is equal to the provided DRM key, an error with detailed reason otherwise.
-func (k *Key) AssertEqual(k2 *Key) error {
+func (k *KeyID) AssertEqual(k2 *KeyID) error {
 	e := errors.Template("assert drm keys equal", errors.K.Invalid, "expected", k, "actual", k2)
 	switch {
 	case k == k2:

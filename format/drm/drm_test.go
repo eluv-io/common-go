@@ -18,7 +18,7 @@ import (
 	"github.com/eluv-io/common-go/format/id"
 )
 
-var key *drm.Key
+var key *drm.KeyID
 const keyString = "drm_7kkjjSDgzcsMtVGWHZad74sRgzdtfBw4Qoz2SyHqswrqGDtgrNdWJTuGaXjZmsr4mK9Ggy3DyC4BxCEEJyokznvBJ1"
 
 var khash *hash.Hash
@@ -30,9 +30,9 @@ func init() {
 	hsize := int64(1024)
 	hid, _ := id.FromString("iq__WxoChT9EZU2PRdTdNU7Ldf")
 	khash = &hash.Hash{Type: htype, Digest: hdigest, Size: hsize, ID: hid}
-	kcode := drm.KeyV1
+	kcode := drm.Key
 	kid, _ := hex.DecodeString("1157591206bf888e839c69bd1c9fa54d")
-	key = &drm.Key{Code: kcode, ID: kid, Hash: khash}
+	key = &drm.KeyID{Code: kcode, ID: kid, Hash: khash}
 }
 
 func TestConstructor(t *testing.T) {
@@ -42,7 +42,7 @@ func TestConstructor(t *testing.T) {
 	khash := &hash.Hash{Type: hash.Type{Code: hash.Q, Format: hash.Unencrypted}, Digest: hdigest, ID: hid, Size: 1234}
 	kid := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
 
-	k1, err := drm.New(drm.KeyV1, kid, khash)
+	k1, err := drm.New(drm.Key, kid, khash)
 	require.NoError(t, err)
 	k2, err := drm.FromString(k1.String())
 	require.NoError(t, err)
@@ -51,16 +51,16 @@ func TestConstructor(t *testing.T) {
 	_, err = drm.New(255, kid, khash)
 	require.Error(t, err)
 
-	_, err = drm.New(drm.KeyV1, make([]byte, 3), khash)
+	_, err = drm.New(drm.Key, make([]byte, 3), khash)
 	require.Error(t, err)
 
-	_, err = drm.New(drm.KeyV1, kid, nil)
+	_, err = drm.New(drm.Key, kid, nil)
 	require.Error(t, err)
 
-	_, err = drm.New(drm.KeyV1, kid, &hash.Hash{Type: hash.Type{Code: hash.UNKNOWN, Format: hash.Unencrypted}, Digest: hdigest, ID: hid, Size: 1234})
+	_, err = drm.New(drm.Key, kid, &hash.Hash{Type: hash.Type{Code: hash.UNKNOWN, Format: hash.Unencrypted}, Digest: hdigest, ID: hid, Size: 1234})
 	require.Error(t, err)
 
-	_, err = drm.New(drm.KeyV1, kid, &hash.Hash{Type: hash.Type{Code: hash.QPart, Format: hash.Unencrypted}, Digest: hdigest, Size: 1234})
+	_, err = drm.New(drm.Key, kid, &hash.Hash{Type: hash.Type{Code: hash.QPart, Format: hash.Unencrypted}, Digest: hdigest, Size: 1234})
 	require.Error(t, err)
 }
 
@@ -81,7 +81,7 @@ func TestString(t *testing.T) {
 	rand.Read(hdigest)
 	khash := &hash.Hash{Type: hash.Type{Code: hash.Q, Format: hash.Unencrypted}, Digest: hdigest, ID: hid, Size: 1234}
 	kid := []byte{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
-	k2 := &drm.Key{Code: drm.KeyV1, ID: kid, Hash: khash}
+	k2 := &drm.KeyID{Code: drm.Key, ID: kid, Hash: khash}
 	k3, err := drm.FromString(k2.String())
 	require.NoError(t, err)
 
@@ -134,7 +134,7 @@ func ExampleString() {
 }
 
 type Wrapper struct {
-	Key *drm.Key
+	Key *drm.KeyID
 }
 
 func TestMarshalUnmarshal(t *testing.T) {
@@ -142,7 +142,7 @@ func TestMarshalUnmarshal(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "\""+keyString+"\"", string(b))
 
-	var unmarshalled *drm.Key
+	var unmarshalled *drm.KeyID
 	err = json.Unmarshal(b, &unmarshalled)
 	assert.NoError(t, err)
 	assert.Equal(t, key, unmarshalled)
@@ -167,9 +167,9 @@ func TestEqual(t *testing.T) {
 	require.True(t, other.Equal(key))
 
 	require.False(t, key.Equal(nil))
-	require.False(t, key.Equal(&drm.Key{}))
+	require.False(t, key.Equal(&drm.KeyID{}))
 
-	var nilKey *drm.Key
+	var nilKey *drm.KeyID
 	require.False(t, nilKey.Equal(key))
 	require.True(t, nilKey.Equal(nil))
 }
@@ -182,7 +182,7 @@ func TestAssertEqual(t *testing.T) {
 	require.NoError(t, key.AssertEqual(other))
 	require.NoError(t, other.AssertEqual(key))
 
-	testAssertEqual := func(key *drm.Key, other *drm.Key, err error) {
+	testAssertEqual := func(key *drm.KeyID, other *drm.KeyID, err error) {
 		ae := key.AssertEqual(other)
 		require.True(t, errors.Match(err, ae), ae)
 	}
@@ -199,7 +199,7 @@ func TestAssertEqual(t *testing.T) {
 	require.NoError(t, err)
 	testAssertEqual(key, other, errors.E().With("reason", "hash differs"))
 
-	var nilKey *drm.Key
+	var nilKey *drm.KeyID
 	require.Error(t, nilKey.AssertEqual(key))
 	require.NoError(t, nilKey.AssertEqual(nil))
 }
@@ -213,7 +213,7 @@ func TestMaxLength(t *testing.T) {
 	khash := &hash.Hash{Type: hash.Type{Code: hash.Q, Format: hash.Unencrypted}, Digest: hdigest, ID: hid, Size: 1024*1024}
 	kid := make([]byte, 16)
 	rand.Read(kid)
-	k, err := drm.New(drm.KeyV1, kid, khash)
+	k, err := drm.New(drm.Key, kid, khash)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, 4+99, len(k.String()))
 	fmt.Println(k.String())
