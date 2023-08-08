@@ -1,6 +1,6 @@
 module github.com/eluv-io/common-go
 
-go 1.17
+go 1.19
 
 require (
 	github.com/PaesslerAG/gval v1.1.2
@@ -13,6 +13,7 @@ require (
 	github.com/eluv-io/log-go v1.0.1
 	github.com/eluv-io/utc-go v1.0.0
 	github.com/ethereum/go-ethereum v1.10.19
+	github.com/fxamacker/cbor/v2 v2.4.0
 	github.com/gammazero/deque v0.1.0
 	github.com/ghodss/yaml v1.0.0
 	github.com/gin-gonic/gin v1.7.7
@@ -22,7 +23,6 @@ require (
 	github.com/mitchellh/mapstructure v1.4.3
 	github.com/modern-go/gls v0.0.0-20220109145502-612d0167dce5
 	github.com/mr-tron/base58 v1.2.0
-	github.com/multiformats/go-multicodec v0.1.6
 	github.com/multiformats/go-varint v0.0.6
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0
@@ -33,6 +33,7 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/ugorji/go/codec v1.1.7
 	go.uber.org/atomic v1.9.0
+	golang.org/x/exp v0.0.0-20220426173459-3bcf042a4bf5
 )
 
 require (
@@ -51,14 +52,12 @@ require (
 	github.com/json-iterator/go v1.1.9 // indirect
 	github.com/jtolds/gls v4.20.0+incompatible // indirect
 	github.com/leodido/go-urn v1.2.0 // indirect
-	github.com/libp2p/go-buffer-pool v0.0.2 // indirect
-	github.com/libp2p/go-msgio v0.1.0 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
-	github.com/rjeczalik/notify v0.9.1 // indirect
+	github.com/rjeczalik/notify v0.9.3 // indirect
 	github.com/smartystreets/assertions v1.2.0 // indirect
-	github.com/whyrusleeping/cbor v0.0.0-20171005072247-63513f603b11 // indirect
+	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/crypto v0.0.0-20211108221036-ceb1ce70b4fa // indirect
 	golang.org/x/sys v0.0.0-20211019181941-9d821ace8654 // indirect
 	golang.org/x/text v0.3.7 // indirect
@@ -67,3 +66,5 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )
+
+replace github.com/fxamacker/cbor/v2 => github.com/eluv-io/cbor/v2 v2.3.1-0.20230627215207-bd2cc685afdd

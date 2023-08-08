@@ -135,12 +135,19 @@ func TestEqualsFromString(t *testing.T) {
 }
 
 func TestEquivalent(t *testing.T) {
-	id1 := Generate(User)                                      // iusr7zNaN4pwUHNuCHDpawHLEz
-	id2 := append(Generate(QNode)[:codeLen], id1[codeLen:]...) // inod7zNaN4pwUHNuCHDpawHLEz
+	id1 := Generate(User)                            // iusr7zNaN4pwUHNuCHDpawHLEz
+	id2 := append(ID{byte(QNode)}, id1[codeLen:]...) // inod7zNaN4pwUHNuCHDpawHLEz
 
+	fmt.Println(id1, id2)
 	require.True(t, id1.Equivalent(id1))
 	require.True(t, id1.Equivalent(id2))
 	require.True(t, id2.Equivalent(id1))
+
+	id3 := Generate(User)
+	require.False(t, id1.Equivalent(id3))
+	require.False(t, id3.Equivalent(id1))
+	require.False(t, id2.Equivalent(id3))
+	require.False(t, id3.Equivalent(id2))
 }
 
 func ExampleID_Explain() {

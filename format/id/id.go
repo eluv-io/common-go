@@ -232,6 +232,9 @@ func (id *ID) UnmarshalText(text []byte) error {
 // As returns a copy of this ID with the given code as the type of the new ID. Special handling: if the code is Q, and
 // the ID has code TQ or TLib, then the returned ID will have code TQ.
 func (id ID) As(c Code) ID {
+	if !id.IsValid() {
+		return nil
+	}
 	buf := make([]byte, len(id))
 	copy(buf, id)
 	buf[0] = byte(c)

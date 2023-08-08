@@ -1,6 +1,7 @@
 package token_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -8,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/eluv-io/common-go/format/codecs"
 	"github.com/eluv-io/common-go/format/encryption"
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/token"
@@ -19,23 +21,19 @@ var (
 	tqid = types.NewTQID(id.NewID(id.Q, []byte{1, 2, 3}), id.NewID(id.Tenant, []byte{99})).ID()
 	nid  = id.MustParse("inod3Sa5p3czRyYi8GnVGnh8gBDLaqJr")
 	qwt  = func() *token.Token {
-		t, _ := token.NewObject(token.QWrite, qid, nid)
-		t.Bytes = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+		t, _ := token.NewObject(token.QWrite, qid, nid, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 		return t
 	}()
 	tqwt = func() *token.Token {
-		t, _ := token.NewObject(token.QWrite, tqid, nid)
-		t.Bytes = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+		t, _ := token.NewObject(token.QWrite, tqid, nid, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 		return t
 	}()
 	qpwt = func() *token.Token {
-		t, _ := token.NewPart(token.QPartWrite, encryption.ClientGen, token.PreambleQPWFlag)
-		t.Bytes = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+		t, _ := token.NewPart(token.QPartWrite, encryption.ClientGen, token.PreambleQPWFlag, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 		return t
 	}()
 	lrot = func() *token.Token {
-		t, _ := token.NewLRO(token.LRO, nid)
-		t.Bytes = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+		t, _ := token.NewLRO(token.LRO, nid, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 		return t
 	}()
 )
@@ -49,10 +47,10 @@ func TestBackwardsCompatibilityHack(t *testing.T) {
 	tok, err := token.Parse("tq__8UmhDD9cZah58THfAYPf3Shj9hVzfwT51Cf4ZHKpayajzZRyMwCPiSpfS5yqRZfjkDjrtXuRmDa")
 	require.NoError(t, err)
 
-	tokBackwardsCompat, err := token.Parse("tq__8UmhDD9cZah58THfAYPf3Shj9hVzfwT51Cf4ZHKpayajzZRyMwCPiSpfS5yqRZfjkDjrtXuRmDa")
+	tokBackwardsCompat, err := token.Parse("tqw__8UmhDD9cZah58THfAYPf3Shj9hVzfwT51Cf4ZHKpayajzZRyMwCPiSpfS5yqRZfjkDjrtXuRmDa")
 	require.NoError(t, err)
 
-	require.Equal(t, tok, tokBackwardsCompat)
+	require.True(t, tok.Equal(tokBackwardsCompat))
 }
 
 func TestConversion(t *testing.T) {
@@ -84,6 +82,34 @@ func testConversion(t *testing.T, tok *token.Token, code token.Code, prefix stri
 	assert.Equal(t, encoded, fmt.Sprint(tok))
 	assert.Equal(t, encoded, fmt.Sprintf("%v", tok))
 	assert.Equal(t, "blub"+encoded, fmt.Sprintf("blub%s", tok))
+}
+
+func TestNil(t *testing.T) {
+	tok := (*token.Token)(nil)
+	require.Nil(t, tok)
+	require.True(t, tok.IsNil())
+	require.False(t, tok.IsValid())
+	require.True(t, tok.Equal(nil))
+	require.Contains(t, tok.AssertCode(token.QWrite).Error(), "token is nil")
+	require.Equal(t, "nil", tok.Describe())
+	require.Contains(t, tok.Validate().Error(), "token is nil")
+
+	bts, err := json.Marshal(tok)
+	require.NoError(t, err)
+	require.Equal(t, `null`, string(bts))
+	tokWrapper := struct {
+		Token *token.Token `json:"token"`
+	}{}
+	err = json.Unmarshal([]byte(`{"token":null}`), &tokWrapper)
+	require.NoError(t, err)
+	require.True(t, tokWrapper.Token.IsNil())
+
+	buf := bytes.NewBuffer(nil)
+	err = codecs.CborMuxCodec.Encoder(buf).Encode(tokWrapper)
+	require.NoError(t, err)
+	err = codecs.CborMuxCodec.Decoder(buf).Decode(&tokWrapper)
+	require.NoError(t, err)
+	require.True(t, tokWrapper.Token.IsNil())
 }
 
 func TestInvalidStringConversions(t *testing.T) {
@@ -183,9 +209,12 @@ func ExampleToken_Describe_object() {
 	tok, _ := token.FromString("tq__3WhUFGKoJAzvqrDWiZtkcfQHiKp4Gda4KkiwuRgX6BTFfq7hNeji2hPDW6qZxLuk7xAju4bgm8iLwK")
 	fmt.Println(tok.Describe())
 
+	// Note on the output: the token is formatted with tqw__ prefix (5 chars) instead of tq__ because we still use the
+	// backwards compatibility hack explained in the comment for `qwPrefix` in token.go line 167.
+
 	// Output:
 	//
-	// tq__3WhUFGKoJAzvqrDWiZtkcfQHiKp4Gda4KkiwuRgX6BTFfq7hNeji2hPDW6qZxLuk7xAju4bgm8iLwK
+	// tqw__3WhUFGKoJAzvqrDWiZtkcfQHiKp4Gda4KkiwuRgX6BTFfq7hNeji2hPDW6qZxLuk7xAju4bgm8iLwK
 	// type:    content write token
 	// bytes:   0xe6ded2a798ac1f820fe871c6170b6d12
 	// content: iq__1Bhh3pU9gLXZiNDL6PEZuEP5ri content 0x000102030405060708090a0b0c0d0e0f10111213 (20 bytes)

@@ -1,6 +1,8 @@
 package ginutil
 
 import (
+	"encoding"
+	"encoding/json"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -92,15 +94,31 @@ func SendError(c *gin.Context, code int, err error) {
 	if err != nil {
 		getLog(c).Debug("api error", "code", code, "error", err)
 	}
+
 	c.Writer.Header().Del("Content-Type")
 	c.Writer.Header().Del("Cache-Control")
+
 	switch c.NegotiateFormat(gin.MIMEJSON, gin.MIMEXML) {
-	case binding.MIMEJSON:
-		c.JSON(code, gin.H{"errors": []interface{}{err}})
 	case binding.MIMEXML:
 		c.Render(code, httputil.NewCustomXMLRenderer(gin.H{"errors": []interface{}{err}}))
 	default:
-		c.JSON(code, gin.H{"errors": []interface{}{err}})
+		switch t := err.(type) {
+		case *errors.ErrorList:
+			// error list marshals exactly as we want it: {"errors": [ e1, e2, ... ]}
+			c.JSON(code, t)
+		case json.Marshaler,
+			encoding.TextMarshaler:
+			// this includes *errors.Error: the error marshals correctly
+			c.JSON(code, gin.H{"errors": []interface{}{t}})
+		default:
+			if err != nil {
+				// convert error to string before marshalling
+				c.JSON(code, gin.H{"errors": []interface{}{err.Error()}})
+			} else {
+				// we could not send a body at all, but for backwards compatibility let's keep this...
+				c.JSON(code, gin.H{"errors": []interface{}{err}})
+			}
+		}
 	}
 }
 

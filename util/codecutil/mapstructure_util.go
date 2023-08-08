@@ -21,8 +21,8 @@ var (
 // MapDecode decodes a parsed, generic source structure that was e.g.
 // produced by unmarshaling JSON
 //
-// 	var any interface{}
-// 	_ := json.Unmarshal(jsonText, &any)
+//	var any interface{}
+//	_ := json.Unmarshal(jsonText, &any)
 //
 // into the destination object dst (usually a pointer to a struct value). Any
 // `json:...` tags defined on the destination structure's member fields will be
@@ -30,13 +30,10 @@ var (
 //
 // The implementation uses github.com/mitchellh/mapstructure to do the decoding,
 // with the following special decoding hooks:
-//
-// * decodes with the 'UnmarshalMap(m map[string]interface{}) error'
-// function if implemented by the destination object/field
-//
-// * decodes with the 'UnmarshalText(text []byte) error' function if the
-// destination implements encoding.TextUnmarshaler
-//
+//   - decodes with the 'UnmarshalMap(m map[string]interface{}) error'
+//     function if implemented by the destination object/field
+//   - decodes with the 'UnmarshalText(text []byte) error' function if the
+//     destination implements encoding.TextUnmarshaler
 func MapDecode(src interface{}, dst interface{}) error {
 	cfg := &mapstructure.DecoderConfig{
 		TagName:    "json",
@@ -83,7 +80,7 @@ func decodeHook(f reflect.Type, t reflect.Type, data interface{}) (interface{}, 
 			}
 			return instance.Interface(), nil
 		} else if t == byteSliceType {
-			// byte arrays are marshaled to byte64 encoded string in JSON by default...
+			// byte arrays are marshaled to base64 encoded string in JSON by default...
 			return base64.StdEncoding.DecodeString(dt)
 		}
 	}

@@ -6,7 +6,8 @@ import (
 )
 
 // NewBuilder creates a link builder that can be used to build a link:
-//   lnk, err := link.NewBuilder().Target(qhash).Selector(link.S.Meta).P("public", "name").Build()
+//
+//	lnk, err := link.NewBuilder().Target(qhash).Selector(link.S.Meta).P("public", "name").Build()
 func NewBuilder() *Builder {
 	return &Builder{
 		l: emptyLink(),
@@ -103,7 +104,7 @@ func (b *Builder) EnforceAuth(force bool) *Builder {
 }
 
 func (b *Builder) Build() (*Link, error) {
-	err := b.l.Validate(true)
+	err := b.l.Validate()
 	if err != nil {
 		return nil, err
 	}

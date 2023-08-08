@@ -18,10 +18,10 @@ var stringType = reflect.TypeOf("")
 
 // sub is a structure that holds the result of a path resolution action. It
 // allows to
-// - get the value at the resolved path
-// - set it to a new value
-// - and also get the potentially new root element of the target data structure
-//   on which the path was resolved with the 'create' option
+//   - get the value at the resolved path
+//   - set it to a new value
+//   - and also get the potentially new root element of the target data structure
+//     on which the path was resolved with the 'create' option
 type sub interface {
 	// Returns the value referenced by the path that was resolved
 	Get() interface{}
@@ -91,14 +91,14 @@ func (s *subArr) Root() interface{} { return s.root }
 // Any non-nil error return will fail the path resolution immediately.
 //
 // Params
-//  * elem:     the data element
-//  * path:     the path at which this element is located
-//  * fullPath: the full path being resolved
+//   - elem:     the data element
+//   - path:     the path at which this element is located
+//   - fullPath: the full path being resolved
 //
 // Returns
-//  * trans: the transformed data element
-//  * cont:  true to continue resolution, false otherwise
-//  * err:   fails path resolution immediately if non-nil
+//   - trans: the transformed data element
+//   - cont:  true to continue resolution, false otherwise
+//   - err:   fails path resolution immediately if non-nil
 type TransformerFn func(elem interface{}, path Path, fullPath Path) (trans interface{}, cont bool, err error)
 
 // noopTransformerFn is a transformer function that returns the element
@@ -253,22 +253,22 @@ func StringSliceAt(target interface{}, path ...string) []string {
 // subtree object.
 //
 // params:
-//  * path      : the path to resolve
-//  * target    : the data structure to analyze
-//  * create    : missing path segments are created if true, generate an error
-//                otherwise
-//  * copyStruct: create a copy of the target structure if needed in order to
-//                ensure the target structure is not modified.
+//   - path      : the path to resolve
+//   - target    : the data structure to analyze
+//   - create    : missing path segments are created if true, generate an error
+//     otherwise
+//   - copyStruct: create a copy of the target structure if needed in order to
+//     ensure the target structure is not modified.
 //
 // return:
-//  * a subtree object representing the value at path.
-//    Its Get() method returns the value at path. Its Set() method allows to
-//    replace that value. Its Root() returns the (potentially new) root of the
-//    structure that was resolved.
-//  * an error if the (full) path does not exist, unless the create parameter is
-//    set to true. In the latter case, the given path is created in the target
-//    structure by creating any missing maps and map entries, setting the final
-//    path segment's value to an empty map.
+//   - a subtree object representing the value at path.
+//     Its Get() method returns the value at path. Its Set() method allows to
+//     replace that value. Its Root() returns the (potentially new) root of the
+//     structure that was resolved.
+//   - an error if the (full) path does not exist, unless the create parameter is
+//     set to true. In the latter case, the given path is created in the target
+//     structure by creating any missing maps and map entries, setting the final
+//     path segment's value to an empty map.
 func resolveSub(path Path, target interface{}, create bool, copyStruct bool) (sub, error) {
 	e := errors.Template("resolve",
 		"full_path", path,
@@ -438,9 +438,9 @@ func resolveTransform(path Path, target interface{}, transform TransformerFn) (i
 				val = val.Elem()
 			}
 
-			if typ.Kind() == reflect.Map && typ.Key() == stringType {
+			if typ.Kind() == reflect.Map && stringType.ConvertibleTo(typ.Key()) {
 				// MAP
-				vv := val.MapIndex(reflect.ValueOf(path[idx]))
+				vv := val.MapIndex(reflect.ValueOf(path[idx]).Convert(typ.Key()))
 				if !vv.IsValid() {
 					return nil, e(errors.K.NotExist,
 						"reason", "map field not found",
