@@ -199,3 +199,40 @@ func TestIsCompatible(t *testing.T) {
 		})
 	}
 }
+func TestID_As(t *testing.T) {
+	bts := []byte("someid")
+	tests := []struct {
+		id   ID
+		as   Code
+		want ID
+	}{
+		// No-ops
+		{NewID(Q, bts), Q, NewID(Q, bts)},
+		{NewID(TQ, bts), TQ, NewID(TQ, bts)},
+		{NewID(QLib, bts), QLib, NewID(QLib, bts)},
+		{NewID(TLib, bts), TLib, NewID(TLib, bts)},
+
+		// non-composed --> non-composed
+		{NewID(Q, bts), QLib, NewID(QLib, bts)},
+		{NewID(QLib, bts), Q, NewID(Q, bts)},
+
+		// composed --> composed
+		{NewID(TQ, bts), TLib, NewID(TLib, bts)},
+		{NewID(TLib, bts), TQ, NewID(TQ, bts)},
+
+		// composed --> non-composed: retain composed ID!
+		{NewID(TQ, bts), Q, NewID(TQ, bts)},
+		{NewID(TLib, bts), QLib, NewID(TLib, bts)},
+		{NewID(TQ, bts), QLib, NewID(TLib, bts)},
+		{NewID(TLib, bts), Q, NewID(TQ, bts)},
+
+		// non-composed --> composed: is performed, but makes little sense. Instead use Compose() to create composed IDs.
+		{NewID(Q, bts), TQ, NewID(TQ, bts)},
+		{NewID(QLib, bts), TLib, NewID(TLib, bts)},
+	}
+	for _, test := range tests {
+		t.Run(fmt.Sprint(test.id, test.as), func(t *testing.T) {
+			require.Equal(t, test.want, test.id.As(test.as))
+		})
+	}
+}

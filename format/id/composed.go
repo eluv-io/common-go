@@ -23,16 +23,16 @@ func Embed(primary ID, embed ID) Composed {
 // and in which the primary or tenant ID or both are nil.
 func Compose(code Code, primary []byte, embed []byte) Composed {
 	codeEmbedded := embeddedCode(code)
-	if codeEmbedded == UNKNOWN || len(embed) == 0 {
+	if codeEmbedded == UNKNOWN {
 		if len(primary) == 0 {
 			return Composed{} // invalid
 		}
-		full := NewID(code, primary)
+		primary := NewID(code, primary)
 		return Composed{
-			full:     full,
-			primary:  full,
+			full:     primary,
+			primary:  primary,
 			embedded: nil,
-			strCache: full.String(),
+			strCache: primary.String(),
 		}
 	}
 

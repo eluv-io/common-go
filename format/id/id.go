@@ -238,9 +238,17 @@ func (id ID) As(c Code) ID {
 	buf := make([]byte, len(id))
 	copy(buf, id)
 	buf[0] = byte(c)
-	if c == Q && id.Code() == TQ || id.Code() == TLib {
-		buf[0] = byte(TQ)
+	switch c {
+	case Q:
+		if id.Code() == TQ || id.Code() == TLib {
+			buf[0] = byte(TQ)
+		}
+	case QLib:
+		if id.Code() == TQ || id.Code() == TLib {
+			buf[0] = byte(TLib)
+		}
 	}
+
 	return buf
 }
 

@@ -18,6 +18,7 @@ func TestExtract(t *testing.T) {
 	tlid := id.Compose(id.TLib, lid.Bytes(), tid.Bytes())
 	einv := id.Compose(id.TLib, lid.Bytes(), nil)
 	einv2 := id.Decompose(id.MustParse("itl_13kpn8nqBySRQV"))
+	einv3 := id.Compose(id.TLib, []byte{4, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, nil)
 
 	fmt.Println(einv2.Explain())
 
@@ -39,6 +40,7 @@ func TestExtract(t *testing.T) {
 		{id.QLib, []string{tlid.String()}, tlid.ID(), false},
 		{id.Tenant, []string{"no ID!"}, nil, true},
 		{id.Tenant, []string{"", qid.String(), "no ID!"}, nil, true},
+		{id.Tenant, []string{einv3.String()}, id.NewID(id.Tenant, nil), false},
 	}
 	for i, tt := range tests {
 		t.Run(fmt.Sprint(tt.target, " ", strings.Join(tt.ids, "|")), func(t *testing.T) {
