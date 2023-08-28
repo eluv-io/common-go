@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -8,6 +9,35 @@ import (
 
 	"github.com/eluv-io/log-go"
 )
+
+// TestingT is an interface wrapper around *testing.T
+type TestingT interface {
+	Errorf(format string, args ...interface{})
+	FailNow()
+	Failed() bool
+}
+
+// NewTestDir creates a new, unique test directory with the given prefix in the default temp directory of the platform.
+// It returns the directory's path and a cleanup function to remove the directory after a successful test. The directory
+// is retained for debugging if the test fails.
+func NewTestDir(t TestingT, prefix string) (path string, cleanup func()) {
+	if !strings.HasPrefix(prefix, "test") {
+		prefix = "test_" + prefix
+	}
+	path, err := os.MkdirTemp(os.TempDir(), prefix)
+	if err != nil {
+		log.Fatal("failed to create test dir", err, "path", path)
+	}
+	// log.Info("test dir", "path", path)
+	cleanup = func() {
+		if !t.Failed() {
+			Purge(path)
+		} else {
+			fmt.Println("test failed - retaining test dir " + path)
+		}
+	}
+	return
+}
 
 // TestDir creates a new, unique test directory with the given prefix in default
 // temp directory of the platform. It returns the directory's path and a cleanup
