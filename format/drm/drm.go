@@ -67,7 +67,7 @@ func init() {
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 // KeyID is the concatenation of a key ID and an associated content hash.
-//     Key format : code (1 byte) | id (16 bytes) | digest (var bytes) | size (var bytes) | id (var bytes)
+// Key format : code (1 byte) | id (16 bytes) | digest (var bytes) | size (var bytes) | id (var bytes)
 type KeyID struct {
 	Code Code
 	ID   []byte
@@ -95,6 +95,21 @@ func New(c Code, id []byte, h *hash.Hash) (*KeyID, error) {
 	return k, nil
 }
 
+func New2(idHex string, qHash string) (k *KeyID, err error) {
+	e := errors.TemplateNoTrace("init drm key", errors.K.Invalid)
+	id, err := hex.DecodeString(idHex)
+	if err != nil {
+		err = e(err, "invalid id", idHex)
+		return
+	}
+	h, err := hash.FromString(qHash)
+	if err != nil {
+		err = e(err)
+		return
+	}
+	return New(Key, id, h)
+}
+
 // FromString parses a DRM key from the given string representation.
 func FromString(s string) (*KeyID, error) {
 	e := errors.TemplateNoTrace("parse drm key", errors.K.Invalid, "string", s)
@@ -114,7 +129,7 @@ func FromString(s string) (*KeyID, error) {
 	n := 0
 	// Parse code
 	m := 1
-	if n + m > len(b) {
+	if n+m > len(b) {
 		return nil, e("reason", "invalid code")
 	} else if Code(b[n]) != c {
 		return nil, e("reason", "mismatched code", "prefix_code", c, "payload_code", b[n])
@@ -122,7 +137,7 @@ func FromString(s string) (*KeyID, error) {
 	n += m
 	// Parse id
 	m = idSize
-	if n + m > len(b) {
+	if n+m > len(b) {
 		return nil, e("reason", "invalid id")
 	}
 	id := b[n : n+m]
