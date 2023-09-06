@@ -1,3 +1,5 @@
+# EAT - Eluvio Authentication Tokens
+
 ## Token encoding formats
 
 ### Base Structure
@@ -9,23 +11,23 @@ TOKEN: PREFIX + BODY
 
 PREFIX: 6b
 * 3b Type: 1st byte "a" stands for "auth token" 
-	{"aun", "unknown"},
-	{"aan", "anonymous"},
-	{"atx", "tx"},
-	{"asc", "state-channel"},
-	{"acl", "client"},
+ {"aun", "unknown"},
+ {"aan", "anonymous"},
+ {"atx", "tx"},
+ {"asc", "state-channel"},
+ {"acl", "client"},
 * 1b SigType
-	{"_", "unknown"},
-	{"u", "unsigned"},
-	{"s", "ES256K"},
+ {"_", "unknown"},
+ {"u", "unsigned"},
+ {"s", "ES256K"},
 * 2b Format
-	{"nk", "unknown"},        
-	{"__", "legacy"},         
-	{"j_", "json"},           
-	{"jc", "json-compressed"},
-	{"c_", "cbor"},           
-	{"cc", "cbor-compressed"},
-	{"b_", "custom"},         
+ {"nk", "unknown"},        
+ {"__", "legacy"},         
+ {"j_", "json"},           
+ {"jc", "json-compressed"},
+ {"c_", "cbor"},           
+ {"cc", "cbor-compressed"},
+ {"b_", "custom"},         
 
 BODY: base58(SIGNATURE + PAYLOAD)
 
@@ -78,13 +80,12 @@ Solution: wrap new token format inside small JSON struct as follows:
 ```
 
 Legacy encoded form:
+
 ```
 eyJxaWQiOiJpcV9fM1Jpd2lQN1VKSmlIeEZMYmtMNDZCb1ZmS1dyQiIsInRvayI6ImFzY3NjY0h3RHV2UlBDQnI2Tk14UUhURjU3UWg5VnJ0UXVhazJqdDZxRUZhWDM2QTdya21tV051amJTOFBVdWFEenhVcW8zSmVZNlI5NXhUemJDNjJXYnhjY1VuRHdBamo1cktXdVVxYUs1eEhIaGNiTWZXRVZHVUVNRmg3cUdobnNiemFKd0pzeGdTNm1WQVVlSFFqZ2g5RUFBenYyOGQ0eXlZOTlDUTJVZzlYTkFrMjdvd3FMaTFUUlJva1NIRlE1ZFVaTmRrNlptTGtCSEVKTGpQVHlpekt5WmM0ZkZZYnJjMzZEdFpRUnBHeXJGU2FhWjhKZkNOSlg2a2NTWnp4WkVUZzFEbmNoV1FvcmpMTVhUaEhUN1d1UzVtM3NtR0RKN2NNYzRXeWZUUm95b3NMIn0=
 ```
 
-
-
-### Brainstorming notes...
+### Brainstorming notes
 
 ```
 BODY: base64(PAYLOAD).base64(SIGNATURE)
