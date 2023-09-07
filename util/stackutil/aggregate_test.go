@@ -60,3 +60,23 @@ func TestAggregateNoStack(t *testing.T) {
 	require.Error(t, err)
 	require.Nil(t, c)
 }
+
+func TestAggregateGo1_19(t *testing.T) {
+	stackb, err := ioutil.ReadFile("testdata/stacktrace_go1_19.txt")
+	require.NoError(t, err)
+	stack := string(stackb)
+
+	c, err := stackutil.Aggregate(stack, stackutil.Normal)
+	require.NoError(t, err)
+
+	c.SortByCount(false)
+
+	text, err := c.AsText()
+	require.NoError(t, err)
+	fmt.Println(text)
+
+	buckets := c.Buckets()
+	require.Equal(t, 12, len(buckets[0].IDs))
+	require.Equal(t, 6, len(buckets[1].IDs))
+	require.Equal(t, 6, len(buckets[2].IDs))
+}

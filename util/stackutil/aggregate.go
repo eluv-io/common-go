@@ -5,8 +5,9 @@ import (
 	"io/ioutil"
 	"sort"
 
-	"github.com/eluv-io/errors-go"
 	"github.com/maruel/panicparse/v2/stack"
+
+	"github.com/eluv-io/errors-go"
 
 	"github.com/eluv-io/common-go/util/numberutil"
 )
