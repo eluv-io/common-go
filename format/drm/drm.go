@@ -95,16 +95,17 @@ func New(c Code, id []byte, h *hash.Hash) (*KeyID, error) {
 	return k, nil
 }
 
+// New2 is the same as New, but accepts string arguments
 func New2(idHex string, qHash string) (k *KeyID, err error) {
 	e := errors.TemplateNoTrace("init drm key", errors.K.Invalid)
 	id, err := hex.DecodeString(idHex)
-	if err != nil {
-		err = e(err, "invalid id", idHex)
+	if err != nil || len(id) != idSize {
+		err = e(err, "reason", "invalid id", "id", idHex)
 		return
 	}
 	h, err := hash.FromString(qHash)
 	if err != nil {
-		err = e(err)
+		err = e(err, "reason", "invalid hash", "hash", qHash)
 		return
 	}
 	return New(Key, id, h)
