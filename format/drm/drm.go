@@ -86,7 +86,7 @@ func New(c Code, id []byte, h *hash.Hash) (*KeyID, error) {
 	} else if c != Key {
 		return nil, e("reason", "code not supported", "code", c)
 	} else if len(id) != idSize {
-		return nil, e("reason", "invalid id", "id", id)
+		return nil, e("reason", "invalid id", "id", id, "expected_size", idSize, "actual_size", len(id))
 	} else if h == nil || h.IsNil() || h.Type.Code != hash.Q {
 		return nil, e("reason", "invalid hash", "hash", h)
 	}
