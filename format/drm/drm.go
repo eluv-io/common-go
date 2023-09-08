@@ -68,6 +68,7 @@ func init() {
 
 // KeyID is the concatenation of a key ID and an associated content hash.
 // Key format : code (1 byte) | id (16 bytes) | digest (var bytes) | size (var bytes) | id (var bytes)
+// For code Key, id is expected to have a length of 16 bytes; h is expected to have a type of {Q, Unencrypted}
 type KeyID struct {
 	Code Code
 	ID   []byte
@@ -76,7 +77,6 @@ type KeyID struct {
 }
 
 // New creates a new DRM key with the given code, ID, and hash.
-// For code Key, id is expected to have a length of 16 bytes; h is expected to have a type of {Q, Unencrypted}
 func New(c Code, id []byte, h *hash.Hash) (*KeyID, error) {
 	e := errors.TemplateNoTrace("init drm key", errors.K.Invalid)
 	if _, ok := codeToPrefix[c]; !ok {
@@ -95,20 +95,18 @@ func New(c Code, id []byte, h *hash.Hash) (*KeyID, error) {
 	return k, nil
 }
 
-// New2 is the same as New, but accepts string arguments
-func New2(idHex string, qHash string) (k *KeyID, err error) {
-	e := errors.TemplateNoTrace("init drm key", errors.K.Invalid)
-	id, err := hex.DecodeString(idHex)
-	if err != nil || len(id) != idSize {
-		err = e(err, "reason", "invalid id", "id", idHex)
-		return
-	}
-	h, err := hash.FromString(qHash)
+// New creates a new DRM key with the given code, ID hex string, and hash string.
+func NewFromStrings(c Code, idStr string, hStr string) (*KeyID, error) {
+	e := errors.TemplateNoTrace("init drm key from strings", errors.K.Invalid)
+	id, err := hex.DecodeString(idStr)
 	if err != nil {
-		err = e(err, "reason", "invalid hash", "hash", qHash)
-		return
+		return nil, e(err, "reason", "invalid id", "id", idStr)
 	}
-	return New(Key, id, h)
+	h, err := hash.FromString(hStr)
+	if err != nil {
+		return nil, e(err, "reason", "invalid hash", "hash", hStr)
+	}
+	return New(c, id, h)
 }
 
 // FromString parses a DRM key from the given string representation.
