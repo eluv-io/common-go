@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/ecdsa"
 	"encoding/hex"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -143,7 +142,7 @@ func PrivateKeyFromString(keyStr string) (*ecdsa.PrivateKey, error) {
 }
 
 func DecryptKeyFile(keyfile string, password string) (*keystore.Key, error) {
-	keyBytes, err := ioutil.ReadFile(keyfile)
+	keyBytes, err := os.ReadFile(keyfile)
 	if err != nil {
 		return nil, errors.E("decrypt key file", err, "file", keyfile)
 	}
@@ -166,7 +165,7 @@ func RecryptKeyFile(keyfile string, password string, newpassword string, scryptN
 		return err
 	}
 
-	keyBytes, err := ioutil.ReadFile(keyfile)
+	keyBytes, err := os.ReadFile(keyfile)
 	if err != nil {
 		return err
 	}
@@ -186,7 +185,7 @@ func RecryptKeyFile(keyfile string, password string, newpassword string, scryptN
 		return err
 	}
 
-	err = ioutil.WriteFile(keyfile, newKeyBytes, fileInfo.Mode())
+	err = os.WriteFile(keyfile, newKeyBytes, fileInfo.Mode())
 	if err != nil {
 		return err
 	}

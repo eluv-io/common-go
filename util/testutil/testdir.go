@@ -2,7 +2,6 @@ package testutil
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,7 +42,7 @@ func NewTestDir(t TestingT, prefix string) (path string, cleanup func()) {
 // temp directory of the platform. It returns the directory's path and a cleanup
 // function to remove the directory after the test.
 func TestDir(prefix string) (path string, cleanup func()) {
-	path, err := ioutil.TempDir(os.TempDir(), prefix)
+	path, err := os.MkdirTemp(os.TempDir(), prefix)
 	if err != nil {
 		log.Fatal("failed to create test dir", err, "path", path)
 	}
@@ -54,7 +53,7 @@ func TestDir(prefix string) (path string, cleanup func()) {
 	return
 }
 
-// Removes the given directory and all of its content.
+// Purge removes the given directory and all of its content.
 func Purge(path string) {
 	// log.Info("purging test dir", "path", path)
 	// util.PrintDirectoryTree(path)
@@ -93,11 +92,11 @@ func CopyDir(source, destination string, accept ...func(relPath string) bool) er
 		if info.IsDir() {
 			return os.Mkdir(filepath.Join(destination, relPath), 0755)
 		} else {
-			var data, ex = ioutil.ReadFile(filepath.Join(source, relPath))
+			var data, ex = os.ReadFile(filepath.Join(source, relPath))
 			if ex != nil {
 				return ex
 			}
-			return ioutil.WriteFile(filepath.Join(destination, relPath), data, 0777)
+			return os.WriteFile(filepath.Join(destination, relPath), data, 0777)
 		}
 	})
 	return err

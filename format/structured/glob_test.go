@@ -3,14 +3,14 @@ package structured_test
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"testing"
 
-	"github.com/eluv-io/log-go"
 	"github.com/stretchr/testify/require"
 
 	"github.com/eluv-io/common-go/format/structured"
 	"github.com/eluv-io/common-go/util/jsonutil"
+	"github.com/eluv-io/log-go"
 )
 
 func TestFilterGlob(t *testing.T) {
@@ -847,25 +847,25 @@ func newCtx(t *testing.T) *tctx {
 }
 
 func (tc *tctx) site() interface{} {
-	bytes, err := ioutil.ReadFile("testdata/site.json")
+	bytes, err := os.ReadFile("testdata/site.json")
 	tc.NoError(err)
 	return tc.parse(string(bytes))
 }
 
 func (tc *tctx) siteWithArrays() interface{} {
-	bytes, err := ioutil.ReadFile("testdata/site_with_arrays.json")
+	bytes, err := os.ReadFile("testdata/site_with_arrays.json")
 	tc.NoError(err)
 	return tc.parse(string(bytes))
 }
 
 func (tc *tctx) iss1237() interface{} {
-	bytes, err := ioutil.ReadFile("testdata/iss-1237.json")
+	bytes, err := os.ReadFile("testdata/iss-1237.json")
 	tc.NoError(err)
 	return tc.parse(string(bytes))
 }
 
 func (tc *tctx) searchOfferings() interface{} {
-	bytes, err := ioutil.ReadFile("testdata/search-offerings.json")
+	bytes, err := os.ReadFile("testdata/search-offerings.json")
 	tc.NoError(err)
 	return tc.parse(string(bytes))
 }

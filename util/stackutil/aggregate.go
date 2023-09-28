@@ -2,7 +2,7 @@ package stackutil
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"sort"
 
 	"github.com/maruel/panicparse/v2/stack"
@@ -29,7 +29,7 @@ type AggregateStack struct {
 func Aggregate(trace string, sim stack.Similarity) (*AggregateStack, error) {
 	in := bytes.NewBuffer([]byte(trace))
 
-	snapshot, _, err := stack.ScanSnapshot(in, ioutil.Discard, stack.DefaultOpts())
+	snapshot, _, err := stack.ScanSnapshot(in, io.Discard, stack.DefaultOpts())
 	if snapshot == nil {
 		return nil, errors.E("stack.Aggregate", errors.K.NotExist, err, "reason", "no stacktrace found")
 	}

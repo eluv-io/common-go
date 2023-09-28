@@ -2,7 +2,6 @@ package fileutil_test
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,17 +14,17 @@ import (
 
 // folder creates a test folder with a predefined files structure
 // folder
-//  + t1
-//     + t1f1
-//     + td1
-//       + -- d0 (with zero file)
-//       + -- d1 (with one file)
-//       + -- d2 (with two files)
-//     + td2
-//       + -- f1   --> td1/d1/f1
-//       + -- t1f1 --> t1/t1f1
-//  + t2
-//     + -- f --> folder
+//   - t1
+//   - t1f1
+//   - td1
+//   - -- d0 (with zero file)
+//   - -- d1 (with one file)
+//   - -- d2 (with two files)
+//   - td2
+//   - -- f1   --> td1/d1/f1
+//   - -- t1f1 --> t1/t1f1
+//   - t2
+//   - -- f --> folder
 func testFolder(t *testing.T, dirPrefix string) (string, func()) {
 	dir, cleanup := testutil.TestDir(dirPrefix)
 
@@ -33,7 +32,7 @@ func testFolder(t *testing.T, dirPrefix string) (string, func()) {
 	t2 := filepath.Join(dir, "t2")
 	require.NoError(t, os.MkdirAll(t1, os.ModePerm))
 	require.NoError(t, os.MkdirAll(t2, os.ModePerm))
-	err := ioutil.WriteFile(
+	err := os.WriteFile(
 		filepath.Join(t1, "t1f1"),
 		make([]byte, 10),
 		os.ModePerm)
@@ -49,7 +48,7 @@ func testFolder(t *testing.T, dirPrefix string) (string, func()) {
 		d := filepath.Join(td1, fmt.Sprintf("d%d", i))
 		require.NoError(t, os.MkdirAll(d, os.ModePerm))
 		for f := 0; f < i; f++ {
-			err := ioutil.WriteFile(
+			err := os.WriteFile(
 				filepath.Join(d, fmt.Sprintf("f%d", f+1)),
 				make([]byte, i),
 				os.ModePerm)

@@ -2,7 +2,6 @@ package ioutil
 
 import (
 	"io"
-	"io/ioutil"
 	"sync"
 
 	"github.com/eluv-io/errors-go"
@@ -142,7 +141,7 @@ func Consume(r io.ReadCloser) error {
 		return nil
 	}
 
-	_, _ = io.Copy(ioutil.Discard, r)
+	_, _ = io.Copy(io.Discard, r)
 	return r.Close() // close reader regardless of copy success
 }
 
@@ -199,7 +198,7 @@ func CopyBuffer(dst io.Writer, src io.Reader, copyBuf []byte) (int, error) {
 // Skip reads and discards n bytes from the given reader. Returns the actual
 // number of bytes read and/or an error.
 func Skip(r io.Reader, n int64) (int64, error) {
-	return io.CopyN(ioutil.Discard, r, n)
+	return io.CopyN(io.Discard, r, n)
 }
 
 // Whence returns a string description of io.Seek* constants

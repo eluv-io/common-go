@@ -6,7 +6,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"strings"
 	"time"
 	"unicode"
@@ -961,7 +961,7 @@ func (t *Token) decodeBytes(bts []byte) error {
 
 	switch t.Format {
 	case Formats.JsonCompressed(), Formats.CborCompressed():
-		bts, err = ioutil.ReadAll(flate.NewReader(bytes.NewReader(bts)))
+		bts, err = io.ReadAll(flate.NewReader(bytes.NewReader(bts)))
 		if err != nil {
 			return e(err)
 		}

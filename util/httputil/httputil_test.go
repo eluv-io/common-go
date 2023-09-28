@@ -3,7 +3,6 @@ package httputil_test
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -287,7 +286,7 @@ func TestClientIP(t *testing.T) {
 
 func TestParseServerError(t *testing.T) {
 	r := func(s string) io.ReadCloser {
-		return ioutil.NopCloser(strings.NewReader(s))
+		return io.NopCloser(strings.NewReader(s))
 	}
 
 	match := func(e1, e2 error) {

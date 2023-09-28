@@ -3,7 +3,7 @@ package ioutil_test
 import (
 	"bytes"
 	"fmt"
-	stdioutil "io/ioutil"
+	"io"
 	"testing"
 
 	"github.com/eluv-io/common-go/util/ioutil"
@@ -13,7 +13,7 @@ import (
 
 func ExampleRepeatingReader() {
 	r := ioutil.NewRepeatingReader([]byte("1234567890"), 24)
-	res, err := stdioutil.ReadAll(r)
+	res, err := io.ReadAll(r)
 	fmt.Printf("bytes read: %s\n", string(res))
 	fmt.Printf("error     : %v\n", err)
 

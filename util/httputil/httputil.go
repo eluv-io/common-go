@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -150,7 +149,7 @@ func GetPlainCustomHeader(headers http.Header, key string) (string, error) {
 	return headers.Get(customHeaderPrefix + key), nil
 }
 
-// SetCustomHeader sets the given key-value pairs from the provided map as
+// SetCustomHeaders sets the given key-value pairs from the provided map as
 // custom headers. If the value is a string, SetCustomerHeader() is called,
 // otherwise SetCustomCBORHeader() (any returned errors are ignored).
 // See these functions for details.
@@ -183,7 +182,7 @@ func SetCustomCBORHeader(headers http.Header, key string, val interface{}) error
 	return nil
 }
 
-// Normalizes the given URL string into the format "scheme://host:port[/path]"
+// NormalizeURL normalizes the given URL string into the format "scheme://host:port[/path]"
 func NormalizeURL(rawURL string, defaultScheme string, defaultPort string) (string, error) {
 	rawurl := rawURL
 	if !strings.Contains(rawurl, "://") {
@@ -278,7 +277,7 @@ func Unmarshal(reqBody io.ReadCloser, reqHeader http.Header) (interface{}, error
 		// tests...
 		return nil, nil
 	}
-	body, err := ioutil.ReadAll(reqBody)
+	body, err := io.ReadAll(reqBody)
 	if err != nil {
 		return nil, errors.E("read request body", errors.K.IO, err)
 	}
@@ -305,7 +304,7 @@ func UnmarshalTo(reqBody io.Reader, reqHeader http.Header, target interface{}, r
 	var body []byte
 	var err error
 	if reqBody != nil {
-		body, err = ioutil.ReadAll(reqBody)
+		body, err = io.ReadAll(reqBody)
 		if err != nil {
 			return errors.E("read request body", errors.K.IO, err)
 		}
@@ -520,7 +519,7 @@ func ParseServerError(body io.ReadCloser, httpStatusCode int) error {
 		e = errors.TemplateNoTrace(errors.K.Internal, "status", httpStatusCode)
 	}
 
-	resp, err := ioutil.ReadAll(io.LimitReader(body, 1_000_000))
+	resp, err := io.ReadAll(io.LimitReader(body, 1_000_000))
 	if err != nil || len(resp) == 0 {
 		return e(err, "body", string(resp))
 	}

@@ -4,17 +4,16 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"testing"
 	"time"
 
-	"github.com/eluv-io/errors-go"
 	"github.com/stretchr/testify/require"
 
 	"github.com/eluv-io/common-go/format/preamble"
 	"github.com/eluv-io/common-go/util/byteutil"
 	"github.com/eluv-io/common-go/util/stringutil"
+	"github.com/eluv-io/errors-go"
 )
 
 var data, data2 []byte
@@ -82,7 +81,7 @@ func TestPreambleRead(t *testing.T) {
 	require.Equal(t, data2, preambleData)
 	require.Equal(t, format2, preambleFormat)
 	require.Equal(t, size2, preambleSize)
-	b, err := ioutil.ReadAll(rdr)
+	b, err := io.ReadAll(rdr)
 	require.NoError(t, err)
 	require.Equal(t, str, string(b))
 

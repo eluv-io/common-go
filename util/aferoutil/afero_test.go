@@ -2,14 +2,14 @@ package aferoutil
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/eluv-io/errors-go"
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/require"
+
+	"github.com/eluv-io/errors-go"
 
 	"github.com/eluv-io/common-go/util"
 	"github.com/eluv-io/common-go/util/testutil"
@@ -123,10 +123,10 @@ func TestMoveFile(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				// src must be gone
-				_, err := ioutil.ReadFile(tt.args.src)
+				_, err := os.ReadFile(tt.args.src)
 				require.Error(t, err)
 				// dst must be there
-				data, err := ioutil.ReadFile(tt.args.dst)
+				data, err := os.ReadFile(tt.args.dst)
 				require.NoError(t, err)
 				require.Equal(t, srcData, data)
 			}
@@ -136,7 +136,7 @@ func TestMoveFile(t *testing.T) {
 
 func createSrc(t *testing.T, dir string, index int, srcData []byte) string {
 	srcPath := filepath.Join(dir, fmt.Sprintf("source-%02d.txt", index))
-	err := ioutil.WriteFile(srcPath, srcData, os.ModePerm)
+	err := os.WriteFile(srcPath, srcData, os.ModePerm)
 	require.NoError(t, err)
 	return srcPath
 }
