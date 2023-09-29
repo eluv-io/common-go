@@ -11,11 +11,11 @@ TOKEN: PREFIX + BODY
 
 PREFIX: 6b
 * 3b Type: 1st byte "a" stands for "auth token" 
- {"aun", "unknown"},
- {"aan", "anonymous"},
- {"atx", "tx"},
- {"asc", "state-channel"},
- {"acl", "client"},
+  {"aun", "unknown"},
+  {"aan", "anonymous"},
+  {"atx", "tx"},
+  {"asc", "state-channel"},
+  {"acl", "client"},
 * 1b SigType
  {"_", "unknown"},
  {"u", "unsigned"},
