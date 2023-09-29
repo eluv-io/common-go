@@ -1,4 +1,4 @@
-# EAT - Eluvio Authentication Tokens
+# EAT - Eluvio Authorization Tokens
 
 ## Token encoding formats
 
