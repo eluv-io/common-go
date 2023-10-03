@@ -29,6 +29,9 @@ func PrintDirectoryTree(dir string) {
 func DirectoryTree(dir string) string {
 	var sb strings.Builder
 	_ = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
 		p, _ := filepath.Rel(dir, path)
 		indent := strings.Repeat("  ", strings.Count(p, "/"))
 		ftype := "f"
