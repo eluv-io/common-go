@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/eluv-io/log-go"
 	"github.com/eluv-io/utc-go"
@@ -55,11 +54,12 @@ func NewTestDir(t TestingT, prefix string) (path string, cleanup func()) {
 //		&net.UnixAddr{Net: "unix", Name: endpoint})
 func eluvioTempDir() string {
 	tmp, ok := os.LookupEnv("ELUVIO_TEST_TMPDIR")
+	DateOnly := "2006-01-02" // use time.DateOnly once go1.20 is used
 	if !ok || tmp == "" {
 		return filepath.Join(
 			os.TempDir(),
 			"eluvio",
-			strings.ReplaceAll(utc.Now().Format(time.DateOnly), "-", "_")[2:])
+			strings.ReplaceAll(utc.Now().Format(DateOnly), "-", "_")[2:])
 	}
 	if filepath.IsAbs(tmp) {
 		return tmp
