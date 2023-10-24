@@ -88,7 +88,7 @@ type Type struct {
 func TypeFromString(s string) (Type, error) {
 	t, ok := prefixToType[s]
 	if !ok {
-		return Type{}, errors.E("parse type", errors.K.Invalid, "string", s)
+		return Type{}, errors.NoTrace("parse type", errors.K.Invalid, "string", s)
 	}
 	return t, nil
 }
@@ -167,7 +167,7 @@ type Hash struct {
 
 // NewObject creates a new object hash with the given type, digest, size, and ID
 func NewObject(htype Type, digest []byte, size int64, id ei.ID) (*Hash, error) {
-	e := errors.Template("init hash", errors.K.Invalid)
+	e := errors.TemplateNoTrace("init hash", errors.K.Invalid)
 	if _, ok := typeToPrefix[htype]; !ok {
 		return nil, e("reason", "invalid type", "code", htype.Code, "format", htype.Format)
 	} else if htype.Code == UNKNOWN {
@@ -196,7 +196,7 @@ func NewObject(htype Type, digest []byte, size int64, id ei.ID) (*Hash, error) {
 
 // NewPart creates a new non-live part hash with the given type, digest, size, and optional preamble size
 func NewPart(htype Type, digest []byte, size int64, preambleSize int64) (*Hash, error) {
-	e := errors.Template("init hash", errors.K.Invalid)
+	e := errors.TemplateNoTrace("init hash", errors.K.Invalid)
 	if _, ok := typeToPrefix[htype]; !ok {
 		return nil, e("reason", "invalid type", "code", htype.Code, "format", htype.Format)
 	} else if htype.Code == UNKNOWN {
@@ -225,7 +225,7 @@ func NewPart(htype Type, digest []byte, size int64, preambleSize int64) (*Hash, 
 
 // NewLive creates a new live hash with the given type, digest, and expiration
 func NewLive(htype Type, digest []byte, expiration utc.UTC) (*Hash, error) {
-	e := errors.Template("init hash", errors.K.Invalid)
+	e := errors.TemplateNoTrace("init hash", errors.K.Invalid)
 	if _, ok := typeToPrefix[htype]; !ok {
 		return nil, e("reason", "invalid type", "code", htype.Code, "format", htype.Format)
 	} else if htype.Code == UNKNOWN {
@@ -262,26 +262,40 @@ func Parse(s string) (*Hash, error) {
 
 // FromString parses a hash from the given string representation.
 func FromString(s string) (*Hash, error) {
+	e := errors.TemplateNoTrace("parse hash", errors.K.Invalid, "string", s)
+
 	if s == "" {
 		return nil, nil
 	}
-	e := errors.Template("parse hash", errors.K.Invalid, "string", s)
 
 	if len(s) <= prefixLen {
 		return nil, e("reason", "invalid token string")
 	}
 
 	htype, found := prefixToType[s[:prefixLen]]
-	if !found {
+	if !found || htype.Code == UNKNOWN {
 		return nil, e("reason", "invalid prefix")
 	}
 
 	b, err := base58.Decode(s[prefixLen:])
 	if err != nil {
-		return nil, e(err, "string", s)
+		return nil, e(err)
 	}
-	n := 0
 
+	h, err := FromDecodedBytes(htype, b)
+	if err != nil {
+		return nil, e(err)
+	}
+	h.s = s
+
+	return h, nil
+}
+
+// FromDecodedBytes parses a hash from the given base58-decoded bytes representation.
+func FromDecodedBytes(htype Type, b []byte) (*Hash, error) {
+	e := errors.TemplateNoTrace("parse hash", errors.K.Invalid)
+
+	n := 0
 	var digest []byte
 	var size, preambleSize int64
 	var id ei.ID
@@ -290,7 +304,7 @@ func FromString(s string) (*Hash, error) {
 		// Parse digest
 		m := sha256.Size
 		if n+m > len(b) {
-			return nil, errors.E("parse hash", errors.K.Invalid, "reason", "invalid digest", "string", s)
+			return nil, e("reason", "invalid digest")
 		}
 		digest = b[n : n+m]
 		n += m
@@ -299,7 +313,7 @@ func FromString(s string) (*Hash, error) {
 		var sz uint64
 		sz, m = binary.Uvarint(b[n:])
 		if m <= 0 {
-			return nil, errors.E("parse hash", errors.K.Invalid, "reason", "invalid size", "string", s)
+			return nil, e("reason", "invalid size")
 		}
 		size = int64(sz)
 		n += m
@@ -307,7 +321,7 @@ func FromString(s string) (*Hash, error) {
 		if htype.Code == QPart {
 			sz, m = binary.Uvarint(b[n:])
 			if m < 0 {
-				return nil, errors.E("parse hash", errors.K.Invalid, "reason", "invalid preamble size", "string", s)
+				return nil, e("reason", "invalid preamble size")
 			} else if m > 0 {
 				preambleSize = int64(sz)
 			}
@@ -322,18 +336,18 @@ func FromString(s string) (*Hash, error) {
 		digest = b[n:]
 	} else {
 		// Parse expiration
-		e, m := binary.Uvarint(b[n:])
+		exp, m := binary.Uvarint(b[n:])
 		if m <= 0 {
-			return nil, errors.E("parse hash", errors.K.Invalid, "reason", "invalid expiration", "string", s)
+			return nil, e("reason", "invalid expiration")
 		}
-		expiration = utc.Unix(int64(e), 0)
+		expiration = utc.Unix(int64(exp), 0)
 		n += m
 
 		// Parse digest
 		digest = b[n:]
 	}
 
-	return &Hash{Type: htype, Digest: digest, Size: size, PreambleSize: preambleSize, ID: id, Expiration: expiration, s: s}, nil
+	return &Hash{Type: htype, Digest: digest, Size: size, PreambleSize: preambleSize, ID: id, Expiration: expiration}, nil
 }
 
 func (h *Hash) String() string {
@@ -342,6 +356,15 @@ func (h *Hash) String() string {
 	}
 
 	if h.s == "" && len(h.Digest) > 0 {
+		h.s = h.prefix() + base58.Encode(h.DecodedBytes())
+	}
+
+	return h.s
+}
+
+// DecodedBytes converts this hash to base58-decoded bytes.
+func (h *Hash) DecodedBytes() []byte {
+	if len(h.Digest) > 0 {
 		var b []byte
 		if !h.IsLive() {
 			b = make([]byte, len(h.Digest))
@@ -368,10 +391,9 @@ func (h *Hash) String() string {
 
 			b = append(b[:n], h.Digest...)
 		}
-		h.s = h.prefix() + base58.Encode(b)
+		return b
 	}
-
-	return h.s
+	return nil
 }
 
 func (h *Hash) IsNil() bool {
@@ -385,7 +407,7 @@ func (h *Hash) IsLive() bool {
 // AssertType checks whether the hash's type equals the provided type
 func (h *Hash) AssertType(t Type) error {
 	if h.IsNil() || h.Type != t {
-		return errors.E("verify hash", errors.K.Invalid, "reason", "hash type doesn't match",
+		return errors.NoTrace("verify hash", errors.K.Invalid, "reason", "hash type doesn't match",
 			"expected", typeToPrefix[t],
 			"actual", h.prefix())
 	}
@@ -398,7 +420,7 @@ func (h *Hash) AssertCode(c Code) error {
 		hcode = h.Type.Code
 	}
 	if hcode != c {
-		return errors.E("verify hash", errors.K.Invalid, "reason", "hash code doesn't match",
+		return errors.NoTrace("verify hash", errors.K.Invalid, "reason", "hash code doesn't match",
 			"expected", c,
 			"actual", hcode)
 	}
@@ -411,7 +433,7 @@ func (h *Hash) AssertFormat(f Format) error {
 		hformat = h.Type.Format
 	}
 	if hformat != f {
-		return errors.E("verify hash", errors.K.Invalid, "reason", "hash format doesn't match",
+		return errors.NoTrace("verify hash", errors.K.Invalid, "reason", "hash format doesn't match",
 			"expected", f,
 			"actual", hformat)
 	}
@@ -461,7 +483,7 @@ func (h Hash) MarshalText() ([]byte, error) {
 func (h *Hash) UnmarshalText(text []byte) error {
 	parsed, err := FromString(string(text))
 	if err != nil {
-		return errors.E("unmarshal hash", err)
+		return errors.NoTrace("unmarshal hash", err)
 	}
 	if parsed == nil {
 		// empty string parses to nil hash... best we can do is ignore it...
@@ -476,11 +498,11 @@ func (h *Hash) As(c Code, id ei.ID) (*Hash, error) {
 	if h.IsNil() || c == h.Type.Code {
 		return h, nil
 	} else if h.PreambleSize > 0 {
-		return nil, errors.E("convert hash", errors.K.Invalid, "reason", "no conversion for parts with preamble", "hash", h)
+		return nil, errors.NoTrace("convert hash", errors.K.Invalid, "reason", "no conversion for parts with preamble", "hash", h)
 	} else if h.IsLive() || c.IsLive() {
-		return nil, errors.E("convert hash", errors.K.Invalid, "reason", "no conversion for live parts", "hash", h, "code", c)
+		return nil, errors.NoTrace("convert hash", errors.K.Invalid, "reason", "no conversion for live parts", "hash", h, "code", c)
 	} else if _, ok := typeToPrefix[Type{c, h.Type.Format}]; !ok {
-		return nil, errors.E("convert hash", errors.K.Invalid, "reason", "invaid type", "code", c, "format", h.Type.Format)
+		return nil, errors.NoTrace("convert hash", errors.K.Invalid, "reason", "invaid type", "code", c, "format", h.Type.Format)
 	}
 	var res Hash = *h
 	res.Type.Code = c
@@ -490,7 +512,7 @@ func (h *Hash) As(c Code, id ei.ID) (*Hash, error) {
 	} else if id != nil && id.AssertCode(ei.Q) == nil {
 		res.ID = id
 	} else {
-		return nil, errors.E("convert hash", errors.K.Invalid, "reason", "invalid id", "id", id)
+		return nil, errors.NoTrace("convert hash", errors.K.Invalid, "reason", "invalid id", "id", id)
 	}
 	res.s = res.String()
 	return &res, nil
@@ -508,7 +530,7 @@ func (h *Hash) Equal(h2 *Hash) bool {
 
 // AssertEqual returns nil if this hash is equal to the provided hash, an error with detailed reason otherwise.
 func (h *Hash) AssertEqual(h2 *Hash) error {
-	e := errors.Template("hash.assert-equal", errors.K.Invalid, "expected", h, "actual", h2)
+	e := errors.TemplateNoTrace("hash.assert-equal", errors.K.Invalid, "expected", h, "actual", h2)
 	switch {
 	case h == h2:
 		return nil
