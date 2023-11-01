@@ -15,6 +15,8 @@ import (
 // span can also record an arbitrary number of attributes (key-value pairs) and events (bundled attributes with a name
 // and timestamp)
 type Span interface {
+	ExtendedSpan
+
 	// End completes the span. No updates are allowed to span after it
 	// ends. The only exception is setting status of the span.
 	End()
@@ -43,14 +45,9 @@ type Span interface {
 
 	// FindByName returns the first sub span with the given name (depth-first) or nil if not found.
 	FindByName(name string) Span
-
-	// Extended returns the extended representation of the span.
-	Extended() ExtendedSpan
 }
 
 type ExtendedSpan interface {
-	Span
-
 	// StartTime returns the start time of the span.
 	StartTime() utc.UTC
 
@@ -59,6 +56,12 @@ type ExtendedSpan interface {
 
 	// Duration returns the duration of the span.
 	Duration() time.Duration
+
+	// Extended returns true if the span is set to use an extended JSON representation.
+	Extended() bool
+
+	// SetExtended sets the span to use an extended JSON representation.
+	SetExtended()
 }
 
 type Event struct {
@@ -70,10 +73,6 @@ type Event struct {
 // ---------------------------------------------------------------------------------------------------------------------
 
 type NoopSpan struct{}
-
-type NoopExtendedSpan struct {
-	NoopSpan
-}
 
 func (n NoopSpan) Start(ctx context.Context, _ string) (context.Context, Span) {
 	return ctx, n
@@ -87,37 +86,34 @@ func (n NoopSpan) Json() string                                         { return
 func (n NoopSpan) Attributes() map[string]interface{}                   { return nil }
 func (n NoopSpan) Events() []*Event                                     { return nil }
 func (n NoopSpan) FindByName(string) Span                               { return nil }
-func (n NoopSpan) Extended() ExtendedSpan                               { return n }
 func (n NoopSpan) StartTime() utc.UTC                                   { return utc.Zero }
 func (n NoopSpan) EndTime() utc.UTC                                     { return utc.Zero }
 func (n NoopSpan) Duration() time.Duration                              { return 0 }
+func (n NoopSpan) Extended() bool                                       { return false }
+func (n NoopSpan) SetExtended()                                         {}
 
 // ---------------------------------------------------------------------------------------------------------------------
 
 func newSpan(name string) *RecordingSpan {
 	s := &RecordingSpan{
-		StartTime: utc.Now(),
-		Data:      &recordingData{},
+		Data: &recordingExtendedData{
+			recordingData: &recordingData{},
+		},
+		startTime: utc.Now(),
 	}
 	s.Data.Name = name
-	s.extended = &recordingExtendedSpan{
-		RecordingSpan: s,
-		data: &recordingExtendedData{
-			recordingData: s.Data,
-			Start:         s.StartTime.String(),
-		},
-	}
+	s.Data.Start = s.startTime.String()
 	return s
 }
 
 type RecordingSpan struct {
 	mutex     sync.Mutex
 	Parent    Span
-	StartTime utc.UTC
-	EndTime   utc.UTC
-	Duration  time.Duration
-	Data      *recordingData
-	extended  *recordingExtendedSpan
+	Data      *recordingExtendedData
+	startTime utc.UTC
+	endTime   utc.UTC
+	duration  time.Duration
+	extended  bool
 }
 
 type recordingData struct {
@@ -128,11 +124,6 @@ type recordingData struct {
 	Subs     []Span                 `json:"subs,omitempty"`
 }
 
-type recordingExtendedSpan struct {
-	*RecordingSpan
-	data *recordingExtendedData
-}
-
 type recordingExtendedData struct {
 	*recordingData
 	Start string `json:"start"`
@@ -141,6 +132,7 @@ type recordingExtendedData struct {
 
 func (s *RecordingSpan) Start(ctx context.Context, name string) (context.Context, Span) {
 	sub := newSpan(name)
+	sub.Parent = s
 
 	s.mutex.Lock()
 	s.Data.Subs = append(s.Data.Subs, sub)
@@ -153,13 +145,13 @@ func (s *RecordingSpan) End() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	if s.EndTime != utc.Zero {
+	if s.endTime != utc.Zero {
 		return
 	}
-	s.EndTime = utc.Now()
-	s.Duration = s.EndTime.Sub(s.StartTime)
-	s.Data.Duration = duration.Spec(s.Duration).RoundTo(1)
-	s.extended.data.End = s.EndTime.String()
+	s.endTime = utc.Now()
+	s.duration = s.endTime.Sub(s.startTime)
+	s.Data.Duration = duration.Spec(s.duration).RoundTo(1)
+	s.Data.End = s.endTime.String()
 }
 
 func (s *RecordingSpan) Attribute(name string, val interface{}) {
@@ -225,43 +217,45 @@ func (s *RecordingSpan) FindByName(name string) Span {
 	return nil
 }
 
-func (s *RecordingSpan) Extended() ExtendedSpan {
-	return s.extended
+func (s *RecordingSpan) StartTime() utc.UTC {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	return s.startTime
+}
+
+func (s *RecordingSpan) EndTime() utc.UTC {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	return s.endTime
+}
+
+func (s *RecordingSpan) Duration() time.Duration {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	return s.duration
+}
+
+func (s *RecordingSpan) Extended() bool {
+	if s.extended {
+		return true
+	} else if s.Parent != nil {
+		// Check parent for extended flag
+		return s.Parent.Extended()
+	}
+	return false
+}
+
+func (s *RecordingSpan) SetExtended() {
+	s.extended = true
 }
 
 func (s *RecordingSpan) MarshalJSON() ([]byte, error) {
-	return json.Marshal(s.Data)
-}
-
-func (s *recordingExtendedSpan) StartTime() utc.UTC {
-	s.RecordingSpan.mutex.Lock()
-	defer s.RecordingSpan.mutex.Unlock()
-
-	return s.RecordingSpan.StartTime
-}
-
-func (s *recordingExtendedSpan) EndTime() utc.UTC {
-	s.RecordingSpan.mutex.Lock()
-	defer s.RecordingSpan.mutex.Unlock()
-
-	return s.RecordingSpan.EndTime
-}
-
-func (s *recordingExtendedSpan) Duration() time.Duration {
-	s.RecordingSpan.mutex.Lock()
-	defer s.RecordingSpan.mutex.Unlock()
-
-	return s.RecordingSpan.Duration
-}
-
-func (s *recordingExtendedSpan) Json() string {
-	res, err := s.MarshalJSON()
-	if err != nil {
-		return "failed to marshal span: " + err.Error()
+	if s.Extended() {
+		return json.Marshal(s.Data)
+	} else {
+		return json.Marshal(s.Data.recordingData)
 	}
-	return string(res)
-}
-
-func (s *recordingExtendedSpan) MarshalJSON() ([]byte, error) {
-	return json.Marshal(s.data)
 }
