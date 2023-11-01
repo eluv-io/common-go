@@ -96,9 +96,6 @@ func (n NoopSpan) SetExtended()                                         {}
 
 func newSpan(name string) *RecordingSpan {
 	s := &RecordingSpan{
-		Data: &recordingExtendedData{
-			recordingData: &recordingData{},
-		},
 		startTime: utc.Now(),
 	}
 	s.Data.Name = name
@@ -109,7 +106,7 @@ func newSpan(name string) *RecordingSpan {
 type RecordingSpan struct {
 	mutex     sync.Mutex
 	Parent    Span
-	Data      *recordingExtendedData
+	Data      recordingExtendedData
 	startTime utc.UTC
 	endTime   utc.UTC
 	duration  time.Duration
@@ -125,7 +122,7 @@ type recordingData struct {
 }
 
 type recordingExtendedData struct {
-	*recordingData
+	recordingData
 	Start string `json:"start"`
 	End   string `json:"end"`
 }
