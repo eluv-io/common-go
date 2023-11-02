@@ -57,11 +57,11 @@ type ExtendedSpan interface {
 	// Duration returns the duration of the span.
 	Duration() time.Duration
 
-	// Extended returns true if the span is set to use an extended JSON representation.
-	Extended() bool
+	// MarshalExtended returns true if the span is set to use an extended JSON representation during marshaling.
+	MarshalExtended() bool
 
-	// SetExtended sets the span to use an extended JSON representation.
-	SetExtended()
+	// SetMarshalExtended sets the span to use an extended JSON representation during marshaling.
+	SetMarshalExtended()
 }
 
 type Event struct {
@@ -89,8 +89,8 @@ func (n NoopSpan) FindByName(string) Span                               { return
 func (n NoopSpan) StartTime() utc.UTC                                   { return utc.Zero }
 func (n NoopSpan) EndTime() utc.UTC                                     { return utc.Zero }
 func (n NoopSpan) Duration() time.Duration                              { return 0 }
-func (n NoopSpan) Extended() bool                                       { return false }
-func (n NoopSpan) SetExtended()                                         {}
+func (n NoopSpan) MarshalExtended() bool                                { return false }
+func (n NoopSpan) SetMarshalExtended()                                  {}
 
 // ---------------------------------------------------------------------------------------------------------------------
 
@@ -235,22 +235,22 @@ func (s *RecordingSpan) Duration() time.Duration {
 	return s.duration
 }
 
-func (s *RecordingSpan) Extended() bool {
+func (s *RecordingSpan) MarshalExtended() bool {
 	if s.extended {
 		return true
 	} else if s.Parent != nil {
 		// Check parent for extended flag
-		return s.Parent.Extended()
+		return s.Parent.MarshalExtended()
 	}
 	return false
 }
 
-func (s *RecordingSpan) SetExtended() {
+func (s *RecordingSpan) SetMarshalExtended() {
 	s.extended = true
 }
 
 func (s *RecordingSpan) MarshalJSON() ([]byte, error) {
-	if s.Extended() {
+	if s.MarshalExtended() {
 		return json.Marshal(s.Data)
 	} else {
 		return json.Marshal(s.Data.recordingData)

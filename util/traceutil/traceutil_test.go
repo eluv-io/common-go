@@ -87,13 +87,13 @@ func TestExtendedSpan(t *testing.T) {
 	sub.End()
 	span.End()
 
-	require.False(t, span.Extended())
-	require.False(t, sub.Extended())
+	require.False(t, span.MarshalExtended())
+	require.False(t, sub.MarshalExtended())
 	require.Equal(t, spanJson, span.Json())
 
-	span.SetExtended()
-	require.True(t, span.Extended())
-	require.True(t, sub.Extended())
+	span.SetMarshalExtended()
+	require.True(t, span.MarshalExtended())
+	require.True(t, sub.MarshalExtended())
 	require.Equal(t, spanExtendedJson, removeMs(span.Json()))
 }
 
