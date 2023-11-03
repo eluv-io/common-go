@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"runtime/debug"
 	"sync"
+	"time"
 
 	"github.com/eluv-io/common-go/util/goutil"
 	"github.com/eluv-io/common-go/util/traceutil/trace"
@@ -12,7 +13,31 @@ import (
 
 // NewStack creates a new ContextStack.
 func NewStack() ContextStack {
-	return &contextStack{stacks: map[int64]*entry{}}
+	c := &contextStack{stacks: map[int64]*entry{}}
+	go func() {
+		for {
+			// Log stack info every 5 min for debugging
+			time.Sleep(time.Minute * 5)
+			c.mutex.Lock()
+			size := len(c.stacks)
+			depths := map[int64]int{}
+			for gid, entry := range c.stacks {
+				depths[gid] = stackDepth(entry.stack)
+			}
+			c.mutex.Unlock()
+			log.Warn("ContextStack", "size", size, "depths", depths)
+		}
+	}()
+	return c
+}
+
+func stackDepth(s *stack) int {
+	depth := 1
+	for s.parent != nil {
+		s = s.parent
+		depth++
+	}
+	return depth
 }
 
 // ContextStack provides access to a stack of context.Context values individually managed per goroutine. It is
@@ -20,48 +45,49 @@ func NewStack() ContextStack {
 // call chain.
 //
 // The "standard" way of using contexts in go is passing it to each function in a call chain:
-// 	type anObject struct {}
 //
-// 	func (r *anObject) A(ctx context.Context) {
-// 		ctx = context.WithValue(context.Background(), "key", "val")
-// 		r.B(ctx)
-// 		...
-// 	}
+//	type anObject struct {}
 //
-// 	func (r *anObject) B(ctx context.Context) {
-// 		...
-// 		r.C(ctx)
-// 		...
-// 	}
+//	func (r *anObject) A(ctx context.Context) {
+//		ctx = context.WithValue(context.Background(), "key", "val")
+//		r.B(ctx)
+//		...
+//	}
 //
-// 	func (r *anObject) C(ctx context.Context) string {
-// 		val := ctx.Value("key")
-// 		...
-// 	}
+//	func (r *anObject) B(ctx context.Context) {
+//		...
+//		r.C(ctx)
+//		...
+//	}
+//
+//	func (r *anObject) C(ctx context.Context) string {
+//		val := ctx.Value("key")
+//		...
+//	}
 //
 // ContextStack achieves the same without adding a context to each method call:
 //
-// 	type anObject struct {
-// 		cs *ctxutil.ContextStack
-// 	}
+//	type anObject struct {
+//		cs *ctxutil.ContextStack
+//	}
 //
-// 	func (r *anObject) A() string {
-// 		release := r.cs.WithValue("key", "val")
-// 		defer release()
-// 		r.B()
-// 		...
-// 	}
+//	func (r *anObject) A() string {
+//		release := r.cs.WithValue("key", "val")
+//		defer release()
+//		r.B()
+//		...
+//	}
 //
-// 	func (r *anObject) B() string {
-// 		...
-// 		r.C()
-// 		...
-// 	}
+//	func (r *anObject) B() string {
+//		...
+//		r.C()
+//		...
+//	}
 //
-// 	func (r *anObject) C() string {
-// 		val := r.Ctx().Value("key")
-// 		...
-// 	}
+//	func (r *anObject) C() string {
+//		val := r.Ctx().Value("key")
+//		...
+//	}
 type ContextStack interface {
 	// Ctx retrieves the current context for the current goroutine.
 	Ctx() context.Context
