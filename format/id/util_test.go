@@ -28,28 +28,29 @@ func TestExtract(t *testing.T) {
 		want    id.ID
 		wantErr bool
 	}{
-		{id.Tenant, nil, nil, false},
-		{id.Tenant, []string{""}, nil, false},
+		{id.Tenant, nil, nil, true},
+		{id.Tenant, []string{""}, nil, true},
 		{id.Tenant, []string{tid.String()}, tid, false},
 		{id.Tenant, []string{"", qid.String(), lid.String(), tid.String()}, tid, false},
 		{id.Tenant, []string{tqid.String()}, tid, false},
 		{id.Tenant, []string{tlid.String()}, tid, false},
-		{id.Tenant, []string{einv.String()}, id.NewID(id.Tenant, nil), false},
-		{id.Tenant, []string{einv2.String()}, id.NewID(id.Tenant, nil), false},
+		{id.Tenant, []string{einv.String()}, id.NewID(id.Tenant, nil), true},
+		{id.Tenant, []string{einv2.String()}, id.NewID(id.Tenant, nil), true},
 		{id.Q, []string{tqid.String()}, tqid.ID(), false},
 		{id.QLib, []string{tlid.String()}, tlid.ID(), false},
 		{id.Tenant, []string{"no ID!"}, nil, true},
 		{id.Tenant, []string{"", qid.String(), "no ID!"}, nil, true},
-		{id.Tenant, []string{einv3.String()}, id.NewID(id.Tenant, nil), false},
+		{id.Tenant, []string{einv3.String()}, id.NewID(id.Tenant, nil), true},
 	}
 	for i, tt := range tests {
 		t.Run(fmt.Sprint(tt.target, " ", strings.Join(tt.ids, "|")), func(t *testing.T) {
 			got, err := id.Extract(tt.target, tt.ids...)
-			require.Equal(t, tt.want, got, "case %d", i)
 			if tt.wantErr {
 				require.Error(t, err, "case %d", i)
 			} else {
+				require.Equal(t, tt.want, got, "case %d", i)
 				require.NoError(t, err, "case %d", i)
+				require.True(t, got.IsValid(), "case %d", i)
 			}
 		})
 	}

@@ -88,6 +88,8 @@ type Factory interface {
 
 	// NewMetadataCodec returns the codec for serializing metadata
 	NewMetadataCodec() codecs.MultiCodec
+
+	QIDFromQIHOT(qihot string) (QID, error)
 }
 
 // NewFactory creates a new format factory.
@@ -276,4 +278,27 @@ func (f *factory) NewMetadataCodec() codecs.MultiCodec {
 // ParseQSpaceID parses the string as content space ID
 func (f *factory) ParseQSpaceID(s string) (QSpaceID, error) {
 	return id.QSpace.FromString(s)
+}
+
+// QIDFromQIHOT retrieves the content ID in the given hash write token and qid.
+// The function expects a content hash, a content write token or a content ID.
+func (f *factory) QIDFromQIHOT(qihot string) (QID, error) {
+	e := errors.Template("QIDFromQIHOT", errors.K.Invalid, "qihot", qihot)
+	var qid id.ID
+	qh, err := f.ParseQHash(qihot)
+	if err != nil {
+		var qwt QWriteToken
+		qwt, err = f.ParseQWriteToken(qihot)
+		if err != nil {
+			qid, err = f.ParseQID(qihot)
+		} else {
+			qid = qwt.QID
+		}
+	} else {
+		qid = qh.ID
+	}
+	if err != nil {
+		return nil, e("reason", "not a qhash, a token or a qid", err)
+	}
+	return qid, nil
 }
