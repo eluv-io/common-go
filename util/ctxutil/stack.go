@@ -21,11 +21,16 @@ func NewStack() ContextStack {
 			c.mutex.Lock()
 			size := len(c.stacks)
 			depths := map[int64]int{}
+			maxDepth := 0
 			for gid, entry := range c.stacks {
-				depths[gid] = stackDepth(entry.stack)
+				depth := stackDepth(entry.stack)
+				depths[gid] = depth
+				if depth > maxDepth {
+					maxDepth = depth
+				}
 			}
 			c.mutex.Unlock()
-			log.Warn("ContextStack", "size", size, "depths", depths)
+			log.Warn("ContextStack", "size", size, "max_depth", maxDepth, "depths", depths)
 		}
 	}()
 	return c
