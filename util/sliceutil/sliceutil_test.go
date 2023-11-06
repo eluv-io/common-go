@@ -2,9 +2,11 @@ package sliceutil
 
 import (
 	"fmt"
+	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var appendTests = []struct {
@@ -165,6 +167,42 @@ func TestContains(t *testing.T) {
 	}
 }
 
+func TestContainsEqualer(t *testing.T) {
+	tests := []struct {
+		slice []*Eq
+		el    *Eq
+		want  bool
+	}{
+		{
+			slice: nil,
+			el:    newEq(3),
+			want:  false,
+		},
+		{
+			slice: []*Eq{},
+			el:    newEq(3),
+			want:  false,
+		},
+		{
+			slice: []*Eq{newEq(1), newEq(2), newEq(3), newEq(4), newEq(5)},
+			el:    newEq(3),
+			want:  true,
+		},
+		{
+			slice: []*Eq{newEq(1), newEq(2), newEq(3), newEq(4), newEq(5)},
+			el:    newEq(6),
+			want:  false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprint(test.slice, test.el), func(t *testing.T) {
+			res := Contains(test.slice, test.el)
+			require.Equal(t, test.want, res)
+		})
+	}
+}
+
 func TestDedupe(t *testing.T) {
 	tests := []struct {
 		target  []interface{}
@@ -283,4 +321,178 @@ func TestDuplicateWithCap(t *testing.T) {
 			assert.Equalf(t, tt.want, dup, "Copy(%v)", tt.target)
 		})
 	}
+}
+
+func TestRemove(t *testing.T) {
+	tests := []struct {
+		slice  []int
+		remove int
+		want   []int
+	}{
+		{
+			slice:  nil,
+			remove: 3,
+			want:   nil,
+		},
+		{
+			slice:  []int{},
+			remove: 3,
+			want:   []int{},
+		},
+		{ // no match
+			slice:  []int{1, 2, 3, 4, 5},
+			remove: 6,
+			want:   []int{1, 2, 3, 4, 5},
+		},
+		{ // one match at beginning
+			slice:  []int{1, 2, 3, 4, 5},
+			remove: 1,
+			want:   []int{2, 3, 4, 5},
+		},
+		{ // one match in middle
+			slice:  []int{1, 2, 3, 4, 5},
+			remove: 3,
+			want:   []int{1, 2, 4, 5},
+		},
+		{ // one match at end
+			slice:  []int{1, 2, 3, 4, 5},
+			remove: 5,
+			want:   []int{1, 2, 3, 4},
+		},
+		{ // multiple matches
+			slice:  []int{1, 2, 1, 2, 1, 2, 3},
+			remove: 2,
+			want:   []int{1, 1, 1, 3},
+		},
+		{ // all match
+			slice:  []int{1, 1, 1, 1, 1},
+			remove: 1,
+			want:   []int{},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprint(test.slice, test.remove), func(t *testing.T) {
+			res, removed := Remove(test.slice, test.remove)
+			require.Equal(t, test.want, res)
+			require.Equal(t, removed, len(test.slice)-len(res))
+			// make sure freed up elements at the end are zeroed out
+			for i := 0; i < removed; i++ {
+				require.Equal(t, 0, test.slice[len(test.slice)-1-i])
+			}
+		})
+	}
+}
+
+func TestRemoveIndex(t *testing.T) {
+	tests := []struct {
+		slice  []string
+		remove int
+		want   []string
+	}{
+		{
+			slice:  nil,
+			remove: 3,
+			want:   nil,
+		},
+		{
+			slice:  []string{},
+			remove: 3,
+			want:   []string{},
+		},
+		{
+			slice:  []string{"1", "2", "3", "4", "5"},
+			remove: 3,
+			want:   []string{"1", "2", "3", "5"},
+		},
+		{
+			slice:  []string{"1", "2", "3", "4", "5"},
+			remove: 99,
+			want:   []string{"1", "2", "3", "4", "5"},
+		},
+		{
+			slice:  []string{"1", "2", "3", "4", "5"},
+			remove: -1,
+			want:   []string{"1", "2", "3", "4", "5"},
+		},
+		{
+			slice:  []string{"1", "2", "3", "4", "5"},
+			remove: 6,
+			want:   []string{"1", "2", "3", "4", "5"},
+		},
+		{
+			slice:  []string{"1", "2", "1", "2", "1", "2", "3"},
+			remove: 2,
+			want:   []string{"1", "2", "2", "1", "2", "3"},
+		},
+		{
+			slice:  []string{"1", "1", "1", "1", "1"},
+			remove: 1,
+			want:   []string{"1", "1", "1", "1"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprint(test.slice, test.remove), func(t *testing.T) {
+			res := RemoveIndex(test.slice, test.remove)
+			require.Equal(t, test.want, res)
+		})
+	}
+}
+
+func TestReverse(t *testing.T) {
+	tests := []struct {
+		slce []string
+		want []string
+	}{
+		{
+			slce: nil,
+			want: nil,
+		},
+		{
+			slce: []string{},
+			want: []string{},
+		},
+		{
+			slce: []string{"a"},
+			want: []string{"a"},
+		},
+		{
+			slce: []string{"a", "b"},
+			want: []string{"b", "a"},
+		},
+		{
+			slce: []string{"a", "b", "c"},
+			want: []string{"c", "b", "a"},
+		},
+		{
+			slce: []string{"a", "b", "c", "d"},
+			want: []string{"d", "c", "b", "a"},
+		},
+	}
+	for _, test := range tests {
+		t.Run(fmt.Sprint(test.slce), func(t *testing.T) {
+			Reverse(test.slce)
+			require.Equal(t, test.want, test.slce)
+		})
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+func newEq(i int) *Eq {
+	return &Eq{i, rand.Intn(1000)}
+}
+
+type Eq struct {
+	i   int
+	rnd int
+}
+
+func (e *Eq) Equal(other *Eq) bool {
+	return e.i == other.i
+}
+
+func (e *Eq) String() string {
+	return fmt.Sprintf("%d-%4d", e.i, e.rnd)
 }
