@@ -50,7 +50,7 @@ jobs:
       - name: Post to Slack
         id: slack
         if: always()
-        uses: slackapi/slack-github-action@v1.16.0
+        uses: slackapi/slack-github-action@v1.24.0
         with:
           # Slack channel id, channel name, or user id to post message.
           # See also: https://api.slack.com/methods/chat.postMessage#channels
