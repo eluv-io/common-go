@@ -159,18 +159,24 @@ func RemoveFn[T any](slice []T, element T, equal func(e1, e2 T) bool) ([]T, int)
 	})
 }
 
-// RemoveMatch removes all occurrences of an element from the given slice that match according to the provided match
-// function. Returns the new slice and the number of removed elements.
+// RemoveMatch removes all elements that match according to the provided match function from the given slice. Removal is
+// performed inline, freed up slots at the end of the slice are zeroed out. Returns the updated slice and the number of
+// removed elements.
 func RemoveMatch[T any](slice []T, match func(e T) bool) ([]T, int) {
-	orgLen := len(slice)
-	for i := 0; i < len(slice); {
+	var zero T
+	removed := 0
+	for i := 0; i < len(slice); i++ {
 		if match(slice[i]) {
-			slice = RemoveIndex(slice, i)
+			removed++
+			slice[i] = zero
 		} else {
-			i++
+			if removed > 0 {
+				slice[i-removed] = slice[i]
+				slice[i] = zero
+			}
 		}
 	}
-	return slice, orgLen - len(slice)
+	return slice[:len(slice)-removed], removed
 }
 
 // RemoveIndex removes the element at the given index from the provided slice. Removes nothing if the index is
