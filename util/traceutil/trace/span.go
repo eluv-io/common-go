@@ -250,7 +250,6 @@ func (s *RecordingSpan) MaxDuration() time.Duration {
 			d = sd
 		}
 	}
-
 	return d
 }
 
