@@ -72,6 +72,7 @@ func eluvioTempDir() string {
 func CreateTemp(dir, suffix string) (*os.File, error) {
 	if dir == "" {
 		dir = eluvioTempDir()
+		_ = os.MkdirAll(dir, os.ModePerm)
 	}
 	return os.CreateTemp(dir, suffix)
 }
