@@ -20,7 +20,7 @@ func NewSnapshot(trace string) (*Snapshot, error) {
 	in := bytes.NewBuffer([]byte(trace))
 	snapshot, _, err := stack.ScanSnapshot(in, io.Discard, stack.DefaultOpts())
 	if snapshot == nil {
-		return nil, errors.E("stack.CreateSnapshot", errors.K.NotExist, "error", err, "reason", "no stacktrace found")
+		return nil, errors.E("stack.CreateSnapshot", errors.K.NotExist, "cause", err, "reason", "no stacktrace found")
 	}
 	s := &Snapshot{snapshot, utc.Now()}
 	s.SortByGID(true)
