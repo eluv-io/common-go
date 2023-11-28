@@ -1,6 +1,7 @@
 package timeutil_test
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/eluv-io/common-go/util/timeutil"
@@ -9,28 +10,56 @@ import (
 )
 
 func ExampleWarnSlowOp() {
-	timeutil.WarnSlowOp(
+	res := timeutil.WarnSlowOp(
+		log.Warn,
+		10*time.Millisecond,
+		20*time.Millisecond,
+		"test_operation", "id", "0003",
+	)
+	fmt.Println("return", res)
+
+	res = timeutil.WarnSlowOp(
+		log.Warn,
+		10*time.Millisecond,
+		8*time.Millisecond,
+		"test_operation", "id", "0003",
+	)
+	fmt.Println("return", res)
+
+	// Output:
+	//
+	// 1970-01-01T00:00:00.000Z WARN  slow operation            logger=/ duration=20ms limit=10ms op=test_operation id=0003
+	// return true
+	// return false
+}
+
+func ExampleWarnSlowOpFn() {
+	res := timeutil.WarnSlowOpFn(
 		func() {
 			time.Sleep(20 * time.Millisecond)
 		},
 		log.Warn,
 		10*time.Millisecond,
-		"test operation", "id", "0003",
+		"test_operation", "id", "0003",
 	)
+	fmt.Println("return", res.Truncate(10*time.Millisecond))
 
 	// Output:
 	//
-	// 1970-01-01T00:00:00.000Z WARN  slow operation            logger=/ duration=20ms limit=10ms op=test operation id=0003
+	// 1970-01-01T00:00:00.000Z WARN  slow operation            logger=/ duration=20ms limit=10ms op=test_operation id=0003
+	// return 20ms
 }
 
 func ExampleStopWatch_WarnSlowOp() {
 	watch := timeutil.StartWatch()
 	time.Sleep(20 * time.Millisecond)
-	watch.WarnSlowOp(log.Warn, 10*time.Millisecond, "test operation", "id", "0003")
+	res := watch.WarnSlowOp(log.Warn, 10*time.Millisecond, "test_operation", "id", "0003")
+	fmt.Println("return", res.Truncate(10*time.Millisecond))
 
 	// Output:
 	//
-	// 1970-01-01T00:00:00.000Z WARN  slow operation            logger=/ duration=20ms limit=10ms op=test operation id=0003
+	// 1970-01-01T00:00:00.000Z WARN  slow operation            logger=/ duration=20ms limit=10ms op=test_operation id=0003
+	// return 20ms
 }
 
 // test logger that truncates all durations found in log fields to 10ms

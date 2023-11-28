@@ -67,24 +67,37 @@ func (w *StopWatch) WarnSlowOp(
 	limit time.Duration,
 	op string,
 	fields ...any,
-) bool {
+) time.Duration {
 	d := w.Duration()
-	if d > limit {
-		logFn("slow operation", append([]any{"duration", d, "limit", limit, "op", op}, fields...)...)
+	WarnSlowOp(logFn, limit, d, op, fields...)
+	return d
+}
+
+// WarnSlowOp logs a warning with the provided log function if the actual duration of an operation is larger than the
+// given limit. Returns true if the limit was exceeded and a warning was logged, false otherwise.
+func WarnSlowOp(
+	logFn func(msg string, fields ...interface{}),
+	limit time.Duration,
+	actual time.Duration,
+	op string,
+	fields ...any,
+) bool {
+	if actual > limit {
+		logFn("slow operation", append([]any{"duration", actual, "limit", limit, "op", op}, fields...)...)
 		return true
 	}
 	return false
 }
 
-// WarnSlowOp executes the given operation and logs a warning with the provided log function if the execution takes
+// WarnSlowOpFn executes the given operation and logs a warning with the provided log function if the execution takes
 // longer than the given limit. Returns true if a warning was logged, false otherwise.
-func WarnSlowOp(
+func WarnSlowOpFn(
 	op func(),
 	logFn func(msg string, fields ...interface{}),
 	limit time.Duration,
 	opName string,
 	fields ...any,
-) bool {
+) time.Duration {
 	w := StartWatch()
 	op()
 	return w.WarnSlowOp(logFn, limit, opName, fields...)
