@@ -37,18 +37,18 @@ defines the different types of the auth tokens.
 * 3 bytes of prefix
 * `a` stands for `auth token`
 
-| Prefix | Name          | SignatureRequired | Description | Fields required                                                               | Fields optional | Signed by|
+| Prefix | Name          | SignatureRequired | Fields required                                                               | Fields optional | Signed by| Description |
 |:-------|:--------------|:------------------|:--------------|:------------------------------------------------------------------------------|:----------------|:--------|
 | aun    | unknown       | false             |||||
-| aan    | anonymous     | false             |a vanilla, unsigned token without tx| sid, lid                                                                      | qid             | -|
-| atx    | tx            | true              |based on a blockchain transaction - aka EthAuthToken| sid, lid, txh                                                                 | apk             | client|
-| asc    | state-channel | true              |based on deferred blockchain tx - aka ElvAuthToken| sid, lid, qid, grant, iat, exp, ctx/sub                                       | apk             | Server |
-| acl    | client        | false             |a state channel token embedded in a client token - aka ElvClientToken| embedded token signed by client                                               | apk             |-|
-| apl    | plain         | true              |a vanilla (signed) token without tx ==> blockchain-based permissions via HasAccess()| sid, lid                                                                      | qid             | client|                                                          |
-| aes    | editor-signed | true              |a token signed by a user who has edit access to the target content in the token| sid, lib, qid, sub = clientID (not required now), grant, iat, exp             | apk, ctx        | client with editor access|
-| ano    | node          | true              |token for node-to-node communication| sid, qp-hash                                                                  | -               | server|
-| asl    | signed-link   | true              |token for signed-links| sid, lid, qid, subject, grant, iat, exp, ctx/elv/lnk, ctx/elv/src=qid         | apk             | client|
-| acs    | client-signed | true              |client-signed token| sid, lid, qid, subject, grant, iat, exp                                       | ctx             | client|                                                          |
+| aan    | anonymous     | false             | sid, lid                                                                      | qid             | -|a vanilla, unsigned token without tx|
+| atx    | tx            | true              | sid, lid, txh                                                                 | apk             | client| based on a blockchain transaction - aka EthAuthToken|
+| asc    | state-channel | true              | sid, lid, qid, grant, iat, exp, ctx/sub                                       | apk             | Server |based on deferred blockchain tx - aka ElvAuthToken|
+| acl    | client        | false             | embedded token signed by client                                               | apk             |-|a state channel token embedded in a client token - aka ElvClientToken|
+| apl    | plain         | true              | sid, lid                                                                      | qid             | client|       a vanilla (signed) token without tx ==> blockchain-based permissions via HasAccess()|                                                   
+| aes    | editor-signed | true              | sid, lib, qid, sub = clientID (not required now), grant, iat, exp             | apk, ctx        | client with editor access|a token signed by a user who has edit access to the target content in the token|
+| ano    | node          | true              | sid, qp-hash                                                                  | -               | server|token for node-to-node communication|
+| asl    | signed-link   | true              | sid, lid, qid, subject, grant, iat, exp, ctx/elv/lnk, ctx/elv/src=qid         | apk             | client|token for signed-links|
+| acs    | client-signed | true              | sid, lid, qid, subject, grant, iat, exp                                       | ctx             | client|   client-signed token|
 ### Token SigType:
 defines the different signature types of auth tokens
 
