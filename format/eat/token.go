@@ -21,6 +21,7 @@ import (
 	"github.com/eluv-io/common-go/format/sign"
 	"github.com/eluv-io/common-go/format/structured"
 	"github.com/eluv-io/common-go/format/types"
+	"github.com/eluv-io/common-go/util/ethutil"
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/common-go/util/stringutil"
 	"github.com/eluv-io/errors-go"
@@ -307,11 +308,17 @@ func (t *Token) Validate() (err error) {
 		if !t.SigType.HasSig() {
 			validator.error(validator.errTemplate("reason", "invalid signature type"))
 		} else if validator.require("signature", t.Signature) {
+			switch t.Type {
 			// state channel tokens are signed by a "trusted authority" (i.e. KMS), whose address is not stored in
-			// the token itself. Hence the signature cannot be checked here and must be checked downstream.
-			if t.Type != Types.StateChannel() {
-				// legacy tokens may have a missing eth addr, in which case we extract it from the signature itself...
-				if !t.HasEthAddr() && (t.Format == Formats.Legacy() || t.Format == Formats.LegacySigned()) {
+			// the token itself. Hence, the signature cannot be checked here and must be checked downstream.
+			case Types.StateChannel():
+			default:
+				if !t.HasEthAddr() &&
+					// cases where we extract it from the signature itself:
+					// - legacy tokens may have a missing eth addr,
+					// - addr is not required in client auxiliary
+					((t.Format == Formats.Legacy() || t.Format == Formats.LegacySigned()) ||
+						t.Type == Types.ClientConfirmation()) {
 					t.EthAddr, err = t.SignerAddress()
 					validator.error(err)
 				}
@@ -328,7 +335,9 @@ func (t *Token) Validate() (err error) {
 		validator.refuse("address", t.EthAddr)
 	}
 
-	validator.require("space id", t.SID)
+	if t.Type != Types.ClientConfirmation() {
+		validator.require("space id", t.SID)
+	}
 
 	// lib seems optional... (because it can be specified in the URL?)
 	// valid.require("lib id", t.LID)
@@ -430,6 +439,21 @@ func (t *Token) Validate() (err error) {
 	case Types.ClientSigned():
 		// PENDING(LUK): add additional validations for ClientSigned tokens!
 		return e.IfNotNil(validator.err)
+
+	case Types.ClientConfirmation():
+		validator.refuse("spc", t.SID)
+		validator.refuse("qid", t.QID)
+		validator.refuse("lib", t.LID)
+		validator.refuse("subject", t.Subject)
+		validator.refuse("grant", t.Grant)
+		validator.refuse("tx-hash", t.EthTxHash)
+		validator.refuse("qp-hash", t.QPHash)
+		validator.refuse("afgh", t.AFGHPublicKey)
+		validator.refuse("aux", t.Cnf)
+
+		validator.require("issued at", t.IssuedAt)
+		validator.require("expires", t.Expires)
+		return e.IfNotNil(validator.err)
 	}
 
 	// refused for all other types
@@ -472,6 +496,64 @@ func (t *Token) Validate() (err error) {
 	}
 
 	return e.IfNotNil(validator.err)
+}
+
+// ValidateConfirmation validates the 'aux' confirmation token.
+// The function returns an error if:
+// - the token requires a confirmation but is not of the right type
+// - the token requires a confirmation but none is passed
+// If the token requires a confirmation the signature of the aux token is checked
+// against the address of the ephemeral key in this token. Then the 'aux' token
+// validity period is verified with the given max validity and time skew.
+func (t *Token) ValidateConfirmation(aux *Token, maxValidity, timeSkew time.Duration) error {
+	e := errors.Template("ValidateConfirmation", errors.K.Invalid,
+		"type", t.Type,
+		"sig_type", t.SigType,
+		"format", t.Format)
+
+	if t.Type.CanRequireConfirm {
+		if t.Cnf.Required && aux == nil {
+			return e("reason", "a confirmation token is required")
+		}
+	} else if aux != nil {
+		return e("reason", "unexpected confirmation token")
+	}
+
+	if t.Cnf.Required {
+		if aux.Type != Types.ClientConfirmation() {
+			return e("reason", "invalid aux authorization type", "type", aux.Type)
+		}
+		sig, err := aux.SignerAddress()
+		if err != nil {
+			return e(err)
+		}
+		var addr common.Address
+		if t.Cnf.Aek != "" {
+			addr = common.HexToAddress(t.Cnf.Aek)
+		} else {
+			pkb, err := ethutil.DecodeHex(t.Cnf.Pek)
+			if err != nil {
+				return e(err)
+			}
+			pubKey, err := crypto.DecompressPubkey(pkb)
+			if err != nil {
+				return e(err)
+			}
+			addr = crypto.PubkeyToAddress(*pubKey)
+		}
+		if !bytes.Equal(sig.Bytes(), addr.Bytes()) {
+			return e("reason", "address/public key in token mismatch confirmation signature")
+		}
+		// verify conditions in 'aux'
+		err = aux.VerifyTimes(maxValidity, timeSkew)
+		if err != nil {
+			return e("reason", "confirmation time invalid or expired", err)
+		}
+	} else if aux != nil {
+		return e("reason", "confirmation token present but not required",
+			"type", aux.Type)
+	}
+	return nil
 }
 
 func (t *Token) IsNil() bool {
@@ -532,6 +614,14 @@ func (t *Token) SignWithT(clientSK *ecdsa.PrivateKey, sigType *TokenSigType) (er
 	}
 	signAddr := crypto.PubkeyToAddress(clientSK.PublicKey)
 	return t.SignWithFuncT(signAddr, signFunc, sigType)
+}
+
+func (t *Token) signWithTNoAddr(clientSK *ecdsa.PrivateKey, sigType *TokenSigType) (err error) {
+	signFunc := func(digestHash []byte) (sig []byte, err error) {
+		return crypto.Sign(digestHash, clientSK)
+	}
+	//signAddr := crypto.PubkeyToAddress(clientSK.PublicKey)
+	return t.SignWithFuncT(common.Address{}, signFunc, sigType)
 }
 
 // SignWithFunc signs this token using the provided signing function, producing a signature of type ES256K.

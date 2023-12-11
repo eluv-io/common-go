@@ -11,6 +11,7 @@ import (
 	"github.com/eluv-io/common-go/format/structured"
 	"github.com/eluv-io/common-go/format/types"
 	"github.com/eluv-io/common-go/util/ethutil"
+	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/utc-go"
 )
 
@@ -127,6 +128,19 @@ func (b *signer) SignEIP912Personal(pk *ecdsa.PrivateKey) Encoder {
 		return b.enc
 	}
 	b.enc.err = b.enc.token.SignWithT(pk, SigTypes.EIP191Personal())
+	return b.enc
+}
+
+func (b *signer) SignNoAddr(pk *ecdsa.PrivateKey) Encoder {
+	if b.enc.err != nil {
+		return b.enc
+	}
+	if b.enc.token.Type != Types.ClientConfirmation() {
+		b.enc.err = errors.E("SignNoAddr", errors.K.Invalid,
+			"reason", "allowed only for 'client-confirmation' tokens",
+			"type", b.enc.token.Type)
+	}
+	b.enc.err = b.enc.token.signWithTNoAddr(pk, SigTypes.ES256K())
 	return b.enc
 }
 
@@ -269,6 +283,11 @@ func (b *EditorSignedBuilder) WithCtx(ctx map[string]interface{}) *EditorSignedB
 
 func (b *EditorSignedBuilder) WithSubject(s string) *EditorSignedBuilder {
 	b.enc.token.Subject = s
+	return b
+}
+
+func (b *EditorSignedBuilder) WithClientConfirm(s ClientConfirmation) *EditorSignedBuilder {
+	b.enc.token.Cnf = s
 	return b
 }
 
@@ -456,6 +475,11 @@ func (b *ClientSignedBuilder) WithSubject(s string) *ClientSignedBuilder {
 	return b
 }
 
+func (b *ClientSignedBuilder) WithClientConfirm(s ClientConfirmation) *ClientSignedBuilder {
+	b.enc.token.Cnf = s
+	return b
+}
+
 func (b *ClientSignedBuilder) Sign(pk *ecdsa.PrivateKey) Encoder {
 	if len(b.enc.token.Subject) == 0 {
 		b.enc.token.Subject = ethutil.AddressToID(crypto.PubkeyToAddress(pk.PublicKey), id.User).String()
@@ -467,5 +491,45 @@ func (b *ClientSignedBuilder) SignEIP912Personal(pk *ecdsa.PrivateKey) Encoder {
 	if len(b.enc.token.Subject) == 0 {
 		b.enc.token.Subject = ethutil.AddressToID(crypto.PubkeyToAddress(pk.PublicKey), id.User).String()
 	}
+	return b.signer.SignEIP912Personal(pk)
+}
+
+// -----------------------------------------------------------------------------
+
+// SignedConfirmation is a utility function to create and sign a client confirmation
+func SignedConfirmation(pk *ecdsa.PrivateKey, expiresIn time.Duration, ctx map[string]interface{}) (string, error) {
+	return NewClientConfirmation(utc.Now(), expiresIn).WithCtx(ctx).SignNoAddr(pk).Encode()
+}
+
+type ClientConfirmationBuilder struct {
+	*signer
+}
+
+func NewClientConfirmation(issuedAt utc.UTC, d ...time.Duration) *ClientConfirmationBuilder {
+	token := New(Types.ClientConfirmation(), defaultFormat, SigTypes.Unsigned())
+	token.IssuedAt = issuedAt
+	dur := time.Second * 20
+	if len(d) > 0 {
+		dur = d[0]
+	}
+	token.Expires = token.IssuedAt.Add(dur)
+	return &ClientConfirmationBuilder{newSigner(token)}
+}
+
+func (b *ClientConfirmationBuilder) WithExpires(expiresAt utc.UTC) *ClientConfirmationBuilder {
+	b.enc.token.Expires = expiresAt
+	return b
+}
+
+func (b *ClientConfirmationBuilder) WithCtx(ctx map[string]interface{}) *ClientConfirmationBuilder {
+	b.enc.token.Ctx = ctx
+	return b
+}
+
+func (b *ClientConfirmationBuilder) Sign(pk *ecdsa.PrivateKey) Encoder {
+	return b.signer.Sign(pk)
+}
+
+func (b *ClientConfirmationBuilder) SignEIP912Personal(pk *ecdsa.PrivateKey) Encoder {
 	return b.signer.SignEIP912Personal(pk)
 }

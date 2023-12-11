@@ -19,6 +19,7 @@ import (
 
 	"github.com/eluv-io/common-go/format/eat"
 	"github.com/eluv-io/common-go/format/id"
+	"github.com/eluv-io/common-go/format/structured"
 	"github.com/eluv-io/common-go/util/ethutil"
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/utc-go"
@@ -725,6 +726,332 @@ func TestClientSigned(t *testing.T) {
 
 			err = token.VerifySignatureFrom(clientAddr)
 			require.NoError(t, err)
+		})
+	}
+}
+
+func TestClientConfirmation(t *testing.T) {
+	now := utc.Now()
+	defer utc.MockNow(now)()
+
+	type testCase struct {
+		name  string
+		csEnc eat.Encoder
+	}
+
+	verifyTimes := func(tok *eat.Token) {
+		now := utc.Now()
+		defer utc.MockNow(now)()
+
+		err := tok.VerifyTimes(time.Hour, time.Minute)
+		require.NoError(t, err)
+
+		// time skew
+		now2 := now.Add(-time.Minute * 2)
+		utc.MockNow(now2)
+		err = tok.VerifyTimes(time.Hour, time.Minute)
+		require.Error(t, err)
+		require.True(t, strings.Contains(err.Error(), "not yet valid"))
+
+		// validity cap
+		now2 = now.Add(time.Hour - time.Second)
+		utc.MockNow(now2)
+		err = tok.VerifyTimes(time.Minute*45, time.Minute)
+		require.True(t, strings.Contains(err.Error(), "max token validity period expired"))
+		require.Error(t, err)
+
+		// expired
+		now2 = now.Add(time.Hour + time.Second)
+		utc.MockNow(now2)
+		err = tok.VerifyTimes(time.Hour*2, time.Minute)
+		require.True(t, strings.Contains(err.Error(), "token expired"))
+		require.Error(t, err)
+	}
+
+	for _, tc := range []*testCase{
+		{
+			name: "regular",
+			csEnc: eat.NewClientConfirmation(now).
+				WithExpires(now.Add(time.Hour)).
+				WithCtx(map[string]interface{}{"color": "blue"}).
+				Sign(clientSK),
+		},
+		{
+			name: "regular_no_ctx",
+			csEnc: eat.NewClientConfirmation(now).
+				WithExpires(now.Add(time.Hour)).
+				Sign(clientSK),
+		},
+		{
+			name: "regular_no_adr",
+			csEnc: eat.NewClientConfirmation(now).
+				WithExpires(now.Add(time.Hour)).
+				WithCtx(map[string]interface{}{"color": "blue"}).
+				SignNoAddr(clientSK),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tokenString, err := tc.csEnc.Encode()
+
+			require.NoError(t, err)
+			fmt.Println(eat.Describe(tokenString))
+
+			token, err := eat.Parse(tokenString)
+			require.NoError(t, err)
+			require.Equal(t, eat.Types.ClientConfirmation(), token.Type)
+
+			err = token.VerifySignatureFrom(clientAddr)
+			require.NoError(t, err)
+			verifyTimes(token)
+		})
+	}
+}
+
+func TestClientSignedWithClientConfirm(t *testing.T) {
+	now := utc.Now()
+
+	type testCase struct {
+		name     string
+		csEnc    eat.Encoder
+		wantFail bool
+		wantCnf  bool
+	}
+
+	for _, tc := range []*testCase{
+		{
+			name: "regular",
+			csEnc: eat.NewClientSigned(sid).
+				WithIssuedAt(now).
+				WithExpires(now.Add(time.Hour)).
+				WithGrant(eat.Grants.Read).
+				WithClientConfirm(eat.ClientConfirmation{
+					Aek: "bla",
+				}).
+				WithCtx(map[string]interface{}{"color": "blue"}).
+				Sign(clientSK),
+			wantCnf: true,
+		},
+		{
+			name: "regular_no_aux",
+			csEnc: eat.NewClientSigned(sid).
+				WithIssuedAt(now).
+				WithExpires(now.Add(time.Hour)).
+				WithGrant(eat.Grants.Read).
+				WithCtx(map[string]interface{}{"color": "blue"}).
+				Sign(clientSK),
+			wantCnf: false,
+		},
+		{
+			name: "regular_no_adr",
+			csEnc: eat.NewClientSigned(sid).
+				WithIssuedAt(now).
+				WithExpires(now.Add(time.Hour)).
+				WithGrant(eat.Grants.Read).
+				WithCtx(map[string]interface{}{"color": "blue"}).
+				SignNoAddr(clientSK),
+			wantFail: true, // 'adr missing'
+		},
+		{
+			name: "EIP912",
+			csEnc: eat.NewClientSigned(sid).
+				WithIssuedAt(now).
+				WithExpires(now.Add(time.Hour)).
+				WithGrant(eat.Grants.Read).
+				WithClientConfirm(eat.ClientConfirmation{
+					Aek: "bla",
+				}).
+				WithCtx(map[string]interface{}{"color": "blue"}).
+				SignEIP912Personal(clientSK),
+			wantCnf: true,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tokenString, err := tc.csEnc.Encode()
+			if tc.wantFail {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			fmt.Println(eat.Describe(tokenString))
+
+			token, err := eat.Parse(tokenString)
+			require.NoError(t, err)
+			require.Equal(t, eat.Types.ClientSigned(), token.Type)
+
+			require.Equal(t, tc.wantCnf, token.Cnf.Required)
+			if token.Cnf.Required {
+				v := structured.Wrap(token.Cnf)
+				require.Equal(t, "bla", v.At("aek").String())
+			}
+
+			err = token.VerifySignatureFrom(clientAddr)
+			require.NoError(t, err)
+		})
+	}
+}
+
+// TestXSignedAndConfirm tests using client-signed and editor-signed tokens with
+// confirmation. Also checks confirmation fails with other types of tokens.
+func TestXSignedAndConfirm(t *testing.T) {
+	now := utc.Now()
+	defer utc.MockNow(now)()
+
+	ephemeralKey := func() (*ecdsa.PrivateKey, common.Address) {
+		sk, _ := ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
+		addr := crypto.PubkeyToAddress(sk.PublicKey)
+		return sk, addr
+	}
+	sk1, adr1 := ephemeralKey()
+	_, adr2 := ephemeralKey()
+
+	type testCase struct {
+		name                 string
+		csEnc                eat.Encoder
+		cnfEnc               eat.Encoder
+		wantType             eat.TokenType
+		wantCnf              bool
+		wantValidationFailed bool
+	}
+
+	for _, tc := range []*testCase{
+		{
+			name: "regular_client_signed",
+			csEnc: eat.NewClientSigned(sid).
+				WithIssuedAt(now).
+				WithExpires(now.Add(time.Minute * 5)).
+				WithGrant(eat.Grants.Read).
+				WithClientConfirm(eat.ClientConfirmation{
+					Aek: adr1.String(),
+				}).
+				Sign(clientSK),
+			cnfEnc:   eat.NewClientConfirmation(now, time.Minute*5).Sign(sk1),
+			wantType: eat.Types.ClientSigned(),
+			wantCnf:  true,
+		},
+		{
+			name: "regular_editor_signed",
+			csEnc: eat.NewEditorSigned(sid, lid, qid).
+				WithIssuedAt(now).
+				WithExpires(now.Add(time.Minute * 5)).
+				WithGrant(eat.Grants.Read).
+				WithClientConfirm(eat.ClientConfirmation{
+					Aek: adr1.String(),
+				}).
+				Sign(clientSK),
+			cnfEnc:   eat.NewClientConfirmation(now, time.Minute*5).Sign(sk1),
+			wantType: eat.Types.EditorSigned(),
+			wantCnf:  true,
+		},
+		{
+			name: "regular_expired",
+			csEnc: eat.NewClientSigned(sid).
+				WithIssuedAt(now).
+				WithExpires(now.Add(time.Minute * 5)).
+				WithGrant(eat.Grants.Read).
+				WithClientConfirm(eat.ClientConfirmation{
+					Aek: adr1.String(),
+				}).
+				Sign(clientSK),
+			cnfEnc:               eat.NewClientConfirmation(now, time.Minute).Sign(sk1),
+			wantType:             eat.Types.ClientSigned(),
+			wantCnf:              true,
+			wantValidationFailed: true,
+		},
+		{
+			name: "regular_wrong_key",
+			csEnc: eat.NewClientSigned(sid).
+				WithIssuedAt(now).
+				WithExpires(now.Add(time.Minute * 5)).
+				WithGrant(eat.Grants.Read).
+				WithClientConfirm(eat.ClientConfirmation{
+					Aek: adr2.String(),
+				}).
+				Sign(clientSK),
+			cnfEnc:               eat.NewClientConfirmation(now, time.Minute).Sign(sk1),
+			wantType:             eat.Types.ClientSigned(),
+			wantCnf:              true,
+			wantValidationFailed: true,
+		},
+		{
+			name: "regular_no_adr",
+			csEnc: eat.NewClientSigned(sid).
+				WithIssuedAt(now).
+				WithExpires(now.Add(time.Minute * 5)).
+				WithGrant(eat.Grants.Read).
+				WithClientConfirm(eat.ClientConfirmation{
+					Aek: adr1.String(),
+				}).
+				Sign(clientSK),
+			cnfEnc:   eat.NewClientConfirmation(now, time.Minute*5).SignNoAddr(sk1),
+			wantType: eat.Types.ClientSigned(),
+			wantCnf:  true,
+		},
+		{
+			name: "regular_no_cnf",
+			csEnc: eat.NewClientSigned(sid).
+				WithIssuedAt(now).
+				WithExpires(now.Add(time.Minute * 5)).
+				WithGrant(eat.Grants.Read).
+				Sign(clientSK),
+			cnfEnc:   eat.NewClientConfirmation(now, time.Minute*5).Sign(sk1),
+			wantType: eat.Types.ClientSigned(),
+			wantCnf:  false,
+		},
+		{
+			name: "regular_eip912",
+			csEnc: eat.NewClientSigned(sid).
+				WithIssuedAt(now).
+				WithExpires(now.Add(time.Minute * 5)).
+				WithGrant(eat.Grants.Read).
+				WithClientConfirm(eat.ClientConfirmation{
+					Aek: adr1.String(),
+				}).
+				SignEIP912Personal(clientSK),
+			cnfEnc:   eat.NewClientConfirmation(now, time.Minute*5).Sign(sk1),
+			wantType: eat.Types.ClientSigned(),
+			wantCnf:  true,
+		},
+		{
+			name:     "plain",
+			csEnc:    eat.NewPlain(sid, lid).Sign(clientSK),
+			cnfEnc:   eat.NewClientConfirmation(now, time.Minute*5).Sign(sk1),
+			wantType: eat.Types.Plain(),
+			wantCnf:  false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tokenString, err := tc.csEnc.Encode()
+			require.NoError(t, err, tc.name)
+
+			fmt.Println(eat.Describe(tokenString))
+			token, err := eat.Parse(tokenString)
+			require.NoError(t, err, tc.name)
+			require.Equal(t, tc.wantType, token.Type, tc.name)
+
+			err = token.VerifySignatureFrom(clientAddr)
+			require.NoError(t, err, tc.name)
+
+			cnfString, err := tc.cnfEnc.Encode()
+			require.NoError(t, err, tc.name)
+			cnf, err := eat.Parse(cnfString)
+			require.NoError(t, err, tc.name)
+			require.Equal(t, eat.Types.ClientConfirmation(), cnf.Type, tc.name)
+
+			now := utc.Now().Add(time.Minute * 3)
+			defer utc.MockNow(now)()
+
+			require.Equal(t, tc.wantCnf, token.Cnf.Required, tc.name)
+			err = token.ValidateConfirmation(cnf, time.Hour, time.Minute)
+			if token.Cnf.Required {
+				if tc.wantValidationFailed {
+					require.Error(t, err, tc.name)
+				} else {
+					require.NoError(t, err, tc.name)
+				}
+			} else {
+				require.Error(t, err, tc.name)
+			}
 		})
 	}
 }
