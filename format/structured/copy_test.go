@@ -46,6 +46,16 @@ func TestCopy(t *testing.T) {
 		wantFn func(res interface{}) // custom result check function
 	}{
 		{
+			name: "nil",
+			src:  nil,
+			want: nil,
+		},
+		{
+			name: "nil",
+			src:  (map[string]interface{})(nil),
+			want: (map[string]interface{})(nil),
+		},
+		{
 			name: "basic types",
 			src:  src,
 			want: src,

@@ -50,7 +50,7 @@ func Log(name string, parentGoID int64, fields ...interface{}) func() {
 //	)
 func Go(name string, fields []any, fn func()) {
 	if !log.IsDebug() {
-		fn()
+		go fn()
 		return
 	}
 	parentGid := GoID()
