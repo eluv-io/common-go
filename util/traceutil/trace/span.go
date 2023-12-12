@@ -57,6 +57,9 @@ type ExtendedSpan interface {
 	// Duration returns the duration of the span.
 	Duration() time.Duration
 
+	// MaxDuration returns the maximum duration of the span and of all sub-spans.
+	MaxDuration() time.Duration
+
 	// MarshalExtended returns true if the span is set to use an extended JSON representation during marshaling.
 	MarshalExtended() bool
 
@@ -89,6 +92,7 @@ func (n NoopSpan) FindByName(string) Span                               { return
 func (n NoopSpan) StartTime() utc.UTC                                   { return utc.Zero }
 func (n NoopSpan) EndTime() utc.UTC                                     { return utc.Zero }
 func (n NoopSpan) Duration() time.Duration                              { return 0 }
+func (n NoopSpan) MaxDuration() time.Duration                           { return 0 }
 func (n NoopSpan) MarshalExtended() bool                                { return false }
 func (n NoopSpan) SetMarshalExtended()                                  {}
 
@@ -233,6 +237,20 @@ func (s *RecordingSpan) Duration() time.Duration {
 	defer s.mutex.Unlock()
 
 	return s.duration
+}
+
+func (s *RecordingSpan) MaxDuration() time.Duration {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	d := s.duration
+	for _, ss := range s.Data.Subs {
+		sd := ss.MaxDuration()
+		if sd > d {
+			d = sd
+		}
+	}
+	return d
 }
 
 func (s *RecordingSpan) MarshalExtended() bool {

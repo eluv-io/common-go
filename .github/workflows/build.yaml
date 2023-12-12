@@ -36,21 +36,21 @@ jobs:
         env:
           FULL_REVISION: ${{ github.event.after }}
         run: |
-          echo "::set-output name=rev::${FULL_REVISION:0:8}"
-          echo "::set-output name=branch::${GITHUB_REF#refs/heads/}"
-          echo "::set-output name=os::$(uname -sr)"
-          echo "::set-output name=go_version::$(go version | cut -d " " -f 3-)"
+          echo "rev=${FULL_REVISION:0:8}" >> $GITHUB_OUTPUT
+          echo "branch=${GITHUB_REF#refs/heads/}" >> $GITHUB_OUTPUT
+          echo "os=$(uname -sr)" >> $GITHUB_OUTPUT
+          echo "go_version=$(go version | cut -d " " -f 3-)" >> $GITHUB_OUTPUT
 
           if [[ "${{ job.status }}" == "success" ]]; then
-            echo "::set-output name=status:::moneybag: SUCCESS"
+            echo "status=:moneybag: SUCCESS" >> $GITHUB_OUTPUT
           else
-            echo "::set-output name=status:::hankey: FAILURE"
+            echo "status=:hankey: FAILURE" >> $GITHUB_OUTPUT
           fi
 
       - name: Post to Slack
         id: slack
         if: always()
-        uses: slackapi/slack-github-action@v1.16.0
+        uses: slackapi/slack-github-action@v1.24.0
         with:
           # Slack channel id, channel name, or user id to post message.
           # See also: https://api.slack.com/methods/chat.postMessage#channels
