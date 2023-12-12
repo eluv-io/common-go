@@ -8,13 +8,13 @@ import (
 )
 
 // NewAuthorization returns an authorization from the given token or an error.
-// The optional aux is a client confirmation token.
+// The optional conf is a client confirmation token.
 // An error is possibly returned only in the case where the token was not encoded
-func NewAuthorization(tok *Token, aux ...*Token) (*Authorization, error) {
+func NewAuthorization(tok *Token, conf ...*Token) (*Authorization, error) {
 	if tok == nil {
 		return nil, errors.E("NewAuthorization", errors.K.Invalid, "reason", "token is nil")
 	}
-	data := tok.TokenData
+	data := tok.TokenData.Copy()
 	// when an embedded exists this is a state channel, hence it has precedence
 	if tok.Embedded != nil {
 		data = tok.Embedded.TokenData
@@ -25,8 +25,8 @@ func NewAuthorization(tok *Token, aux ...*Token) (*Authorization, error) {
 	}
 
 	var cnf *Token
-	if len(aux) > 0 {
-		cnf = aux[0]
+	if len(conf) > 0 {
+		cnf = conf[0]
 	}
 	if cnf != nil {
 		// populate data.Cnf from cnf - not required for now

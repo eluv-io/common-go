@@ -642,7 +642,7 @@ func TestEditorSignedSubject(t *testing.T) {
 
 	// subject is not necessarily the signer
 	createToken := func() *eat.Token {
-		token := eat.New(eat.Types.EditorSigned(), eat.Formats.Json(), eat.SigTypes.Unsigned())
+		token := eat.New(eat.Types.EditorSigned(), eat.Formats.Json())
 		token.SID = sid
 		token.LID = lid
 		token.QID = qid
@@ -787,7 +787,7 @@ func TestClientConfirmation(t *testing.T) {
 			csEnc: eat.NewClientConfirmation(now).
 				WithExpires(now.Add(time.Hour)).
 				WithCtx(map[string]interface{}{"color": "blue"}).
-				SignNoAddr(clientSK),
+				Sign(clientSK),
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -824,15 +824,15 @@ func TestClientSignedWithClientConfirm(t *testing.T) {
 				WithIssuedAt(now).
 				WithExpires(now.Add(time.Hour)).
 				WithGrant(eat.Grants.Read).
-				WithClientConfirm(eat.ClientConfirmation{
-					Aek: "bla",
+				WithConfirmation(eat.ClientConfirmation{
+					AddrOfEphemeralKey: "bla",
 				}).
 				WithCtx(map[string]interface{}{"color": "blue"}).
 				Sign(clientSK),
 			wantCnf: true,
 		},
 		{
-			name: "regular_no_aux",
+			name: "regular_no_confirmation",
 			csEnc: eat.NewClientSigned(sid).
 				WithIssuedAt(now).
 				WithExpires(now.Add(time.Hour)).
@@ -848,8 +848,8 @@ func TestClientSignedWithClientConfirm(t *testing.T) {
 				WithExpires(now.Add(time.Hour)).
 				WithGrant(eat.Grants.Read).
 				WithCtx(map[string]interface{}{"color": "blue"}).
-				SignNoAddr(clientSK),
-			wantFail: true, // 'adr missing'
+				Sign(clientSK),
+			wantFail: false,
 		},
 		{
 			name: "EIP912",
@@ -857,8 +857,8 @@ func TestClientSignedWithClientConfirm(t *testing.T) {
 				WithIssuedAt(now).
 				WithExpires(now.Add(time.Hour)).
 				WithGrant(eat.Grants.Read).
-				WithClientConfirm(eat.ClientConfirmation{
-					Aek: "bla",
+				WithConfirmation(eat.ClientConfirmation{
+					AddrOfEphemeralKey: "bla",
 				}).
 				WithCtx(map[string]interface{}{"color": "blue"}).
 				SignEIP912Personal(clientSK),
@@ -879,9 +879,11 @@ func TestClientSignedWithClientConfirm(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, eat.Types.ClientSigned(), token.Type)
 
-			require.Equal(t, tc.wantCnf, token.Cnf.Required)
-			if token.Cnf.Required {
-				v := structured.Wrap(token.Cnf)
+			require.Equal(t, tc.wantCnf, token.Confirmation.RequiresConfirmation())
+			require.Equal(t, tc.wantCnf, token.Copy().Confirmation.Required)
+
+			if token.Confirmation.RequiresConfirmation() {
+				v := structured.Wrap(token.Confirmation)
 				require.Equal(t, "bla", v.At("aek").String())
 			}
 
@@ -921,8 +923,8 @@ func TestXSignedAndConfirm(t *testing.T) {
 				WithIssuedAt(now).
 				WithExpires(now.Add(time.Minute * 5)).
 				WithGrant(eat.Grants.Read).
-				WithClientConfirm(eat.ClientConfirmation{
-					Aek: adr1.String(),
+				WithConfirmation(eat.ClientConfirmation{
+					AddrOfEphemeralKey: adr1.String(),
 				}).
 				Sign(clientSK),
 			cnfEnc:   eat.NewClientConfirmation(now, time.Minute*5).Sign(sk1),
@@ -935,8 +937,8 @@ func TestXSignedAndConfirm(t *testing.T) {
 				WithIssuedAt(now).
 				WithExpires(now.Add(time.Minute * 5)).
 				WithGrant(eat.Grants.Read).
-				WithClientConfirm(eat.ClientConfirmation{
-					Aek: adr1.String(),
+				WithConfirmation(eat.ClientConfirmation{
+					AddrOfEphemeralKey: adr1.String(),
 				}).
 				Sign(clientSK),
 			cnfEnc:   eat.NewClientConfirmation(now, time.Minute*5).Sign(sk1),
@@ -949,12 +951,28 @@ func TestXSignedAndConfirm(t *testing.T) {
 				WithIssuedAt(now).
 				WithExpires(now.Add(time.Minute * 5)).
 				WithGrant(eat.Grants.Read).
-				WithClientConfirm(eat.ClientConfirmation{
-					Aek: adr1.String(),
+				WithConfirmation(eat.ClientConfirmation{
+					AddrOfEphemeralKey: adr1.String(),
 				}).
 				Sign(clientSK),
 			cnfEnc:               eat.NewClientConfirmation(now, time.Minute).Sign(sk1),
 			wantType:             eat.Types.ClientSigned(),
+			wantCnf:              true,
+			wantValidationFailed: true,
+		},
+		{
+			name: "editor_ttl_expired",
+			csEnc: eat.NewEditorSigned(sid, lid, qid).
+				WithIssuedAt(now).
+				WithExpires(now.Add(time.Minute * 5)).
+				WithGrant(eat.Grants.Read).
+				WithConfirmation(eat.ClientConfirmation{
+					AddrOfEphemeralKey: adr1.String(),
+					TTL:                1,
+				}).
+				Sign(clientSK),
+			cnfEnc:               eat.NewClientConfirmation(now, time.Minute*5).Sign(sk1),
+			wantType:             eat.Types.EditorSigned(),
 			wantCnf:              true,
 			wantValidationFailed: true,
 		},
@@ -964,8 +982,8 @@ func TestXSignedAndConfirm(t *testing.T) {
 				WithIssuedAt(now).
 				WithExpires(now.Add(time.Minute * 5)).
 				WithGrant(eat.Grants.Read).
-				WithClientConfirm(eat.ClientConfirmation{
-					Aek: adr2.String(),
+				WithConfirmation(eat.ClientConfirmation{
+					AddrOfEphemeralKey: adr2.String(),
 				}).
 				Sign(clientSK),
 			cnfEnc:               eat.NewClientConfirmation(now, time.Minute).Sign(sk1),
@@ -979,11 +997,11 @@ func TestXSignedAndConfirm(t *testing.T) {
 				WithIssuedAt(now).
 				WithExpires(now.Add(time.Minute * 5)).
 				WithGrant(eat.Grants.Read).
-				WithClientConfirm(eat.ClientConfirmation{
-					Aek: adr1.String(),
+				WithConfirmation(eat.ClientConfirmation{
+					AddrOfEphemeralKey: adr1.String(),
 				}).
 				Sign(clientSK),
-			cnfEnc:   eat.NewClientConfirmation(now, time.Minute*5).SignNoAddr(sk1),
+			cnfEnc:   eat.NewClientConfirmation(now, time.Minute*5).Sign(sk1),
 			wantType: eat.Types.ClientSigned(),
 			wantCnf:  true,
 		},
@@ -1004,8 +1022,8 @@ func TestXSignedAndConfirm(t *testing.T) {
 				WithIssuedAt(now).
 				WithExpires(now.Add(time.Minute * 5)).
 				WithGrant(eat.Grants.Read).
-				WithClientConfirm(eat.ClientConfirmation{
-					Aek: adr1.String(),
+				WithConfirmation(eat.ClientConfirmation{
+					AddrOfEphemeralKey: adr1.String(),
 				}).
 				SignEIP912Personal(clientSK),
 			cnfEnc:   eat.NewClientConfirmation(now, time.Minute*5).Sign(sk1),
@@ -1041,9 +1059,9 @@ func TestXSignedAndConfirm(t *testing.T) {
 			now := utc.Now().Add(time.Minute * 3)
 			defer utc.MockNow(now)()
 
-			require.Equal(t, tc.wantCnf, token.Cnf.Required, tc.name)
 			err = token.ValidateConfirmation(cnf, time.Hour, time.Minute)
-			if token.Cnf.Required {
+			require.Equal(t, tc.wantCnf, token.Confirmation.RequiresConfirmation(), tc.name)
+			if token.Confirmation.RequiresConfirmation() {
 				if tc.wantValidationFailed {
 					require.Error(t, err, tc.name)
 				} else {

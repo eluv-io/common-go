@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/eluv-io/common-go/format/codecs"
 	"github.com/eluv-io/common-go/format/hash"
@@ -17,12 +18,13 @@ import (
 )
 
 // ClientConfirmation is auxiliary information for DPOP (Demonstrating Proof-of-Possession)
-// Note that Required is populated during deserialization and allows a policy to access the
-// token and verify the confirmation was required via 'token/cnf/required'
+// Note that Required is updated when creating an Authorization for the server such as to allow
+// a policy to access the token and verify a confirmation was required via 'token/cnf/required'
 type ClientConfirmation struct {
-	Aek      string `json:"aek,omitempty"`      // address of ephemeral public key
-	Pek      string `json:"pek,omitempty"`      // public ephemeral key
-	Required bool   `json:"required,omitempty"` // true if either aek or pek is set
+	AddrOfEphemeralKey string `json:"aek,omitempty"`      // address of ephemeral public key
+	PublicEphemeralKey string `json:"pek,omitempty"`      // public ephemeral key
+	TTL                int    `json:"ttl,omitempty"`      // max validity of a confirmation in seconds
+	Required           bool   `json:"required,omitempty"` // true if either aek or pek is set
 	// additional data from the client confirmation - not needed for now
 	// when needed this could be populated when the Authorization is built.
 	//IssuedAt utc.UTC                `json:"iat,omitempty"` // Issued At
@@ -30,10 +32,29 @@ type ClientConfirmation struct {
 	//Ctx      map[string]interface{} `json:"ctx,omitempty"` // additional, arbitrary information conveyed in the token
 }
 
-// requireConfirmation returns true if this references an ephemeral key, either
+// RequiresConfirmation returns true if this references an ephemeral key, either
 // as an address or a public key.
-func (d ClientConfirmation) requireConfirmation() bool {
-	return d.Aek != "" || d.Pek != ""
+func (d ClientConfirmation) RequiresConfirmation() bool {
+	return d.AddrOfEphemeralKey != "" || d.PublicEphemeralKey != ""
+}
+
+func (d ClientConfirmation) ConfirmationAddress() (common.Address, error) {
+	e := errors.Template("ConfirmationAddress", errors.K.Invalid)
+	var addr common.Address
+	if d.AddrOfEphemeralKey != "" {
+		addr = common.HexToAddress(d.AddrOfEphemeralKey)
+	} else {
+		pkb, err := ethutil.DecodeHex(d.PublicEphemeralKey)
+		if err != nil {
+			return addr, e(err)
+		}
+		pubKey, err := crypto.DecompressPubkey(pkb)
+		if err != nil {
+			return addr, e(err)
+		}
+		addr = crypto.PubkeyToAddress(*pubKey)
+	}
+	return addr, nil
 }
 
 var zeroCnf = ClientConfirmation{}
@@ -51,13 +72,21 @@ type TokenData struct {
 	LID types.QLibID   `json:"lib,omitempty"` // lib ID
 
 	// ElvAuthToken ==> elv-master
-	QID      types.QID              `json:"qid,omitempty"` // content ID
-	Subject  string                 `json:"sub,omitempty"` // the entity the token was granted to
-	Grant    Grant                  `json:"gra,omitempty"` // type of grant
-	IssuedAt utc.UTC                `json:"iat,omitempty"` // Issued At
-	Expires  utc.UTC                `json:"exp,omitempty"` // Expiration Time
-	Ctx      map[string]interface{} `json:"ctx,omitempty"` // additional, arbitrary information conveyed in the token
-	Cnf      ClientConfirmation     `json:"cnf,omitempty"` // auxiliary confirmation for DPOP (Demonstrating Proof-of-Possession)
+	QID          types.QID              `json:"qid,omitempty"` // content ID
+	Subject      string                 `json:"sub,omitempty"` // the entity the token was granted to
+	Grant        Grant                  `json:"gra,omitempty"` // type of grant
+	IssuedAt     utc.UTC                `json:"iat,omitempty"` // Issued At
+	Expires      utc.UTC                `json:"exp,omitempty"` // Expiration Time
+	Ctx          map[string]interface{} `json:"ctx,omitempty"` // additional, arbitrary information conveyed in the token
+	Confirmation ClientConfirmation     `json:"cnf,omitempty"` // auxiliary confirmation for DPOP (Demonstrating Proof-of-Possession)
+}
+
+// Copy returns a copy of this TokenData.
+// It also updates the Required field of the Confirmation in the returned value.
+func (t *TokenData) Copy() TokenData {
+	ret := *t
+	ret.Confirmation.Required = ret.Confirmation.RequiresConfirmation()
+	return ret
 }
 
 // EncodeJSON encodes the token data to JSON in its optimized form.
@@ -193,7 +222,7 @@ func (t *TokenData) Decode(bts []byte) error {
 	if err == nil {
 		err = dec.readCbor(&td.Cnf)
 		if err == nil {
-			t.Cnf = td.Cnf.toClientConfirmation()
+			t.Confirmation = td.Cnf.toClientConfirmation()
 		}
 	}
 
@@ -220,6 +249,7 @@ func (t *TokenData) Signer() types.UserID {
 type serClientConfirmation struct {
 	Aek string `json:"aek,omitempty"` // address of ephemeral public key
 	Pek string `json:"pek,omitempty"` // public ephemeral key
+	Ttl int    `json:"ttl,omitempty"` // max validity in seconds
 }
 
 func (s *serClientConfirmation) toClientConfirmation() ClientConfirmation {
@@ -227,9 +257,9 @@ func (s *serClientConfirmation) toClientConfirmation() ClientConfirmation {
 		return ClientConfirmation{}
 	}
 	return ClientConfirmation{
-		Aek:      s.Aek,
-		Pek:      s.Pek,
-		Required: s.Aek != "" || s.Pek != "",
+		AddrOfEphemeralKey: s.Aek,
+		PublicEphemeralKey: s.Pek,
+		TTL:                s.Ttl,
 	}
 }
 
@@ -252,7 +282,7 @@ type serData struct {
 	IssuedAt int64                  `json:"iat,omitempty"` // Issued At
 	Expires  int64                  `json:"exp,omitempty"` // Expiration Time
 	Ctx      map[string]interface{} `json:"ctx,omitempty"` // additional, arbitrary information conveyed in the token
-	Cnf      *serClientConfirmation `json:"cnf,omitempty"` // auxiliary 'confirmation' for DPOP
+	Cnf      *serClientConfirmation `json:"cnf,omitempty"` // auxiliary 'confirmation'
 }
 
 func (d *serData) copyTo(t *TokenData) *TokenData {
@@ -273,7 +303,7 @@ func (d *serData) copyTo(t *TokenData) *TokenData {
 	}
 	t.Ctx = d.Ctx
 	if d.Cnf != nil {
-		t.Cnf = d.Cnf.toClientConfirmation()
+		t.Confirmation = d.Cnf.toClientConfirmation()
 	}
 	return t
 }
@@ -299,12 +329,11 @@ func (d *serData) copyFrom(t *TokenData) *serData {
 		d.Expires = t.Expires.UnixMilli()
 	}
 	d.Ctx = t.Ctx
-	if t.Cnf != zeroCnf {
-		// update the 'required' field when encoding
-		t.Cnf.Required = t.Cnf.requireConfirmation()
+	if t.Confirmation != zeroCnf {
 		d.Cnf = &serClientConfirmation{
-			Aek: t.Cnf.Aek,
-			Pek: t.Cnf.Pek,
+			Aek: t.Confirmation.AddrOfEphemeralKey,
+			Pek: t.Confirmation.PublicEphemeralKey,
+			Ttl: t.Confirmation.TTL,
 		}
 	}
 	return d

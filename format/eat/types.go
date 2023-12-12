@@ -10,10 +10,10 @@ const Types enumType = 0
 type TokenType = *tokenType
 
 type tokenType struct {
-	Prefix            string `json:"prefix"`
-	Name              string `json:"name"`
-	SignatureRequired bool   `json:"-"`
-	CanRequireConfirm bool   `json:"-"`
+	Prefix                 string `json:"prefix"`
+	Name                   string `json:"name"`
+	SignatureRequired      bool   `json:"-"`
+	MayRequireConfirmation bool   `json:"-"`
 }
 
 func (t *tokenType) String() string {
@@ -32,17 +32,17 @@ func (t *tokenType) Validate() error {
 }
 
 var allTypes = []TokenType{
-	{"aun", "unknown", false, false},            // 0
-	{"aan", "anonymous", false, false},          // 1
-	{"atx", "tx", true, false},                  // 2
-	{"asc", "state-channel", true, false},       // 3
-	{"acl", "client", false, false},             // 4
-	{"apl", "plain", true, false},               // 5
-	{"aes", "editor-signed", true, true},        // 6
-	{"ano", "node", true, false},                // 7
-	{"asl", "signed-link", true, false},         // 8
-	{"acs", "client-signed", true, true},        // 9
-	{"acc", "client-confirmation", true, false}, // 10
+	{"aun", "unknown", false, false},      // 0
+	{"aan", "anonymous", false, false},    // 1
+	{"atx", "tx", true, false},            // 2
+	{"asc", "state-channel", true, false}, // 3
+	{"acl", "client", false, false},       // 4
+	{"apl", "plain", true, false},         // 5
+	{"aes", "editor-signed", true, true},  // 6
+	{"ano", "node", true, false},          // 7
+	{"asl", "signed-link", true, false},   // 8
+	{"acs", "client-signed", true, true},  // 9
+	{"acc", "confirmation", true, false},  // 10
 }
 
 type enumType int

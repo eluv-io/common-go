@@ -11,7 +11,6 @@ import (
 	"github.com/eluv-io/common-go/format/structured"
 	"github.com/eluv-io/common-go/format/types"
 	"github.com/eluv-io/common-go/util/ethutil"
-	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/utc-go"
 )
 
@@ -93,6 +92,12 @@ func (b *encoder) MustEncode() string {
 }
 
 func (b *encoder) Token() (*Token, error) {
+	if b.token.encoded == "" {
+		_, err := b.Encode()
+		if err != nil {
+			return nil, err
+		}
+	}
 	return b.token, b.err
 }
 
@@ -131,19 +136,6 @@ func (b *signer) SignEIP912Personal(pk *ecdsa.PrivateKey) Encoder {
 	return b.enc
 }
 
-func (b *signer) SignNoAddr(pk *ecdsa.PrivateKey) Encoder {
-	if b.enc.err != nil {
-		return b.enc
-	}
-	if b.enc.token.Type != Types.ClientConfirmation() {
-		b.enc.err = errors.E("SignNoAddr", errors.K.Invalid,
-			"reason", "allowed only for 'client-confirmation' tokens",
-			"type", b.enc.token.Type)
-	}
-	b.enc.err = b.enc.token.signWithTNoAddr(pk, SigTypes.ES256K())
-	return b.enc
-}
-
 func (b *signer) Token() *Token {
 	return b.enc.token
 }
@@ -160,7 +152,7 @@ func NewStateChannel(
 	qid types.QID,
 	subject string) *StateChannelBuilder {
 
-	token := New(Types.StateChannel(), defaultFormat, SigTypes.Unsigned())
+	token := New(Types.StateChannel(), defaultFormat)
 	token.SID = sid
 	token.LID = lid
 	token.QID = qid
@@ -207,7 +199,7 @@ func NewTx(
 	lid types.QLibID,
 	EthTxHash common.Hash) *TxBuilder {
 
-	token := New(Types.Tx(), defaultFormat, SigTypes.Unsigned())
+	token := New(Types.Tx(), defaultFormat)
 	token.SID = sid
 	token.LID = lid
 	token.EthTxHash = EthTxHash
@@ -229,7 +221,7 @@ func NewNodeToken(
 	sid types.QSpaceID,
 	qphash types.QPHash) *NodeTokenBuilder {
 
-	token := New(Types.Node(), defaultFormat, SigTypes.Unsigned())
+	token := New(Types.Node(), defaultFormat)
 	token.SID = sid
 	token.QPHash = qphash
 	return &NodeTokenBuilder{newSigner(token)}
@@ -246,7 +238,7 @@ func NewEditorSigned(
 	lid types.QLibID,
 	qid types.QID) *EditorSignedBuilder {
 
-	token := New(Types.EditorSigned(), defaultFormat, SigTypes.Unsigned())
+	token := New(Types.EditorSigned(), defaultFormat)
 	token.SID = sid
 	token.LID = lid
 	token.QID = qid
@@ -286,8 +278,8 @@ func (b *EditorSignedBuilder) WithSubject(s string) *EditorSignedBuilder {
 	return b
 }
 
-func (b *EditorSignedBuilder) WithClientConfirm(s ClientConfirmation) *EditorSignedBuilder {
-	b.enc.token.Cnf = s
+func (b *EditorSignedBuilder) WithConfirmation(s ClientConfirmation) *EditorSignedBuilder {
+	b.enc.token.Confirmation = s
 	return b
 }
 
@@ -315,7 +307,7 @@ func NewPlain(
 	sid types.QSpaceID,
 	lid types.QLibID) *PlainBuilder {
 
-	token := New(Types.Plain(), defaultFormat, SigTypes.Unsigned())
+	token := New(Types.Plain(), defaultFormat)
 	token.SID = sid
 	token.LID = lid
 	return &PlainBuilder{newSigner(token)}
@@ -341,7 +333,7 @@ func NewAnonymous(
 	sid types.QSpaceID,
 	lid types.QLibID) *AnonymousBuilder {
 
-	token := New(Types.Anonymous(), defaultFormat, SigTypes.Unsigned())
+	token := New(Types.Anonymous(), defaultFormat)
 	token.SID = sid
 	token.LID = lid
 	return &AnonymousBuilder{newEncoder(token)}
@@ -365,7 +357,7 @@ func NewSignedLink(
 	linkPath string,
 	srcQID types.QID) *SignedLinkBuilder {
 
-	token := New(Types.SignedLink(), defaultFormat, SigTypes.Unsigned())
+	token := New(Types.SignedLink(), defaultFormat)
 	token.SID = sid
 	token.LID = lid
 	token.QID = qid
@@ -428,7 +420,7 @@ type ClientSignedBuilder struct {
 }
 
 func NewClientSigned(sid types.QSpaceID) *ClientSignedBuilder {
-	token := New(Types.ClientSigned(), defaultFormat, SigTypes.Unsigned())
+	token := New(Types.ClientSigned(), defaultFormat)
 	token.SID = sid
 	token.IssuedAt = utc.Now()
 	token.Expires = token.IssuedAt.Add(time.Hour)
@@ -475,8 +467,8 @@ func (b *ClientSignedBuilder) WithSubject(s string) *ClientSignedBuilder {
 	return b
 }
 
-func (b *ClientSignedBuilder) WithClientConfirm(s ClientConfirmation) *ClientSignedBuilder {
-	b.enc.token.Cnf = s
+func (b *ClientSignedBuilder) WithConfirmation(s ClientConfirmation) *ClientSignedBuilder {
+	b.enc.token.Confirmation = s
 	return b
 }
 
@@ -496,17 +488,12 @@ func (b *ClientSignedBuilder) SignEIP912Personal(pk *ecdsa.PrivateKey) Encoder {
 
 // -----------------------------------------------------------------------------
 
-// SignedConfirmation is a utility function to create and sign a client confirmation
-func SignedConfirmation(pk *ecdsa.PrivateKey, expiresIn time.Duration, ctx map[string]interface{}) (string, error) {
-	return NewClientConfirmation(utc.Now(), expiresIn).WithCtx(ctx).SignNoAddr(pk).Encode()
-}
-
 type ClientConfirmationBuilder struct {
 	*signer
 }
 
 func NewClientConfirmation(issuedAt utc.UTC, d ...time.Duration) *ClientConfirmationBuilder {
-	token := New(Types.ClientConfirmation(), defaultFormat, SigTypes.Unsigned())
+	token := New(Types.ClientConfirmation(), defaultFormat)
 	token.IssuedAt = issuedAt
 	dur := time.Second * 20
 	if len(d) > 0 {

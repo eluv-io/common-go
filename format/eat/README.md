@@ -85,6 +85,55 @@ Legacy encoded form:
 eyJxaWQiOiJpcV9fM1Jpd2lQN1VKSmlIeEZMYmtMNDZCb1ZmS1dyQiIsInRvayI6ImFzY3NjY0h3RHV2UlBDQnI2Tk14UUhURjU3UWg5VnJ0UXVhazJqdDZxRUZhWDM2QTdya21tV051amJTOFBVdWFEenhVcW8zSmVZNlI5NXhUemJDNjJXYnhjY1VuRHdBamo1cktXdVVxYUs1eEhIaGNiTWZXRVZHVUVNRmg3cUdobnNiemFKd0pzeGdTNm1WQVVlSFFqZ2g5RUFBenYyOGQ0eXlZOTlDUTJVZzlYTkFrMjdvd3FMaTFUUlJva1NIRlE1ZFVaTmRrNlptTGtCSEVKTGpQVHlpekt5WmM0ZkZZYnJjMzZEdFpRUnBHeXJGU2FhWjhKZkNOSlg2a2NTWnp4WkVUZzFEbmNoV1FvcmpMTVhUaEhUN1d1UzVtM3NtR0RKN2NNYzRXeWZUUm95b3NMIn0=
 ```
 
+### Client or Editor Signed tokens requiring client confirmation
+
+The objective is to implement a simple 'app lock' to avoid users copying playout URLs
+ 
+* Client creates ephemeral private/public key (Ethereum SECP)
+* Client creates a 'client-signed token' including the address corresponding to the public key of the ephemeral key
+* Client signs the token as usual 
+
+The client-signed token has a `cnf` element with `aek` field allowing to specify the address corresponding to the public
+key of the ephemeral key.
+
+```
+{
+      "txh": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "adr": "0x65419c9f653703ed7fb6cc636cf9fda6cc024e2e",
+      "spc": "ispc2XW6n11mJXepAW3WmBSZyuPRtEGv",
+      "sub": "iusr2QpVishg9QSGU4TW3Nn4g6gYw6TP",
+      "iat": "2023-12-12T13:17:32.779Z",
+      "exp": "2023-12-12T17:17:32.779Z",
+      "cnf": {
+        "aek": "0xC96aAa54E2d44c299564da76e1cD3184A2386B8D"
+      }
+    }
+```
+
+For each resource access the client needs to provide the following:
+
+* authorization header/query parameter using the client signed access token (which includes `cnf/aek`)
+* separate header or query parameter specifying the confirmation (aka 'proof' of possession) - which is a confirmation token, like below
+  * Header: `Authorization: cnf accsjcoBtHrLNoym...DRsk`
+  * Query parameter: `authorization=cnf accsjcoBtHrLNoym...DRsk`
+* the confirmation token is signed using the ephemeral key created at the first step
+* fields `iat` (issuedAt) and `exp` (expires) are mandatory
+* prefix for the token type is `acc`
+
+````
+    {
+      "adr": "0x57549293ae2aed940aa5e2414a09ab74b4ad7381",
+      "iat": "2023-12-12T19:03:53.380Z",
+      "exp": "2023-12-12T19:08:53.380Z"
+    }
+    
+token string
+    accsjcoBtHrLNoymYRittdMQ96z16yQpDgZxfQQQFR2JG2PfFHKHLA7GfYDmwTJe2Uo7bWoaCGFjJ6fPiuy3mtWpFwTda9dhxAHUj7F9GD3YJE9kibnGZnr9YzyhmNu5EQPkE1QmTAMToqDRsk
+````
+
+**Note**: multiple `Bearer` tokens are not permitted when using client/editor signed token with confirmation.
+
+
 ### Brainstorming notes
 
 ```
