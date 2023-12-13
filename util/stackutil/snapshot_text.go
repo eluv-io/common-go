@@ -1,15 +1,15 @@
 package stackutil
 
 import (
-	"fmt"
 	"io"
 	"text/template"
 
-	"github.com/eluv-io/utc-go"
 	"github.com/maruel/panicparse/v2/stack"
+
+	"github.com/eluv-io/utc-go"
 )
 
-const textTmpl = `
+const snapshotTextTmpl = `
 {{- define "RenderCall" -}}
 {{printf "\n\t%-*s" srcLineLen (srcLine .)}} {{.Func.Complete}}({{.Args}})
 {{- end -}}
@@ -18,14 +18,13 @@ const textTmpl = `
 {{srcLine .}} {{.Func.Complete}}({{.Args}})
 {{- end -}}
 
-** Aggregate Stacktrace **
+** Goroutine Stacktrace **
 
-generated on:     {{.Now.String}}
-aggregation mode: {{.Similarity}}
+generated on:     {{.Timestamp.String}}
 go-routines:      {{.GoroutineCount}}
 
-{{range .Buckets}}
-	{{- len .IDs}}: {{.State}}
+{{range .Goroutines}}
+gid={{.ID}} {{.State}}
 	{{- if .SleepMax -}}
 		{{- if ne .SleepMin .SleepMax}} [{{.SleepMin}}~{{.SleepMax}} minutes]
 		{{- else}} [{{.SleepMax}} minutes]
@@ -42,35 +41,31 @@ go-routines:      {{.GoroutineCount}}
 {{end}}
 `
 
-func (a *AggregateStack) writeAsText(out io.Writer) error {
-	goroutineCount, srcLineLen, _ := a.calcLengths(false)
+func (s *Snapshot) writeAsText(out io.Writer) error {
+	srcLineLen, _ := s.calcLengths(false)
 	m := template.FuncMap{
 		"srcLineLen": func() int { return srcLineLen },
 		"srcLine":    srcLine,
 	}
-	t, err := template.New("textTmpl").Funcs(m).Parse(textTmpl)
+	t, err := template.New("snapshotTextTmpl").Funcs(m).Parse(snapshotTextTmpl)
 	if err != nil {
 		return err
 	}
 	data := struct {
-		Buckets        []*stack.Bucket
-		Now            utc.UTC
+		Goroutines     []*stack.Goroutine
+		Timestamp      utc.UTC
 		SrcLineSize    int
 		GoroutineCount int
-		Similarity     string
-	}{a.agg.Buckets, utc.Now(), srcLineLen, goroutineCount, a.SimilarityString()}
+	}{s.Goroutines, s.Timestamp, srcLineLen, len(s.Goroutines)}
 	return t.Execute(out, data)
 }
 
 // CalcLengths returns the maximum length of the source lines and package names.
-func (a *AggregateStack) calcLengths(fullPath bool) (int, int, int) {
-	goroutineCount := 0
+func (s *Snapshot) calcLengths(fullPath bool) (int, int) {
 	srcLen := 0
 	pkgLen := 0
-	for _, bucket := range a.agg.Buckets {
-		goroutineCount += len(bucket.IDs)
-		for _, line := range bucket.Signature.Stack.Calls {
-
+	for _, goroutine := range s.Goroutines {
+		for _, line := range goroutine.Signature.Stack.Calls {
 			l := 0
 			if fullPath {
 				l = len(fullSrcLine(line))
@@ -86,14 +81,5 @@ func (a *AggregateStack) calcLengths(fullPath bool) (int, int, int) {
 			}
 		}
 	}
-	return goroutineCount, srcLen, pkgLen
-}
-
-func srcLine(c stack.Call) string {
-	return fmt.Sprintf("%s:%d", c.SrcName, c.Line)
-}
-
-func fullSrcLine(c stack.Call) string {
-	// return fmt.Sprintf("%s:%d", c.RemoteSrcPath, c.Line)
-	return fmt.Sprintf("%s:%d", c.RelSrcPath, c.Line)
+	return srcLen, pkgLen
 }

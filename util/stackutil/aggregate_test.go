@@ -2,7 +2,7 @@ package stackutil_test
 
 import (
 	"fmt"
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -11,7 +11,7 @@ import (
 )
 
 func TestAggregate(t *testing.T) {
-	stackb, err := ioutil.ReadFile("testdata/stacktrace1.txt")
+	stackb, err := os.ReadFile("testdata/stacktrace1.txt")
 	require.NoError(t, err)
 	stack := string(stackb)
 
@@ -31,7 +31,7 @@ func TestAggregate(t *testing.T) {
 }
 
 func TestAggregateHTML(t *testing.T) {
-	stackb, err := ioutil.ReadFile("testdata/stacktrace1.txt")
+	stackb, err := os.ReadFile("testdata/stacktrace1.txt")
 	require.NoError(t, err)
 	stack := string(stackb)
 
