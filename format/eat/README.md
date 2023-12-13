@@ -114,8 +114,8 @@ For each resource access the client needs to provide the following:
 
 * authorization header/query parameter using the client signed access token (which includes `cnf/aek`)
 * separate header or query parameter specifying the confirmation (aka 'proof' of possession) - which is a confirmation token, like below
-  * Header: `Authorization: cnf accsjcoBtHrLNoym...DRsk`
-  * Query parameter: `authorization=cnf accsjcoBtHrLNoym...DRsk`
+  * Header: `Authorization: confirmation accsjcoBtHrLNoym...DRsk`
+  * Query parameter: `authorization=confirmation accsjcoBtHrLNoym...DRsk`
 * the confirmation token is signed using the ephemeral key created at the first step
 * fields `iat` (issuedAt) and `exp` (expires) are mandatory
 * prefix for the token type is `acc`
