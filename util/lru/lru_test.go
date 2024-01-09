@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/atomic"
+
 	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/util/jsonutil"
 
@@ -461,17 +463,17 @@ func TestGetValidOrCreate(t *testing.T) {
 				require.Equal(
 					t,
 					int64(keyRange*(runDuration/validity)),
-					int64(ctor.invoked))
+					ctor.invoked.Load())
 			}
 
-			fmt.Println("total", totalCount, "ctor invoked", ctor.invoked)
+			fmt.Println("total", totalCount, "ctor invoked", ctor.invoked.Load())
 		})
 	}
 
 }
 
 type ctor struct {
-	invoked int
+	invoked atomic.Int64
 }
 
 type testResource struct {
@@ -481,7 +483,7 @@ type testResource struct {
 
 func (c *ctor) constructor(key string, sleep time.Duration) func() (interface{}, error) {
 	return func() (interface{}, error) {
-		c.invoked++
+		c.invoked.Inc()
 		if sleep > 0 {
 			time.Sleep(sleep)
 		}

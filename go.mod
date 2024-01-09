@@ -10,7 +10,7 @@ require (
 	github.com/eluv-io/apexlog-go v1.9.1-elv3
 	github.com/eluv-io/errors-go v1.0.0
 	github.com/eluv-io/inject-go v0.0.0-20211014192223-71ed1bcfb56d
-	github.com/eluv-io/log-go v1.0.3
+	github.com/eluv-io/log-go v1.0.4-0.20240109181721-54903c07a53e
 	github.com/eluv-io/utc-go v1.0.0
 	github.com/ethereum/go-ethereum v1.10.19
 	github.com/gammazero/deque v0.1.0
@@ -68,3 +68,5 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 )
+
+replace github.com/modern-go/gls => github.com/eluv-io/gls v0.0.0-20240109172027-f54afc64be57

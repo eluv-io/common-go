@@ -48,13 +48,21 @@ func Log(name string, parentGoID int64, fields ...interface{}) func() {
 //	        ...
 //	    },
 //	)
-func Go(name string, fields []any, fn func()) {
+func Go(name string, fields []any, fn func(), deferFn ...func()) {
+	deferFunc := func() {}
+	if len(deferFn) > 0 && deferFn[0] != nil {
+		deferFunc = deferFn[0]
+	}
 	if !log.IsDebug() {
-		go fn()
+		go func() {
+			defer deferFunc()
+			fn()
+		}()
 		return
 	}
 	parentGid := GoID()
 	go func() {
+		defer deferFunc()
 		defer Log(name, parentGid, fields...)()
 		fn()
 	}()
