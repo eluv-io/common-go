@@ -1,7 +1,7 @@
-// The lru package provides a simple LRU cache. It is a small adaption of the
+// Package lru provides a simple LRU cache. It is a small adaption of the
 // LRU implementation of github.com/hashicorp/golang-lru/lru.go that adds the
 // function GetOrCreate() to atomically get a cached value or create it if it
-// does not yet exists in the cache.
+// does not yet exist in the cache.
 package lru
 
 import (
@@ -73,6 +73,7 @@ func NewWithEvict(size int, onEvicted func(key interface{}, value interface{})) 
 	}
 	c := &Cache{
 		evictHandler: onEvicted,
+		metrics:      makeMetrics(),
 	}
 	c.lru, _ = simplelru.NewLRU(size, c.onEvict)
 	c.metrics.Config.MaxItems = size
@@ -142,8 +143,8 @@ func (c *Cache) Add(key, value interface{}) bool {
 // non-nil, otherwise nil. The update function returns the non-nil updated value.
 //
 // Update returns two booleans:
-//  - new: true if the key is new, false if it already existed and the entry was updated
-//  - evicted: true if an eviction occurred.
+//   - new: true if the key is new, false if it already existed and the entry was updated
+//   - evicted: true if an eviction occurred.
 func (c *Cache) Update(key interface{}, value interface{}) (new bool, evicted bool) {
 	return c.UpdateFn(key, func(_ interface{}) interface{} {
 		return value
@@ -156,8 +157,8 @@ func (c *Cache) Update(key interface{}, value interface{}) (new bool, evicted bo
 // key or nil if no value is associated with the key. The update function returns a non-nil updated value.
 //
 // Update returns two booleans:
-//  - new: true if the key is new, false if it already existed and the entry was updated
-//  - evicted: true if an eviction occurred.
+//   - new: true if the key is new, false if it already existed and the entry was updated
+//   - evicted: true if an eviction occurred.
 func (c *Cache) UpdateFn(key interface{}, update func(value interface{}) interface{}) (new bool, evicted bool) {
 	if c == nil {
 		return true, false
@@ -205,14 +206,14 @@ func (c *Cache) Get(key interface{}) (interface{}, bool) {
 // GetOrCreate looks up a key's value from the cache, creating it if necessary.
 // Invalid, stale or expired entries are discarded from the cache as dictated
 // by the first optional evict parameter.
-// - If the key does not exist, the given constructor function is called to
-//   create a new value, store it at the key and return it. If the constructor
-//   fails, no value is added to the cache and the error is returned. Otherwise,
-//   the new value is added to the cache, and a boolean to mark any evictions
-//   from the cache is returned as defined in the Add() method.
-// - If the key exists and the evict parameter is not nil, then the first evict
-//   function is invoked with the retrieved value. If it returns true, the
-//   value is discarded from the cache and the constructor is called.
+//   - If the key does not exist, the given constructor function is called to
+//     create a new value, store it at the key and return it. If the constructor
+//     fails, no value is added to the cache and the error is returned. Otherwise,
+//     the new value is added to the cache, and a boolean to mark any evictions
+//     from the cache is returned as defined in the Add() method.
+//   - If the key exists and the evict parameter is not nil, then the first evict
+//     function is invoked with the retrieved value. If it returns true, the
+//     value is discarded from the cache and the constructor is called.
 func (c *Cache) GetOrCreate(
 	key interface{},
 	constructor func() (interface{}, error),
@@ -433,9 +434,9 @@ func (c *Cache) Len() int {
 // Metrics returns a copy of the cache's runtime properties.
 func (c *Cache) Metrics() Metrics {
 	if c == nil {
-		return Metrics{}
+		return makeMetrics()
 	}
-	return c.metrics
+	return c.metrics.Copy()
 }
 
 // CollectMetrics returns a copy of the cache's runtime properties.

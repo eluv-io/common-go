@@ -19,6 +19,7 @@ func NewRefCache(
 	c := &RefCache{
 		callback: callback,
 		active:   make(map[string]*entry),
+		metrics:  makeMetrics(),
 	}
 	if maxSize > 0 {
 		c.lru, _ = simplelru.NewLRU(maxSize, c.onEvict)
@@ -238,7 +239,7 @@ func (c *RefCache) Purge() {
 func (c *RefCache) Metrics() Metrics {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
-	return c.metrics
+	return c.metrics.Copy()
 }
 
 // CollectMetrics returns a copy of the cache's runtime properties.

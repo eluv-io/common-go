@@ -9,9 +9,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/mr-tron/base58/base58"
+
 	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/log-go"
-	"github.com/mr-tron/base58/base58"
 
 	"github.com/eluv-io/common-go/format/encryption"
 	"github.com/eluv-io/common-go/format/id"
@@ -40,6 +41,7 @@ func NewObject(code Code, qid id.ID, nid id.ID, bytes ...byte) (*Token, error) {
 		}
 		res.NID = nid
 	}
+	res.makeString()
 	return res, nil
 }
 
@@ -65,6 +67,7 @@ func NewPart(code Code, scheme encryption.Scheme, flags byte, bytes ...byte) (*T
 		}
 		res.Flags = flags
 	}
+	res.makeString()
 	return res, nil
 }
 
@@ -84,6 +87,7 @@ func NewLRO(code Code, nid id.ID, bytes ...byte) (*Token, error) {
 		return nil, e("reason", "invalid nid", "nid", nid)
 	}
 	res.NID = nid
+	res.makeString()
 	return res, nil
 }
 
@@ -225,10 +229,15 @@ func (t *Token) String() string {
 	if t.s != "" {
 		return t.s
 	}
+	return t.makeString()
+}
 
+func (t *Token) makeString() string {
 	var b []byte
 
 	switch t.Code {
+	case UNKNOWN:
+		return ""
 	case QWriteV1, QPartWriteV1:
 		b = make([]byte, len(t.Bytes))
 		copy(b, t.Bytes)
