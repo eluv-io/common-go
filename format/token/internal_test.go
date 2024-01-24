@@ -1,9 +1,10 @@
 package token
 
 import (
-	"github.com/stretchr/testify/require"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestCodeFromStringInvalid(t *testing.T) {
@@ -14,4 +15,10 @@ func TestCodeFromStringInvalid(t *testing.T) {
 		require.True(t, strings.Contains(err.Error(), v))
 		require.True(t, strings.Contains(err.Error(), "invalid-id"))
 	}
+}
+
+// ClearString is exposed to tests in order to clear 's' the string representation
+// of the token
+func (t *Token) ClearString() string {
+	return t.makeString()
 }

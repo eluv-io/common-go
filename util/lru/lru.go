@@ -73,7 +73,7 @@ func NewWithEvict(size int, onEvicted func(key interface{}, value interface{})) 
 	}
 	c := &Cache{
 		evictHandler: onEvicted,
-		metrics:      makeMetrics(),
+		metrics:      MakeMetrics(),
 	}
 	c.lru, _ = simplelru.NewLRU(size, c.onEvict)
 	c.metrics.Config.MaxItems = size
@@ -434,7 +434,7 @@ func (c *Cache) Len() int {
 // Metrics returns a copy of the cache's runtime properties.
 func (c *Cache) Metrics() Metrics {
 	if c == nil {
-		return makeMetrics()
+		return MakeMetrics()
 	}
 	return c.metrics.Copy()
 }

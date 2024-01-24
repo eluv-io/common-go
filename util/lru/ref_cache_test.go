@@ -64,11 +64,11 @@ func TestNewRefCacheBasic(t *testing.T) {
 
 	{
 		metrics := cache.Metrics()
-		require.EqualValues(t, 2, metrics.Hits)
-		require.EqualValues(t, 4, metrics.Misses)
-		require.EqualValues(t, 0, metrics.Errors)
-		require.EqualValues(t, 4, metrics.Added)
-		require.EqualValues(t, 4, metrics.Removed)
+		require.EqualValues(t, 2, metrics.Hits.Load())
+		require.EqualValues(t, 4, metrics.Misses.Load())
+		require.EqualValues(t, 0, metrics.Errors.Load())
+		require.EqualValues(t, 4, metrics.Added.Load())
+		require.EqualValues(t, 4, metrics.Removed.Load())
 	}
 
 	{
@@ -150,15 +150,15 @@ func TestConcurrent(t *testing.T) {
 		"release", cb.release.Load())
 	metrics := cache.Metrics()
 	fmt.Println(jsonutil.MarshalString(metrics))
-	require.EqualValues(t, totalCount, metrics.Hits+metrics.Misses)
-	require.EqualValues(t, 0, metrics.Errors)
+	require.EqualValues(t, totalCount, metrics.Hits.Load()+metrics.Misses.Load())
+	require.EqualValues(t, 0, metrics.Errors.Load())
 	require.EqualValues(t, cacheSize, metrics.Config.MaxItems)
-	require.EqualValues(t, cacheSize, metrics.Added-metrics.Removed)
+	require.EqualValues(t, cacheSize, metrics.Added.Load()-metrics.Removed.Load())
 
 	cache.Purge()
 
 	metrics = cache.Metrics()
-	require.EqualValues(t, 0, metrics.Added-metrics.Removed)
+	require.EqualValues(t, 0, metrics.Added.Load()-metrics.Removed.Load())
 	require.Equal(t, cb.open.Load(), cb.close.Load())
 	require.Equal(t, cb.get.Load(), cb.release.Load())
 }

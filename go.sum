@@ -32,8 +32,10 @@ github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1 h1:YLtO71vCjJRCBcrPMtQ9nqBsqpA1
 github.com/decred/dcrd/dcrec/secp256k1/v4 v4.0.1/go.mod h1:hyedUtir6IdtD/7lIxGeCxkaw7y45JueMRL4DIyJDKs=
 github.com/eluv-io/apexlog-go v1.9.1-elv3 h1:cWYg+5Bi5/y+R0WU3lsU3jlkNeHJv5PHXGnE1WhNPsc=
 github.com/eluv-io/apexlog-go v1.9.1-elv3/go.mod h1:pZhIuRbWTsOm5WEOxke9B2dczjQuaEGeJXEYd5lCxkk=
-github.com/eluv-io/errors-go v1.0.0 h1:CsGhBoMWyXY1j4a4v4JiOPQrbNA7x/mm8PZCIyJJ40M=
-github.com/eluv-io/errors-go v1.0.0/go.mod h1:bSd8y2sXPla5W9piijQn/RT00T2bC0Dce5ofvQ8vWws=
+github.com/eluv-io/errors-go v1.0.3-0.20240124171541-db422849ef4d h1:i7vU0p/4OUU9/FyhqPeyus9RPUfUVMplwLOmLO5/I/g=
+github.com/eluv-io/errors-go v1.0.3-0.20240124171541-db422849ef4d/go.mod h1:xzpHDxim4/sH3SKFu9Xry0WsCBuK1a1axeTbCuRXx6Q=
+github.com/eluv-io/errors-go v1.0.3-0.20240124175045-5f96ae8c0c7f h1:0DKMdT7YGdF98GRnAin5QmuHw1RK1qI2yNpGCkQPOs0=
+github.com/eluv-io/errors-go v1.0.3-0.20240124175045-5f96ae8c0c7f/go.mod h1:SoBNolWeyjrvHosBsIpxlQAq5/jVvqWsw/o0XpGMtKU=
 github.com/eluv-io/gls v0.0.0-20240109172027-f54afc64be57 h1:3Xd2e2/khksl5KohJGnrLS/+rYptG/+yhjHrNvXqzQE=
 github.com/eluv-io/gls v0.0.0-20240109172027-f54afc64be57/go.mod h1:4rPCrom1ZvL5sqFMGiNbCr/QfDq3oljqXEBdstdge0o=
 github.com/eluv-io/inject-go v0.0.0-20211014192223-71ed1bcfb56d h1:gUJoRZT6SFGvP0pi7XvRMEPECLQzexKVZ9Bf6d67JeU=

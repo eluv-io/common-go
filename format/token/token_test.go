@@ -19,16 +19,19 @@ var (
 	qwt = func() *token.Token {
 		t, _ := token.NewObject(token.QWrite, qid, nid)
 		t.Bytes = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+		t.ClearString()
 		return t
 	}()
 	qpwt = func() *token.Token {
 		t, _ := token.NewPart(token.QPartWrite, encryption.ClientGen, token.PreambleQPWFlag)
 		t.Bytes = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+		t.ClearString()
 		return t
 	}()
 	lrot = func() *token.Token {
 		t, _ := token.NewLRO(token.LRO, nid)
 		t.Bytes = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+		t.ClearString()
 		return t
 	}()
 )

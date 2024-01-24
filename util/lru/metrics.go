@@ -22,7 +22,7 @@ type Metrics struct {
 	Removed *atomic.Int64 // see Added
 }
 
-func makeMetrics() Metrics {
+func MakeMetrics() Metrics {
 	return Metrics{
 		Hits:    &atomic.Int64{},
 		Misses:  &atomic.Int64{},
@@ -40,7 +40,7 @@ type config struct {
 }
 
 func (c *Metrics) Copy() Metrics {
-	ret := makeMetrics()
+	ret := MakeMetrics()
 	ret.Name = c.Name
 	ret.Config = config{
 		MaxItems: c.Config.MaxItems,

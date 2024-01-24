@@ -19,7 +19,7 @@ func NewRefCache(
 	c := &RefCache{
 		callback: callback,
 		active:   make(map[string]*entry),
-		metrics:  makeMetrics(),
+		metrics:  MakeMetrics(),
 	}
 	if maxSize > 0 {
 		c.lru, _ = simplelru.NewLRU(maxSize, c.onEvict)
