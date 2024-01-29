@@ -17,21 +17,15 @@ var (
 	qid = id.MustParse("iq__99d4kp14eSDEP7HWfjU4W6qmqDw")
 	nid = id.MustParse("inod3Sa5p3czRyYi8GnVGnh8gBDLaqJr")
 	qwt = func() *token.Token {
-		t, _ := token.NewObject(token.QWrite, qid, nid)
-		t.Bytes = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-		t.ClearString()
+		t, _ := token.NewObject(token.QWrite, qid, nid, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 		return t
 	}()
 	qpwt = func() *token.Token {
-		t, _ := token.NewPart(token.QPartWrite, encryption.ClientGen, token.PreambleQPWFlag)
-		t.Bytes = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-		t.ClearString()
+		t, _ := token.NewPart(token.QPartWrite, encryption.ClientGen, token.PreambleQPWFlag, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 		return t
 	}()
 	lrot = func() *token.Token {
-		t, _ := token.NewLRO(token.LRO, nid)
-		t.Bytes = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-		t.ClearString()
+		t, _ := token.NewLRO(token.LRO, nid, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 		return t
 	}()
 )

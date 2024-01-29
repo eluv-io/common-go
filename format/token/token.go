@@ -41,7 +41,7 @@ func NewObject(code Code, qid id.ID, nid id.ID, bytes ...byte) (*Token, error) {
 		}
 		res.NID = nid
 	}
-	res.makeString()
+	res.MakeString()
 	return res, nil
 }
 
@@ -67,7 +67,7 @@ func NewPart(code Code, scheme encryption.Scheme, flags byte, bytes ...byte) (*T
 		}
 		res.Flags = flags
 	}
-	res.makeString()
+	res.MakeString()
 	return res, nil
 }
 
@@ -87,7 +87,7 @@ func NewLRO(code Code, nid id.ID, bytes ...byte) (*Token, error) {
 		return nil, e("reason", "invalid nid", "nid", nid)
 	}
 	res.NID = nid
-	res.makeString()
+	res.MakeString()
 	return res, nil
 }
 
@@ -229,10 +229,13 @@ func (t *Token) String() string {
 	if t.s != "" {
 		return t.s
 	}
-	return t.makeString()
+	// we should never go there when t.s is computed in constructor
+	return t.MakeString()
 }
 
-func (t *Token) makeString() string {
+// MakeString recomputes the internal cached string representation of this Token
+// MakeString is not safe for calls from concurrent go-routines.
+func (t *Token) MakeString() string {
 	var b []byte
 
 	switch t.Code {
