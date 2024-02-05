@@ -37,8 +37,8 @@ github.com/eluv-io/gls v0.0.0-20240109172027-f54afc64be57 h1:3Xd2e2/khksl5KohJGn
 github.com/eluv-io/gls v0.0.0-20240109172027-f54afc64be57/go.mod h1:4rPCrom1ZvL5sqFMGiNbCr/QfDq3oljqXEBdstdge0o=
 github.com/eluv-io/inject-go v0.0.0-20211014192223-71ed1bcfb56d h1:gUJoRZT6SFGvP0pi7XvRMEPECLQzexKVZ9Bf6d67JeU=
 github.com/eluv-io/inject-go v0.0.0-20211014192223-71ed1bcfb56d/go.mod h1:Sadd3LZg6qVz7UvR3firWI7LHanlzT8V2Ouia9KE2SY=
-github.com/eluv-io/log-go v1.0.4-0.20240205092730-5c08ea79c697 h1:iio3vl2zguY1VI4EcI6oiF1VsrYhiherqWwKzotJhF8=
-github.com/eluv-io/log-go v1.0.4-0.20240205092730-5c08ea79c697/go.mod h1:UiD1hUgVNpNC2qyePvtyZP+fYvkBmqzaEwXlfsk4pbs=
+github.com/eluv-io/log-go v1.0.4-0.20240205160531-eefb8bbefbbe h1:asaVUXzU6FxSFsJnaTQwgUBqN6GnbFvxC3tWC42XsdQ=
+github.com/eluv-io/log-go v1.0.4-0.20240205160531-eefb8bbefbbe/go.mod h1:UiD1hUgVNpNC2qyePvtyZP+fYvkBmqzaEwXlfsk4pbs=
 github.com/eluv-io/stack v1.8.2 h1:yocCvAcPy9vW5iBdNnig5Tem8LgOTT8JrOLvDcacnEQ=
 github.com/eluv-io/stack v1.8.2/go.mod h1:MIN/UfmiJlJUFpglnJCj+7DR5sDBUuvQRTENHm1F310=
 github.com/eluv-io/utc-go v1.0.0 h1:SUC9bdAginhb0a9qKZDY4MD1usQedoWN5XjNqdYag6A=

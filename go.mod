@@ -10,7 +10,7 @@ require (
 	github.com/eluv-io/apexlog-go v1.9.1-elv3.0.20240205085428-b9e81ee49181
 	github.com/eluv-io/errors-go v1.0.3-0.20240124175045-5f96ae8c0c7f
 	github.com/eluv-io/inject-go v0.0.0-20211014192223-71ed1bcfb56d
-	github.com/eluv-io/log-go v1.0.4-0.20240205092730-5c08ea79c697
+	github.com/eluv-io/log-go v1.0.4-0.20240205160531-eefb8bbefbbe
 	github.com/eluv-io/utc-go v1.0.0
 	github.com/ethereum/go-ethereum v1.10.19
 	github.com/gammazero/deque v0.1.0
