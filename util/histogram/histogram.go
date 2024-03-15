@@ -129,7 +129,7 @@ func NewDurationHistogramBins(bins []*DurationBin) *DurationHistogram {
 // DurationHistogram uses predefined bins.
 type DurationHistogram struct {
 	bins          []*DurationBin
-	marshalTotals bool
+	MarshalTotals bool
 }
 
 func (h *DurationHistogram) TotalCount() int64 {
@@ -262,7 +262,7 @@ func (h *DurationHistogram) MarshalGeneric() interface{} {
 		totalCount += v[i].Count
 		totalDur += v[i].DSum
 	}
-	if !h.marshalTotals {
+	if !h.MarshalTotals {
 		return v
 	}
 
