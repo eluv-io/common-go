@@ -86,11 +86,10 @@ func NewDurationHistogram(t DurationHistogramType) *DurationHistogram {
 			{Label: "2h-", Max: time.Hour * 10000},
 		}
 	}
-	return newDurationHistogramBins(bins)
+	return NewDurationHistogramBins(bins)
 }
 
-func DurationHistogramFromValues(t DurationHistogramType, values []*SerializedDurationBin) (*DurationHistogram, error) {
-	h := NewDurationHistogram(t)
+func (h *DurationHistogram) LoadValues(values []*SerializedDurationBin) error {
 	for _, v := range values {
 		seen := false
 		for _, b := range h.bins {
@@ -102,10 +101,10 @@ func DurationHistogramFromValues(t DurationHistogramType, values []*SerializedDu
 			}
 		}
 		if !seen {
-			return nil, errors.E("DurationHistogramFromValues", "reason", "mismatched histogram types", "label", v.Label)
+			return errors.E("DurationHistogramFromValues", "reason", "mismatched histogram types", "label", v.Label)
 		}
 	}
-	return h, nil
+	return nil
 }
 
 type DurationBin struct {
@@ -121,7 +120,7 @@ type SerializedDurationBin struct {
 	DSum  int64  `json:"dsum"`
 }
 
-func newDurationHistogramBins(bins []*DurationBin) *DurationHistogram {
+func NewDurationHistogramBins(bins []*DurationBin) *DurationHistogram {
 	return &DurationHistogram{
 		bins: bins,
 	}

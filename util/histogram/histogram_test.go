@@ -66,7 +66,7 @@ func TestStandardDeviation(t *testing.T) {
 		{Label: "50-90", Max: 90},
 		{Label: "90-100", Max: 100},
 	}
-	h := newDurationHistogramBins(bins)
+	h := NewDurationHistogramBins(bins)
 
 	data := []time.Duration{
 		3, 7, 12, 13, 14, 15, 15, 15, 16, 17, 25, 30, 60, 70, 80, 85, 93,
@@ -87,7 +87,7 @@ func TestQuantileEstimation(t *testing.T) {
 		{Label: "30-40", Max: 40},
 		{Label: "40-50", Max: 50},
 	}
-	h := newDurationHistogramBins(bins)
+	h := NewDurationHistogramBins(bins)
 
 	// Uniformly distributed data from 0 to 50
 	data := []time.Duration{
@@ -132,7 +132,8 @@ func TestMarshalUnmarshal(t *testing.T) {
 
 	var vals []*SerializedDurationBin
 	json.Unmarshal(s, &vals)
-	h2, err := DurationHistogramFromValues(DefaultDurationHistogram, vals)
+	h2 := NewDurationHistogram(DefaultDurationHistogram)
+	err = h2.LoadValues(vals)
 	require.NoError(t, err)
 
 	s2, err := h2.MarshalJSON()
