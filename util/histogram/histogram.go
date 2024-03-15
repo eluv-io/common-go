@@ -134,18 +134,27 @@ type DurationHistogram struct {
 
 func (h *DurationHistogram) TotalCount() int64 {
 	tot := int64(0)
-	for i := range h.bins {
-		tot += h.bins[i].Count.Load()
+	for _, b := range h.bins {
+		tot += b.Count.Load()
 	}
 	return tot
 }
 
 func (h *DurationHistogram) TotalDSum() int64 {
 	tot := int64(0)
-	for i := range h.bins {
-		tot += h.bins[i].DSum.Load()
+	for _, b := range h.bins {
+		tot += b.DSum.Load()
 	}
 	return tot
+}
+
+// TODO(Nate): Make this actually thread safe in some capacity. Right now, it's possible to read the
+// histogram partway through clearing, albeit incredibly unlikely
+func (h *DurationHistogram) Clear() {
+	for _, b := range h.bins {
+		b.Count.Store(0)
+		b.DSum.Store(0)
+	}
 }
 
 func (h *DurationHistogram) Observe(n time.Duration) {
