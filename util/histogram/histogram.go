@@ -286,6 +286,16 @@ func (h *DurationHistogram) MarshalJSON() ([]byte, error) {
 	return json.Marshal(h.MarshalGeneric())
 }
 
+func (h *DurationHistogram) MarshalArray() []SerializedDurationBin {
+	v := make([]SerializedDurationBin, len(h.bins))
+	for i, b := range h.bins {
+		v[i].Label = b.Label
+		v[i].Count = b.Count.Load()
+		v[i].DSum = b.DSum.Load()
+	}
+	return v
+}
+
 // String returns a string representation of the histogram.
 func (h *DurationHistogram) String() string {
 	bb, err := json.Marshal(h)
