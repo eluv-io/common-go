@@ -215,6 +215,13 @@ func (l *Link) MarshalCBORV1() map[string]interface{} {
 	if len(extra) > 0 {
 		m["Extra"] = extra
 	}
+	if l.Blob != nil {
+		blobProps := l.Blob.MarshalMap()
+		for k, v := range l.Props {
+			blobProps[k] = v
+		}
+		l.Props = blobProps
+	}
 	l.cleanupProps()
 	if len(l.Props) > 0 {
 		m["Props"] = l.Props
