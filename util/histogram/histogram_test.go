@@ -79,6 +79,24 @@ func TestStandardDeviation(t *testing.T) {
 	require.Equal(t, time.Duration(29), h.StandardDeviation())
 }
 
+func TestStandardDeviation2(t *testing.T) {
+	values := []*SerializedDurationBin{
+		{Label: "0-100ms", Count: 11917, DSum: 750548874146},
+		{Label: "100ms-200ms", Count: 11174, DSum: 1632240504452},
+		{Label: "200ms-300ms", Count: 6794, DSum: 1668223282733},
+		{Label: "300ms-400ms", Count: 3911, DSum: 1350261250114},
+		{Label: "400ms-500ms", Count: 2449, DSum: 1091202961948},
+		{Label: "500ms-750ms", Count: 2644, DSum: 1585670182188},
+		{Label: "750ms-1s", Count: 781, DSum: 665865316657},
+		{Label: "1s-2s", Count: 328, DSum: 389033374409},
+		{Label: "2s-4s", Count: 2, DSum: 4031693641},
+		{Label: "4s-", Count: 0, DSum: 0},
+	}
+	h := NewDurationHistogram(SegmentLatencyHistogram)
+	h.LoadValues(values)
+
+	require.Equal(t, int64(196), h.StandardDeviation().Milliseconds())
+}
 func TestQuantileEstimation(t *testing.T) {
 	bins := []*DurationBin{
 		{Label: "0-10", Max: 10},

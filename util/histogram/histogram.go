@@ -245,6 +245,10 @@ func (h *DurationHistogram) StandardDeviation() time.Duration {
 	trueAvg := float64(totDur) / float64(totCount)
 	binAvgs := []float64{}
 	for i := range h.bins {
+		if counts[i] == 0 {
+			binAvgs = append(binAvgs, 0)
+			continue
+		}
 		binAvg := float64(durs[i]) / float64(counts[i])
 		binAvgs = append(binAvgs, binAvg)
 	}
