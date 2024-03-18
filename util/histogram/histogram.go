@@ -191,6 +191,13 @@ func (h *DurationHistogram) loadDSums() ([]time.Duration, time.Duration) {
 	return data, tot
 }
 
+func (h *DurationHistogram) Average() time.Duration {
+	_, totCount := h.loadCounts()
+	_, totDur := h.loadDSums()
+	trueAvg := float64(totDur) / float64(totCount)
+	return time.Duration(trueAvg)
+}
+
 // Quantile returns an approximation of the value at the qth quantile of the histogram, where q is
 // in the range [0, 1]. It makes use of the assumption that data within each histogram bin is
 // uniformly distributed in order to estimate within bins. Depending on the distribution, this
