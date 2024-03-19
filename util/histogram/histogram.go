@@ -24,7 +24,7 @@ func NewDefaultDurationHistogram() *DurationHistogram {
 	return NewDurationHistogram(DefaultDurationHistogram)
 }
 
-// newDurationHistogram creates a new duration histogram with predefined
+// NewDurationHistogram creates a new duration histogram with predefined
 // labeled duration bins.
 // note: label are provided since computing them produces string with useless
 // suffixes like: 1m => 1m0s
