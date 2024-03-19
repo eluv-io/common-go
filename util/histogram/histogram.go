@@ -3,9 +3,8 @@ package histogram
 import (
 	"encoding/json"
 	"math"
+	"sync"
 	"time"
-
-	"go.uber.org/atomic"
 
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/errors-go"
@@ -90,12 +89,15 @@ func NewDurationHistogram(t DurationHistogramType) *DurationHistogram {
 }
 
 func (h *DurationHistogram) LoadValues(values []*SerializedDurationBin) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	for _, v := range values {
 		seen := false
 		for _, b := range h.bins {
 			if v.Label == b.Label {
-				b.Count.Store(v.Count)
-				b.DSum.Store(v.DSum)
+				b.Count = v.Count
+				b.DSum = v.DSum
 				seen = true
 				break
 			}
@@ -110,8 +112,8 @@ func (h *DurationHistogram) LoadValues(values []*SerializedDurationBin) error {
 type DurationBin struct {
 	Label string
 	Max   time.Duration // immutable upper-bound of bin (lower bound defined by previous bin)
-	Count atomic.Int64  // number or durations falling in bin
-	DSum  atomic.Int64  // sum of durations of this bin
+	Count int64         // the number of durations falling in this bin
+	DSum  int64         // sum of durations of this bin
 }
 
 type SerializedDurationBin struct {
@@ -129,39 +131,49 @@ func NewDurationHistogramBins(bins []*DurationBin) *DurationHistogram {
 // DurationHistogram uses predefined bins.
 type DurationHistogram struct {
 	bins          []*DurationBin
+	mu            sync.Mutex
 	MarshalTotals bool
 }
 
 func (h *DurationHistogram) TotalCount() int64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	tot := int64(0)
 	for _, b := range h.bins {
-		tot += b.Count.Load()
+		tot += b.Count
 	}
 	return tot
 }
 
 func (h *DurationHistogram) TotalDSum() int64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	tot := int64(0)
 	for _, b := range h.bins {
-		tot += b.DSum.Load()
+		tot += b.DSum
 	}
 	return tot
 }
 
-// TODO(Nate): Make this actually thread safe in some capacity. Right now, it's possible to read the
-// histogram partway through clearing, albeit incredibly unlikely
 func (h *DurationHistogram) Clear() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	for _, b := range h.bins {
-		b.Count.Store(0)
-		b.DSum.Store(0)
+		b.Count = 0
+		b.DSum = 0
 	}
 }
 
 func (h *DurationHistogram) Observe(n time.Duration) {
 	for i := range h.bins {
 		if n <= h.bins[i].Max || i == len(h.bins)-1 {
-			h.bins[i].Count.Add(1)
-			h.bins[i].DSum.Add(int64(n))
+			h.mu.Lock()
+			defer h.mu.Unlock()
+
+			h.bins[i].Count += 1
+			h.bins[i].DSum += int64(n)
 			return
 		}
 	}
@@ -172,7 +184,7 @@ func (h *DurationHistogram) loadCounts() ([]int64, int64) {
 	data := make([]int64, len(h.bins))
 	tot := int64(0)
 	for i := range h.bins {
-		data[i] = h.bins[i].Count.Load()
+		data[i] = h.bins[i].Count
 		tot += data[i]
 	}
 
@@ -184,7 +196,7 @@ func (h *DurationHistogram) loadDSums() ([]time.Duration, time.Duration) {
 	data := make([]time.Duration, len(h.bins))
 	tot := time.Duration(0)
 	for i := range h.bins {
-		data[i] = time.Duration(h.bins[i].DSum.Load())
+		data[i] = time.Duration(h.bins[i].DSum)
 		tot += data[i]
 	}
 
@@ -192,6 +204,8 @@ func (h *DurationHistogram) loadDSums() ([]time.Duration, time.Duration) {
 }
 
 func (h *DurationHistogram) Average() time.Duration {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	_, totCount := h.loadCounts()
 	_, totDur := h.loadDSums()
 	trueAvg := float64(totDur) / float64(totCount)
@@ -203,6 +217,9 @@ func (h *DurationHistogram) Average() time.Duration {
 // uniformly distributed in order to estimate within bins. Depending on the distribution, this
 // assumption may be more or less accurate.
 func (h *DurationHistogram) Quantile(q float64) time.Duration {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	if q < 0 || q > 1 {
 		return -1
 	}
@@ -247,6 +264,9 @@ func (h *DurationHistogram) Quantile(q float64) time.Duration {
 // We then calculate an estimated standard deviation of 29, which is very close to the actual
 // standard deviation of 30.6.
 func (h *DurationHistogram) StandardDeviation() time.Duration {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	counts, totCount := h.loadCounts()
 	durs, totDur := h.loadDSums()
 	trueAvg := float64(totDur) / float64(totCount)
@@ -270,14 +290,17 @@ func (h *DurationHistogram) StandardDeviation() time.Duration {
 }
 
 func (h *DurationHistogram) MarshalGeneric() interface{} {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	totalCount := int64(0)
 	totalDur := int64(0)
 
 	v := make([]SerializedDurationBin, len(h.bins))
 	for i, b := range h.bins {
 		v[i].Label = b.Label
-		v[i].Count = b.Count.Load()
-		v[i].DSum = b.DSum.Load()
+		v[i].Count = b.Count
+		v[i].DSum = b.DSum
 
 		totalCount += v[i].Count
 		totalDur += v[i].DSum
@@ -298,11 +321,14 @@ func (h *DurationHistogram) MarshalJSON() ([]byte, error) {
 }
 
 func (h *DurationHistogram) MarshalArray() []SerializedDurationBin {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	v := make([]SerializedDurationBin, len(h.bins))
 	for i, b := range h.bins {
 		v[i].Label = b.Label
-		v[i].Count = b.Count.Load()
-		v[i].DSum = b.DSum.Load()
+		v[i].Count = b.Count
+		v[i].DSum = b.DSum
 	}
 	return v
 }
