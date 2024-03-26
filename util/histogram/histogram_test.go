@@ -35,6 +35,31 @@ func TestDurationHistogramBounds(t *testing.T) {
 	}
 }
 
+func TestBinsValidation(t *testing.T) {
+	emptyBins := []*DurationBin{}
+	unboundedBeforeEnd := []*DurationBin{
+		{Label: "0-10", Max: 10},
+		{Label: "10-", Max: 0},
+		{Label: "10-20", Max: 20},
+	}
+	duplicateBins := []*DurationBin{
+		{Label: "0-10", Max: 10},
+		{Label: "10-20", Max: 20},
+		{Label: "10-20", Max: 20},
+	}
+	decreasingBins := []*DurationBin{
+		{Label: "0-10", Max: 10},
+		{Label: "15-20", Max: 20},
+		{Label: "10-15", Max: 15},
+	}
+
+	testCases := [][]*DurationBin{emptyBins, unboundedBeforeEnd, duplicateBins, decreasingBins}
+	for _, testCase := range testCases {
+		_, err := NewDurationHistogramBins(testCase)
+		require.Error(t, err)
+	}
+}
+
 func TestDurationHistogram(t *testing.T) {
 	h := NewDefaultDurationHistogram()
 
@@ -72,7 +97,8 @@ func TestDurationMaxBehavior(t *testing.T) {
 		{Label: "10-"},
 	}
 
-	h := NewDurationHistogramBins(bins)
+	h, err := NewDurationHistogramBins(bins)
+	require.NoError(t, err)
 
 	h.Observe(10)
 	h.Observe(11)
@@ -85,7 +111,8 @@ func TestDurationMaxBehavior(t *testing.T) {
 		{Label: "10-20", Max: 20},
 	}
 
-	h2 := NewDurationHistogramBins(bins2)
+	h2, err := NewDurationHistogramBins(bins2)
+	require.NoError(t, err)
 
 	h2.Observe(10)
 	h2.Observe(11)
@@ -101,7 +128,8 @@ func TestStandardDeviation(t *testing.T) {
 		{Label: "50-90", Max: 90},
 		{Label: "90-100", Max: 100},
 	}
-	h := NewDurationHistogramBins(bins)
+	h, err := NewDurationHistogramBins(bins)
+	require.NoError(t, err)
 
 	data := []time.Duration{
 		3, 7, 12, 13, 14, 15, 15, 15, 16, 17, 25, 30, 60, 70, 80, 85, 93,
@@ -140,7 +168,8 @@ func TestQuantileEstimation(t *testing.T) {
 		{Label: "30-40", Max: 40},
 		{Label: "40-50", Max: 50},
 	}
-	h := NewDurationHistogramBins(bins)
+	h, err := NewDurationHistogramBins(bins)
+	require.NoError(t, err)
 
 	// Uniformly distributed data from 0 to 50
 	data := []time.Duration{
@@ -170,7 +199,8 @@ func TestUnboundedQuantileEstimation(t *testing.T) {
 		{Label: "10-"},
 	}
 
-	h := NewDurationHistogramBins(bins)
+	h, err := NewDurationHistogramBins(bins)
+	require.NoError(t, err)
 	h.Observe(5)
 	// The 10- bin has an average of 30
 	// Therefore we estimate that the bin is evenly distributed across 10-50 (twice the difference
@@ -225,7 +255,8 @@ func TestHistogramConcurrency(t *testing.T) {
 		{Label: "30-40", Max: 40},
 		{Label: "40-50", Max: 50},
 	}
-	h := NewDurationHistogramBins(bins)
+	h, err := NewDurationHistogramBins(bins)
+	require.NoError(t, err)
 
 	// Uniformly distributed data from 0 to 50
 	data := []time.Duration{

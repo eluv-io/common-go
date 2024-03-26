@@ -85,7 +85,8 @@ func NewDurationHistogram(t DurationHistogramType) *DurationHistogram {
 			{Label: "2h-"},
 		}
 	}
-	return NewDurationHistogramBins(bins)
+	h, _ := NewDurationHistogramBins(bins)
+	return h
 }
 
 func (h *DurationHistogram) LoadValues(values []*SerializedDurationBin) error {
@@ -124,10 +125,28 @@ type SerializedDurationBin struct {
 	DSum  int64  `json:"dsum"`
 }
 
-func NewDurationHistogramBins(bins []*DurationBin) *DurationHistogram {
+func NewDurationHistogramBins(bins []*DurationBin) (*DurationHistogram, error) {
+	e := errors.Template("NewDurationHistogramBins", errors.K.Invalid)
+
+	if len(bins) == 0 {
+		return nil, e("reason", "no bins")
+	}
+
+	for i, b := range bins {
+		// Unbounded bins can only be the final bin
+		if b.Max == 0 && i != len(bins)-1 {
+			return nil, e("reason", "unbounded bin not final bin", "label", b.Label, "index", i)
+		}
+
+		if b.Max != 0 && i > 0 && b.Max <= bins[i-1].Max {
+			return nil, e("reason", "bins not strictly increasing", "bin_label", b.Label,
+				"bin_max", b.Max, "prev_label", bins[i-1].Label, "prev_max", bins[i-1].Max)
+		}
+	}
+
 	return &DurationHistogram{
 		bins: bins,
-	}
+	}, nil
 }
 
 // DurationHistogram uses predefined bins.
