@@ -57,7 +57,7 @@ func NewDurationHistogram(t DurationHistogramType) *DurationHistogram {
 			{Label: "750ms-1s", Max: time.Second},
 			{Label: "1s-2s", Max: time.Second * 2},
 			{Label: "2s-4s", Max: time.Second * 4},
-			{Label: "4s-", Max: time.Second * 30},
+			{Label: "4s-10s", Max: time.Second * 10},
 		}
 	case DefaultDurationHistogram:
 		fallthrough
@@ -168,7 +168,7 @@ func (h *DurationHistogram) Clear() {
 
 func (h *DurationHistogram) Observe(n time.Duration) {
 	for i := range h.bins {
-		if n <= h.bins[i].Max || i == len(h.bins)-1 {
+		if n <= h.bins[i].Max {
 			h.mu.Lock()
 			defer h.mu.Unlock()
 
