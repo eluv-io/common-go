@@ -52,8 +52,12 @@ func TestBinsValidation(t *testing.T) {
 		{Label: "15-20", Max: 20},
 		{Label: "10-15", Max: 15},
 	}
+	notEmptyBin := []*DurationBin{
+		{Label: "0-10", Max: 10},
+		{Label: "10-20", Max: 20, Count: 15},
+	}
 
-	testCases := [][]*DurationBin{emptyBins, unboundedBeforeEnd, duplicateBins, decreasingBins}
+	testCases := [][]*DurationBin{emptyBins, unboundedBeforeEnd, duplicateBins, decreasingBins, notEmptyBin}
 	for _, testCase := range testCases {
 		_, err := NewDurationHistogramBins(testCase)
 		require.Error(t, err)

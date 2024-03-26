@@ -125,6 +125,11 @@ type SerializedDurationBin struct {
 	DSum  int64  `json:"dsum"`
 }
 
+// NewDurationHistogramBins creates a histogram from custom duration bins. The bins must be empty
+// (Count and DSum equal to 0), and provided in strictly increasing order of bin maximums.
+// Optionally, the final bin may have a max of 0 to represent an unbounded bin.
+// By convention, the provided labels are usually PREV_MAX-CUR_MAX, where each is formatted in a
+// concise readable format.
 func NewDurationHistogramBins(bins []*DurationBin) (*DurationHistogram, error) {
 	e := errors.Template("NewDurationHistogramBins", errors.K.Invalid)
 
@@ -141,6 +146,10 @@ func NewDurationHistogramBins(bins []*DurationBin) (*DurationHistogram, error) {
 		if b.Max != 0 && i > 0 && b.Max <= bins[i-1].Max {
 			return nil, e("reason", "bins not strictly increasing", "bin_label", b.Label,
 				"bin_max", b.Max, "prev_label", bins[i-1].Label, "prev_max", bins[i-1].Max)
+		}
+
+		if b.Count != 0 || b.DSum != 0 {
+			return nil, e("reason", "bin for construction not empty", "label", b.Label)
 		}
 	}
 
