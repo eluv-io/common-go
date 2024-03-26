@@ -44,7 +44,7 @@ func NewDurationHistogram(t DurationHistogramType) *DurationHistogram {
 			{Label: "5s-10s", Max: time.Second * 10},
 			{Label: "10s-20s", Max: time.Second * 20},
 			{Label: "20s-30s", Max: time.Second * 30},
-			{Label: "30s-", Max: time.Hour * 10000},
+			{Label: "30s-"},
 		}
 	case SegmentLatencyHistogram:
 		bins = []*DurationBin{
@@ -82,7 +82,7 @@ func NewDurationHistogram(t DurationHistogramType) *DurationHistogram {
 			{Label: "10m-20m", Max: time.Minute * 20},
 			{Label: "20m-30m", Max: time.Minute * 30},
 			{Label: "30m-2h", Max: time.Hour * 2},
-			{Label: "2h-", Max: time.Hour * 10000},
+			{Label: "2h-"},
 		}
 	}
 	return NewDurationHistogramBins(bins)
@@ -111,9 +111,11 @@ func (h *DurationHistogram) LoadValues(values []*SerializedDurationBin) error {
 
 type DurationBin struct {
 	Label string
-	Max   time.Duration // immutable upper-bound of bin (lower bound defined by previous bin)
-	Count int64         // the number of durations falling in this bin
-	DSum  int64         // sum of durations of this bin
+	// Max is the immutable upper-bound of the bin (lower bound defined by previous bin). Setting
+	// this to 0 represents that the bin has no upper bound
+	Max   time.Duration
+	Count int64 // the number of durations falling in this bin
+	DSum  int64 // sum of durations of this bin
 }
 
 type SerializedDurationBin struct {
@@ -168,7 +170,7 @@ func (h *DurationHistogram) Clear() {
 
 func (h *DurationHistogram) Observe(n time.Duration) {
 	for i := range h.bins {
-		if n <= h.bins[i].Max {
+		if n <= h.bins[i].Max || (i == len(h.bins)-1 && h.bins[i].Max == 0) {
 			h.mu.Lock()
 			defer h.mu.Unlock()
 
