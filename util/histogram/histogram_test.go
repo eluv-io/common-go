@@ -44,20 +44,54 @@ func TestDurationHistogram(t *testing.T) {
 			min = h.bins[i-1].Max
 		}
 		h.Observe(min)
-		h.Observe(b.Max)
-		h.Observe(b.Max + 1)
+		if b.Max != 0 {
+			h.Observe(b.Max)
+			h.Observe(b.Max + 1)
+		}
 	}
 	for i, b := range h.bins {
-		require.Equal(t, int64(3), b.Count)
+		if i == len(h.bins)-1 {
+			require.Equal(t, int64(1), b.Count)
+		} else {
+			require.Equal(t, int64(3), b.Count)
+		}
 		switch i {
 		case 0:
 			require.EqualValues(t, b.Max*2, b.DSum)
 		case len(h.bins) - 1:
-			require.EqualValues(t, b.Max*2+h.bins[i-1].Max+2, b.DSum)
+			require.EqualValues(t, b.Max*2+h.bins[i-1].Max+1, b.DSum)
 		default:
 			require.EqualValues(t, b.Max*2+h.bins[i-1].Max+1, b.DSum)
 		}
 	}
+}
+
+func TestDurationMaxBehavior(t *testing.T) {
+	bins := []*DurationBin{
+		{Label: "0-10", Max: 10},
+		{Label: "10-"},
+	}
+
+	h := NewDurationHistogramBins(bins)
+
+	h.Observe(10)
+	h.Observe(11)
+	h.Observe(100)
+	require.Equal(t, int64(2), h.bins[1].Count)
+	require.Equal(t, int64(111), h.bins[1].DSum)
+
+	bins2 := []*DurationBin{
+		{Label: "0-10", Max: 10},
+		{Label: "10-20", Max: 20},
+	}
+
+	h2 := NewDurationHistogramBins(bins2)
+
+	h2.Observe(10)
+	h2.Observe(11)
+	h2.Observe(100)
+	require.Equal(t, int64(1), h2.bins[1].Count)
+	require.Equal(t, int64(11), h2.bins[1].DSum)
 }
 
 func TestStandardDeviation(t *testing.T) {
