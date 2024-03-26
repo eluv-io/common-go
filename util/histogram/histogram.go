@@ -217,7 +217,8 @@ func (h *DurationHistogram) Average() time.Duration {
 // Quantile returns an approximation of the value at the qth quantile of the histogram, where q is
 // in the range [0, 1]. It makes use of the assumption that data within each histogram bin is
 // uniformly distributed in order to estimate within bins. Depending on the distribution, this
-// assumption may be more or less accurate.
+// assumption may be more or less accurate. For the topmost bin that is unbounded, it assumes the
+// intra-bin distribution is uniform over the range [bin_min, 2 * bin_average].
 func (h *DurationHistogram) Quantile(q float64) time.Duration {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -237,7 +238,13 @@ func (h *DurationHistogram) Quantile(q float64) time.Duration {
 			if i > 0 {
 				binStart = h.bins[i-1].Max
 			}
-			binSpan := h.bins[i].Max - binStart
+			var binSpan time.Duration
+			if h.bins[i].Max != 0 {
+				binSpan = h.bins[i].Max - binStart
+			} else {
+				binAvg := float64(h.bins[i].DSum) / float64(h.bins[i].Count)
+				binSpan = (time.Duration(binAvg) - binStart) * 2
+			}
 			return binStart + time.Duration(int64(binProportion*float64(binSpan)))
 		}
 		count -= fData

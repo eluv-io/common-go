@@ -164,6 +164,28 @@ func TestQuantileEstimation(t *testing.T) {
 	require.Equal(t, time.Duration(45), h.Quantile(0.9))
 }
 
+func TestUnboundedQuantileEstimation(t *testing.T) {
+	bins := []*DurationBin{
+		{Label: "0-10", Max: 10},
+		{Label: "10-"},
+	}
+
+	h := NewDurationHistogramBins(bins)
+	h.Observe(5)
+	// The 10- bin has an average of 30
+	// Therefore we estimate that the bin is evenly distributed across 10-50 (twice the difference
+	// between the previous max and the average)
+	h.Observe(20)
+	h.Observe(30)
+	h.Observe(30)
+	h.Observe(40)
+
+	// The upper 80% of this histogram is estimated as the linear distribution from 10-50
+	require.Equal(t, time.Duration(10), h.Quantile(0.20))
+	require.Equal(t, time.Duration(30), h.Quantile(0.60))
+	require.Equal(t, time.Duration(50), h.Quantile(1.0))
+}
+
 func TestMarshalUnmarshal(t *testing.T) {
 	h := NewDurationHistogram(DefaultDurationHistogram)
 
