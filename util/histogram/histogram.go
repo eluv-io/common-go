@@ -19,6 +19,8 @@ const (
 	SegmentLatencyHistogram
 )
 
+const OutlierLabel = "outliers"
+
 func NewDefaultDurationHistogram() *DurationHistogram {
 	return NewDurationHistogram(DefaultDurationHistogram)
 }
@@ -130,6 +132,8 @@ type SerializedDurationBin struct {
 // Optionally, the final bin may have a max of 0 to represent an unbounded bin.
 // By convention, the provided labels are usually PREV_MAX-CUR_MAX, where each is formatted in a
 // concise readable format.
+// An 'outliers' bin is automatically added if there is not an unbounded bin at the end of the
+// histogram. It is ignored for summary statistic purposes.
 func NewDurationHistogramBins(bins []*DurationBin) (*DurationHistogram, error) {
 	e := errors.Template("NewDurationHistogramBins", errors.K.Invalid)
 
@@ -143,6 +147,11 @@ func NewDurationHistogramBins(bins []*DurationBin) (*DurationHistogram, error) {
 			return nil, e("reason", "unbounded bin not final bin", "label", b.Label, "index", i)
 		}
 
+		// The outlier bin can only be the final bin
+		if b.Label == OutlierLabel && (i != len(bins)-1 || b.Max != 0) {
+			return nil, e("reason", "outlier bin not correct", "label", b.Label, "index", i)
+		}
+
 		if b.Max != 0 && i > 0 && b.Max <= bins[i-1].Max {
 			return nil, e("reason", "bins not strictly increasing", "bin_label", b.Label,
 				"bin_max", b.Max, "prev_label", bins[i-1].Label, "prev_max", bins[i-1].Max)
@@ -151,6 +160,10 @@ func NewDurationHistogramBins(bins []*DurationBin) (*DurationHistogram, error) {
 		if b.Count != 0 || b.DSum != 0 {
 			return nil, e("reason", "bin for construction not empty", "label", b.Label)
 		}
+	}
+
+	if bins[len(bins)-1].Max != 0 {
+		bins = append(bins, &DurationBin{Label: OutlierLabel, Max: 0})
 	}
 
 	return &DurationHistogram{
@@ -171,6 +184,9 @@ func (h *DurationHistogram) TotalCount() int64 {
 
 	tot := int64(0)
 	for _, b := range h.bins {
+		if b.Label == OutlierLabel {
+			continue
+		}
 		tot += b.Count
 	}
 	return tot
@@ -182,9 +198,31 @@ func (h *DurationHistogram) TotalDSum() int64 {
 
 	tot := int64(0)
 	for _, b := range h.bins {
+		if b.Label == OutlierLabel {
+			continue
+		}
 		tot += b.DSum
 	}
 	return tot
+}
+
+// OutlierProportion returns the proportion of histogram observations that fall outside the given
+// bins. This returns 0 if the histogram includes an unbounded bin at the upper end.
+func (h *DurationHistogram) OutlierProportion() float64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	_, totalCount := h.loadCounts()
+
+	if h.bins[len(h.bins)-1].Label != OutlierLabel {
+		return 0
+	}
+
+	outCount := h.bins[len(h.bins)-1].Count
+	if outCount == 0 && totalCount == 0 {
+		return 0
+	}
+	return float64(outCount) / (float64(totalCount + outCount))
 }
 
 func (h *DurationHistogram) Clear() {
@@ -214,6 +252,9 @@ func (h *DurationHistogram) loadCounts() ([]int64, int64) {
 	data := make([]int64, len(h.bins))
 	tot := int64(0)
 	for i := range h.bins {
+		if h.bins[i].Label == OutlierLabel {
+			continue
+		}
 		data[i] = h.bins[i].Count
 		tot += data[i]
 	}
@@ -226,6 +267,9 @@ func (h *DurationHistogram) loadDSums() ([]time.Duration, time.Duration) {
 	data := make([]time.Duration, len(h.bins))
 	tot := time.Duration(0)
 	for i := range h.bins {
+		if h.bins[i].Label == OutlierLabel {
+			continue
+		}
 		data[i] = time.Duration(h.bins[i].DSum)
 		tot += data[i]
 	}
@@ -259,6 +303,9 @@ func (h *DurationHistogram) Quantile(q float64) time.Duration {
 
 	count := q * float64(tot)
 	for i := range h.bins {
+		if h.bins[i].Label == OutlierLabel {
+			continue
+		}
 		fData := float64(data[i])
 		if count <= fData {
 			binProportion := 1 - ((fData - count) / fData)
@@ -309,6 +356,9 @@ func (h *DurationHistogram) StandardDeviation() time.Duration {
 	trueAvg := float64(totDur) / float64(totCount)
 	binAvgs := []float64{}
 	for i := range h.bins {
+		if h.bins[i].Label == OutlierLabel {
+			continue
+		}
 		if counts[i] == 0 {
 			binAvgs = append(binAvgs, 0)
 			continue
@@ -319,6 +369,9 @@ func (h *DurationHistogram) StandardDeviation() time.Duration {
 
 	sumOfSquares := float64(0)
 	for i := range h.bins {
+		if h.bins[i].Label == OutlierLabel {
+			continue
+		}
 		sumOfSquares += float64(counts[i]) * math.Pow(binAvgs[i]-trueAvg, 2)
 	}
 

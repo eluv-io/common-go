@@ -146,6 +146,56 @@ func TestStandardDeviation(t *testing.T) {
 	require.Equal(t, time.Duration(29), h.StandardDeviation())
 }
 
+func TestSummaryStatsIgnoreOutliers(t *testing.T) {
+	bins := []*DurationBin{
+		{Label: "0-10", Max: 10},
+		{Label: "10-20", Max: 20},
+		{Label: "20-30", Max: 30},
+		{Label: "30-40", Max: 40},
+		{Label: "40-50", Max: 50},
+	}
+	bins2 := append([]*DurationBin{}, bins...)
+
+	h, err := NewDurationHistogramBins(bins)
+	require.NoError(t, err)
+
+	hWithOutliers, err := NewDurationHistogramBins(bins2)
+	require.NoError(t, err)
+
+	// Uniformly distributed data from 0 to 50
+	data := []time.Duration{
+		1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+		11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+		21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+		31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+		41, 42, 43, 44, 45, 46, 47, 48, 49, 50,
+	}
+
+	outliers := []time.Duration{
+		55, 80, 100, 200, 500,
+	}
+
+	for _, d := range data {
+		h.Observe(d)
+		hWithOutliers.Observe(d)
+	}
+
+	for _, d := range outliers {
+		hWithOutliers.Observe(d)
+	}
+
+	require.Equal(t, h.TotalCount(), hWithOutliers.TotalCount())
+	require.Equal(t, h.TotalDSum(), hWithOutliers.TotalDSum())
+	require.Equal(t, h.Quantile(0.1), hWithOutliers.Quantile(0.1))
+	require.Equal(t, h.Quantile(0.5), hWithOutliers.Quantile(0.5))
+	require.Equal(t, h.Quantile(0.9), hWithOutliers.Quantile(0.9))
+	require.Equal(t, h.Quantile(1.0), hWithOutliers.Quantile(1.0))
+	require.Equal(t, h.Average(), hWithOutliers.Average())
+	require.Equal(t, h.StandardDeviation(), hWithOutliers.StandardDeviation())
+	require.InDeltaf(t, float64(0.047), hWithOutliers.OutlierProportion(), float64(0.01), "bad outliers")
+	require.Equal(t, float64(0), h.OutlierProportion())
+}
+
 func TestStandardDeviation2(t *testing.T) {
 	values := []*SerializedDurationBin{
 		{Label: "0-100ms", Count: 11917, DSum: 750548874146},
