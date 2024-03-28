@@ -47,13 +47,9 @@ func MapDecode(src interface{}, dst interface{}) error {
 var byteSliceType = reflect.TypeOf([]byte(nil))
 
 func decodeHook(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
-	for t.Kind() == reflect.Ptr {
-		t = t.Elem()
-	}
-	ptr := reflect.PtrTo(t)
-
 	switch dt := data.(type) {
 	case map[string]interface{}:
+		t, ptr := resolve(t)
 		if ptr.Implements(mapUnmarshaler) {
 			instance := reflect.New(t)
 			fnc := instance.MethodByName("UnmarshalMap")
@@ -67,6 +63,7 @@ func decodeHook(f reflect.Type, t reflect.Type, data interface{}) (interface{}, 
 			return instance.Interface(), nil
 		}
 	case string:
+		t, ptr := resolve(t)
 		if ptr.Implements(textUnmarshaler) {
 			instance := reflect.New(t)
 			fnc := instance.MethodByName("UnmarshalText")
@@ -83,5 +80,14 @@ func decodeHook(f reflect.Type, t reflect.Type, data interface{}) (interface{}, 
 			return base64.StdEncoding.DecodeString(dt)
 		}
 	}
+
 	return data, nil
+}
+
+func resolve(t reflect.Type) (reflect.Type, reflect.Type) {
+	for t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	ptr := reflect.PtrTo(t)
+	return t, ptr
 }

@@ -160,7 +160,10 @@ func (l *Link) UnmarshalMap(m map[string]interface{}) error {
 	val.Delete("/")
 
 	if extra := val.Get("."); !extra.IsError() {
-		l.Extra.UnmarshalValueAndRemove(extra)
+		err := l.Extra.UnmarshalValueAndRemove(extra)
+		if err != nil {
+			return err
+		}
 		if len(extra.Map()) == 0 {
 			val.Delete(".")
 		}

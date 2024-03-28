@@ -242,7 +242,7 @@ func TestDedupe(t *testing.T) {
 	}
 }
 
-func TestDuplicate(t *testing.T) {
+func TestCopy(t *testing.T) {
 	tests := []struct {
 		target []interface{}
 		want   []interface{}
@@ -274,7 +274,7 @@ func TestDuplicate(t *testing.T) {
 	}
 }
 
-func TestDuplicateWithCap(t *testing.T) {
+func TestCopyWithCap(t *testing.T) {
 	tests := []struct {
 		target       []interface{}
 		capacity     int

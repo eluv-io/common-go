@@ -5,6 +5,7 @@ import (
 
 	"github.com/eluv-io/common-go/format/encryption"
 	"github.com/eluv-io/common-go/format/structured"
+	"github.com/eluv-io/common-go/util/sliceutil"
 	"github.com/eluv-io/errors-go"
 )
 
@@ -29,12 +30,8 @@ type Blob struct {
 }
 
 func (b *Blob) UnmarshalValue(val *structured.Value) error {
-	// data, err := base64.StdEncoding.DecodeString(val.Get("data").String())
-	// if err == nil {
-	// 	_ = val.Set(structured.Path{"data"}, data)
 	b.EncryptionScheme = encryption.None
 	err := val.Decode(b)
-	// }
 	if err != nil {
 		return errors.NoTrace("blob.unmarshalValue", err)
 	}
@@ -42,11 +39,29 @@ func (b *Blob) UnmarshalValue(val *structured.Value) error {
 }
 
 func (b *Blob) UnmarshalValueAndRemove(val *structured.Value) error {
+	// mapstructure.Decode is super slow with (large) byte slices (copying each element of the slice individually!)
+	// Therefore copy the "data" manually...
+	data := val.Get("data")
+	if !data.IsError() {
+		switch t := data.Data.(type) {
+		case []byte:
+			b.Data = sliceutil.Copy(t)
+		case string:
+			var err error
+			b.Data, err = base64.StdEncoding.DecodeString(t)
+			if err != nil {
+				return errors.NoTrace("blob.UnmarshalValueAndRemove", errors.K.Invalid, err)
+			}
+		default:
+			return errors.NoTrace("blob.UnmarshalValueAndRemove: invalid type for data field", errors.K.Invalid, "type", errors.TypeOf(data.Data))
+		}
+		val.Delete("data")
+	}
+
 	err := b.UnmarshalValue(val)
 	if err != nil {
 		return err
 	}
-	val.Delete("data")
 	val.Delete("encryption")
 	val.Delete("kid")
 	return nil
