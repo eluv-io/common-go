@@ -9,38 +9,38 @@ import (
 )
 
 type ContentRange struct {
-	off, len, totalSize    int64
-	adaptedOff, adaptedLen int64
+	Off, Len, TotalLen     int64
+	AdaptedOff, AdaptedLen int64
 }
 
 func (c *ContentRange) GetAdaptedOff() int64 {
-	return c.adaptedOff
+	return c.AdaptedOff
 }
 
 func (c *ContentRange) GetAdaptedEndOff() int64 {
-	if c.adaptedLen == 0 {
-		return c.adaptedOff
+	if c.AdaptedLen == 0 {
+		return c.AdaptedOff
 	}
-	return c.adaptedOff + c.adaptedLen - 1
+	return c.AdaptedOff + c.AdaptedLen - 1
 }
 
 func (c *ContentRange) GetAdaptedLen() int64 {
-	return c.adaptedLen
+	return c.AdaptedLen
 }
 
 func (c *ContentRange) IsPartial() bool {
-	return c.adaptedOff > 0 || c.adaptedLen != c.totalSize
+	return c.AdaptedOff > 0 || c.AdaptedLen != c.TotalLen
 }
 
 func (c *ContentRange) AsHeader() string {
-	if c.adaptedOff < 0 {
-		return fmt.Sprintf("bytes */%d", c.totalSize)
+	if c.AdaptedOff < 0 {
+		return fmt.Sprintf("bytes */%d", c.TotalLen)
 	}
-	return fmt.Sprintf("bytes %d-%d/%d", c.adaptedOff, c.GetAdaptedEndOff(), c.totalSize)
+	return fmt.Sprintf("bytes %d-%d/%d", c.AdaptedOff, c.GetAdaptedEndOff(), c.TotalLen)
 }
 
 func (c *ContentRange) TotalSize() int64 {
-	return c.totalSize
+	return c.TotalLen
 }
 
 // --------------------------------------------------------------------------------------------------------------------
@@ -80,11 +80,11 @@ func AdaptRange(off, len, totalLen int64) (*ContentRange, error) {
 	}
 
 	return &ContentRange{
-		off:        off,
-		len:        len,
-		totalSize:  totalLen,
-		adaptedOff: realOff,
-		adaptedLen: realLen,
+		Off:        off,
+		Len:        len,
+		TotalLen:   totalLen,
+		AdaptedOff: realOff,
+		AdaptedLen: realLen,
 	}, err
 }
 
@@ -92,11 +92,11 @@ func AdaptRange(off, len, totalLen int64) (*ContentRange, error) {
 // offset of 0 and an adapted len equal to the total size.
 func FullRange(totalSize int64) *ContentRange {
 	return &ContentRange{
-		off:        0,
-		len:        -1,
-		totalSize:  totalSize,
-		adaptedOff: 0,
-		adaptedLen: totalSize,
+		Off:        0,
+		Len:        -1,
+		TotalLen:   totalSize,
+		AdaptedOff: 0,
+		AdaptedLen: totalSize,
 	}
 }
 
