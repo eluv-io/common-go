@@ -363,10 +363,8 @@ func (l *Link) Validate(includeProps bool) error {
 	}
 
 	switch l.Selector {
-	case S.Rep, S.File:
-		if l.Path.IsEmpty() {
-			return e("reason", "path is empty")
-		}
+	case S.File, S.Rep:
+		// no additional verification
 	case S.Meta:
 		if l.Off != 0 || l.Len != -1 {
 			return e("reason", "byte range not allowed for meta link")
