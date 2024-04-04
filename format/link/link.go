@@ -76,11 +76,12 @@ type Link struct {
 // Note: link properties are not encoded in the string!
 //
 // Examples:
-//   "./meta/some/path"
-//   "./files/some/path#40-49"
-//   "/qfab/hqp_QmYtUc4iTCbbfVSDNKvtQqrfyezPPnFvE33wFmutw9PBBk"
-//   "/qfab/hq__QmYtUc4iTCbbfVSDNKvtQqrfyezPPnFvE33wFmutw9PBBk/files/some/path"
-//   "/qfab/hq__QmYtUc4iTCbbfVSDNKvtQqrfyezPPnFvE33wFmutw9PBBk/files/some/path#300-"
+//
+//	"./meta/some/path"
+//	"./files/some/path#40-49"
+//	"/qfab/hqp_QmYtUc4iTCbbfVSDNKvtQqrfyezPPnFvE33wFmutw9PBBk"
+//	"/qfab/hq__QmYtUc4iTCbbfVSDNKvtQqrfyezPPnFvE33wFmutw9PBBk/files/some/path"
+//	"/qfab/hq__QmYtUc4iTCbbfVSDNKvtQqrfyezPPnFvE33wFmutw9PBBk/files/some/path#300-"
 func (l Link) String() string {
 	b := &strings.Builder{}
 	addByteRange := func() {
@@ -362,8 +363,10 @@ func (l *Link) Validate(includeProps bool) error {
 	}
 
 	switch l.Selector {
-	case S.File, S.Rep:
-		// no additional verification
+	case S.Rep, S.File:
+		if l.Path.IsEmpty() {
+			return e("reason", "path is empty")
+		}
 	case S.Meta:
 		if l.Off != 0 || l.Len != -1 {
 			return e("reason", "byte range not allowed for meta link")

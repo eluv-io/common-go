@@ -8,9 +8,10 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/eluv-io/errors-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/eluv-io/errors-go"
 
 	"github.com/eluv-io/common-go/format/codecs"
 	"github.com/eluv-io/common-go/format/hash"
@@ -55,8 +56,8 @@ var linkTests = []testCase{
 	},
 	{
 		name: "abs no path",
-		str:  "/qfab/hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7/rep",
-		lnk:  create(qHash(), link.S.Rep, nil),
+		str:  "/qfab/hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7/rep/default",
+		lnk:  create(qHash(), link.S.Rep, structured.ParsePath("/default")),
 	},
 	{
 		name: "abs with path",
