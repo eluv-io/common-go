@@ -8,9 +8,10 @@ import (
 	"testing"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/eluv-io/errors-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/eluv-io/errors-go"
 
 	"github.com/eluv-io/common-go/format/codecs"
 	"github.com/eluv-io/common-go/format/hash"

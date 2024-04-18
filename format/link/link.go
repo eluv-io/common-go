@@ -18,17 +18,19 @@ const RELATIVE_LINK_PREFIX = "./"
 type Selector string
 
 var S = struct {
-	None Selector
-	Meta Selector
-	File Selector
-	Rep  Selector
-	Blob Selector
+	None    Selector
+	Meta    Selector
+	File    Selector
+	Rep     Selector
+	Blob    Selector
+	Bitcode Selector
 }{
-	None: "",
-	Meta: "meta",
-	File: "files",
-	Rep:  "rep",
-	Blob: "blob",
+	None:    "",
+	Meta:    "meta",
+	File:    "files",
+	Rep:     "rep",
+	Blob:    "blob",
+	Bitcode: "bc",
 }
 
 // NewLink creates a new Link. offAndLen is an optional variadic argument
@@ -76,11 +78,12 @@ type Link struct {
 // Note: link properties are not encoded in the string!
 //
 // Examples:
-//   "./meta/some/path"
-//   "./files/some/path#40-49"
-//   "/qfab/hqp_QmYtUc4iTCbbfVSDNKvtQqrfyezPPnFvE33wFmutw9PBBk"
-//   "/qfab/hq__QmYtUc4iTCbbfVSDNKvtQqrfyezPPnFvE33wFmutw9PBBk/files/some/path"
-//   "/qfab/hq__QmYtUc4iTCbbfVSDNKvtQqrfyezPPnFvE33wFmutw9PBBk/files/some/path#300-"
+//
+//	"./meta/some/path"
+//	"./files/some/path#40-49"
+//	"/qfab/hqp_QmYtUc4iTCbbfVSDNKvtQqrfyezPPnFvE33wFmutw9PBBk"
+//	"/qfab/hq__QmYtUc4iTCbbfVSDNKvtQqrfyezPPnFvE33wFmutw9PBBk/files/some/path"
+//	"/qfab/hq__QmYtUc4iTCbbfVSDNKvtQqrfyezPPnFvE33wFmutw9PBBk/files/some/path#300-"
 func (l Link) String() string {
 	b := &strings.Builder{}
 	addByteRange := func() {
@@ -302,7 +305,7 @@ func (l *Link) UnmarshalText(text []byte) error {
 	if len(p) > 0 {
 		l.Selector = Selector(p[0])
 		switch l.Selector {
-		case S.Meta, S.File, S.Rep, S.Blob:
+		case S.Meta, S.File, S.Rep, S.Blob, S.Bitcode:
 			// valid selector - continue
 		default:
 			return errors.E("unmarshal link", errors.K.Invalid, "reason", "unknown selector", "selector", p[0])
@@ -362,7 +365,7 @@ func (l *Link) Validate(includeProps bool) error {
 	}
 
 	switch l.Selector {
-	case S.File, S.Rep:
+	case S.File, S.Rep, S.Bitcode:
 		// no additional verification
 	case S.Meta:
 		if l.Off != 0 || l.Len != -1 {
