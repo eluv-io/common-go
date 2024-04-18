@@ -11,24 +11,9 @@ TOKEN: PREFIX + BODY
 
 PREFIX: 6b
 * 3b Type: 1st byte "a" stands for "auth token" 
-  {"aun", "unknown"},
-  {"aan", "anonymous"},
-  {"atx", "tx"},
-  {"asc", "state-channel"},
-  {"acl", "client"},
 * 1b SigType
- {"_", "unknown"},
- {"u", "unsigned"},
- {"s", "ES256K"},
 * 2b Format
- {"nk", "unknown"},        
- {"__", "legacy"},         
- {"j_", "json"},           
- {"jc", "json-compressed"},
- {"c_", "cbor"},           
- {"cc", "cbor-compressed"},
- {"b_", "custom"},         
-
+	   
 BODY: base58(SIGNATURE + PAYLOAD)
 
 SIGNATURE: pure signature bytes - type is encoded in SigType of prefix above, and length is implied by type
@@ -44,6 +29,54 @@ TOKENDATA: proper token data encoded according to Format
 * cbor-compressed: deflate(cbor)
 ```
 
+
+### Token Type:
+
+defines the different types of the auth tokens.
+
+* 3 bytes of prefix
+* `a` stands for `auth token`
+
+| Prefix | Name          | SignatureRequired | Fields required                                                               | Fields optional | Signed by| Description |
+|:-------|:--------------|:------------------|:--------------|:------------------------------------------------------------------------------|:----------------|:--------|
+| aun    | unknown       | false             |||||
+| aan    | anonymous     | false             | sid, lid                                                                      | qid             | -|a vanilla, unsigned token without tx|
+| atx    | tx            | true              | sid, lid, txh                                                                 | apk             | client| based on a blockchain transaction - aka EthAuthToken|
+| asc    | state-channel | true              | sid, lid, qid, grant, iat, exp, ctx/sub                                       | apk             | Server |based on deferred blockchain tx - aka ElvAuthToken|
+| acl    | client        | false             | embedded token signed by client                                               | apk             |-|a state channel token embedded in a client token - aka ElvClientToken|
+| apl    | plain         | true              | sid, lid                                                                      | qid             | client|       a vanilla (signed) token without tx ==> blockchain-based permissions via HasAccess()|                                                   
+| aes    | editor-signed | true              | sid, lib, qid, sub = clientID (not required now), grant, iat, exp             | apk, ctx        | client with editor access|a token signed by a user who has edit access to the target content in the token|
+| ano    | node          | true              | sid, qp-hash                                                                  | -               | server|token for node-to-node communication|
+| asl    | signed-link   | true              | sid, lid, qid, subject, grant, iat, exp, ctx/elv/lnk, ctx/elv/src=qid         | apk             | client|token for signed-links|
+| acs    | client-signed | true              | sid, lid, qid, subject, grant, iat, exp                                       | ctx             | client|   client-signed token|
+### Token SigType:
+defines the different signature types of auth tokens
+
+* 1 byte of prefix
+
+| Prefix 	| Name 	| Code 	|
+|:---:	|:---:	|:---:	|
+| _ 	| unknown 	| sign.UNKNOWN 	|
+| u 	| unsigned 	| sign.UNKNOWN 	|
+| s 	| E256K 	| sign.E256K 	|
+| p 	| EIP191Personal 	| sign.EIP191Personal 	|
+
+### Token Format:
+defines the available encoding formats for auth tokens
+
+* 2 bytes of prefix
+
+| Index | Prefix | Name |
+|:---:|:---:|---|
+| 0 | nk | unknown |
+| 1 | __ | legacy |
+| 2 | __ | legacy-signed |
+| 3 | j_ | json |
+| 4 | jc | json-compressed |
+| 5 | c_ | cbor |
+| 6 | cc | cbor-compressed |
+| 7 | b_ | custom |
+
 ### Client Tokens with Embedded Server Token
 
 Client tokens ("ac") contain an embedded state channel token created by elvmaster. That embedded token is encoded
@@ -57,7 +90,7 @@ BODY: SIGNATURE + PAYLOAD
 ```
 
 The signature of a client token is calculated on the above PAYLOAD and therefore includes the server token and its
- signature.
+signature.
 
 ### Legacy-Signed Token
 

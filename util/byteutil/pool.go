@@ -3,6 +3,7 @@ package byteutil
 import (
 	"sync"
 
+	"github.com/eluv-io/common-go/util"
 	"github.com/eluv-io/log-go"
 )
 
@@ -29,6 +30,7 @@ type Pool struct {
 	q        chan []byte // Queue of released buffers
 	created  Counter     // Metric for created buffers
 	released Counter     // Metrics for released buffers
+	locker   sync.Locker // usually a noop locker (a real locker is only used in tests)
 }
 
 // NewPool creates a new buffer pool to service buffers of size bufSize
@@ -37,6 +39,7 @@ func NewPool(bufSize int) *Pool {
 	p.BufSize = bufSize
 	p.p = &sync.Pool{New: p.new}
 	p.q = make(chan []byte)
+	p.locker = util.NoopLocker{}
 
 	// Process buffers to be released sequentially in background
 	go func() {
@@ -120,13 +123,20 @@ func (p *Pool) setCounter(buf []byte, count []byte) {
 	buf[:p.BufSize+1][p.BufSize] = n
 }
 
-// Decrements the buffer's reference counter by 1; returns true if the buffer
-// should be released back into the pool.
+// decrCounter decrements the buffer's reference counter by 1; returns true if
+// the buffer should be released back into the pool.
+//
+// note: tests are reading the ref count from buf while this function is writing
+// it to buf. This is why tests set a locker - alternatively we could use a directive
+// 'go:norace' to disable the race detector in unit-tests where we are reading
+// the ref count.
 func (p *Pool) decrCounter(buf []byte) bool {
 	buf = buf[:p.BufSize+1]
 	n := buf[p.BufSize]
 	if n > 0 {
+		p.locker.Lock()
 		buf[p.BufSize] = n - 1
+		p.locker.Unlock()
 		if n == 1 {
 			return true
 		}
