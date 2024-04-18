@@ -48,6 +48,8 @@ func Log(name string, parentGoID int64, fields ...interface{}) func() {
 //	        ...
 //	    },
 //	)
+//
+// The optional deferFn is a function that is called after the exit log is written.
 func Go(name string, fields []any, fn func(), deferFn ...func()) {
 	deferFunc := func() {}
 	if len(deferFn) > 0 && deferFn[0] != nil {
