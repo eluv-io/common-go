@@ -23,10 +23,11 @@ func NewLimitedWriter(w io.Writer, limit int) io.Writer {
 }
 
 func (l *LimitedWriter) Write(bts []byte) (n int, err error) {
-	written := l.Written + len(bts)
-	if written > l.Limit {
+	if l.Written+len(bts) > l.Limit {
 		return 0, errors.E("limitedWriter.write", errors.K.IO, "reason", "limit exceeded", "limit", l.Limit)
 	}
-	l.Written = written
-	return l.Writer.Write(bts)
+
+	n, err = l.Writer.Write(bts)
+	l.Written += n
+	return n, err
 }

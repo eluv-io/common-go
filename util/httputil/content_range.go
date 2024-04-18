@@ -45,11 +45,16 @@ func (c *ContentRange) TotalSize() int64 {
 
 // --------------------------------------------------------------------------------------------------------------------
 
-// AdaptRange adapts offset and length received in HTTP header (or query) as described in RFC 7233, section 4
-// (https://tools.ietf.org/html/rfc7233#section-4) given the actual total size of the content.
+// AdaptRange adapts offset and length of a [Byte Range] received in an HTTP Range header (or query) according to the
+// instructions in [RFC 7233, section 4] given the actual total size of the content.
 //
-// A content range object is always returned, even in case of error, in which case the AsHeader() method will return
-// "*/TotalBytes" as needed in the HTTP response.
+// See httputil.ParseByteRange() for details on offset and len.
+//
+// Returns an error if offset and/or len are invalid. A content range object is always returned, even in case of error,
+// in which case the AsHeader() method will return "*/TotalBytes" as needed in the HTTP response.
+//
+// [Byte Range]: https://tools.ietf.org/html/rfc7233#section-2.1
+// [RFC 7233, section 4]: https://tools.ietf.org/html/rfc7233#section-4
 func AdaptRange(off, len, totalLen int64) (*ContentRange, error) {
 	var err error = nil
 	realOff := off
