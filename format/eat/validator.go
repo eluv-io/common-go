@@ -86,6 +86,8 @@ func isEmpty(field interface{}) bool {
 		return t == zeroHash
 	case map[string]interface{}:
 		return len(t) == 0
+	case ClientConfirmation:
+		return t == zeroCnf
 	default:
 		return ifutil.IsEmpty(field)
 	}
