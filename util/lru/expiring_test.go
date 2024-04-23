@@ -4,11 +4,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eluv-io/utc-go"
 	"github.com/stretchr/testify/require"
 
 	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/util/lru"
+	"github.com/eluv-io/utc-go"
 )
 
 func TestExpiringCache(t *testing.T) {
@@ -47,8 +47,9 @@ func testNilCache(t *testing.T, cache *lru.ExpiringCache) {
 	require.Nil(t, cache.Entries())
 
 	cache.EvictExpired()
-	require.Equal(t, lru.Metrics{}, cache.Metrics())
-	require.Equal(t, &lru.Metrics{}, cache.CollectMetrics())
+	m := lru.MakeMetrics()
+	require.Equal(t, m, cache.Metrics())
+	require.Equal(t, &m, cache.CollectMetrics())
 }
 
 func TestExpiringCacheAssertEntries(t *testing.T) {

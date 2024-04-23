@@ -76,8 +76,18 @@ func TestPool(t *testing.T) {
 		buf[i] = 1
 	}
 
+	mu := &sync.Mutex{}
+	p.SetLocker(mu)
+	getRefCount := func(buf []byte) byte {
+		mu.Lock()
+		defer mu.Unlock()
+		buf = buf[:p.BufSize+1]
+		return buf[p.BufSize]
+	}
+
 	// Repeatedly release existing buffer to reduce refCount to 1 from 4
 	for n := byte(0); n < refCount-1; n++ {
+		r0 := ctx.released.val.Load()
 		p.Put(buf)
 		// RefCount of existing buffer should reduce by 1; buffer should not be re-added to pool yet
 		for i := 0; i < 100; i++ {
@@ -86,17 +96,18 @@ func TestPool(t *testing.T) {
 			openCount++
 			time.Sleep(time.Millisecond)
 		}
-		require.Equal(t, refCount-n-1, buf[:bufSize+1][bufSize])
+		r1 := ctx.released.val.Load()
+		require.Equal(t, 0.0, r1-r0)
+		require.Equal(t, refCount-n-1, getRefCount(buf))
 	}
 
-	getRefCount := func(buf []byte) byte {
-		buf = buf[:p.BufSize+1]
-		return buf[p.BufSize]
-	}
 	require.Equal(t, byte(1), getRefCount(buf))
 
+	r0 := ctx.released.val.Load()
 	p.Put(buf)
 	time.Sleep(50 * time.Millisecond)
+	r1 := ctx.released.val.Load()
+	require.Equal(t, 1.0, r1-r0)
 	require.Equal(t, byte(0), getRefCount(buf))
 	closeCount++
 

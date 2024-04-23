@@ -63,6 +63,16 @@ func StringToBool(value string, defaultValue bool) bool {
 	return defaultValue
 }
 
+// Float64Query retrieves the given query parameter from the query as a float64. Returns the default value if the query
+func Float64Query(query url.Values, name string, defaultValue float64) float64 {
+	str := query.Get(name)
+	res, err := strconv.ParseFloat(str, 64)
+	if err != nil {
+		return defaultValue
+	}
+	return res
+}
+
 // DurationQuery retrieves the given query parameter from the query as a string. Returns the default value if the query
 // parameter does not exist.
 func DurationQuery(query url.Values, name string, unit duration.Spec, defaultValue duration.Spec) duration.Spec {

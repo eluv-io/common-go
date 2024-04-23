@@ -32,8 +32,8 @@ func TestGoID(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
+		defer wg.Done()
 		id2 = GoID()
-		wg.Done()
 	}()
 	wg.Wait()
 
@@ -99,13 +99,12 @@ func doTestGo(count int, level string) []*apexlog.Entry {
 			func() {
 				log.Info("process")
 				time.Sleep(time.Second)
-				wg.Done()
+			},
+			func() {
+				defer wg.Done()
 			})
 	}
 	wg.Wait()
-
-	// wait group is not sufficient because Go() logs after the passed in function returns...
-	time.Sleep(20 * time.Millisecond)
 
 	h := log.Handler().(*memory.Handler)
 	return h.Entries

@@ -14,7 +14,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/eluv-io/errors-go"
 	"github.com/gin-gonic/gin/binding"
 	mc "github.com/multiformats/go-multicodec"
 	cbor "github.com/multiformats/go-multicodec/cbor"
@@ -23,6 +22,7 @@ import (
 
 	"github.com/eluv-io/common-go/format/id"
 	eioutil "github.com/eluv-io/common-go/util/ioutil"
+	"github.com/eluv-io/errors-go"
 )
 
 const (
@@ -85,13 +85,14 @@ func GetBytesRange(request *http.Request) (string, error) {
 	return "", nil
 }
 
-// ParseByteRange parses a (single) byte-range in the form "start-end" as
-// defined for HTTP Range Request (https://tools.ietf.org/html/rfc7233)
-// returns it as offset and size.
+// ParseByteRange parses a (single) [Byte Range] in the form "start-end" as
+// defined for HTTP Range Request returns it as offset and size.
 //
 // Returns offset = -1 if no first byte position is specified in the range.
 // Returns size = -1 if no last byte position is specified in the range.
 // Returns [0, -1] if no range is specified (empty string).
+//
+// [Byte Range]: https://tools.ietf.org/html/rfc7233#section-2.1
 func ParseByteRange(r string) (offset, size int64, err error) {
 	if r == "" {
 		return 0, -1, nil
@@ -264,9 +265,9 @@ func SetRefererQuery(u *url.URL, r string) {
 // Adapted from DefaultRetryPolicy in github.com/hashicorp/go-retryablehttp.
 //
 // Params
-//  * ctx: the context used in the request (or nil)
-//  * statusCode: the returned HTTP status if available (if err != nil)
-//  * err:        the error returned by httpClient.Do() or Get() or similar
+//   - ctx: the context used in the request (or nil)
+//   - statusCode: the returned HTTP status if available (if err != nil)
+//   - err:        the error returned by httpClient.Do() or Get() or similar
 func ShouldRetry(ctx context.Context, statusCode int, err error) bool {
 	// do not retry on context.Canceled or context.DeadlineExceeded
 	if ctx != nil && ctx.Err() != nil {
