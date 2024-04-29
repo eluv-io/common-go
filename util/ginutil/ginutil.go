@@ -12,6 +12,12 @@ import (
 	elog "github.com/eluv-io/log-go"
 )
 
+// CustomAbortHandler is an optional handler that can be registered on the gin.Context with SetCustomAbortHandler() that
+// allows intercepting calls to Abort() or AbortWithStatus(). The custom handler must return true if it has handled the
+// abort completely. Otherwise, the default abort logic is executed.
+type CustomAbortHandler func(c *gin.Context, code int, err error) (handled bool)
+
+const customAbortHandlerKey = "custom-abort-handler"
 const loggerKey = "ginutil.LOGGER"
 
 // Abort aborts the current HTTP request with the given error. The HTTP status code is set according to the error type.
@@ -59,6 +65,15 @@ func abortCode(c *gin.Context, err error) int {
 
 // AbortWithStatus aborts the current HTTP request with the given status code and error.
 func AbortWithStatus(c *gin.Context, code int, err error) {
+	if handlerFunc, ok := GetCustomAbortHandler(c); ok {
+		log := getLog(c)
+		log.Trace("calling custom abort handler", "code", code, "err", err)
+		if handlerFunc(c, code, err) {
+			log.Debug("abort handled by custom handler")
+			return
+		}
+		log.Trace("abort not handled by custom handler")
+	}
 	c.Abort()
 	SendError(c, code, err)
 }
@@ -134,4 +149,20 @@ func getLog(c *gin.Context) (log *elog.Log) {
 		log = elog.Get("/")
 	}
 	return log
+}
+
+// SetCustomAbortHandler sets a custom handler that is called if an API call is aborted.
+func SetCustomAbortHandler(c *gin.Context, handler CustomAbortHandler) {
+	c.Set(customAbortHandlerKey, handler)
+}
+
+// GetCustomAbortHandler gets the custom abort handler if previously set. The bool return indicates whether a handler
+// was set or not.
+func GetCustomAbortHandler(c *gin.Context) (CustomAbortHandler, bool) {
+	if handler, ok := c.Get(customAbortHandlerKey); ok {
+		if handlerFunc, ok := handler.(CustomAbortHandler); ok {
+			return handlerFunc, true
+		}
+	}
+	return nil, false
 }
