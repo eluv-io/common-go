@@ -14,6 +14,7 @@ type Workfn func() error
 type WorkGroup struct {
 	wg      *sync.WaitGroup
 	ch      chan Workfn
+	chMu    sync.Mutex
 	name    string
 	workers []*worker
 }
@@ -59,6 +60,8 @@ func (w *WorkGroup) Add(fns ...Workfn) (err error) {
 		}
 	}()
 
+	w.chMu.Lock()
+	defer w.chMu.Unlock()
 	for _, f := range fns {
 		w.ch <- f
 	}
@@ -66,6 +69,8 @@ func (w *WorkGroup) Add(fns ...Workfn) (err error) {
 }
 
 func (w *WorkGroup) closeChan() {
+	w.chMu.Lock()
+	defer w.chMu.Unlock()
 	defer func() {
 		if ex := recover(); ex != nil {
 		}

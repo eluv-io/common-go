@@ -18,17 +18,19 @@ const RELATIVE_LINK_PREFIX = "./"
 type Selector string
 
 var S = struct {
-	None Selector
-	Meta Selector
-	File Selector
-	Rep  Selector
-	Blob Selector
+	None    Selector
+	Meta    Selector
+	File    Selector
+	Rep     Selector
+	Blob    Selector
+	Bitcode Selector
 }{
-	None: "",
-	Meta: "meta",
-	File: "files",
-	Rep:  "rep",
-	Blob: "blob",
+	None:    "",
+	Meta:    "meta",
+	File:    "files",
+	Rep:     "rep",
+	Blob:    "blob",
+	Bitcode: "bc",
 }
 
 // NewLink creates a new Link. offAndLen is an optional variadic argument
@@ -333,7 +335,7 @@ func (l *Link) UnmarshalText(text []byte) error {
 	if len(p) > 0 {
 		l.Selector = Selector(p[0])
 		switch l.Selector {
-		case S.Meta, S.File, S.Rep, S.Blob:
+		case S.Meta, S.File, S.Rep, S.Blob, S.Bitcode:
 			// valid selector - continue
 		default:
 			return errors.E("unmarshal link", errors.K.Invalid, "reason", "unknown selector", "selector", p[0])
@@ -416,7 +418,7 @@ func (l *Link) validateCore() error {
 	}
 
 	switch l.Selector {
-	case S.File, S.Rep, S.Blob:
+	case S.File, S.Rep, S.Blob, S.Bitcode:
 		// no additional verification
 	case S.Meta:
 		if l.Off != 0 || l.Len != -1 {

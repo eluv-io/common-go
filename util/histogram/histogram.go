@@ -19,6 +19,8 @@ const (
 	SegmentLatencyHistogram
 )
 
+const OutlierLabel = "outliers"
+
 func NewDefaultDurationHistogram() *DurationHistogram {
 	return NewDurationHistogram(DefaultDurationHistogram)
 }
@@ -44,7 +46,7 @@ func NewDurationHistogram(t DurationHistogramType) *DurationHistogram {
 			{Label: "5s-10s", Max: time.Second * 10},
 			{Label: "10s-20s", Max: time.Second * 20},
 			{Label: "20s-30s", Max: time.Second * 30},
-			{Label: "30s-", Max: time.Hour * 10000},
+			{Label: "30s-"},
 		}
 	case SegmentLatencyHistogram:
 		bins = []*DurationBin{
@@ -57,7 +59,7 @@ func NewDurationHistogram(t DurationHistogramType) *DurationHistogram {
 			{Label: "750ms-1s", Max: time.Second},
 			{Label: "1s-2s", Max: time.Second * 2},
 			{Label: "2s-4s", Max: time.Second * 4},
-			{Label: "4s-", Max: time.Second * 30},
+			{Label: "4s-10s", Max: time.Second * 10},
 		}
 	case DefaultDurationHistogram:
 		fallthrough
@@ -82,10 +84,11 @@ func NewDurationHistogram(t DurationHistogramType) *DurationHistogram {
 			{Label: "10m-20m", Max: time.Minute * 20},
 			{Label: "20m-30m", Max: time.Minute * 30},
 			{Label: "30m-2h", Max: time.Hour * 2},
-			{Label: "2h-", Max: time.Hour * 10000},
+			{Label: "2h-"},
 		}
 	}
-	return NewDurationHistogramBins(bins)
+	h, _ := NewDurationHistogramBins(bins)
+	return h
 }
 
 func (h *DurationHistogram) LoadValues(values []*SerializedDurationBin) error {
@@ -111,9 +114,11 @@ func (h *DurationHistogram) LoadValues(values []*SerializedDurationBin) error {
 
 type DurationBin struct {
 	Label string
-	Max   time.Duration // immutable upper-bound of bin (lower bound defined by previous bin)
-	Count int64         // the number of durations falling in this bin
-	DSum  int64         // sum of durations of this bin
+	// Max is the immutable upper-bound of the bin (lower bound defined by previous bin). Setting
+	// this to 0 represents that the bin has no upper bound
+	Max   time.Duration
+	Count int64 // the number of durations falling in this bin
+	DSum  int64 // sum of durations of this bin
 }
 
 type SerializedDurationBin struct {
@@ -122,10 +127,48 @@ type SerializedDurationBin struct {
 	DSum  int64  `json:"dsum"`
 }
 
-func NewDurationHistogramBins(bins []*DurationBin) *DurationHistogram {
+// NewDurationHistogramBins creates a histogram from custom duration bins. The bins must be empty
+// (Count and DSum equal to 0), and provided in strictly increasing order of bin maximums.
+// Optionally, the final bin may have a max of 0 to represent an unbounded bin.
+// By convention, the provided labels are usually PREV_MAX-CUR_MAX, where each is formatted in a
+// concise readable format.
+// An 'outliers' bin is automatically added if there is not an unbounded bin at the end of the
+// histogram. It is ignored for summary statistic purposes.
+func NewDurationHistogramBins(bins []*DurationBin) (*DurationHistogram, error) {
+	e := errors.Template("NewDurationHistogramBins", errors.K.Invalid)
+
+	if len(bins) == 0 {
+		return nil, e("reason", "no bins")
+	}
+
+	for i, b := range bins {
+		// Unbounded bins can only be the final bin
+		if b.Max == 0 && i != len(bins)-1 {
+			return nil, e("reason", "unbounded bin not final bin", "label", b.Label, "index", i)
+		}
+
+		// The outlier bin can only be the final bin
+		if b.Label == OutlierLabel && (i != len(bins)-1 || b.Max != 0) {
+			return nil, e("reason", "outlier bin not correct", "label", b.Label, "index", i)
+		}
+
+		if b.Max != 0 && i > 0 && b.Max <= bins[i-1].Max {
+			return nil, e("reason", "bins not strictly increasing", "bin_label", b.Label,
+				"bin_max", b.Max, "prev_label", bins[i-1].Label, "prev_max", bins[i-1].Max)
+		}
+
+		if b.Count != 0 || b.DSum != 0 {
+			return nil, e("reason", "bin for construction not empty", "label", b.Label)
+		}
+	}
+
+	if bins[len(bins)-1].Max != 0 {
+		bins = append(bins, &DurationBin{Label: OutlierLabel, Max: 0})
+	}
+
 	return &DurationHistogram{
 		bins: bins,
-	}
+	}, nil
 }
 
 // DurationHistogram uses predefined bins.
@@ -141,6 +184,9 @@ func (h *DurationHistogram) TotalCount() int64 {
 
 	tot := int64(0)
 	for _, b := range h.bins {
+		if b.Label == OutlierLabel {
+			continue
+		}
 		tot += b.Count
 	}
 	return tot
@@ -152,9 +198,31 @@ func (h *DurationHistogram) TotalDSum() int64 {
 
 	tot := int64(0)
 	for _, b := range h.bins {
+		if b.Label == OutlierLabel {
+			continue
+		}
 		tot += b.DSum
 	}
 	return tot
+}
+
+// OutlierProportion returns the proportion of histogram observations that fall outside the given
+// bins. This returns 0 if the histogram includes an unbounded bin at the upper end.
+func (h *DurationHistogram) OutlierProportion() float64 {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	_, totalCount := h.loadCounts()
+
+	if h.bins[len(h.bins)-1].Label != OutlierLabel {
+		return 0
+	}
+
+	outCount := h.bins[len(h.bins)-1].Count
+	if outCount == 0 && totalCount == 0 {
+		return 0
+	}
+	return float64(outCount) / (float64(totalCount + outCount))
 }
 
 func (h *DurationHistogram) Clear() {
@@ -168,7 +236,7 @@ func (h *DurationHistogram) Clear() {
 
 func (h *DurationHistogram) Observe(n time.Duration) {
 	for i := range h.bins {
-		if n <= h.bins[i].Max || i == len(h.bins)-1 {
+		if n <= h.bins[i].Max || (i == len(h.bins)-1 && h.bins[i].Max == 0) {
 			h.mu.Lock()
 			defer h.mu.Unlock()
 
@@ -184,6 +252,9 @@ func (h *DurationHistogram) loadCounts() ([]int64, int64) {
 	data := make([]int64, len(h.bins))
 	tot := int64(0)
 	for i := range h.bins {
+		if h.bins[i].Label == OutlierLabel {
+			continue
+		}
 		data[i] = h.bins[i].Count
 		tot += data[i]
 	}
@@ -196,6 +267,9 @@ func (h *DurationHistogram) loadDSums() ([]time.Duration, time.Duration) {
 	data := make([]time.Duration, len(h.bins))
 	tot := time.Duration(0)
 	for i := range h.bins {
+		if h.bins[i].Label == OutlierLabel {
+			continue
+		}
 		data[i] = time.Duration(h.bins[i].DSum)
 		tot += data[i]
 	}
@@ -215,7 +289,8 @@ func (h *DurationHistogram) Average() time.Duration {
 // Quantile returns an approximation of the value at the qth quantile of the histogram, where q is
 // in the range [0, 1]. It makes use of the assumption that data within each histogram bin is
 // uniformly distributed in order to estimate within bins. Depending on the distribution, this
-// assumption may be more or less accurate.
+// assumption may be more or less accurate. For the topmost bin that is unbounded, it assumes the
+// intra-bin distribution is uniform over the range [bin_min, 2 * bin_average].
 func (h *DurationHistogram) Quantile(q float64) time.Duration {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -228,6 +303,9 @@ func (h *DurationHistogram) Quantile(q float64) time.Duration {
 
 	count := q * float64(tot)
 	for i := range h.bins {
+		if h.bins[i].Label == OutlierLabel {
+			continue
+		}
 		fData := float64(data[i])
 		if count <= fData {
 			binProportion := 1 - ((fData - count) / fData)
@@ -235,7 +313,13 @@ func (h *DurationHistogram) Quantile(q float64) time.Duration {
 			if i > 0 {
 				binStart = h.bins[i-1].Max
 			}
-			binSpan := h.bins[i].Max - binStart
+			var binSpan time.Duration
+			if h.bins[i].Max != 0 {
+				binSpan = h.bins[i].Max - binStart
+			} else {
+				binAvg := float64(h.bins[i].DSum) / float64(h.bins[i].Count)
+				binSpan = (time.Duration(binAvg) - binStart) * 2
+			}
 			return binStart + time.Duration(int64(binProportion*float64(binSpan)))
 		}
 		count -= fData
@@ -272,6 +356,9 @@ func (h *DurationHistogram) StandardDeviation() time.Duration {
 	trueAvg := float64(totDur) / float64(totCount)
 	binAvgs := []float64{}
 	for i := range h.bins {
+		if h.bins[i].Label == OutlierLabel {
+			continue
+		}
 		if counts[i] == 0 {
 			binAvgs = append(binAvgs, 0)
 			continue
@@ -282,6 +369,9 @@ func (h *DurationHistogram) StandardDeviation() time.Duration {
 
 	sumOfSquares := float64(0)
 	for i := range h.bins {
+		if h.bins[i].Label == OutlierLabel {
+			continue
+		}
 		sumOfSquares += float64(counts[i]) * math.Pow(binAvgs[i]-trueAvg, 2)
 	}
 

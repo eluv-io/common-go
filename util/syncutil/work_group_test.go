@@ -5,8 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eluv-io/errors-go"
 	"github.com/stretchr/testify/require"
+
+	"github.com/eluv-io/errors-go"
 )
 
 func TestWGSimple(t *testing.T) {
@@ -81,6 +82,7 @@ func TestWGFailFast(t *testing.T) {
 	wg = newWorkGroup("adder", 2, 1, true)
 	for i = 0; i < 10; i++ {
 		err = wg.Add(adder)
+		time.Sleep(time.Millisecond * 2) // slow down a bit to make sure we see an error
 		if err != nil {
 			break
 		}

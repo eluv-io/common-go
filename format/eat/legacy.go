@@ -142,7 +142,7 @@ func (t *Token) decodeLegacyString(s string) (err error) {
 	if isElvClientToken(legData, hasSignature) {
 		// legacy client token was a single token with all data squashed
 		// into it => split into two and embed one in the other
-		sct := New(Types.StateChannel(), Formats.Legacy(), SigTypes.Unsigned())
+		sct := New(Types.StateChannel(), Formats.Legacy())
 		legData.CopyToTokenData(sct, sct.Type)
 		if !legData.AuthSig.IsNil() {
 			sct.SigType = SigTypes.ES256K()

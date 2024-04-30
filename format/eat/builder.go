@@ -92,6 +92,12 @@ func (b *encoder) MustEncode() string {
 }
 
 func (b *encoder) Token() (*Token, error) {
+	if b.token.encoded == "" {
+		_, err := b.Encode()
+		if err != nil {
+			return nil, err
+		}
+	}
 	return b.token, b.err
 }
 
@@ -146,7 +152,7 @@ func NewStateChannel(
 	qid types.QID,
 	subject string) *StateChannelBuilder {
 
-	token := New(Types.StateChannel(), defaultFormat, SigTypes.Unsigned())
+	token := New(Types.StateChannel(), defaultFormat)
 	token.SID = sid
 	token.LID = lid
 	token.QID = qid
@@ -193,7 +199,7 @@ func NewTx(
 	lid types.QLibID,
 	EthTxHash common.Hash) *TxBuilder {
 
-	token := New(Types.Tx(), defaultFormat, SigTypes.Unsigned())
+	token := New(Types.Tx(), defaultFormat)
 	token.SID = sid
 	token.LID = lid
 	token.EthTxHash = EthTxHash
@@ -215,7 +221,7 @@ func NewNodeToken(
 	sid types.QSpaceID,
 	qphash types.QPHash) *NodeTokenBuilder {
 
-	token := New(Types.Node(), defaultFormat, SigTypes.Unsigned())
+	token := New(Types.Node(), defaultFormat)
 	token.SID = sid
 	token.QPHash = qphash
 	return &NodeTokenBuilder{newSigner(token)}
@@ -232,7 +238,7 @@ func NewEditorSigned(
 	lid types.QLibID,
 	qid types.QID) *EditorSignedBuilder {
 
-	token := New(Types.EditorSigned(), defaultFormat, SigTypes.Unsigned())
+	token := New(Types.EditorSigned(), defaultFormat)
 	token.SID = sid
 	token.LID = lid
 	token.QID = qid
@@ -272,6 +278,11 @@ func (b *EditorSignedBuilder) WithSubject(s string) *EditorSignedBuilder {
 	return b
 }
 
+func (b *EditorSignedBuilder) WithConfirmation(s ClientConfirmation) *EditorSignedBuilder {
+	b.enc.token.Confirmation = s
+	return b
+}
+
 func (b *EditorSignedBuilder) Sign(pk *ecdsa.PrivateKey) Encoder {
 	if len(b.enc.token.Subject) == 0 {
 		b.enc.token.Subject = ethutil.AddressToID(crypto.PubkeyToAddress(pk.PublicKey), id.User).String()
@@ -296,7 +307,7 @@ func NewPlain(
 	sid types.QSpaceID,
 	lid types.QLibID) *PlainBuilder {
 
-	token := New(Types.Plain(), defaultFormat, SigTypes.Unsigned())
+	token := New(Types.Plain(), defaultFormat)
 	token.SID = sid
 	token.LID = lid
 	return &PlainBuilder{newSigner(token)}
@@ -322,7 +333,7 @@ func NewAnonymous(
 	sid types.QSpaceID,
 	lid types.QLibID) *AnonymousBuilder {
 
-	token := New(Types.Anonymous(), defaultFormat, SigTypes.Unsigned())
+	token := New(Types.Anonymous(), defaultFormat)
 	token.SID = sid
 	token.LID = lid
 	return &AnonymousBuilder{newEncoder(token)}
@@ -346,7 +357,7 @@ func NewSignedLink(
 	linkPath string,
 	srcQID types.QID) *SignedLinkBuilder {
 
-	token := New(Types.SignedLink(), defaultFormat, SigTypes.Unsigned())
+	token := New(Types.SignedLink(), defaultFormat)
 	token.SID = sid
 	token.LID = lid
 	token.QID = qid
@@ -409,7 +420,7 @@ type ClientSignedBuilder struct {
 }
 
 func NewClientSigned(sid types.QSpaceID) *ClientSignedBuilder {
-	token := New(Types.ClientSigned(), defaultFormat, SigTypes.Unsigned())
+	token := New(Types.ClientSigned(), defaultFormat)
 	token.SID = sid
 	token.IssuedAt = utc.Now()
 	token.Expires = token.IssuedAt.Add(time.Hour)
@@ -456,6 +467,11 @@ func (b *ClientSignedBuilder) WithSubject(s string) *ClientSignedBuilder {
 	return b
 }
 
+func (b *ClientSignedBuilder) WithConfirmation(s ClientConfirmation) *ClientSignedBuilder {
+	b.enc.token.Confirmation = s
+	return b
+}
+
 func (b *ClientSignedBuilder) Sign(pk *ecdsa.PrivateKey) Encoder {
 	if len(b.enc.token.Subject) == 0 {
 		b.enc.token.Subject = ethutil.AddressToID(crypto.PubkeyToAddress(pk.PublicKey), id.User).String()
@@ -467,5 +483,40 @@ func (b *ClientSignedBuilder) SignEIP912Personal(pk *ecdsa.PrivateKey) Encoder {
 	if len(b.enc.token.Subject) == 0 {
 		b.enc.token.Subject = ethutil.AddressToID(crypto.PubkeyToAddress(pk.PublicKey), id.User).String()
 	}
+	return b.signer.SignEIP912Personal(pk)
+}
+
+// -----------------------------------------------------------------------------
+
+type ClientConfirmationBuilder struct {
+	*signer
+}
+
+func NewClientConfirmation(issuedAt utc.UTC, d ...time.Duration) *ClientConfirmationBuilder {
+	token := New(Types.ClientConfirmation(), defaultFormat)
+	token.IssuedAt = issuedAt
+	dur := time.Second * 20
+	if len(d) > 0 {
+		dur = d[0]
+	}
+	token.Expires = token.IssuedAt.Add(dur)
+	return &ClientConfirmationBuilder{newSigner(token)}
+}
+
+func (b *ClientConfirmationBuilder) WithExpires(expiresAt utc.UTC) *ClientConfirmationBuilder {
+	b.enc.token.Expires = expiresAt
+	return b
+}
+
+func (b *ClientConfirmationBuilder) WithCtx(ctx map[string]interface{}) *ClientConfirmationBuilder {
+	b.enc.token.Ctx = ctx
+	return b
+}
+
+func (b *ClientConfirmationBuilder) Sign(pk *ecdsa.PrivateKey) Encoder {
+	return b.signer.Sign(pk)
+}
+
+func (b *ClientConfirmationBuilder) SignEIP912Personal(pk *ecdsa.PrivateKey) Encoder {
 	return b.signer.SignEIP912Personal(pk)
 }

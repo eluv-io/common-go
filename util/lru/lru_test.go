@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/atomic"
+
 	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/util/jsonutil"
 
@@ -188,10 +190,10 @@ func createAssertMetricsFn(t *testing.T, lru *Cache, name string) func(hits int,
 	return func(hits, misses, added, removed int) {
 		m := lru.Metrics()
 		require.Equal(t, name, m.Name)
-		require.EqualValues(t, hits, m.Hits, "hits")
-		require.EqualValues(t, misses, m.Misses, "misses")
-		require.EqualValues(t, added, m.Added, "added")
-		require.EqualValues(t, removed, m.Removed, "removed")
+		require.EqualValues(t, hits, m.Hits.Load(), "hits")
+		require.EqualValues(t, misses, m.Misses.Load(), "misses")
+		require.EqualValues(t, added, m.Added.Load(), "added")
+		require.EqualValues(t, removed, m.Removed.Load(), "removed")
 	}
 }
 
@@ -209,17 +211,17 @@ func TestGetOrCreate(t *testing.T) {
 				So(err, ShouldBeNil)
 				So(val, ShouldEqual, key)
 				metrics := lru.Metrics()
-				So(metrics.Hits, ShouldEqual, 0)
-				So(metrics.Misses, ShouldEqual, i+1)
-				So(metrics.Added, ShouldEqual, i+1)
+				So(metrics.Hits.Load(), ShouldEqual, 0)
+				So(metrics.Misses.Load(), ShouldEqual, i+1)
+				So(metrics.Added.Load(), ShouldEqual, i+1)
 				if i < 2 {
 					So(evicted, ShouldBeFalse)
 					So(evictedCount, ShouldEqual, 0)
-					So(metrics.Removed, ShouldEqual, 0)
+					So(metrics.Removed.Load(), ShouldEqual, 0)
 				} else {
 					So(evicted, ShouldBeTrue)
 					So(evictedCount, ShouldEqual, i-1)
-					So(metrics.Removed, ShouldEqual, i-1)
+					So(metrics.Removed.Load(), ShouldEqual, i-1)
 				}
 			}
 
@@ -295,11 +297,11 @@ func TestNilCache(t *testing.T) {
 			})
 			Convey("Metrics returns an empty struct", func() {
 				m := lru.Metrics()
-				So(m.Hits, ShouldEqual, 0)
-				So(m.Misses, ShouldEqual, 0)
-				So(m.Errors, ShouldEqual, 0)
-				So(m.Added, ShouldEqual, 0)
-				So(m.Removed, ShouldEqual, 0)
+				So(m.Hits.Load(), ShouldEqual, 0)
+				So(m.Misses.Load(), ShouldEqual, 0)
+				So(m.Errors.Load(), ShouldEqual, 0)
+				So(m.Added.Load(), ShouldEqual, 0)
+				So(m.Removed.Load(), ShouldEqual, 0)
 				So(m.Config.MaxItems, ShouldEqual, 0)
 				So(m.Config.MaxAge, ShouldEqual, 0)
 				So(m.Config.Mode, ShouldEqual, "")
@@ -368,10 +370,10 @@ func TestGetOrCreateStress(t *testing.T) {
 			fmt.Println("total", totalCount, "evicted", evictedCount)
 			metrics := lru.Metrics()
 			fmt.Println(jsonutil.MarshalString(metrics))
-			require.EqualValues(t, totalCount, metrics.Hits+metrics.Misses)
-			require.EqualValues(t, 0, metrics.Errors)
+			require.EqualValues(t, totalCount, metrics.Hits.Load()+metrics.Misses.Load())
+			require.EqualValues(t, 0, metrics.Errors.Load())
 			require.EqualValues(t, cacheSize, metrics.Config.MaxItems)
-			require.EqualValues(t, cacheSize, metrics.Added-metrics.Removed)
+			require.EqualValues(t, cacheSize, metrics.Added.Load()-metrics.Removed.Load())
 		})
 	}
 
@@ -461,17 +463,17 @@ func TestGetValidOrCreate(t *testing.T) {
 				require.Equal(
 					t,
 					int64(keyRange*(runDuration/validity)),
-					int64(ctor.invoked))
+					ctor.invoked.Load())
 			}
 
-			fmt.Println("total", totalCount, "ctor invoked", ctor.invoked)
+			fmt.Println("total", totalCount, "ctor invoked", ctor.invoked.Load())
 		})
 	}
 
 }
 
 type ctor struct {
-	invoked int
+	invoked atomic.Int64
 }
 
 type testResource struct {
@@ -481,7 +483,7 @@ type testResource struct {
 
 func (c *ctor) constructor(key string, sleep time.Duration) func() (interface{}, error) {
 	return func() (interface{}, error) {
-		c.invoked++
+		c.invoked.Inc()
 		if sleep > 0 {
 			time.Sleep(sleep)
 		}
