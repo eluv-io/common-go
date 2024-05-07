@@ -161,6 +161,8 @@ func makeCborV2Codec() Codec {
 
 	encOptions := cbor.CoreDetEncOptions()
 	encOptions.HandleTagForMarshaler = true
+	encOptions.Time = cbor.TimeUnixMicro
+	encOptions.TimeTag = cbor.EncTagRequired
 	enc, err := encOptions.EncModeWithTags(tagSet)
 	if err != nil {
 		log.Fatal("failed to create cbor encoder mode", err)
