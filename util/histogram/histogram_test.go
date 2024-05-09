@@ -344,3 +344,11 @@ func TestHistogramConcurrency(t *testing.T) {
 	require.Equal(t, time.Duration(25), h.Quantile(0.5))
 	require.Equal(t, time.Duration(45), h.Quantile(0.9))
 }
+
+func TestHistogramZeroes(t *testing.T) {
+	h := NewDurationHistogram(SegmentLatencyHistogram)
+	v := h.Quantile(0.3).Milliseconds()
+	v2 := h.StandardDeviation().Milliseconds()
+	require.Equal(t, v, int64(0))
+	require.Equal(t, v2, int64(0))
+}

@@ -302,6 +302,10 @@ func (h *DurationHistogram) Quantile(q float64) time.Duration {
 	data, tot := h.loadCounts()
 
 	count := q * float64(tot)
+
+	if count == 0 {
+		return 0
+	}
 	for i := range h.bins {
 		if h.bins[i].Label == OutlierLabel {
 			continue
@@ -353,6 +357,11 @@ func (h *DurationHistogram) StandardDeviation() time.Duration {
 
 	counts, totCount := h.loadCounts()
 	durs, totDur := h.loadDSums()
+
+	if totCount == 0 {
+		return 0
+	}
+
 	trueAvg := float64(totDur) / float64(totCount)
 	binAvgs := []float64{}
 	for i := range h.bins {
