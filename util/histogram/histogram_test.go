@@ -349,6 +349,8 @@ func TestHistogramZeroes(t *testing.T) {
 	h := NewDurationHistogram(SegmentLatencyHistogram)
 	v := h.Quantile(0.3).Milliseconds()
 	v2 := h.StandardDeviation().Milliseconds()
+	v3 := h.Average().Milliseconds()
 	require.Equal(t, v, int64(0))
 	require.Equal(t, v2, int64(0))
+	require.Equal(t, v3, int64(0))
 }

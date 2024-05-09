@@ -282,6 +282,9 @@ func (h *DurationHistogram) Average() time.Duration {
 	defer h.mu.Unlock()
 	_, totCount := h.loadCounts()
 	_, totDur := h.loadDSums()
+	if totCount == 0 {
+		return 0
+	}
 	trueAvg := float64(totDur) / float64(totCount)
 	return time.Duration(trueAvg)
 }
