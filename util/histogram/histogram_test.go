@@ -207,10 +207,11 @@ func TestStandardDeviation2(t *testing.T) {
 		{Label: "750ms-1s", Count: 781, DSum: 665865316657},
 		{Label: "1s-2s", Count: 328, DSum: 389033374409},
 		{Label: "2s-4s", Count: 2, DSum: 4031693641},
-		{Label: "4s-", Count: 0, DSum: 0},
+		{Label: "4s-10s", Count: 0, DSum: 0},
 	}
 	h := NewDurationHistogram(SegmentLatencyHistogram)
-	h.LoadValues(values)
+	err := h.LoadValues(values)
+	require.NoError(t, err)
 
 	require.Equal(t, int64(196), h.StandardDeviation().Milliseconds())
 }
@@ -290,7 +291,8 @@ func TestMarshalUnmarshal(t *testing.T) {
 	require.NoError(t, err)
 
 	var vals []*SerializedDurationBin
-	json.Unmarshal(s, &vals)
+	err = json.Unmarshal(s, &vals)
+	require.NoError(t, err)
 	h2 := NewDurationHistogram(DefaultDurationHistogram)
 	err = h2.LoadValues(vals)
 	require.NoError(t, err)

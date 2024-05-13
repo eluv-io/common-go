@@ -33,8 +33,8 @@ github.com/eluv-io/apexlog-go v1.9.1-elv4 h1:lJE8+Y+GtUhw1BBAlFePuVZg78jCKgeFsdq
 github.com/eluv-io/apexlog-go v1.9.1-elv4/go.mod h1:pZhIuRbWTsOm5WEOxke9B2dczjQuaEGeJXEYd5lCxkk=
 github.com/eluv-io/errors-go v1.0.3 h1:sROm5+5xA2oMDUq5T69CVI2w2W5JDCr8QakysjiCPX4=
 github.com/eluv-io/errors-go v1.0.3/go.mod h1:SoBNolWeyjrvHosBsIpxlQAq5/jVvqWsw/o0XpGMtKU=
-github.com/eluv-io/gls v0.0.0-20240109172027-f54afc64be57 h1:3Xd2e2/khksl5KohJGnrLS/+rYptG/+yhjHrNvXqzQE=
-github.com/eluv-io/gls v0.0.0-20240109172027-f54afc64be57/go.mod h1:4rPCrom1ZvL5sqFMGiNbCr/QfDq3oljqXEBdstdge0o=
+github.com/eluv-io/gls v1.0.0-elv1 h1:fV9z/aLSs5KH8wWMkamoS/Xxl8wmXF76WMx8/N5XEr8=
+github.com/eluv-io/gls v1.0.0-elv1/go.mod h1:4rPCrom1ZvL5sqFMGiNbCr/QfDq3oljqXEBdstdge0o=
 github.com/eluv-io/inject-go v1.0.2 h1:1+t2LqRHk1Ns+2JUBN9dqATxa6Y+7ay7GftfJVXqfT0=
 github.com/eluv-io/inject-go v1.0.2/go.mod h1:03/vIoB3v+J0ASXrdw7nes2Qc2MeY9BKYf2BWJCJf3M=
 github.com/eluv-io/log-go v1.0.4 h1:WQwaoCN4lNfzS6qvhdlzUbKv2ZTDmE/Z855nMLZri10=

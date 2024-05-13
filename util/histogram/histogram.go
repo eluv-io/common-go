@@ -324,7 +324,7 @@ func (h *DurationHistogram) Quantile(q float64) time.Duration {
 			if h.bins[i].Max != 0 {
 				binSpan = h.bins[i].Max - binStart
 			} else {
-				binAvg := float64(h.bins[i].DSum) / float64(h.bins[i].Count)
+				binAvg := float64(h.bins[i].DSum) / fData
 				binSpan = (time.Duration(binAvg) - binStart) * 2
 			}
 			return binStart + time.Duration(int64(binProportion*float64(binSpan)))

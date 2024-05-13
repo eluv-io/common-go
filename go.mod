@@ -69,4 +69,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/modern-go/gls => github.com/eluv-io/gls v0.0.0-20240109172027-f54afc64be57
+replace github.com/modern-go/gls => github.com/eluv-io/gls v1.0.0-elv1
