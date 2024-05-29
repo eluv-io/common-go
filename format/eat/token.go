@@ -76,11 +76,11 @@ type encodingDetails struct {
 }
 
 // New creates a new auth token with the given type, digest, size, and ID
-func New(typ TokenType, format *tokenFormat, sig *TokenSigType) *Token {
+func New(typ TokenType, format *tokenFormat) *Token {
 	return &Token{
 		Type:    typ,
 		Format:  format,
-		SigType: sig,
+		SigType: SigTypes.Unsigned(),
 		TokenData: TokenData{
 			Ctx: map[string]interface{}{},
 		},
@@ -125,7 +125,7 @@ func Parse(s string) (*Token, error) {
 // parse parses a token from the given string and returns both the parsed token and any parsing/validation error. In
 // case of errors, the token is still returned: it will be invalid and probably only partially decoded.
 func parse(s string) (*Token, error) {
-	t := New(Types.Unknown(), Formats.Unknown(), SigTypes.Unknown())
+	t := New(Types.Unknown(), Formats.Unknown())
 	err := t.Decode(s)
 	return t, err
 }
@@ -308,11 +308,17 @@ func (t *Token) Validate() (err error) {
 		if !t.SigType.HasSig() {
 			validator.error(validator.errTemplate("reason", "invalid signature type"))
 		} else if validator.require("signature", t.Signature) {
+			switch t.Type {
 			// state channel tokens are signed by a "trusted authority" (i.e. KMS), whose address is not stored in
-			// the token itself. Hence the signature cannot be checked here and must be checked downstream.
-			if t.Type != Types.StateChannel() {
-				// legacy tokens may have a missing eth addr, in which case we extract it from the signature itself...
-				if !t.HasEthAddr() && (t.Format == Formats.Legacy() || t.Format == Formats.LegacySigned()) {
+			// the token itself. Hence, the signature cannot be checked here and must be checked downstream.
+			case Types.StateChannel():
+			default:
+				if !t.HasEthAddr() &&
+					// cases where we extract it from the signature itself:
+					// - legacy tokens may have a missing eth addr,
+					// - addr is not required in client confirmation token
+					((t.Format == Formats.Legacy() || t.Format == Formats.LegacySigned()) ||
+						t.Type == Types.ClientConfirmation()) {
 					t.EthAddr, err = t.SignerAddress()
 					validator.error(err)
 				}
@@ -329,7 +335,9 @@ func (t *Token) Validate() (err error) {
 		validator.refuse("address", t.EthAddr)
 	}
 
-	validator.require("space id", t.SID)
+	if t.Type != Types.ClientConfirmation() {
+		validator.require("space id", t.SID)
+	}
 
 	// lib seems optional... (because it can be specified in the URL?)
 	// valid.require("lib id", t.LID)
@@ -431,6 +439,21 @@ func (t *Token) Validate() (err error) {
 	case Types.ClientSigned():
 		// PENDING(LUK): add additional validations for ClientSigned tokens!
 		return e.IfNotNil(validator.err)
+
+	case Types.ClientConfirmation():
+		validator.refuse("spc", t.SID)
+		validator.refuse("qid", t.QID)
+		validator.refuse("lib", t.LID)
+		validator.refuse("subject", t.Subject)
+		validator.refuse("grant", t.Grant)
+		validator.refuse("tx-hash", t.EthTxHash)
+		validator.refuse("qp-hash", t.QPHash)
+		validator.refuse("afgh", t.AFGHPublicKey)
+		validator.refuse("confirmation", t.Confirmation)
+
+		validator.require("issued at", t.IssuedAt)
+		validator.require("expires", t.Expires)
+		return e.IfNotNil(validator.err)
 	}
 
 	// refused for all other types
@@ -473,6 +496,65 @@ func (t *Token) Validate() (err error) {
 	}
 
 	return e.IfNotNil(validator.err)
+}
+
+// ValidateConfirmation validates the 'confirmation' token.
+// The function returns an error if:
+// - the token requires a confirmation but is not of the right type
+// - the token requires a confirmation but none is passed
+// If the token requires a confirmation the signature of the confirmation token
+// is checked against the address of the ephemeral key in this token. Then the
+// confirmation token validity period is verified with the given max validity
+// and time skew.
+func (t *Token) ValidateConfirmation(confirmation *Token, maxValidity, timeSkew time.Duration) error {
+	e := errors.Template("ValidateConfirmation", errors.K.Invalid,
+		"type", t.Type,
+		"sig_type", t.SigType,
+		"format", t.Format)
+
+	if t.Type.MayRequireConfirmation {
+		if t.Confirmation.RequiresConfirmation() && confirmation == nil {
+			return e("reason", "a confirmation token is required")
+		}
+	} else if confirmation != nil {
+		return e("reason", "unexpected confirmation token")
+	}
+
+	if t.Confirmation.RequiresConfirmation() {
+		if confirmation.Type != Types.ClientConfirmation() {
+			return e("reason", "invalid confirmation authorization type", "type", confirmation.Type)
+		}
+		sig, err := confirmation.SignerAddress()
+		if err != nil {
+			return e(err)
+		}
+		addr, err := t.Confirmation.ConfirmationAddress()
+		if err != nil {
+			return e(err)
+		}
+		if !bytes.Equal(sig.Bytes(), addr.Bytes()) {
+			return e("reason", "address/public key in token does not match confirmation token signature")
+		}
+
+		// if the token enforces a TTL on confirmation, use the shortest of the
+		// given max-validity and the token confirmation TTL.
+		if t.Confirmation.TTL > 0 {
+			m := time.Second * time.Duration(t.Confirmation.TTL)
+			if m < maxValidity {
+				maxValidity = m
+			}
+		}
+
+		// verify conditions in 'confirmation'
+		err = confirmation.VerifyTimes(maxValidity, timeSkew)
+		if err != nil {
+			return e("reason", "confirmation time invalid or expired", err)
+		}
+	} else if confirmation != nil {
+		return e("reason", "confirmation token present but not required",
+			"type", confirmation.Type)
+	}
+	return nil
 }
 
 func (t *Token) IsNil() bool {
@@ -531,7 +613,10 @@ func (t *Token) SignWithT(clientSK *ecdsa.PrivateKey, sigType *TokenSigType) (er
 	signFunc := func(digestHash []byte) (sig []byte, err error) {
 		return crypto.Sign(digestHash, clientSK)
 	}
-	signAddr := crypto.PubkeyToAddress(clientSK.PublicKey)
+	signAddr := common.Address{}
+	if t.Type != Types.ClientConfirmation() {
+		signAddr = crypto.PubkeyToAddress(clientSK.PublicKey)
+	}
 	return t.SignWithFuncT(signAddr, signFunc, sigType)
 }
 

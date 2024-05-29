@@ -75,17 +75,22 @@ func IDStringToAddress(idString string) (common.Address, error) {
 	return IDToAddress(id), nil
 }
 
-// HexToAddress converts the given hex string into an ethereum address.
-// Similar to common.HexToAddress but returning an error and not setting bytes
-// in the address in case of error.
-func HexToAddress(s string) (common.Address, error) {
+// DecodeHex strips the 'Ox' prefix if present in s, then calls hex.DecodeString
+func DecodeHex(s string) ([]byte, error) {
 	if strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X") {
 		s = s[2:]
 	}
 	if len(s)%2 == 1 {
 		s = "0" + s
 	}
-	b, err := hex.DecodeString(s)
+	return hex.DecodeString(s)
+}
+
+// HexToAddress converts the given hex string into an ethereum address.
+// Similar to common.HexToAddress but returning an error and not setting bytes
+// in the address in case of error.
+func HexToAddress(s string) (common.Address, error) {
+	b, err := DecodeHex(s)
 	var a common.Address
 	if err != nil {
 		return a, errors.E("HexToAddress", errors.K.Invalid, err,

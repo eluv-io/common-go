@@ -1,9 +1,10 @@
 package token
 
 import (
-	"github.com/stretchr/testify/require"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestCodeFromStringInvalid(t *testing.T) {

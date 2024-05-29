@@ -43,7 +43,7 @@ func NewObject(code Code, qid id.ID, nid id.ID, bytes ...byte) (*Token, error) {
 		}
 		res.NID = nid
 	}
-	_ = res.String() // initialize string cache to simplify unit tests
+	res.MakeString()
 	return res, nil
 }
 
@@ -69,7 +69,7 @@ func NewPart(code Code, scheme encryption.Scheme, flags byte, bytes ...byte) (*T
 		}
 		res.Flags = flags
 	}
-	_ = res.String() // initialize string cache to simplify unit tests
+	res.MakeString()
 	return res, nil
 }
 
@@ -89,7 +89,7 @@ func NewLRO(code Code, nid id.ID, bytes ...byte) (*Token, error) {
 		return nil, e("reason", "invalid nid", "nid", nid)
 	}
 	res.NID = nid
-	_ = res.String() // initialize string cache to simplify unit tests
+	res.MakeString()
 	return res, nil
 }
 
@@ -231,10 +231,18 @@ func (t *Token) String() string {
 	if t.s != "" {
 		return t.s
 	}
+	// we should never get here if t.s is computed in constructor
+	return t.MakeString()
+}
 
+// MakeString recomputes the internal cached string representation of this Token
+// MakeString is not safe for calls from concurrent go-routines.
+func (t *Token) MakeString() string {
 	var b []byte
 
 	switch t.Code {
+	case UNKNOWN:
+		return ""
 	case QWriteV1, QPartWriteV1:
 		b = make([]byte, len(t.Bytes))
 		copy(b, t.Bytes)
@@ -510,7 +518,7 @@ func Parse(s string) (*Token, error) {
 
 		// fill string cache here instead of using s in struct initializer to consistently generate a tqw__ instead of
 		// tq__ (as long as the qwPrefix hack is in use)
-		_ = res.String()
+		res.MakeString()
 		return res, nil
 	case QPartWrite:
 		// prefix + base58(byte(SCHEME) | byte(FLAGS) |

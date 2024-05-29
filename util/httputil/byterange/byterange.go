@@ -7,13 +7,14 @@ import (
 	"github.com/eluv-io/errors-go"
 )
 
-// Parse parses a (single) byte-range in the form "start-end" as defined for HTTP Range Request
-// (https://tools.ietf.org/html/rfc7233) returns it as offset and size.
+// Parse parses a (single) [Byte Range] in the form "start-end" as
+// defined for HTTP Range Request returns it as offset and size.
 //
-// Returns
-//   - offset=-1 if no first byte position is specified in the range.
-//   - size=-1 if no last byte position is specified in the range.
-//   - offset=0 and size=-1 if no range is specified (empty string).
+// Returns offset = -1 if no first byte position is specified in the range.
+// Returns size = -1 if no last byte position is specified in the range.
+// Returns [0, -1] if no range is specified (empty string).
+//
+// [Byte Range]: https://tools.ietf.org/html/rfc7233#section-2.1
 func Parse(r string) (offset, size int64, err error) {
 	if r == "" {
 		return 0, -1, nil

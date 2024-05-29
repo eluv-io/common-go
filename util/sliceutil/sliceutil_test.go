@@ -242,7 +242,7 @@ func TestDedupe(t *testing.T) {
 	}
 }
 
-func TestDuplicate(t *testing.T) {
+func TestCopy(t *testing.T) {
 	tests := []struct {
 		target []interface{}
 		want   []interface{}
@@ -274,7 +274,7 @@ func TestDuplicate(t *testing.T) {
 	}
 }
 
-func TestDuplicateWithCap(t *testing.T) {
+func TestCopyWithCap(t *testing.T) {
 	tests := []struct {
 		target       []interface{}
 		capacity     int
@@ -339,22 +339,32 @@ func TestRemove(t *testing.T) {
 			remove: 3,
 			want:   []int{},
 		},
-		{
-			slice:  []int{1, 2, 3, 4, 5},
-			remove: 3,
-			want:   []int{1, 2, 4, 5},
-		},
-		{
+		{ // no match
 			slice:  []int{1, 2, 3, 4, 5},
 			remove: 6,
 			want:   []int{1, 2, 3, 4, 5},
 		},
-		{
+		{ // one match at beginning
+			slice:  []int{1, 2, 3, 4, 5},
+			remove: 1,
+			want:   []int{2, 3, 4, 5},
+		},
+		{ // one match in middle
+			slice:  []int{1, 2, 3, 4, 5},
+			remove: 3,
+			want:   []int{1, 2, 4, 5},
+		},
+		{ // one match at end
+			slice:  []int{1, 2, 3, 4, 5},
+			remove: 5,
+			want:   []int{1, 2, 3, 4},
+		},
+		{ // multiple matches
 			slice:  []int{1, 2, 1, 2, 1, 2, 3},
 			remove: 2,
 			want:   []int{1, 1, 1, 3},
 		},
-		{
+		{ // all match
 			slice:  []int{1, 1, 1, 1, 1},
 			remove: 1,
 			want:   []int{},

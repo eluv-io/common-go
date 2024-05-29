@@ -2,16 +2,20 @@ package link_test
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"testing"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/stretchr/testify/require"
 
 	"github.com/eluv-io/common-go/format/codecs"
 	"github.com/eluv-io/common-go/format/encryption"
 	"github.com/eluv-io/common-go/format/link"
+	"github.com/eluv-io/common-go/util/timeutil"
+	"github.com/eluv-io/log-go"
 )
 
 func TestBlobLinks(t *testing.T) {
@@ -126,4 +130,50 @@ func TestBlobLinkCborMarshaling(t *testing.T) {
 		require.Equal(t, *lnk.Blob, blobDecoded)
 		require.Equal(t, data, blobDecoded.Data)
 	}
+}
+
+func TestUnmarshalLargeBlobLink(t *testing.T) {
+	data := make([]byte, 10000000)
+	_, err := rand.Read(data)
+	require.NoError(t, err)
+
+	genLink := map[string]any{
+		"blob-slice": map[string]any{
+			"/":          "./blob",
+			"data":       data,
+			"encryption": "none",
+		},
+		"blob-string": map[string]any{
+			"/":          "./blob",
+			"data":       base64.StdEncoding.EncodeToString(data),
+			"encryption": "none",
+		},
+	}
+
+	watch := timeutil.StartWatch()
+	log.Info("start")
+	converted, err := link.ConvertLinks(genLink)
+	log.Info("end", "duration", watch.Duration())
+
+	require.NoError(t, err)
+	require.Equal(t, data, converted.(map[string]any)["blob-slice"].(*link.Link).Blob.Data)
+	require.Equal(t, data, converted.(map[string]any)["blob-string"].(*link.Link).Blob.Data)
+}
+
+// TestDecodeSlice demonstrates slow decoding of byte slices with mapstructure
+func xTestDecodeSlice(t *testing.T) {
+	data := make([]byte, 10000000)
+	_, err := rand.Read(data)
+	require.NoError(t, err)
+
+	var target []byte
+
+	watch := timeutil.StartWatch()
+	log.Info("start")
+	//err = codecutil.MapDecode(data, &target)
+	err = mapstructure.Decode(data, &target)
+	log.Info("end", "duration", watch.Duration())
+
+	require.NoError(t, err)
+	require.Equal(t, data, target)
 }

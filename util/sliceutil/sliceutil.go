@@ -14,8 +14,8 @@ func Clone[T any](target []T) []T {
 
 // Copy returns a shallow copy of the given slice. Returns nil if the given slice is nil. Returns an empty slice if
 // the given slice is empty.
-func Copy[T any](target []T) []T {
-	return CopyWithCap(target, 0)
+func Copy[T any](source []T) []T {
+	return CopyWithCap(source, 0)
 }
 
 // CopyWithCap returns a copy of the given slice. Returns nil if the given slice is nil. Returns an empty slice if
@@ -23,18 +23,18 @@ func Copy[T any](target []T) []T {
 //
 // The duplicate slice will be created with the given capacity (or the original capacity if smaller than the slice's
 // length).
-func CopyWithCap[T any](target []T, capacity int) []T {
-	if target == nil {
+func CopyWithCap[T any](source []T, capacity int) []T {
+	if source == nil {
 		return nil
 	}
 
-	c := cap(target)
+	c := cap(source)
 	if capacity > c {
 		c = capacity
 	}
 
-	dup := make([]T, len(target), c)
-	copy(dup, target)
+	dup := make([]T, len(source), c)
+	copy(dup, source)
 	return dup
 }
 
@@ -159,18 +159,24 @@ func RemoveFn[T any](slice []T, element T, equal func(e1, e2 T) bool) ([]T, int)
 	})
 }
 
-// RemoveMatch removes all occurrences of an element from the given slice that match according to the provided match
-// function. Returns the new slice and the number of removed elements.
+// RemoveMatch removes all elements that match according to the provided match function from the given slice. Removal is
+// performed inline, freed up slots at the end of the slice are zeroed out. Returns the updated slice and the number of
+// removed elements.
 func RemoveMatch[T any](slice []T, match func(e T) bool) ([]T, int) {
-	orgLen := len(slice)
-	for i := 0; i < len(slice); {
+	var zero T
+	removed := 0
+	for i := 0; i < len(slice); i++ {
 		if match(slice[i]) {
-			slice = RemoveIndex(slice, i)
+			removed++
+			slice[i] = zero
 		} else {
-			i++
+			if removed > 0 {
+				slice[i-removed] = slice[i]
+				slice[i] = zero
+			}
 		}
 	}
-	return slice, orgLen - len(slice)
+	return slice[:len(slice)-removed], removed
 }
 
 // RemoveIndex removes the element at the given index from the provided slice. Removes nothing if the index is

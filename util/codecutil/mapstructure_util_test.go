@@ -104,6 +104,7 @@ func TestMapDecodeStruct(t *testing.T) {
 func TestMapDecodeStructCBOR(t *testing.T) {
 	hsh, err := hash.FromString("hq__EKjpzYq4vjPxchdoSm8fUSvK2y3PYVgLPdMWP8yqRRvu4rBnv3BY1BS7pdjVjfvvsasaTZA9qq")
 	require.NoError(t, err)
+
 	ts := testStruct{
 		stringutil.RandomString(10),
 		rnd.Int(),
@@ -127,5 +128,7 @@ func TestMapDecodeStructCBOR(t *testing.T) {
 	dst := testStruct{}
 	err = codecutil.MapDecode(src, &dst)
 	require.NoError(t, err)
+	// force token string update for comparison
+	_ = dst.Token.String()
 	require.Equal(t, &ts, &dst)
 }

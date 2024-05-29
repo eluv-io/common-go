@@ -18,17 +18,19 @@ const RELATIVE_LINK_PREFIX = "./"
 type Selector string
 
 var S = struct {
-	None Selector
-	Meta Selector
-	File Selector
-	Rep  Selector
-	Blob Selector
+	None    Selector
+	Meta    Selector
+	File    Selector
+	Rep     Selector
+	Blob    Selector
+	Bitcode Selector
 }{
-	None: "",
-	Meta: "meta",
-	File: "files",
-	Rep:  "rep",
-	Blob: "blob",
+	None:    "",
+	Meta:    "meta",
+	File:    "files",
+	Rep:     "rep",
+	Blob:    "blob",
+	Bitcode: "bc",
 }
 
 // NewLink creates a new Link. offAndLen is an optional variadic argument
@@ -160,7 +162,10 @@ func (l *Link) UnmarshalMap(m map[string]interface{}) error {
 	val.Delete("/")
 
 	if extra := val.Get("."); !extra.IsError() {
-		l.Extra.UnmarshalValueAndRemove(extra)
+		err := l.Extra.UnmarshalValueAndRemove(extra)
+		if err != nil {
+			return err
+		}
 		if len(extra.Map()) == 0 {
 			val.Delete(".")
 		}
@@ -214,6 +219,13 @@ func (l *Link) MarshalCBORV1() map[string]interface{} {
 	extra := l.Extra.MarshalMap()
 	if len(extra) > 0 {
 		m["Extra"] = extra
+	}
+	if l.Blob != nil {
+		blobProps := l.Blob.MarshalMap()
+		for k, v := range l.Props {
+			blobProps[k] = v
+		}
+		l.Props = blobProps
 	}
 	l.cleanupProps()
 	if len(l.Props) > 0 {
@@ -323,7 +335,7 @@ func (l *Link) UnmarshalText(text []byte) error {
 	if len(p) > 0 {
 		l.Selector = Selector(p[0])
 		switch l.Selector {
-		case S.Meta, S.File, S.Rep, S.Blob:
+		case S.Meta, S.File, S.Rep, S.Blob, S.Bitcode:
 			// valid selector - continue
 		default:
 			return errors.E("unmarshal link", errors.K.Invalid, "reason", "unknown selector", "selector", p[0])
@@ -406,7 +418,7 @@ func (l *Link) validateCore() error {
 	}
 
 	switch l.Selector {
-	case S.File, S.Rep, S.Blob:
+	case S.File, S.Rep, S.Blob, S.Bitcode:
 		// no additional verification
 	case S.Meta:
 		if l.Off != 0 || l.Len != -1 {

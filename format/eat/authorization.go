@@ -7,13 +7,14 @@ import (
 	"github.com/eluv-io/errors-go"
 )
 
-// NewAuthorization returns an authorization or an error.
+// NewAuthorization returns an authorization from the given token or an error.
+// The optional conf is a client confirmation token.
 // An error is possibly returned only in the case where the token was not encoded
-func NewAuthorization(tok *Token) (*Authorization, error) {
+func NewAuthorization(tok *Token, conf ...*Token) (*Authorization, error) {
 	if tok == nil {
 		return nil, errors.E("NewAuthorization", errors.K.Invalid, "reason", "token is nil")
 	}
-	data := tok.TokenData
+	data := tok.TokenData.Copy()
 	// when an embedded exists this is a state channel, hence it has precedence
 	if tok.Embedded != nil {
 		data = tok.Embedded.TokenData
@@ -21,6 +22,15 @@ func NewAuthorization(tok *Token) (*Authorization, error) {
 			// only take it if not specified by elv master
 			data.AFGHPublicKey = tok.AFGHPublicKey
 		}
+	}
+
+	var cnf *Token
+	if len(conf) > 0 {
+		cnf = conf[0]
+	}
+	if cnf != nil {
+		// populate data.Cnf from cnf - not required for now
+		// see comment in ClientConfirmation
 	}
 
 	bearer, err := tok.OriginalBearer()
@@ -65,6 +75,7 @@ func (a *Authorization) UserId() types.UserID {
 		}
 
 	case Types.Tx(), Types.Plain(), Types.Node(), Types.ClientSigned():
+		// Types.ClientConfirmation() may have an EthAddr but is not suitable for user id.
 		if a.EthAddr != zeroAddr {
 			uid = ethutil.AddressToID(a.EthAddr, id.User)
 		}

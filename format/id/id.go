@@ -165,7 +165,7 @@ func (id ID) String() string {
 // AssertCode checks whether the ID's code equals the provided code
 func (id ID) AssertCode(c Code) error {
 	if id == nil || id.Code() != c {
-		return errors.E("ID code check", errors.K.Invalid,
+		return errors.NoTrace("ID code check", errors.K.Invalid,
 			"expected", codeToPrefix[c],
 			"actual", id.prefix())
 	}
@@ -223,7 +223,7 @@ func (id ID) Bytes() []byte {
 func (id *ID) UnmarshalText(text []byte) error {
 	parsed, err := FromString(string(text))
 	if err != nil {
-		return errors.E("unmarshal ID", errors.K.Invalid, err)
+		return errors.NoTrace("unmarshal ID", errors.K.Invalid, err)
 	}
 	*id = parsed
 	return nil
@@ -339,7 +339,7 @@ func MustParse(s string) ID {
 
 // Parse parses an ID from the given string representation.
 func Parse(s string) (ID, error) {
-	e := errors.Template("parse ID", errors.K.Invalid, "string", s)
+	e := errors.TemplateNoTrace("parse ID", errors.K.Invalid, "string", s)
 	if len(s) <= prefixLen {
 		if len(s) == 0 {
 			return nil, e("reason", "empty string")
@@ -384,7 +384,7 @@ func FromStringValidate(s string, valCode Code) (ID, error) {
 		return nil, err
 	}
 	if id.Code() != valCode {
-		return nil, errors.E("invalid code", errors.K.Invalid,
+		return nil, errors.NoTrace("invalid code", errors.K.Invalid,
 			"expect", valCode,
 			"actual", id.Code())
 	}

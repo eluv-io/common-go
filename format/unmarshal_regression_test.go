@@ -11,11 +11,13 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/eluv-io/common-go/format"
+	"github.com/eluv-io/common-go/format/codecs"
 	"github.com/eluv-io/common-go/format/encryption"
 	"github.com/eluv-io/common-go/format/hash"
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/keys"
 	"github.com/eluv-io/common-go/format/link"
+	"github.com/eluv-io/common-go/util/jsonutil"
 )
 
 // TestMarshalUnmarshalCurrent marshals and unmarshals the current test data.
@@ -208,6 +210,26 @@ func unmarshalAndValidate(t *testing.T, jsonData []byte, cborData []byte, wantDa
 
 func newInstance(data interface{}) any {
 	return reflect.New(reflect.TypeOf(data).Elem()).Interface()
+}
+
+func TestCborV1(t *testing.T) {
+	tests := []any{
+		link.NewBuilder().Selector(link.S.Meta).P("private", "assets", "file").AddProp("prop1", "val1").MustBuild(),
+		link.NewBlobBuilder().Data([]byte("test-data")).MustBuild(),
+		link.NewBlobBuilder().Data([]byte("test-data")).EncryptionScheme(encryption.ClientGen).KID("mykid").MustBuild(),
+	}
+	codec := codecs.CborV1Codec
+	for _, test := range tests {
+		t.Run(jsonutil.MarshalCompactString(test), func(t *testing.T) {
+			buf := &bytes.Buffer{}
+			err := codec.Encoder(buf).Encode(test)
+			require.NoError(t, err)
+			var res any
+			err = codec.Decoder(buf).Decode(&res)
+			require.NoError(t, err)
+			require.Equal(t, jsonutil.MarshalCompactString(test), jsonutil.MarshalCompactString(res))
+		})
+	}
 }
 
 /*
