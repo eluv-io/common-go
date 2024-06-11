@@ -3,6 +3,7 @@ package codecs
 import (
 	"bytes"
 	"fmt"
+	"runtime"
 	"testing"
 	"time"
 
@@ -82,9 +83,24 @@ func TestCompBasic(t *testing.T) {
 
 func TestCompTime(t *testing.T) {
 	cmpTime := func(t *testing.T, val time.Time, v1, v2 any) {
-		assert.Equal(t, val.UTC(), v1)                                           // v1 codec decodes to UTC
-		assert.Equal(t, val.Truncate(0), v2.(time.Time).Round(time.Microsecond)) // v2 codec decodes to local and does not strip nanos
-		assert.Equal(t, v1, v2.(time.Time).UTC().Round(time.Microsecond))
+		fmt.Println("val", val.Truncate(0), val.Nanosecond())
+		fmt.Println("v1 ", v1, v1.(time.Time).Nanosecond())
+		fmt.Println("v2 ", v2, v2.(time.Time).Nanosecond())
+		if runtime.GOOS == "linux" {
+			// time.Now() provides nanosecond precision on linux
+			// v1 codec decodes to UTC
+			assert.Equal(t, val.Round(time.Microsecond).UTC(), v1)
+			// v2 codec decodes to local and does not strip nanos - but nanos seem to be a rounding error rather than the real thing...
+			assert.Equal(t, val.Local().Round(time.Microsecond), v2.(time.Time).Round(time.Microsecond))
+			assert.Equal(t, v1, v2.(time.Time).UTC().Round(time.Microsecond))
+		} else if runtime.GOOS == "darwin" {
+			// time.Now() provides only microsecond precision on darwin
+			assert.Equal(t, val.UTC(), v1)                                                   // v1 codec decodes to UTC
+			assert.Equal(t, val.Truncate(0).Local(), v2.(time.Time).Round(time.Microsecond)) // v2 codec decodes to local and does not strip nanos
+			assert.Equal(t, v1, v2.(time.Time).UTC().Round(time.Microsecond))
+		} else {
+			assert.Fail(t, "unsupported platform")
+		}
 	}
 	mustParse := func(s string) time.Time {
 		ts, err := time.Parse("2006-01-02 15:04:05.999999999 -0700 MST", s)
@@ -92,7 +108,10 @@ func TestCompTime(t *testing.T) {
 		return ts
 	}
 
-	tc(time.Now()).withCmp(cmpTime).disableBinaryCheck().run(t)
+	for i := 0; i < 10; i++ {
+		tc(time.Now()).withCmp(cmpTime).disableBinaryCheck().run(t)
+		time.Sleep(100 * time.Millisecond)
+	}
 
 	// this produces slightly different cbor encodings:
 	// v1: c1fb41d98e84687b8f08 -> 1(1715081633.930605)
