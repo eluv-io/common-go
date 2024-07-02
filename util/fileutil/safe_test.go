@@ -5,14 +5,19 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/eluv-io/errors-go"
 )
 
 func TestSafeReader(t *testing.T) {
-	testDir, err := os.MkdirTemp("", "TestSafeReaderWriter")
+	testDir, err := os.MkdirTemp("", "TestSafeReader")
 	require.NoError(t, err)
+	defer func() { _ = os.RemoveAll(testDir) }()
 
 	type testCase struct {
 		name       string
@@ -63,6 +68,7 @@ func TestSafeReader(t *testing.T) {
 func TestSafeWriter(t *testing.T) {
 	testDir, err := os.MkdirTemp("", "TestSafeReaderWriter")
 	require.NoError(t, err)
+	defer func() { _ = os.RemoveAll(testDir) }()
 
 	target := filepath.Join(testDir, "f.txt")
 	ftmp := target + tempExt
@@ -91,6 +97,7 @@ func TestSafeWriter(t *testing.T) {
 func TestSafeWriterError(t *testing.T) {
 	testDir, err := os.MkdirTemp("", "TestSafeReaderWriter")
 	require.NoError(t, err)
+	defer func() { _ = os.RemoveAll(testDir) }()
 
 	target := filepath.Join(testDir, "f.txt")
 	ftmp := target + tempExt
@@ -111,4 +118,118 @@ func TestSafeWriterError(t *testing.T) {
 
 	_, err = os.Stat(ftmp)
 	require.Error(t, err)
+}
+
+func TestSlowSafeReaderWriter(t *testing.T) {
+	testDir, err := os.MkdirTemp("", "TestSlowSafeReaderWriter")
+	require.NoError(t, err)
+	defer func() { _ = os.RemoveAll(testDir) }()
+
+	target := filepath.Join(testDir, "f.txt")
+	writer, finalize, err := NewSafeWriter(target)
+	require.NoError(t, err)
+	_, err = writer.Write([]byte("test data"))
+	require.NoError(t, err)
+	err = finalize(nil)
+	require.NoError(t, err)
+
+	// take the lock on target and do a 'slow read'
+	reader, err := NewSafeReader(target)
+	require.NoError(t, err)
+	go func(rd io.ReadCloser) {
+		time.Sleep(time.Millisecond * 500)
+		_ = rd.Close()
+	}(reader)
+
+	// attempt to write during the slow read (log should report a warning)
+	writer, finalize, err = NewSafeWriter(target)
+	require.NoError(t, err)
+	_, err = writer.Write([]byte("test data2"))
+	require.NoError(t, err)
+	err = finalize(nil)
+	require.NoError(t, err)
+
+	reader, err = NewSafeReader(target)
+	require.NoError(t, err)
+	defer errors.Ignore(reader.Close)
+	bb, err := io.ReadAll(reader)
+	require.NoError(t, err)
+	require.Equal(t, "test data2", string(bb))
+}
+
+// TestConcurrentSafeReaderWriter shows that reading concurrently with a write
+// might lead to fail writing whenever not using lock.
+func TestConcurrentSafeReaderWriter(t *testing.T) {
+	testDir, err := os.MkdirTemp("", "TestConcurrentSafeReaderWriter")
+	require.NoError(t, err)
+	defer func() { _ = os.RemoveAll(testDir) }()
+
+	target := filepath.Join(testDir, "f.txt")
+
+	readFile := func(lock bool) (string, error) {
+		reader, err := newSafeReader(target, lock)
+		if err != nil {
+			return "", err
+		}
+		bb, err := io.ReadAll(reader)
+		_ = reader.Close()
+		if err != nil {
+			return "", err
+		}
+		return string(bb), nil
+	}
+
+	type testCase struct {
+		lock     bool
+		wantFail bool
+	}
+
+	for _, tc := range []*testCase{
+		{lock: true},
+		{lock: false, wantFail: true},
+	} {
+		//fmt.Println("case", tc.lock)
+		tcase := fmt.Sprintf("lock: %v", tc.lock)
+		err := PurgeSafeFile(target)
+		require.NoError(t, err, tcase)
+
+		writer, finalize, err := newSafeWriter(target, tc.lock)
+		require.NoError(t, err, tcase)
+
+		// reading concurrently without lock deletes the '.temp' file
+		val := ""
+		var rerr error
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go func(lock bool) {
+			defer wg.Done()
+			val, rerr = readFile(lock)
+		}(tc.lock)
+
+		time.Sleep(time.Millisecond * 100)
+		_, err = writer.Write([]byte("test data"))
+		require.NoError(t, err, tcase)
+		time.Sleep(time.Millisecond * 100)
+		err = finalize(nil)
+		wg.Wait()
+
+		//fmt.Println("val", val)
+		require.NoError(t, rerr, tcase)
+		if tc.wantFail {
+			require.Error(t, err, tcase)
+			require.Equal(t, "", val, tcase)
+		} else {
+			require.NoError(t, err, tcase)
+			require.Equal(t, "test data", val, tcase)
+		}
+
+		ret, err := readFile(tc.lock)
+		if tc.wantFail {
+			require.Error(t, err, tcase)
+		} else {
+			require.NoError(t, err, tcase)
+			require.Equal(t, "test data", ret, tcase)
+		}
+	}
+
 }
