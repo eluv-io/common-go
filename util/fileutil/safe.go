@@ -16,25 +16,29 @@ const (
 )
 
 var (
-	log            = elog.Get("/eluvio/fileutil")
-	logIfWait4Lock = time.Millisecond * 100
-	safeFiles      = syncutil.NamedLocks{}
+	log       = elog.Get("/eluvio/fileutil")
+	safeFiles = syncutil.NamedLocks{}
 )
 
 // lockSafeFile takes a lock in 'safeFiles' for the given path and returns the
 // unlocker that must be called after using the locked file.
 // This uses real sync.Mutex. Alternatively we could use:
-// - advisory file locking as done by go internals in package src/cmd/go/internal/lockedfile.
-// - or: https://github.com/rboyer/safeio
+//   - advisory file locking as done in go internals in package src/cmd/go/internal/lockedfile
+//     and made public in package lockedfile of github.com/rogpeppe/go-internal
+//   - or: https://github.com/rboyer/safeio
+//
+// Also note that github.com/rogpeppe/go-internal has a package 'robustio' where
+// 'darwin' is deemed flaky and Rename, RemoveAll and ReadFile are retried up to
+// an `arbitraryTimeout` of 2s.
 func lockSafeFile(op, path string) syncutil.Unlocker {
 	watch := timeutil.StartWatch()
-	unlock := safeFiles.Lock(path)
+	unlock, refCount := safeFiles.LockCount(path)
 
-	d := watch.Duration()
-	if d > logIfWait4Lock {
+	if refCount >= 1 {
 		log.Warn(op+" - waited for file lock",
 			"path", path,
-			"duration", d)
+			"ref_count", refCount,
+			"duration", watch.Duration())
 	}
 	return unlock
 }
@@ -44,7 +48,11 @@ func PurgeSafeFile(path string) error {
 	defer unlocker.Unlock()
 
 	_ = os.Remove(path + tempExt)
-	return os.RemoveAll(path)
+	err := os.Remove(path)
+	if os.IsNotExist(err) {
+		err = nil
+	}
+	return err
 }
 
 // NewSafeWriter returns a writer that writes to a temporary file and attempts to replace the target file upon
