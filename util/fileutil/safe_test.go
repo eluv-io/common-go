@@ -164,6 +164,7 @@ func TestConcurrentSafeReaderWriter(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = os.RemoveAll(testDir) }()
 
+	fmt.Println("test_dir", testDir)
 	target := filepath.Join(testDir, "f.txt")
 
 	readFile := func(lock bool) (string, error) {
@@ -213,8 +214,8 @@ func TestConcurrentSafeReaderWriter(t *testing.T) {
 		err = finalize(nil)
 		wg.Wait()
 
-		//fmt.Println("val", val)
 		require.NoError(t, rerr, tcase)
+
 		if tc.wantFail {
 			require.Error(t, err, tcase)
 			require.Equal(t, "", val, tcase)
@@ -223,13 +224,18 @@ func TestConcurrentSafeReaderWriter(t *testing.T) {
 			require.Equal(t, "test data", val, tcase)
 		}
 
+		// finalization of the safe writer was previously doing
+		// 			_ = os.Remove(path)
+		//			err = os.Rename(tmp, path)
+		// while now just
+		//			err = os.Rename(tmp, path)
+		// therefore, we were previously getting an error 'no such file' when reading here
+		// while now we have no error (even though the writer failed) because renaming was
+		// done by the earlier read!
 		ret, err := readFile(tc.lock)
-		if tc.wantFail {
-			require.Error(t, err, tcase)
-		} else {
-			require.NoError(t, err, tcase)
-			require.Equal(t, "test data", ret, tcase)
-		}
+		require.NoError(t, err, tcase)
+		require.Equal(t, "test data", ret, tcase)
+
 	}
 
 }

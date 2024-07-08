@@ -30,13 +30,15 @@ type NamedLocks struct {
 // Lock gets or creates the lock for the given name, calls its Lock() method and
 // returns its Unlocker (i.e. the "unlocking half" of the sync.Locker
 // interface). This ensures that the returned lock is not stored and re-used.
-// Instead simply call NamedLocks.Lock() again.
+// Instead, simply call NamedLocks.Lock() again.
 func (n *NamedLocks) Lock(name interface{}) Unlocker {
 	l, _ := n.LockCount(name)
 	return l
 }
 
 // LockCount acts like Lock and returns an Unlocker and the current ref count of the lock.
+// The returned ref count value is the observed value when calling the function,
+// i.e. before obtaining the lock.
 func (n *NamedLocks) LockCount(name interface{}) (Unlocker, int) {
 	l, refCount := n.get(name)
 	l.mutex.Lock()

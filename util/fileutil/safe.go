@@ -1,6 +1,7 @@
 package fileutil
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -26,6 +27,7 @@ var (
 //   - advisory file locking as done in go internals in package src/cmd/go/internal/lockedfile
 //     and made public in package lockedfile of github.com/rogpeppe/go-internal
 //   - or: https://github.com/rboyer/safeio
+//   - or: https://github.com/google/renameio, more specifically see https://github.com/google/renameio/blob/c1c62ad1756cd19ffb560d66a3633d71d6104f82/tempfile.go#L150-L162
 //
 // Also note that github.com/rogpeppe/go-internal has a package 'robustio' where
 // 'darwin' is deemed flaky and Rename, RemoveAll and ReadFile are retried up to
@@ -47,12 +49,30 @@ func PurgeSafeFile(path string) error {
 	unlocker := lockSafeFile("PurgeSafeFile", path)
 	defer unlocker.Unlock()
 
-	_ = os.Remove(path + tempExt)
-	err := os.Remove(path)
-	if os.IsNotExist(err) {
-		err = nil
+	count := 0
+	for {
+		count++
+		_ = os.Remove(path + tempExt)
+		err := os.Remove(path)
+		if os.IsNotExist(err) {
+			err = nil
+		}
+		if err != nil {
+			return err
+		}
+		if _, err = os.Stat(path); err == nil {
+			if count > 3 {
+				return errors.E("PurgeSafeFile", errors.K.IO,
+					"reason", fmt.Sprintf("file not deleted after %d attempts", count),
+					"path", path)
+			}
+			time.Sleep(time.Millisecond * 10 * time.Duration(count*2))
+			continue
+		}
+		break
 	}
-	return err
+
+	return nil
 }
 
 // NewSafeWriter returns a writer that writes to a temporary file and attempts to replace the target file upon
@@ -64,11 +84,14 @@ func PurgeSafeFile(path string) error {
 //     while closing or renaming the temp file
 //   - if the provided error is not nil, it tries to close and remove the temp file and returns the provided in error
 func NewSafeWriter(path string) (w io.Writer, finalize func(error) error, err error) {
-	return newSafeWriter(path)
+	return newSafeWriter(path, true)
 }
-func newSafeWriter(path string, lock ...bool) (w io.Writer, finalize func(error) error, err error) {
+
+// newSafeWriter is like NewSafeWriter with an additional 'lock' parameter meant
+// to be used exclusively from test. When lock is false, no locking is performed.
+func newSafeWriter(path string, lock bool) (w io.Writer, finalize func(error) error, err error) {
 	var unlocker syncutil.Unlocker
-	if len(lock) > 0 && !lock[0] {
+	if !lock {
 		unlocker = &noopUnlocker{}
 	} else {
 		unlocker = lockSafeFile("NewSafeWriter", path)
@@ -94,9 +117,8 @@ func newSafeWriter(path string, lock ...bool) (w io.Writer, finalize func(error)
 		count := 0
 		for {
 			count++
-			_ = os.Remove(path)
-			err = os.Rename(tmp, path)
 
+			err = os.Rename(tmp, path)
 			if err == nil || count > 3 {
 				return err
 			}
@@ -107,7 +129,7 @@ func newSafeWriter(path string, lock ...bool) (w io.Writer, finalize func(error)
 				log.Warn("safe writer - rename failed (no such file)",
 					"temp_file", tmp,
 					"count", count)
-				time.Sleep(time.Millisecond * 2 * time.Duration(count))
+				time.Sleep(time.Millisecond * 10 * time.Duration(count*2))
 				continue
 			}
 
@@ -124,11 +146,14 @@ func newSafeWriter(path string, lock ...bool) (w io.Writer, finalize func(error)
 //   - If both the temporary file and the target exists, then the temp file is removed and the target file used.
 //   - Otherwise the target file is attempted to be opened
 func NewSafeReader(path string) (io.ReadCloser, error) {
-	return newSafeReader(path)
+	return newSafeReader(path, true)
 }
-func newSafeReader(path string, lock ...bool) (io.ReadCloser, error) {
+
+// newSafeReader is like NewSafeReader with a lock parameter allowing tests to
+// not use the global locks.
+func newSafeReader(path string, lock bool) (io.ReadCloser, error) {
 	var unlocker syncutil.Unlocker
-	if len(lock) > 0 && !lock[0] {
+	if !lock {
 		unlocker = &noopUnlocker{}
 	} else {
 		unlocker = lockSafeFile("NewSafeReader", path)
@@ -136,12 +161,12 @@ func newSafeReader(path string, lock ...bool) (io.ReadCloser, error) {
 
 	tmp := path + tempExt
 	if _, err := os.Stat(tmp); err == nil {
-		fexists := false
+		fileExists := false
 		if _, err := os.Stat(path); err == nil {
-			fexists = true
+			fileExists = true
 		}
 
-		switch fexists {
+		switch fileExists {
 		case true:
 			// both files exist: assume we crashed writing temp or just afterward
 			// note: the assumption could be wrong without lock as we could be writing
@@ -149,7 +174,6 @@ func newSafeReader(path string, lock ...bool) (io.ReadCloser, error) {
 		case false:
 			// temp was written correctly but not renamed to f.path
 			// note: the assumption could be wrong without lock as we could be writing
-			_ = os.Remove(path)
 			err = os.Rename(tmp, path)
 			if err != nil {
 				return nil, err
