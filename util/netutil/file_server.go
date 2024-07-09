@@ -9,7 +9,7 @@ import (
 	"github.com/eluv-io/log-go"
 )
 
-// NewFileServer creates a lightweight file server. This is only suitable for tests, as
+// NewFileServer creates a lightweight file server.
 func NewFileServer(fsRoot string, port int) *FileServer {
 	h := http.FileServer(http.Dir(fsRoot))
 	s := &http.Server{
@@ -37,12 +37,13 @@ func (fs *FileServer) SetLog(l *log.Log) {
 	fs.log = l
 }
 
-func (fs *FileServer) Start() error {
-	go func() { log.Info("http server shutdown", fs.s.ListenAndServe()) }()
-	return nil
+func (fs *FileServer) Start() {
+	fs.log.Info("starting file server", "root", fs.root, "port", fs.port)
+	go func() { fs.log.Info("http server shutdown", fs.s.ListenAndServe()) }()
 }
 
 func (fs *FileServer) Stop() error {
+	fs.log.Info("shutting down file server", "root", fs.root, "port", fs.port)
 	c, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 	return fs.s.Shutdown(c)
