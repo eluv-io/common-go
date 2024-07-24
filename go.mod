@@ -69,5 +69,5 @@ require (
 
 replace (
 	github.com/fxamacker/cbor/v2 => github.com/eluv-io/cbor/v2 v2.3.1-0.20230627215207-bd2cc685afdd
-	github.com/modern-go/gls => github.com/eluv-io/gls v0.0.0-20240109172027-f54afc64be57
+	github.com/modern-go/gls => github.com/eluv-io/gls v1.0.0-elv1
 )

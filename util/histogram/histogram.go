@@ -282,6 +282,9 @@ func (h *DurationHistogram) Average() time.Duration {
 	defer h.mu.Unlock()
 	_, totCount := h.loadCounts()
 	_, totDur := h.loadDSums()
+	if totCount == 0 {
+		return 0
+	}
 	trueAvg := float64(totDur) / float64(totCount)
 	return time.Duration(trueAvg)
 }
@@ -302,6 +305,10 @@ func (h *DurationHistogram) Quantile(q float64) time.Duration {
 	data, tot := h.loadCounts()
 
 	count := q * float64(tot)
+
+	if count == 0 {
+		return 0
+	}
 	for i := range h.bins {
 		if h.bins[i].Label == OutlierLabel {
 			continue
@@ -317,7 +324,7 @@ func (h *DurationHistogram) Quantile(q float64) time.Duration {
 			if h.bins[i].Max != 0 {
 				binSpan = h.bins[i].Max - binStart
 			} else {
-				binAvg := float64(h.bins[i].DSum) / float64(h.bins[i].Count)
+				binAvg := float64(h.bins[i].DSum) / fData
 				binSpan = (time.Duration(binAvg) - binStart) * 2
 			}
 			return binStart + time.Duration(int64(binProportion*float64(binSpan)))
@@ -353,6 +360,11 @@ func (h *DurationHistogram) StandardDeviation() time.Duration {
 
 	counts, totCount := h.loadCounts()
 	durs, totDur := h.loadDSums()
+
+	if totCount == 0 {
+		return 0
+	}
+
 	trueAvg := float64(totDur) / float64(totCount)
 	binAvgs := []float64{}
 	for i := range h.bins {
