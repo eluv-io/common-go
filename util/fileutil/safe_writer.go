@@ -3,7 +3,11 @@ package fileutil
 import (
 	"fmt"
 	"io"
+	"io/fs"
+	"math/rand"
 	"os"
+	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/eluv-io/errors-go"
@@ -27,6 +31,11 @@ const (
 	// tempExt is the extension added to the file name to create a temporary file
 	tempExt = ".temp"
 )
+
+// nextRandom is a function generating a random number.
+func nextRandom() string {
+	return strconv.FormatInt(rand.Int63(), 10)
+}
 
 // SafeWriter implements 'safe' writes by writing to a temporary file and renaming
 // the temporary file when closing.
@@ -68,11 +77,15 @@ func WriteSafeFile(filename string, data []byte, perm os.FileMode, opts ...Optio
 type PendingFile struct {
 	*os.File
 
-	path             string
-	done             bool
-	closed           bool
-	noReplaceOnClose bool
-	syncBeforeRename bool
+	// Note: the temporary file should be removed when an error occurs, but a
+	// remove must not be attempted if the rename succeeded, as a new file might
+	// have been created with the same name.
+
+	path             string // target path where the final file is expected
+	done             bool   // done is set to true when the temporary file was removed either as a result of a successful rename or cleanup
+	closed           bool   // closed is set to true when the temporary file was closed
+	noRenameOnClose  bool   // option to not rename when closing
+	syncBeforeRename bool   // option to 'sync' before renaming (default is true)
 }
 
 func NewSafeWriter(path string, opts ...Option) (SafeWriter, error) {
@@ -92,7 +105,7 @@ func NewPendingFile(path string, opts ...Option) (*PendingFile, error) {
 		o.apply(&cfg)
 	}
 
-	f, err := openTempFile(cfg.path+tempExt, cfg.createPerm)
+	f, err := openTempFile(cfg.path, tempExt, cfg.createPerm)
 	if err != nil {
 		return nil, err
 	}
@@ -100,21 +113,38 @@ func NewPendingFile(path string, opts ...Option) (*PendingFile, error) {
 	return &PendingFile{
 		File:             f,
 		path:             cfg.path,
-		noReplaceOnClose: cfg.noRenameOnClose,
+		noRenameOnClose:  cfg.noRenameOnClose,
 		syncBeforeRename: cfg.syncBeforeRename,
 	}, nil
 }
 
-func openTempFile(name string, perm os.FileMode) (*os.File, error) {
-	f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
-	return f, err
+func openTempFile(name, ext string, perm os.FileMode) (*os.File, error) {
+	try := 0
+	for {
+		// note: PurgeSafeFile must be changed if the way fileName is constructed changes
+		fileName := name + "." + nextRandom() + ext
+		f, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, perm)
+		if os.IsExist(err) {
+			if try++; try < 10000 {
+				continue
+			}
+			return nil, &os.PathError{Op: "openTempFile", Path: fileName, Err: os.ErrExist}
+		}
+		return f, err
+	}
 }
 
-// cleanup is a no-op if CloseAtomicallyReplace succeeded, and otherwise closes
-// and removes the temporary file.
+// Path returns the target file.
+func (t *PendingFile) Path() string {
+	return t.path
+}
+
+// Cleanup is a no-op if CloseAtomicallyReplace succeeded, and otherwise closes
+// and removes the temporary file. Calling this function should be not necessary
+// in normal use, only in case option WithNoRenameOnClose was used.
 //
 // This method is not safe for concurrent use by multiple goroutines.
-func (t *PendingFile) cleanup() error {
+func (t *PendingFile) Cleanup() error {
 	if t.done {
 		return nil
 	}
@@ -122,6 +152,7 @@ func (t *PendingFile) cleanup() error {
 	// reporting, there is nothing the caller can recover here.
 	var closeErr error
 	if !t.closed {
+		t.closed = true
 		closeErr = t.File.Close()
 	}
 	if err := os.Remove(t.Name()); err != nil {
@@ -164,20 +195,21 @@ func (t *PendingFile) closeAtomicallyReplace() error {
 }
 
 // Close closes the file.
-// When configured with WithNoReplaceOnClose, it just calls Close() on the
+// When configured with WithNoRenameOnClose, it just calls Close() on the
 // underlying file, otherwise, it calls closeAtomicallyReplace().
 func (t *PendingFile) Close() error {
-	if t.noReplaceOnClose {
+	if t.noRenameOnClose {
+		t.closed = true
 		return t.File.Close()
 	}
 	return t.closeAtomicallyReplace()
 }
 
-// CloseWithError closes the file if writeErr is nil otherwise it calls cleanup
+// CloseWithError closes the file if writeErr is nil otherwise it calls Cleanup
 // and returns the original error.
 func (t *PendingFile) CloseWithError(writeErr error) error {
 	if writeErr != nil {
-		_ = t.cleanup()
+		_ = t.Cleanup()
 		return writeErr
 	}
 	return t.Close()
@@ -217,19 +249,30 @@ func WithSyncBeforeRename(sync bool) Option {
 	})
 }
 
-// WithNoReplaceOnClose causes PendingFile.Close() to actually not call CloseAtomicallyReplace()
-// and just call Close.
-func WithNoReplaceOnClose() Option {
+// WithNoRenameOnClose causes PendingFile.Close() to actually not call CloseAtomicallyReplace()
+// and just call Close on its temporary file.
+// Use of this option is discouraged since when using it, the caller has to
+// handle renaming the temporary file to the actual target path and/or calling
+// Cleanup - as well as manage potential garbage left behind (see PurgeSafeFile).
+func WithNoRenameOnClose() Option {
 	return optionFunc(func(c *config) {
 		c.noRenameOnClose = true
 	})
 }
 
+// PurgeSafeFile removes the file at the given path as well as all temporary files
+// that could have been created when opening a PendingFile for the given path.
+// Calling this function should not be necessary in a normal use of SafeWriter.
 func PurgeSafeFile(path string) error {
 	count := 0
+	dir := filepath.Dir(path)
+	if tempFiles, err := fs.Glob(os.DirFS(dir), filepath.Base(path)+".*"+tempExt); err == nil {
+		for _, tmp := range tempFiles {
+			_ = os.Remove(filepath.Join(dir, tmp))
+		}
+	}
 	for {
 		count++
-		_ = os.Remove(path + tempExt)
 		err := os.Remove(path)
 		if os.IsNotExist(err) {
 			err = nil
