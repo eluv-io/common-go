@@ -9,6 +9,7 @@ import (
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/common-go/util/stringutil"
 	"github.com/eluv-io/common-go/util/traceutil"
+	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/log-go"
 )
 
@@ -152,7 +153,14 @@ func (c *RefCache) GetOrCreate(key string, constructor Constructor) (interface{}
 
 	// the wrapper entry now exists, but not the resource... create it
 	// we still have the lock on the entry
-	ent.resource, err = constructor()
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				err = errors.E("RefCache entry constructor", errors.K.Internal, "panic", r)
+			}
+		}()
+		ent.resource, err = constructor()
+	}()
 
 	if err != nil {
 		// mark the entry as failed

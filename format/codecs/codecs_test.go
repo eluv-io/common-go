@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
-	mc "github.com/multiformats/go-multicodec"
+	"github.com/stretchr/testify/require"
 )
 
 func TestGobCodec(t *testing.T) {
@@ -16,25 +14,40 @@ func TestGobCodec(t *testing.T) {
 
 func TestCborCodec(t *testing.T) {
 	runCodecTest(t, NewCborCodec())
-
-	c := NewCborCodec()
-	buf, data := encode(c)
-	decodeInterface(c, buf, data, t)
+	runCodecTestInterface(t, NewCborCodec())
 }
 
-func runCodecTest(t *testing.T, c mc.Multicodec) {
-	buf, data := encode(c)
+// TestCborV1Codec encodes data with CborV1MultiCodec and decodes it with CborMuxCodec.
+func TestCborV1Codec(t *testing.T) {
+	{
+		buf, data := encode(t, CborV1MultiCodec)
+		decode(CborMuxCodec, buf, data, t)
+	}
+	{
+		buf, data := encode(t, CborV1MultiCodec)
+		decodeInterface(CborMuxCodec, buf, data, t)
+	}
+}
+
+func runCodecTest(t *testing.T, c MultiCodec) {
+	buf, data := encode(t, c)
 	decode(c, buf, data, t)
 }
 
-func encode(c mc.Multicodec) (bytes.Buffer, []string) {
+func runCodecTestInterface(t *testing.T, c MultiCodec) {
+	buf, data := encode(t, c)
+	decodeInterface(c, buf, data, t)
+}
+
+func encode(t *testing.T, c MultiCodec) (bytes.Buffer, []string) {
 	var buf bytes.Buffer
 	var data []string
 	e := c.Encoder(&buf)
 	for i := 0; i < 20; i++ {
 		s := fmt.Sprintf("String %02d %b", i, i)
 		data = append(data, s)
-		e.Encode(s)
+		err := e.Encode(s)
+		require.NoError(t, err)
 	}
 	encoded := buf.Bytes()
 	fmt.Printf("Encoded size %d\n", len(encoded))
@@ -42,26 +55,26 @@ func encode(c mc.Multicodec) (bytes.Buffer, []string) {
 	return buf, data
 }
 
-func decode(c mc.Multicodec, buf bytes.Buffer, data []string, t *testing.T) {
+func decode(c MultiCodec, buf bytes.Buffer, data []string, t *testing.T) {
 	d := c.Decoder(&buf)
 	var val string
 	for _, s := range data {
 		err := d.Decode(&val)
-		assert.NoError(t, err)
-		assert.Equal(t, s, val)
+		require.NoError(t, err)
+		require.Equal(t, s, val)
 	}
 	err := d.Decode(&val)
-	assert.NotNil(t, err)
+	require.NotNil(t, err)
 }
 
-func decodeInterface(c mc.Multicodec, buf bytes.Buffer, data []string, t *testing.T) {
+func decodeInterface(c MultiCodec, buf bytes.Buffer, data []string, t *testing.T) {
 	d := c.Decoder(&buf)
 	var val interface{}
 	for _, s := range data {
 		err := d.Decode(&val)
-		assert.NoError(t, err)
-		assert.Equal(t, s, val)
+		require.NoError(t, err)
+		require.Equal(t, s, val)
 	}
 	err := d.Decode(&val)
-	assert.NotNil(t, err)
+	require.NotNil(t, err)
 }

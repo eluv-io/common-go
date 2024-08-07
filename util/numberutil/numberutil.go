@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"time"
 
+	"golang.org/x/exp/constraints"
+
 	"github.com/eluv-io/errors-go"
 
 	"github.com/eluv-io/common-go/format/duration"
@@ -224,10 +226,27 @@ func MaxInt(a, b int) int {
 	return b
 }
 
+// Min returns the smaller value of a and b. Returns a if both are equal or NaN if a or b is a float NaN.
+func Min[T constraints.Ordered](a, b T) T {
+	if b != b || b < a { //b != b is true if b is a NaN
+		return b
+	}
+	return a
+}
+
+// Max returns the greater value of a and b. Returns a if both are equal or NaN if a or b is a float NaN.
+func Max[T constraints.Ordered](a, b T) T {
+	if b != b || b > a { //b != b is true if b is a NaN
+		return b
+	}
+	return a
+}
+
 // LessInt compares two integer values and returns
-//	* true  if i1 < i2
-//	* false if i1 > i2
-// 	* true or the result of the tie function if i1 == i2
+//   - true  if i1 < i2
+//   - false if i1 > i2
+//   - true or the result of the tie function if i1 == i2
+//
 // If ascending is false, the sense of the comparison is inverted, effectively
 // returning the result for "more".
 func LessInt(ascending bool, i1 int, i2 int, tie ...func() bool) (less bool) {

@@ -11,7 +11,7 @@ import (
 	"github.com/eluv-io/common-go/format/link"
 )
 
-// HashStringConverter marshals/unmarshals a hash.Hash object to/from a string.
+// HashConverter marshals/unmarshals a hash.Hash object to/from a string.
 type HashConverter struct{}
 
 func (x *HashConverter) ConvertExt(v interface{}) interface{} {
@@ -65,14 +65,14 @@ type LinkConverter struct{}
 
 func (x *LinkConverter) ConvertExt(v interface{}) interface{} {
 	l := v.(*link.Link)
-	return l.MarshalCBOR()
+	return l.MarshalCBORV1()
 }
 
 func (x *LinkConverter) UpdateExt(dest interface{}, v interface{}) {
 	dst := dest.(*link.Link)
 	switch t := dereference(v).Interface().(type) {
 	case map[string]interface{}:
-		dst.UnmarshalCBOR(t)
+		dst.UnmarshalCBORV1(t)
 	default:
 		panic(errors.E("LinkConverter.UpdateExt", errors.K.Invalid,
 			"expected_types", []string{"map[string]interface{}"},
