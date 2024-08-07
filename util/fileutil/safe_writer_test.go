@@ -102,36 +102,6 @@ func TestSafeWriterError(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestPurgeSafeFile(t *testing.T) {
-	testDir, err := os.MkdirTemp("", "TestPurgeSafeFile")
-	require.NoError(t, err)
-	defer func() { _ = os.RemoveAll(testDir) }()
-
-	target := filepath.Join(testDir, "target")
-	for _, fileName := range []string{
-		"target",
-		"target.0" + tempExt,
-		"target.1234567890" + tempExt,
-		"target" + tempExt,
-		"other",
-		"other.123" + tempExt,
-	} {
-		err = os.WriteFile(filepath.Join(testDir, fileName), []byte("this is a sample"), os.ModePerm)
-		require.NoError(t, err)
-	}
-
-	err = PurgeSafeFile(target)
-	require.NoError(t, err)
-
-	files, err := fs.Glob(os.DirFS(testDir), "*")
-	require.NoError(t, err)
-
-	require.Equal(t, 3, len(files))
-	require.Equal(t, "other", files[0])
-	require.Equal(t, "other.123"+tempExt, files[1])
-	require.Equal(t, "target"+tempExt, files[2])
-}
-
 func TestSafeWriterWithConcurrentRead(t *testing.T) {
 	testDir, err := os.MkdirTemp("", "TestSafeWriterConcurrent")
 	require.NoError(t, err)

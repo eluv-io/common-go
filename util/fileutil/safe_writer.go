@@ -1,16 +1,10 @@
 package fileutil
 
 import (
-	"fmt"
 	"io"
-	"io/fs"
 	"math/rand"
 	"os"
-	"path/filepath"
 	"strconv"
-	"time"
-
-	"github.com/eluv-io/errors-go"
 )
 
 // NOTES: the implementation of SafeFile comes from https://github.com/google/renameio
@@ -148,7 +142,7 @@ func (t *PendingFile) Cleanup() error {
 	if t.done {
 		return nil
 	}
-	// An error occurred. Close and remove the tempfile. Errors are returned for
+	// An error occurred. Close and remove the temp file. Errors are returned for
 	// reporting, there is nothing the caller can recover here.
 	var closeErr error
 	if !t.closed {
@@ -156,6 +150,7 @@ func (t *PendingFile) Cleanup() error {
 		closeErr = t.File.Close()
 	}
 	if err := os.Remove(t.Name()); err != nil {
+		// err is 'not exist' if the file was deleted
 		return err
 	}
 	t.done = true
@@ -187,10 +182,13 @@ func (t *PendingFile) closeAtomicallyReplace() error {
 	if err := t.File.Close(); err != nil {
 		return err
 	}
+
+	t.done = true
 	if err := os.Rename(t.Name(), t.path); err != nil {
+		// we failed, there's nothing we can do anymore with the temp file: just remove it
+		_ = os.Remove(t.Name())
 		return err
 	}
-	t.done = true
 	return nil
 }
 
@@ -258,39 +256,4 @@ func WithNoRenameOnClose() Option {
 	return optionFunc(func(c *config) {
 		c.noRenameOnClose = true
 	})
-}
-
-// PurgeSafeFile removes the file at the given path as well as all temporary files
-// that could have been created when opening a PendingFile for the given path.
-// Calling this function should not be necessary in a normal use of SafeWriter.
-func PurgeSafeFile(path string) error {
-	count := 0
-	dir := filepath.Dir(path)
-	if tempFiles, err := fs.Glob(os.DirFS(dir), filepath.Base(path)+".*"+tempExt); err == nil {
-		for _, tmp := range tempFiles {
-			_ = os.Remove(filepath.Join(dir, tmp))
-		}
-	}
-	for {
-		count++
-		err := os.Remove(path)
-		if os.IsNotExist(err) {
-			err = nil
-		}
-		if err != nil {
-			return err
-		}
-		if _, err = os.Stat(path); err == nil {
-			if count > 3 {
-				return errors.E("PurgeSafeFile", errors.K.IO,
-					"reason", fmt.Sprintf("file not deleted after %d attempts", count),
-					"path", path)
-			}
-			time.Sleep(time.Millisecond * 10 * time.Duration(count*2))
-			continue
-		}
-		break
-	}
-
-	return nil
 }
