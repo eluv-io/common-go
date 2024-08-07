@@ -16,11 +16,12 @@ type Unlocker interface {
 // The zero value for NamedLocks is ready to be used.
 //
 // Usage:
-// 	nl := NamedLocks{}
 //
-//	l := nl.Lock("blub")
-//  defer l.Unlock()
-//  ...
+//		nl := NamedLocks{}
+//
+//		l := nl.Lock("blub")
+//	 defer l.Unlock()
+//	 ...
 type NamedLocks struct {
 	mutex sync.Mutex
 	named map[interface{}]*lock
@@ -29,7 +30,7 @@ type NamedLocks struct {
 // Lock gets or creates the lock for the given name, calls its Lock() method and
 // returns its Unlocker (i.e. the "unlocking half" of the sync.Locker
 // interface). This ensures that the returned lock is not stored and re-used.
-// Instead simply call NamedLocks.Lock() again.
+// Instead, simply call NamedLocks.Lock() again.
 func (n *NamedLocks) Lock(name interface{}) Unlocker {
 	l := n.get(name)
 	l.mutex.Lock()
