@@ -9,10 +9,9 @@ import (
 
 // NewWorkerPool creates a new WorkerPool.
 //
-//   - maxWorkers:      the maximum number of worker goroutines that will be used
-//     to execute tasks concurrently. If <=0 maxWokers is set to
-//     runtime.NumPCU()
-//   - idleTimeout:     the time to hold on to idle workers. After this duration,
+//   - maxWorkers: the maximum number of worker goroutines that will be used to
+//     execute tasks concurrently. If <=0 maxWokers is set to runtime.NumPCU()
+//   - idleTimeout: the time to hold on to idle workers. After this duration,
 //     idle workers are shutdown.
 //   - defaultQueueCap: the default capacity to use when creating new
 //     WorkerQueues. If <=0 the default queue cap is set to 16.

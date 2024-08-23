@@ -97,7 +97,8 @@ func (c *ConcurrencyLimiter) ExecuteWithTicket(job func(ticket int)) int {
 
 // wait until all the previously Executed jobs completed running
 //
-// IMPORTANT: calling the Wait function while keep calling Execute leads to un-desired race conditions
+// IMPORTANT: calling the Wait function while keep calling Execute leads to
+// un-desired race conditions
 func (c *ConcurrencyLimiter) Wait() {
 	for i := 0; i < c.limit; i++ {
 		_ = <-c.tickets
