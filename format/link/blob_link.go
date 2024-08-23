@@ -12,11 +12,12 @@ import (
 // A blob link is a relative link with the "blob" selector, a "data" property that
 // contains base64-encoded bytes, and an optional "encryption" property as defined
 // in encryption.Scheme (defaults to "none"):
-//   {
-//     "/": "./blob",
-//     "data": "Y2xlYXIgZGF0YQ==",
-//     "encryption": "cgck"
-//   }
+//
+//	{
+//	  "/": "./blob",
+//	  "data": "Y2xlYXIgZGF0YQ==",
+//	  "encryption": "cgck"
+//	}
 //
 // Blob links are used to include encrypted data in metadata, and have it
 // automatically decrypted by the fabric node in the same way as encrypted parts.

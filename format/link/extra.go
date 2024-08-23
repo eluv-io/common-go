@@ -6,17 +6,18 @@ import (
 
 // Extra are additional link features. They are stored in "." in the JSON
 // representation:
-//  {
-//  	"/": "./meta/blub",
-//  	".": {
-//  		"auto_update": {
-//  			"tag": "latest"
-//  		},
-//  		"container": "hq__AAA"
-//  	},
-//  	"other-link-prop1": "zonk",
-//  	"other-link-prop2": "zink"
-//  }
+//
+//	{
+//		"/": "./meta/blub",
+//		".": {
+//			"auto_update": {
+//				"tag": "latest"
+//			},
+//			"container": "hq__AAA"
+//		},
+//		"other-link-prop1": "zonk",
+//		"other-link-prop2": "zink"
+//	}
 type Extra struct {
 	// The auto-update
 	AutoUpdate *AutoUpdate `json:"auto_update,omitempty"`

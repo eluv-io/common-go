@@ -7,10 +7,20 @@ import (
 )
 
 func TestAtomicBytes(t *testing.T) {
-	as := Bytes{}
-	require.Nil(t, as.Get())
-	as.Set([]byte("bla"))
-	require.Equal(t, "bla", string(as.Get()))
-	as.Set(nil)
-	require.Nil(t, as.Get())
+	ab := Bytes{}
+	require.Nil(t, ab.Get())
+
+	buf := []byte("bla")
+	ab.Set(buf)
+	require.Equal(t, buf, ab.Get())
+
+	buf2 := []byte("argh")
+	ab.SetNX(buf2)
+	require.Equal(t, buf, ab.Get())
+
+	ab.Set(nil)
+	require.Nil(t, ab.Get())
+
+	ab.SetNX(buf2)
+	require.Equal(t, buf2, ab.Get())
 }

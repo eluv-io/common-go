@@ -237,7 +237,8 @@ type cborConverter struct {
 }
 
 // NOTE: do not remove or re-order the converters, since their position
-//       determines the CBOR tag ID! Only append to the end!
+//
+//	determines the CBOR tag ID! Only append to the end!
 var cborConverters = []cborConverter{
 	{reflect.TypeOf((*id.ID)(nil)), &IDConverter{}},
 	{reflect.TypeOf((*hash.Hash)(nil)), &HashConverter{}},

@@ -6,7 +6,8 @@ import (
 )
 
 // NewBuilder creates a link builder that can be used to build a link:
-//   lnk, err := link.NewBuilder().Target(qhash).Selector(link.S.Meta).P("public", "name").Build()
+//
+//	lnk, err := link.NewBuilder().Target(qhash).Selector(link.S.Meta).P("public", "name").Build()
 func NewBuilder() *Builder {
 	return &Builder{
 		l: emptyLink(),

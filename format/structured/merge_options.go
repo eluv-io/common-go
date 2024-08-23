@@ -47,17 +47,17 @@ func (arrayMergeModeEnum) Append() ArrayMergeMode { return "append" }
 // already exists in the merged array (right before the element is appended).
 //
 // In other words:
-//  * source elements that exist in the target are not appended
-//  * duplicate elements in the source are appended at most once
-//  * duplicate elements in the target array remain
+//   - source elements that exist in the target are not appended
+//   - duplicate elements in the source are appended at most once
+//   - duplicate elements in the target array remain
 func (arrayMergeModeEnum) Squash() ArrayMergeMode { return "squash" }
 
 // Dedupe mode appends all elements of the source array to the end of the target array and then removes any duplicates.
 //
 // In other words:
-//  * source elements that exist in the target are not appended
-//  * duplicate elements in the source are appended at most once
-//  * duplicate elements in the target array are removed
+//   - source elements that exist in the target are not appended
+//   - duplicate elements in the source are appended at most once
+//   - duplicate elements in the target array are removed
 func (arrayMergeModeEnum) Dedupe() ArrayMergeMode { return "dedupe" }
 
 // Replace mode replaces the target array with the source array. No merging occurs.

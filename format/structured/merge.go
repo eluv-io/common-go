@@ -36,12 +36,12 @@ type mergeCtx struct {
 // the source. If the data types are different, the source value replaces the target value. If the data types are the
 // same, the merge is performed as follows:
 //
-// * map[string]interface{}: key/value pairs from the sources are added to the
-//   target structure. If a key already exists in the target, its value is
-//   replaced by the value of the source.
-// * []interface{}: elements of the source slice are appended to the target's
-//   slice
-// * any other value: the source value replaces the target value
+//   - map[string]interface{}: key/value pairs from the sources are added to the
+//     target structure. If a key already exists in the target, its value is
+//     replaced by the value of the source.
+//   - []interface{}: elements of the source slice are appended to the target's
+//     slice
+//   - any other value: the source value replaces the target value
 //
 // If sources is empty, the target structure is returned unchanged.
 func MergeWithOptions(opts MergeOptions, target interface{}, path Path, sources ...interface{}) (interface{}, error) {

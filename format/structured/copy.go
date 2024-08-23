@@ -8,11 +8,11 @@ type CopyFn func(val interface{}) (override bool, newVal interface{})
 // Copy creates a copy of the target data structure. The different data types
 // are handled as follows:
 //
-//	* map[string]interface{} are duplicated
-//	* []interface{} are duplicated
-//	* other types of maps & slices, pointers, channels and func
-//	  etc.) are "copied by reference"
-//	* simple types and structs are copied by value
+//   - map[string]interface{} are duplicated
+//   - []interface{} are duplicated
+//   - other types of maps & slices, pointers, channels and func
+//     etc.) are "copied by reference"
+//   - simple types and structs are copied by value
 //
 // The optional custom copy function is called for each element in the copied
 // structure and may override the default data type handling by returning true

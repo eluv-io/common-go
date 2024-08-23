@@ -28,8 +28,9 @@ func FindLocator(locators []string, candidate string) bool {
 }
 
 // NormalizeLocator normalizes the given locator to its standards form:
-//   http://node-1.contentfabric.net:80/
-//   https://node-1.contentfabric.net:443/
+//
+//	http://node-1.contentfabric.net:80/
+//	https://node-1.contentfabric.net:443/
 func NormalizeLocator(locator string) (string, error) {
 	u, err := url.Parse(locator)
 	if err != nil || u.Scheme == "" || u.Host == "" || u.Opaque != "" {

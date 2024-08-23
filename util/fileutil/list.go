@@ -32,15 +32,16 @@ func (i *FileInfo) RelPath() string {
 
 // ListFiles lists the files at target path.
 //
-// * targetPath: the target path
-// * followSymLinks: true to follow symlinks
-// * filter: an optional filter function to accept files. All files are accepted
-//   when not provided
+//   - targetPath: the target path
+//   - followSymLinks: true to follow symlinks
+//   - filter: an optional filter function to accept files. All files are accepted
+//     when not provided
+//
 // Return
-// * an array of *FileInfo describing the listed files. Symlinks are not
-//   included if followSymLinks is false.
-// * error is not nil in case followSymLinks is true and a loop is detected
-//   or if there was an error listing the content of a directory.
+//   - an array of *FileInfo describing the listed files. Symlinks are not
+//     included if followSymLinks is false.
+//   - error is not nil in case followSymLinks is true and a loop is detected
+//     or if there was an error listing the content of a directory.
 func ListFiles(targetPath string, followSymLinks bool, filter ...func(path string) bool) ([]*FileInfo, error) {
 	var res []*FileInfo
 

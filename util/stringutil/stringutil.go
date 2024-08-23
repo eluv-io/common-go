@@ -204,7 +204,7 @@ func WrapLines(s, w string) string {
 // performed when necessary, i.e. in logging statements. The following will call
 // call obj.AsJSON() only in case the log is actually in DEBUG.
 //
-//   log.Debug("costly string", stringutil.Stringer(obj.AsJSON))
+//	log.Debug("costly string", stringutil.Stringer(obj.AsJSON))
 type Stringer func() string
 
 func (s Stringer) String() string {
@@ -280,6 +280,7 @@ func digitEndPosition(s string, startPos int) int {
 // MatchRunes returns true if all runes of string s match all provided functions, false otherwise.
 //
 // Example usage:
+//
 //	if stringutil.MatchRunes("some string", unicode.IsLetter, unicode.IsDigit) { ... }
 func MatchRunes(s string, funcs ...func(r rune) bool) bool {
 	for _, r := range s {
