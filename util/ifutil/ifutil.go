@@ -31,10 +31,10 @@ func IsNil(obj interface{}) bool {
 }
 
 // IsEmpty returns true if the given object is considered "empty":
-//	* nil
-//  * collections with no element (arrays, slices, maps, channels)
-//  * nil pointer or pointer to an empty object
-//	* the zero value for all other types
+//   - nil
+//   - collections with no element (arrays, slices, maps, channels)
+//   - nil pointer or pointer to an empty object
+//   - the zero value for all other types
 func IsEmpty(obj interface{}) bool {
 	if obj == nil {
 		return true

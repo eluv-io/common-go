@@ -15,7 +15,9 @@ import (
 
 // Write writes the given preamble to the specified writer
 // A preamble is stored at the beginning of a part in the following format:
-//     [varint][header][data]
+//
+//	[varint][header][data]
+//
 // where varint is the length of the header and data, header is a multiformat header describing the
 // format of the data, and data is the user-specified preamble data.
 func Write(w io.Writer, preambleData []byte, preambleFormat ...string) (int64, error) {

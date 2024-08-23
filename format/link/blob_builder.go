@@ -7,8 +7,9 @@ import (
 )
 
 // NewBlobBuilder creates a link builder that can be used to build a blob link:
-//   lnk, err := link.NewBlobBuilder().Data(data).Build()
-//   lnk, err := link.NewBlobBuilder().EncryptionScheme(encryption.ClientGen).Data(encryptedData).Build()
+//
+//	lnk, err := link.NewBlobBuilder().Data(data).Build()
+//	lnk, err := link.NewBlobBuilder().EncryptionScheme(encryption.ClientGen).Data(encryptedData).Build()
 func NewBlobBuilder() *BlobBuilder {
 	b := &BlobBuilder{
 		b: NewBuilder(),

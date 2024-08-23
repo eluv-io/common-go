@@ -5,22 +5,23 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"github.com/eluv-io/errors-go"
 )
 
 func TestAtomicError(t *testing.T) {
 	ae := &Error{}
-
 	require.Nil(t, ae.Get())
+
 	err := io.EOF
 	ae.Set(err)
-	require.Equal(t, io.EOF, ae.Get())
+	require.Equal(t, err, ae.Get())
 
-	err = errors.NoTrace("bla")
-	ae.Set(err)
+	err2 := io.ErrUnexpectedEOF
+	ae.SetNX(err2)
 	require.Equal(t, err, ae.Get())
 
 	ae.Set(nil)
 	require.Nil(t, ae.Get())
+
+	ae.SetNX(err2)
+	require.Equal(t, err2, ae.Get())
 }

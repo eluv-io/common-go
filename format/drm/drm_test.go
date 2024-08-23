@@ -19,9 +19,11 @@ import (
 )
 
 var key *drm.KeyID
+
 const keyString = "drm_2qU32EeeHhVBxMF9vC8ABUsF5rmbfY1a6TvUGr3EYpYv1EvAc1FAM9tkACxiYmPoPxaEfbTNzHsAVh4TyKGJEFCd1gM"
 
 var khash *hash.Hash
+
 const khashString = "hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7"
 
 func init() {
@@ -210,7 +212,7 @@ func TestMaxLength(t *testing.T) {
 	hidbytes := make([]byte, 20)
 	rand.Read(hidbytes)
 	hid := id.NewID(id.Q, hidbytes)
-	khash := &hash.Hash{Type: hash.Type{Code: hash.Q, Format: hash.Unencrypted}, Digest: hdigest, ID: hid, Size: 1024*1024*128}
+	khash := &hash.Hash{Type: hash.Type{Code: hash.Q, Format: hash.Unencrypted}, Digest: hdigest, ID: hid, Size: 1024 * 1024 * 128}
 	kid := make([]byte, 16)
 	rand.Read(kid)
 	k, err := drm.New(drm.Key, kid, khash)

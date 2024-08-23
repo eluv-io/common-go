@@ -20,48 +20,49 @@ func NewStack() ContextStack {
 // call chain.
 //
 // The "standard" way of using contexts in go is passing it to each function in a call chain:
-// 	type anObject struct {}
 //
-// 	func (r *anObject) A(ctx context.Context) {
-// 		ctx = context.WithValue(context.Background(), "key", "val")
-// 		r.B(ctx)
-// 		...
-// 	}
+//	type anObject struct {}
 //
-// 	func (r *anObject) B(ctx context.Context) {
-// 		...
-// 		r.C(ctx)
-// 		...
-// 	}
+//	func (r *anObject) A(ctx context.Context) {
+//		ctx = context.WithValue(context.Background(), "key", "val")
+//		r.B(ctx)
+//		...
+//	}
 //
-// 	func (r *anObject) C(ctx context.Context) string {
-// 		val := ctx.Value("key")
-// 		...
-// 	}
+//	func (r *anObject) B(ctx context.Context) {
+//		...
+//		r.C(ctx)
+//		...
+//	}
+//
+//	func (r *anObject) C(ctx context.Context) string {
+//		val := ctx.Value("key")
+//		...
+//	}
 //
 // ContextStack achieves the same without adding a context to each method call:
 //
-// 	type anObject struct {
-// 		cs *ctxutil.ContextStack
-// 	}
+//	type anObject struct {
+//		cs *ctxutil.ContextStack
+//	}
 //
-// 	func (r *anObject) A() string {
-// 		release := r.cs.WithValue("key", "val")
-// 		defer release()
-// 		r.B()
-// 		...
-// 	}
+//	func (r *anObject) A() string {
+//		release := r.cs.WithValue("key", "val")
+//		defer release()
+//		r.B()
+//		...
+//	}
 //
-// 	func (r *anObject) B() string {
-// 		...
-// 		r.C()
-// 		...
-// 	}
+//	func (r *anObject) B() string {
+//		...
+//		r.C()
+//		...
+//	}
 //
-// 	func (r *anObject) C() string {
-// 		val := r.Ctx().Value("key")
-// 		...
-// 	}
+//	func (r *anObject) C() string {
+//		val := r.Ctx().Value("key")
+//		...
+//	}
 type ContextStack interface {
 	// Ctx retrieves the current context for the current goroutine.
 	Ctx() context.Context

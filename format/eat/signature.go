@@ -50,9 +50,9 @@ func (t *Token) verifySignature() error {
 }
 
 // SignerAddress returns the address of a token's signer. Returns an error if
-//   * the token is not signed
-//   * signed with a signature that doesn't allow signer recovery
-//   * or an error during recovery occurs
+//   - the token is not signed
+//   - signed with a signature that doesn't allow signer recovery
+//   - or an error during recovery occurs
 func (t *Token) SignerAddress() (addr common.Address, err error) {
 	e := errors.Template("signerAddress")
 

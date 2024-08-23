@@ -25,8 +25,9 @@ const (
 // String returns the duration spec formatted like time.Duration.String(), but
 // omits zero values.
 // Examples:
-//   1h0m0s is formatted as 1h
-//   1h0m5s is formatted as 1h5s
+//
+//	1h0m0s is formatted as 1h
+//	1h0m5s is formatted as 1h5s
 func (s Spec) String() string {
 	d := s.Duration()
 	f := d.String()
@@ -59,9 +60,9 @@ func (s *Spec) UnmarshalText(text []byte) error {
 }
 
 // UnmarshalJSON implements custom unmarshaling. It supports unmarshalling from
-//  * human readable strings with units: "1h15m"
-//  * numeric strings without units, interpreted as seconds: "10.5"
-//  * numeric values, interpreted as seconds: 10.5
+//   - human readable strings with units: "1h15m"
+//   - numeric strings without units, interpreted as seconds: "10.5"
+//   - numeric values, interpreted as seconds: 10.5
 func (s *Spec) UnmarshalJSON(b []byte) error {
 	if len(b) >= 2 && b[0] == '"' {
 		return s.UnmarshalText(b[1 : len(b)-1])
@@ -82,18 +83,18 @@ func (s Spec) Duration() time.Duration {
 
 // Round rounds the duration to a value that produces a sensitive and human
 // readable form that removes insignificant information with theses rules:
-//	* nanos  are capped if d > 1 millisecond: 1.123444ms -> 1.123ms
-//	* micros are capped if d > 1 second:      1.123555s  -> 1.124s
-//	* millis are capped if d > 1 minute:      1m10s444ms -> 1m10s
+//   - nanos  are capped if d > 1 millisecond: 1.123444ms -> 1.123ms
+//   - micros are capped if d > 1 second:      1.123555s  -> 1.124s
+//   - millis are capped if d > 1 minute:      1m10s444ms -> 1m10s
 func (s Spec) Round() Spec {
 	return s.RoundTo(3)
 }
 
 // RoundTo rounds the duration to a "reasonable" value like Round, but also
 // allows to choose the number of decimals [0-3] that are retained:
-//	* 766.123µs, 2 decimals: 766.12µs
-//	* 1.123444ms, 1 decimal:   1.1ms
-//	* 1.123444s, 0 decimals:   1s
+//   - 766.123µs, 2 decimals: 766.12µs
+//   - 1.123444ms, 1 decimal:   1.1ms
+//   - 1.123444s, 0 decimals:   1s
 func (s Spec) RoundTo(decimals int) Spec {
 	if decimals > 3 {
 		decimals = 3

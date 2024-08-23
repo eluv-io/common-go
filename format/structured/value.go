@@ -73,7 +73,6 @@ func WrapJson(jsonDoc string) *Value {
 //	val.String()  // the string at path or "" if error or not a string
 //	val.Int(99)   // the int at path or 99 if error or not an int
 //	val.IsError() // true if the Resolve call returned an error
-//
 type Value struct {
 	Data interface{}
 	err  error
@@ -118,20 +117,24 @@ func (v *Value) Delete(path ...string) (deleted bool) {
 }
 
 // Get returns the value at the given path, specified as string slice, e.g.
-// 	val.Get("path", "to", "value")
+//
+//	val.Get("path", "to", "value")
 func (v *Value) Get(path ...string) *Value {
 	return NewValue(Resolve(path, v.Data))
 }
 
 // GetP returns the value at the given path, specified as a single string, e.g.
-// 	val.GetP("/path/to/value")
+//
+//	val.GetP("/path/to/value")
+//
 // Alias of At()
 func (v *Value) GetP(path string) *Value {
 	return v.At(path)
 }
 
 // At returns the value at the given path, specified as a single string, e.g.
-// 	val.At("/path/to/value")
+//
+//	val.At("/path/to/value")
 func (v *Value) At(path string) *Value {
 	return NewValue(Resolve(ParsePath(path), v.Data))
 }

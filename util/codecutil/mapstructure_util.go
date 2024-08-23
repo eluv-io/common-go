@@ -17,8 +17,8 @@ var textUnmarshaler = reflect.TypeOf((*encoding.TextUnmarshaler)(nil)).Elem()
 // MapDecode decodes a parsed, generic source structure that was e.g.
 // produced by unmarshaling JSON
 //
-// 	var any interface{}
-// 	_ := json.Unmarshal(jsonText, &any)
+//	var any interface{}
+//	_ := json.Unmarshal(jsonText, &any)
 //
 // into the destination object dst (usually a pointer to a struct value). Any
 // `json:...` tags defined on the destination structure's member fields will be
@@ -32,7 +32,6 @@ var textUnmarshaler = reflect.TypeOf((*encoding.TextUnmarshaler)(nil)).Elem()
 //
 // * decodes with the 'UnmarshalText(text []byte) error' function if the
 // destination implements encoding.TextUnmarshaler
-//
 func MapDecode(src interface{}, dst interface{}) error {
 	cfg := &mapstructure.DecoderConfig{
 		TagName:    "json",
