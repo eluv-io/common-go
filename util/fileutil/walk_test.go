@@ -14,18 +14,19 @@ import (
 )
 
 // folder creates a test folder with a predefined files structure
-// folder
-//   - t1
-//   - t1f1
-//   - td1
-//   - -- d0 (with zero file)
-//   - -- d1 (with one file)
-//   - -- d2 (with two files)
-//   - td2
-//   - -- f1   --> td1/d1/f1
-//   - -- t1f1 --> t1/t1f1
-//   - t2
-//   - -- f --> folder
+//
+//	 folder
+//		|-- t1
+//		|   |-- t1f1
+//		|   |-- td1
+//		|   |   |-- d0 (with zero file)
+//		|   |   |-- d1 (with one file)
+//		|   |   `-- d2 (with two files)
+//		|   `-- td2
+//		|       |-- f1   -> td1/d1/f1
+//		|       `-- t1f1 -> t1/t1f1
+//		`-- t2
+//		    `-- f -> folder
 func testFolder(t *testing.T, dirPrefix string) (string, func()) {
 	dir, cleanup := testutil.TestDir(dirPrefix)
 
