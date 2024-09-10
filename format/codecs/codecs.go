@@ -120,7 +120,8 @@ type cborConverter struct {
 
 // cborConverters is the list of converters used for the CborV1Codec
 //
-// NOTE: do not change the CBOR tag ID of existing converters!
+// NOTE: do not remove or re-order the converters, since their position
+// determines the CBOR tag ID! Only append to the end!
 var cborConverters = []cborConverter{
 	// Custom CBOR tags 40-60 are currently unassigned, and they are
 	// encoded in a single byte.

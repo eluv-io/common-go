@@ -19,20 +19,20 @@ import (
 // interface{})
 //
 // The result is a slice of triplets [path, value, type]
-// E.g. [ "/", "{}", "object"]
-//      [ "/first", "joe", "string" ]
-//      [ "/last", "doe", "string" ]
-//      [ "/age", "24", "number" ]
-//      [ "/children", "[]", "array" ]
-//      [ "/children/0", "fred", "string" ]
-//      [ "/children/1", "cathy", "string" ]
-//      [ "/children/3", "jenny", "string" ]
+//
+//	  E.g. [ "/", "{}", "object"]
+//		[ "/first", "joe", "string" ]
+//		[ "/last", "doe", "string" ]
+//		[ "/age", "24", "number" ]
+//		[ "/children", "[]", "array" ]
+//		[ "/children/0", "fred", "string" ]
+//		[ "/children/1", "cathy", "string" ]
+//		[ "/children/3", "jenny", "string" ]
 //
 // Possible types are: object, array, string, bool, number, float64, null
 //
 // Slashes in path elements are encoded according to the JSON Pointer format
 // defined in RFC 6901: https://tools.ietf.org/html/rfc6901
-//
 func Flatten(structure interface{}, separator ...string) ([][3]string, error) {
 	f := &flatten{
 		separator: "/",

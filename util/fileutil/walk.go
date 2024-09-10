@@ -18,11 +18,11 @@ func Walk(path string, followSymlinks bool, walkFn filepath.WalkFunc) error {
 
 // walk walks the given walkPath.
 //
-//  * walkPath: path with which the walk starts
-//  * linkPath: the path of the directory symlink that triggered this walk, or
-//              same as walkPath for original walk
-//  * walkFn:   the function called for all found files and directories
-//  * visited:  list of walkPaths already visited
+//   - walkPath: path with which the walk starts
+//   - linkPath: the path of the directory symlink that triggered this walk, or
+//     same as walkPath for original walk
+//   - walkFn:   the function called for all found files and directories
+//   - visited:  list of walkPaths already visited
 func walk(walkPath string, linkPath string, walkFn filepath.WalkFunc, visited []string) error {
 	e := errors.Template("fileutil.WalkSym", "walk_path", walkPath)
 	for _, v := range visited {

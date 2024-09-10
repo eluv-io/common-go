@@ -9,13 +9,12 @@ import (
 
 // NewWorkerPool creates a new WorkerPool.
 //
-//  * maxWorkers:      the maximum number of worker goroutines that will be used
-//                     to execute tasks concurrently. If <=0 maxWokers is set to
-//                     runtime.NumPCU()
-//  * idleTimeout:     the time to hold on to idle workers. After this duration,
-//                     idle workers are shutdown.
-//  * defaultQueueCap: the default capacity to use when creating new
-//                     WorkerQueues. If <=0 the default queue cap is set to 16.
+//   - maxWorkers: the maximum number of worker goroutines that will be used to
+//     execute tasks concurrently. If <=0 maxWokers is set to runtime.NumPCU()
+//   - idleTimeout: the time to hold on to idle workers. After this duration,
+//     idle workers are shutdown.
+//   - defaultQueueCap: the default capacity to use when creating new
+//     WorkerQueues. If <=0 the default queue cap is set to 16.
 func NewWorkerPool(maxWorkers int, idleTimeout time.Duration, defaultQueueCap int) WorkerPool {
 	if defaultQueueCap <= 0 {
 		defaultQueueCap = 16
@@ -57,8 +56,8 @@ type workerPool struct {
 // NewTaskQueue creates a new input queue for task submission. Submitting tasks
 // to the task queue block when the queue reaches its capacity.
 //
-//  * cap: the optional capacity of the task queue. If not specified or <= 0,
-//         the default task queue cap of the WorkerPool is used.
+//   - cap: the optional capacity of the task queue. If not specified or <= 0,
+//     the default task queue cap of the WorkerPool is used.
 func (p *workerPool) NewTaskQueue(cap ...int) TaskQueue {
 	c := p.defaultQueueCap
 	if len(cap) > 0 && cap[0] > 0 {

@@ -7,13 +7,26 @@ type Bytes struct {
 }
 
 func (x *Bytes) Get() []byte {
-	s := x.Load()
-	if s == nil {
+	val := x.Load()
+	if val == nil {
 		return nil
 	}
-	return *s
+	return *val
 }
 
-func (x *Bytes) Set(val []byte) {
-	x.Store(&val)
+func (x *Bytes) Set(buf []byte) {
+	var val *[]byte
+	if buf != nil {
+		val = &buf
+	}
+	x.Store(val)
+}
+
+// SetNX sets the given value if no value already set
+func (x *Bytes) SetNX(buf []byte) {
+	var val *[]byte
+	if buf != nil {
+		val = &buf
+	}
+	_ = x.CompareAndSwap(nil, val)
 }

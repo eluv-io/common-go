@@ -61,16 +61,16 @@ func (c *ExpiringCache) WithName(name string) *ExpiringCache {
 
 // GetOrCreate looks up a key's value from the cache, creating it if necessary.
 //
-//  - If the key does not exist, the given constructor function is called to
-//    create a new value, store it at the key and return it. If the constructor
-//    fails, no value is added to the cache and the error is returned.
-//    Otherwise, the new value is added to the cache, and a boolean to mark any
-//    evictions from the cache is returned as defined in the Add() method.
-//  - If the key exists but is expired according to the max age, the current
-//    value is discarded and re-created with the constructor function.
-//  - If evict functions are passed and a non-expired cache entry exists, then
-//    the first evict function is invoked with the cached value. If it returns
-//    true, the value is discarded from the cache and the constructor is called.
+//   - If the key does not exist, the given constructor function is called to
+//     create a new value, store it at the key and return it. If the constructor
+//     fails, no value is added to the cache and the error is returned.
+//     Otherwise, the new value is added to the cache, and a boolean to mark any
+//     evictions from the cache is returned as defined in the Add() method.
+//   - If the key exists but is expired according to the max age, the current
+//     value is discarded and re-created with the constructor function.
+//   - If evict functions are passed and a non-expired cache entry exists, then
+//     the first evict function is invoked with the cached value. If it returns
+//     true, the value is discarded from the cache and the constructor is called.
 func (c *ExpiringCache) GetOrCreate(
 	key interface{},
 	constructor func() (interface{}, error),
@@ -141,8 +141,8 @@ func (c *ExpiringCache) Add(key, value interface{}) bool {
 
 // Update updates the existing value for the given key or adds it to the cache if it doesn't exist.
 // It returns two booleans:
-//  - new: true if the key is new, false if it already existed and the entry was updated
-//  - evicted: true if an eviction occurred.
+//   - new: true if the key is new, false if it already existed and the entry was updated
+//   - evicted: true if an eviction occurred.
 func (c *ExpiringCache) Update(key, value interface{}) (new bool, evicted bool) {
 	return c.cache.UpdateFn(key, func(entry interface{}) interface{} {
 		if en, ok := entry.(*expiringEntry); ok {

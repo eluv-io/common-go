@@ -10,9 +10,12 @@ import (
 // repeating the content of the provided buf as necessary.
 //
 // Example:
-//   NewRepeatingReader([]byte("1234567890"), 24)
+//
+//	NewRepeatingReader([]byte("1234567890"), 24)
+//
 // will generate the byte sequence
-//   123456789012345678901234
+//
+//	123456789012345678901234
 func NewRepeatingReader(buf []byte, len int64) ReadSeekCloser {
 	return &repeatingReader{buf: buf, len: len}
 }

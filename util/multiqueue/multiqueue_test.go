@@ -115,9 +115,10 @@ const (
 
 // BenchamrkConcurrent creates and runs X test "clients" concurrently, each of which
 // executes the following:
-//  * add a new input
-//  * submit a number of messages
-//  * close the input
+//   - add a new input
+//   - submit a number of messages
+//   - close the input
+//
 // The test verifies that for each test routine all messages are popped from the
 // MultiQueue in order and that all inputs are properly removed.
 func BenchmarkConcurrent(b *testing.B) {
