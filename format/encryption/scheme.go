@@ -1,9 +1,8 @@
 package encryption
 
 import (
-	"github.com/eluv-io/errors-go"
-
 	"github.com/eluv-io/common-go/format/hash"
+	"github.com/eluv-io/errors-go"
 )
 
 // Scheme is the encryption scheme of a resource.
@@ -71,4 +70,14 @@ func (s Scheme) String() string {
 
 func (s Scheme) HashFormat() hash.Format {
 	return schemeToFormat[s]
+}
+
+func (s Scheme) MarshalText() ([]byte, error) {
+	return []byte(s.String()), nil
+}
+
+func (s *Scheme) UnmarshalText(text []byte) error {
+	var err error
+	*s, err = FromString(string(text))
+	return err
 }
