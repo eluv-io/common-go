@@ -1,7 +1,9 @@
 package histogram
 
 import (
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -20,6 +22,8 @@ const (
 )
 
 const OutlierLabel = "outliers"
+
+var ErrNegativeHistogram = fmt.Errorf("negative histogram")
 
 func NewDefaultDurationHistogram() *DurationHistogram {
 	return NewDurationHistogram(DefaultDurationHistogram)
@@ -141,6 +145,8 @@ func NewDurationHistogramBins(bins []*DurationBin) (*DurationHistogram, error) {
 		return nil, e("reason", "no bins")
 	}
 
+	h := sha256.New()
+
 	for i, b := range bins {
 		// Unbounded bins can only be the final bin
 		if b.Max == 0 && i != len(bins)-1 {
@@ -160,6 +166,9 @@ func NewDurationHistogramBins(bins []*DurationBin) (*DurationHistogram, error) {
 		if b.Count != 0 || b.DSum != 0 {
 			return nil, e("reason", "bin for construction not empty", "label", b.Label)
 		}
+
+		h.Write([]byte(b.Label))
+		h.Write([]byte(b.Max.String()))
 	}
 
 	if bins[len(bins)-1].Max != 0 {
@@ -167,7 +176,8 @@ func NewDurationHistogramBins(bins []*DurationBin) (*DurationHistogram, error) {
 	}
 
 	return &DurationHistogram{
-		bins: bins,
+		bins:    bins,
+		binHash: string(h.Sum(nil)),
 	}, nil
 }
 
@@ -176,6 +186,10 @@ type DurationHistogram struct {
 	bins          []*DurationBin
 	mu            sync.Mutex
 	MarshalTotals bool
+
+	// binHash is a unique identifier for the bins (not their values). It is used to quickly
+	// determine if two duration histograms have the same bin structure.
+	binHash string
 }
 
 func (h *DurationHistogram) TotalCount() int64 {
@@ -442,4 +456,60 @@ func (h *DurationHistogram) String() string {
 		return jsonutil.MarshallingError("duration_histogram", err)
 	}
 	return string(bb)
+}
+
+// Add adds the counts and durations of other to this one. The histograms must match exactly in bin structure.
+func (h *DurationHistogram) Add(other *DurationHistogram) error {
+	if h.binHash != other.binHash {
+		return errors.E("Add", "reason", "mismatched histogram types")
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	other.mu.Lock()
+	defer other.mu.Unlock()
+
+	for i := range h.bins {
+		h.bins[i].Count += other.bins[i].Count
+		h.bins[i].DSum += other.bins[i].DSum
+	}
+
+	return nil
+}
+
+// Sub subtracts the counts and durations of other from this one. The histograms must match exactly in bin structure.
+// If the subtraction would result in negative counts or durations, the histogram is not modified and ErrNegativeHistogram is returned.
+func (h *DurationHistogram) Sub(other *DurationHistogram) error {
+	if h.binHash != other.binHash {
+		return errors.E("Sub", "reason", "mismatched histogram types")
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	other.mu.Lock()
+	defer other.mu.Unlock()
+
+	for i := range h.bins {
+		h.bins[i].Count -= other.bins[i].Count
+		h.bins[i].DSum -= other.bins[i].DSum
+	}
+
+	// If any became negative, return a sentinel error and restore the histogram state
+	var err error
+	for _, b := range h.bins {
+		if b.Count < 0 || b.DSum < 0 {
+			err = ErrNegativeHistogram
+		}
+	}
+
+	if err != nil {
+		for i := range h.bins {
+			h.bins[i].Count += other.bins[i].Count
+			h.bins[i].DSum += other.bins[i].DSum
+		}
+	}
+
+	return err
 }
