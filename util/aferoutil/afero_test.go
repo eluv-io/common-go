@@ -224,5 +224,7 @@ func TestRecreateDir(t *testing.T) {
 			require.NotNil(t, fi)
 			require.Equal(t, iofs.FileMode(0750), fi.Mode().Perm())
 		}
+		_, err = fs.Stat(path + ".bak")
+		require.True(t, os.IsNotExist(err))
 	}
 }
