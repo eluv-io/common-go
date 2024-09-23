@@ -36,6 +36,8 @@ require (
 	golang.org/x/exp v0.0.0-20220426173459-3bcf042a4bf5
 )
 
+require github.com/djherbis/times v1.6.0
+
 require (
 	github.com/btcsuite/btcd/btcec/v2 v2.2.0 // indirect
 	github.com/deckarep/golang-set v1.8.0 // indirect

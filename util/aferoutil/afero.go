@@ -76,3 +76,82 @@ func MoveFile(fs afero.Fs, src, dst string) error {
 
 	return nil
 }
+
+// RecreateDir re-creates the given directory and all sub-directories to reduce filesystem overhead for the directories
+// (see https://github.com/openzfs/zfs/issues/4933). If newFilePathFn is specified, visited files will be moved to
+// newFilePathFn(filePath) relative to the given top directory; otherwise, files will be moved to the matching path in
+// the re-created directory. Returns the number of moved files.
+// Note: Uses the ".bak" file extension for interim directories so that RecreateDir can be retried upon failures and
+// resume progress
+func RecreateDir(fs afero.Fs, path string, newFilePathFn ...func(string) string) (int, error) {
+	e := errors.Template("RecreateDir", errors.K.IO, "path", path)
+	newPathFn := func(p string) string {
+		return filepath.Join(path, p)
+	}
+	if len(newFilePathFn) > 0 && newFilePathFn[0] != nil {
+		newPathFn = func(p string) string {
+			return filepath.Join(path, newFilePathFn[0](p))
+		}
+	}
+	// Move existing/old dir, create new dir, move files over, delete old dir
+	bakPath := path + ".bak"
+	_, err := fs.Stat(bakPath) // Check in case backup dir already exists from previously failed attempt
+	if os.IsNotExist(err) {
+		err := fs.Rename(path, bakPath)
+		if err != nil {
+			return 0, e(err)
+		}
+	} else if err != nil {
+		return 0, e(err)
+	}
+	err = fs.Mkdir(path, os.ModePerm)
+	if err != nil {
+		return 0, e(err)
+	}
+	var visitDir func(string, string) (int, error)
+	visitDir = func(basePath string, subPath string) (int, error) {
+		n := 0
+		path := filepath.Join(basePath, subPath)
+		dir, err := fs.Open(path)
+		if err != nil {
+			return n, e(err)
+		}
+		defer errors.Ignore(dir.Close)
+		for {
+			files, err := dir.Readdir(500)
+			for _, file := range files {
+				filePath := filepath.Join(subPath, file.Name())
+				var err error
+				if file.IsDir() {
+					var m int
+					m, err = visitDir(basePath, filePath)
+					n += m
+				} else {
+					oldPath := filepath.Join(basePath, filePath)
+					newPath := newPathFn(filePath)
+					err = fs.MkdirAll(filepath.Dir(newPath), os.ModePerm)
+					if err == nil {
+						err = fs.Rename(oldPath, newPath)
+						if err == nil {
+							n++
+						}
+					}
+				}
+				if err != nil {
+					return n, e(err)
+				}
+			}
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				return n, e(err)
+			}
+		}
+		err = fs.Remove(path)
+		if err != nil {
+			return n, e(err)
+		}
+		return n, nil
+	}
+	return visitDir(bakPath, "")
+}

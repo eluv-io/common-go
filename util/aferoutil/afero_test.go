@@ -2,9 +2,11 @@ package aferoutil
 
 import (
 	"fmt"
+	iofs "io/fs"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/eluv-io/errors-go"
@@ -147,4 +149,80 @@ type NoRenameFs struct {
 
 func (f *NoRenameFs) Rename(string, string) error {
 	return errors.E("rename", errors.K.Invalid)
+}
+
+func TestRecreateDir(t *testing.T) {
+	tests := []struct {
+		name string
+		old  []string
+		new  []string
+		fn   func(string) string
+	}{
+		{
+			name: "no_change",
+			old:  []string{"a", "b", "c", "d/e", "f/g/h"},
+			new:  []string{"a", "b", "c", "d/e", "f/g/h"},
+			fn:   nil,
+		},
+		{
+			name: "replace_1_with_0",
+			old:  []string{"a0", "b1", "c0", "d1/e1", "f0/g1/h0"},
+			new:  []string{"a0", "b0", "c0", "d0/e0", "f0/g0/h0"},
+			fn: func(p string) string {
+				return strings.ReplaceAll(p, "1", "0")
+			},
+		},
+		{
+			name: "squash_to_top_level",
+			old:  []string{"a", "b", "c", "d/e", "f/g/h"},
+			new:  []string{"a", "b", "c", "de", "fgh"},
+			fn: func(p string) string {
+				return strings.ReplaceAll(p, "/", "")
+			},
+		},
+	}
+	dir, cleanup := testutil.TestDir("recreate_dir")
+	defer cleanup()
+	fs := afero.NewOsFs()
+	for _, test := range tests {
+		path := filepath.Join(dir, test.name)
+		// Create directories and files with 0750 perms
+		err := fs.Mkdir(path, 0750)
+		require.NoError(t, err)
+		for _, fname := range test.old {
+			fpath := filepath.Join(path, fname)
+			fdir := filepath.Dir(fpath)
+			err = fs.MkdirAll(fdir, 0750)
+			require.NoError(t, err)
+			f, err := fs.OpenFile(fpath, os.O_RDWR|os.O_CREATE, 0750)
+			require.NoError(t, err)
+			err = f.Close()
+			require.NoError(t, err)
+			fi, err := fs.Stat(fdir)
+			require.NoError(t, err)
+			require.NotNil(t, fi)
+			require.Equal(t, iofs.FileMode(0750), fi.Mode().Perm())
+			fi, err = fs.Stat(fpath)
+			require.NoError(t, err)
+			require.NotNil(t, fi)
+			require.Equal(t, iofs.FileMode(0750), fi.Mode().Perm())
+		}
+		// Recreate directories
+		n, err := RecreateDir(fs, path, test.fn)
+		require.NoError(t, err)
+		require.Equal(t, len(test.old), n)
+		// Check new directories with 0755 perms and existing files with 0750 perms
+		for _, fname := range test.new {
+			fpath := filepath.Join(path, fname)
+			fdir := filepath.Dir(fpath)
+			fi, err := fs.Stat(fdir)
+			require.NoError(t, err)
+			require.NotNil(t, fi)
+			require.Equal(t, iofs.FileMode(0755), fi.Mode().Perm())
+			fi, err = fs.Stat(fpath)
+			require.NoError(t, err)
+			require.NotNil(t, fi)
+			require.Equal(t, iofs.FileMode(0750), fi.Mode().Perm())
+		}
+	}
 }
