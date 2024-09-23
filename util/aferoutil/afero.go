@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"github.com/eluv-io/errors-go"
 	"github.com/spf13/afero"
@@ -80,17 +81,20 @@ func MoveFile(fs afero.Fs, src, dst string) error {
 // RecreateDir re-creates the given directory and all sub-directories to reduce filesystem overhead for the directories
 // (see https://github.com/openzfs/zfs/issues/4933). If newFilePathFn is specified, visited files will be moved to
 // newFilePathFn(filePath) relative to the given top directory; otherwise, files will be moved to the matching path in
-// the re-created directory. Returns the number of moved files.
+// the re-created directory. Returns the number of moved files. Sub-directories in the given excludeDirs will not be
+// traveresed but simply moved to the re-created directory.
 // Note: Uses the ".bak" file extension for interim directories so that RecreateDir can be retried upon failures and
 // resume progress
-func RecreateDir(fs afero.Fs, path string, newFilePathFn ...func(string) string) (int, error) {
+func RecreateDir(fs afero.Fs, path string, newFilePathFn func(string) string, excludeDirs ...string) (int, error) {
 	e := errors.Template("RecreateDir", errors.K.IO, "path", path)
-	newPathFn := func(p string) string {
-		return filepath.Join(path, p)
-	}
-	if len(newFilePathFn) > 0 && newFilePathFn[0] != nil {
+	var newPathFn func(string) string
+	if newFilePathFn == nil {
 		newPathFn = func(p string) string {
-			return filepath.Join(path, newFilePathFn[0](p))
+			return filepath.Join(path, p)
+		}
+	} else {
+		newPathFn = func(p string) string {
+			return filepath.Join(path, newFilePathFn(p))
 		}
 	}
 	// Move existing/old dir, create new dir, move files over, delete old dir
@@ -122,7 +126,7 @@ func RecreateDir(fs afero.Fs, path string, newFilePathFn ...func(string) string)
 			for _, file := range files {
 				filePath := filepath.Join(subPath, file.Name())
 				var err error
-				if file.IsDir() {
+				if file.IsDir() && !slices.Contains(excludeDirs, filePath) {
 					var m int
 					m, err = visitDir(basePath, filePath)
 					n += m
