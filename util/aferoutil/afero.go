@@ -5,9 +5,15 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"time"
+
+	"github.com/djherbis/times"
+	"github.com/spf13/afero"
 
 	"github.com/eluv-io/errors-go"
-	"github.com/spf13/afero"
+
+	"github.com/eluv-io/common-go/util/byteutil"
+	"github.com/eluv-io/common-go/util/stringutil"
 )
 
 // MoveFile moves the given source file to the destination path. First, the file is attempted to be renamed. If that
@@ -158,4 +164,56 @@ func RecreateDir(fs afero.Fs, path string, newFilePathFn func(string) string, ex
 		return n, nil
 	}
 	return visitDir(backupPath, "")
+}
+
+// CheckAccessTimeEnabled checks whether access_time is enabled in the filesystem at the given path.
+func CheckAccessTimeEnabled(fs afero.Fs, path string) (bool, error) {
+	e := errors.Template("CheckAccessTimeEnabled", errors.K.IO, "path", path)
+	atn := filepath.Join(path, "atc"+stringutil.RandomString(8))
+	var ati os.FileInfo
+	atf, err := fs.Create(atn)
+	if err == nil {
+		ati, err = atf.Stat()
+		if err == nil {
+			_, err = atf.Write(byteutil.RandomBytes(1024))
+			if err == nil {
+				err = atf.Close()
+			}
+		}
+	}
+	defer func(atf afero.File) {
+		if atf != nil {
+			_ = atf.Close()
+			_ = fs.Remove(atn)
+		}
+	}(atf)
+	if err != nil {
+		return false, e(err)
+	}
+	if ati.Sys() == nil {
+		return false, e(errors.K.NotImplemented, "reason", "system stats not available", "path", atn)
+	}
+	at1 := times.Get(ati).AccessTime()
+	time.Sleep(time.Millisecond * 5)
+	atf, err = fs.Open(atn)
+	if err == nil {
+		_, err = io.ReadAll(atf)
+		if err == nil {
+			err = atf.Close()
+		}
+	}
+	defer func(atf afero.File) {
+		if atf != nil {
+			_ = atf.Close()
+		}
+	}(atf)
+	if err != nil {
+		return false, e(err)
+	}
+	ati, err = fs.Stat(atn)
+	if err != nil {
+		return false, e(err)
+	}
+	at2 := times.Get(ati).AccessTime()
+	return !at1.Equal(at2), nil
 }
