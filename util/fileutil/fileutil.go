@@ -39,7 +39,7 @@ func CheckAccessTimeEnabled(path string) (bool, error) {
 		return false, e(err)
 	}
 	if ati.Sys() == nil {
-		return false, e("reason", "system stats not available", "path", atn)
+		return false, e(errors.K.NotImplemented, "reason", "system stats not available", "path", atn)
 	}
 	at1 := times.Get(ati).AccessTime()
 	time.Sleep(time.Millisecond * 5)

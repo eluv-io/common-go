@@ -82,9 +82,9 @@ func MoveFile(fs afero.Fs, src, dst string) error {
 // (see https://github.com/openzfs/zfs/issues/4933). If newFilePathFn is specified, visited files will be moved to
 // newFilePathFn(filePath) relative to the given top directory; otherwise, files will be moved to the matching path in
 // the re-created directory. Returns the number of moved files. Sub-directories in the given excludeDirs will not be
-// traveresed but simply moved to the re-created directory.
-// Note: Uses the ".bak" file extension for interim directories so that RecreateDir can be retried upon failures and
-// resume progress
+// traversed but simply moved to the re-created directory.
+// Note: Uses the ".recreate" file extension for interim directories so that RecreateDir can be retried upon failures
+// and resume progress
 func RecreateDir(fs afero.Fs, path string, newFilePathFn func(string) string, excludeDirs ...string) (int, error) {
 	e := errors.Template("RecreateDir", errors.K.IO, "path", path)
 	var newPathFn func(string) string
@@ -98,17 +98,17 @@ func RecreateDir(fs afero.Fs, path string, newFilePathFn func(string) string, ex
 		}
 	}
 	// Move existing/old dir, create new dir, move files over, delete old dir
-	bakPath := path + ".bak"
-	_, err := fs.Stat(bakPath) // Check in case backup dir already exists from previously failed attempt
+	backupPath := path + ".recreate"
+	_, err := fs.Stat(backupPath) // Check in case backup dir already exists from previously failed attempt
 	if os.IsNotExist(err) {
-		err := fs.Rename(path, bakPath)
+		err := fs.Rename(path, backupPath)
 		if err != nil {
 			return 0, e(err)
 		}
 	} else if err != nil {
 		return 0, e(err)
 	}
-	err = fs.Mkdir(path, os.ModePerm)
+	err = fs.MkdirAll(path, os.ModePerm)
 	if err != nil {
 		return 0, e(err)
 	}
@@ -157,5 +157,5 @@ func RecreateDir(fs afero.Fs, path string, newFilePathFn func(string) string, ex
 		}
 		return n, nil
 	}
-	return visitDir(bakPath, "")
+	return visitDir(backupPath, "")
 }
