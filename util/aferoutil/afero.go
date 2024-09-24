@@ -157,6 +157,7 @@ func RecreateDir(fs afero.Fs, path string, newFilePathFn func(string) string, ex
 				return n, e(err)
 			}
 		}
+		errors.Ignore(dir.Close)
 		err = fs.Remove(path)
 		if err != nil {
 			return n, e(err)
