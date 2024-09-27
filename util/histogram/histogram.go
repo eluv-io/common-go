@@ -461,7 +461,7 @@ func (h *DurationHistogram) String() string {
 // Add adds the counts and durations of other to this one. The histograms must match exactly in bin structure.
 func (h *DurationHistogram) Add(other *DurationHistogram) error {
 	if h.binHash != other.binHash {
-		return errors.E("Add", "reason", "mismatched histogram types")
+		return errors.E("Add", "reason", errors.K.Invalid, "mismatched histogram types")
 	}
 
 	h.mu.Lock()
@@ -482,7 +482,7 @@ func (h *DurationHistogram) Add(other *DurationHistogram) error {
 // If the subtraction would result in negative counts or durations, the histogram is not modified and ErrNegativeHistogram is returned.
 func (h *DurationHistogram) Sub(other *DurationHistogram) error {
 	if h.binHash != other.binHash {
-		return errors.E("Sub", "reason", "mismatched histogram types")
+		return errors.E("Sub", errors.K.Invalid, "reason", "mismatched histogram types")
 	}
 
 	h.mu.Lock()
