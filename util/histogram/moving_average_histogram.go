@@ -3,8 +3,6 @@ package histogram
 import (
 	"sync"
 	"time"
-
-	"github.com/eluv-io/errors-go"
 )
 
 // MovingAverageHistogram keeps multiple duration histograms, and rotates out the oldest histograms
@@ -12,11 +10,8 @@ import (
 // minute, as well as weighted statistics over the duration, with more recent time periods weighted
 // more heavily.
 type MovingAverageHistogram struct {
-	// typ is the type of duration histogram for this moving average histogram. If necessary, this
-	// can be extended to a description of the bins directly.
-	typ DurationHistogramType
-	// maxDuration is the total history that is kept in the moving average histogram.
-	maxDuration time.Duration
+	// newHist is the factory for constructing new duration histograms
+	newHist func() *DurationHistogram
 	// durationPerHistogram describes the rotation schedule of the histogram.
 	durationPerHistogram time.Duration
 
@@ -32,23 +27,17 @@ type MovingAverageHistogram struct {
 }
 
 func NewMovingAverageHistogram(
-	typ DurationHistogramType,
-	maxDuration time.Duration,
+	histFactory func() *DurationHistogram,
+	histCount int,
 	durationPerHistogram time.Duration,
 ) (*MovingAverageHistogram, error) {
-	histCount := maxDuration / durationPerHistogram
-	if maxDuration%durationPerHistogram != 0 {
-		return nil, errors.E("NewMovingAverageHistogram", errors.K.Invalid, "reason", "maxDuration must be a multiple of durationPerHistogram")
-	}
-
 	mah := &MovingAverageHistogram{
-		typ:                  typ,
-		maxDuration:          maxDuration,
+		newHist:              histFactory,
 		durationPerHistogram: durationPerHistogram,
 		h:                    make([]*DurationHistogram, histCount),
 	}
 	// Create the first histogram
-	mah.h[0] = NewDurationHistogram(typ)
+	mah.h[0] = histFactory()
 
 	return mah, nil
 }
@@ -61,7 +50,7 @@ func (m *MovingAverageHistogram) Rotate() {
 		m.h[i] = m.h[i-1]
 	}
 
-	m.h[0] = NewDurationHistogram(m.typ)
+	m.h[0] = m.newHist()
 }
 
 func (m *MovingAverageHistogram) autoRotate(d time.Duration) {
@@ -94,12 +83,11 @@ func (m *MovingAverageHistogram) Observe(n time.Duration) {
 }
 
 func (m *MovingAverageHistogram) StatLastMinute(f func(h *DurationHistogram) time.Duration) time.Duration {
-	// We calculate this countToKeep in order to at least capture the last minute worth of data.
-	countToKeep := int(time.Minute / m.durationPerHistogram)
-	if time.Minute%m.durationPerHistogram != 0 {
-		countToKeep++
-	}
-	if countToKeep == 1 {
+	// We calculate this countToKeep in order to at least capture the last minute worth of data,
+	// accounting for the possibility of an empty period that just started.
+	countToKeep := int(time.Minute/m.durationPerHistogram) + 1
+	// This case occurs with the duration per histogram is not a divisor of a minute.
+	if time.Duration(countToKeep)*m.durationPerHistogram < time.Minute+m.durationPerHistogram {
 		countToKeep++
 	}
 
@@ -108,10 +96,14 @@ func (m *MovingAverageHistogram) StatLastMinute(f func(h *DurationHistogram) tim
 	copy(hists, m.h)
 	m.mu.Unlock()
 
-	agg := NewDurationHistogram(m.typ)
+	agg := m.newHist()
 	for _, h := range hists {
+		if h == nil {
+			// The other histograms will also be nil, so we break
+			break
+		}
 		// Ignore the error as we know that the histograms are of the same type.
-		agg.Add(h)
+		_ = agg.Add(h)
 	}
 
 	return f(agg)
