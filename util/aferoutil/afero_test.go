@@ -194,6 +194,18 @@ func TestRecreateDir(t *testing.T) {
 				return strings.ReplaceAll(p, "1", "0")
 			},
 		},
+		{
+			name:    "remove_1",
+			old:     []string{"a0", "b1", "c0", "d0/e1", "f1/g1/h1"},
+			new:     []string{"a0", "c0"},
+			exclude: []string{},
+			fn: func(p string) string {
+				if strings.Contains(p, "1") {
+					return ""
+				}
+				return p
+			},
+		},
 	}
 	dir, cleanup := testutil.TestDir("recreate_dir")
 	defer cleanup()
@@ -224,7 +236,7 @@ func TestRecreateDir(t *testing.T) {
 		// Recreate directories
 		n, err := RecreateDir(fs, path, test.fn, test.exclude...)
 		require.NoError(t, err)
-		require.Equal(t, len(test.old), n)
+		require.Equal(t, len(test.new), n)
 		// Check new directories with 0755 perms and existing files with 0750 perms
 		for i, fname := range test.new {
 			fpath := filepath.Join(path, fname)

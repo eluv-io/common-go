@@ -87,21 +87,24 @@ func MoveFile(fs afero.Fs, src, dst string) error {
 // RecreateDir re-creates the given directory and all sub-directories to reduce filesystem overhead for the directories
 // (see https://github.com/openzfs/zfs/issues/4933). If newFilePathFn is specified, visited files will be moved to
 // newFilePathFn(filePath) relative to the given top directory; otherwise, files will be moved to the matching path in
-// the re-created directory. Returns the number of moved files. Sub-directories in the given excludeDirs will not be
-// traversed but simply moved to the re-created directory.
+// the re-created directory. Returns the number of moved files. If newFilePathFn returns an empty string for a visited
+// file, the file will be removed instead of moved. Sub-directories in the given excludeDirs will not be traversed but
+// simply moved to the re-created directory.
 // Note: Uses the ".recreate" file extension for interim directories so that RecreateDir can be retried upon failures
 // and resume progress
 func RecreateDir(fs afero.Fs, path string, newFilePathFn func(string) string, excludeDirs ...string) (int, error) {
 	e := errors.Template("RecreateDir", errors.K.IO, "path", path)
-	var newPathFn func(string) string
 	if newFilePathFn == nil {
-		newPathFn = func(p string) string {
-			return filepath.Join(path, p)
+		newFilePathFn = func(p string) string {
+			return p
 		}
-	} else {
-		newPathFn = func(p string) string {
-			return filepath.Join(path, newFilePathFn(p))
+	}
+	newPathFn := func(p string) string {
+		newPath := newFilePathFn(p)
+		if newPath == "" {
+			return ""
 		}
+		return filepath.Join(path, newPath)
 	}
 	// Move existing/old dir, create new dir, move files over, delete old dir
 	backupPath := path + ".recreate"
@@ -139,12 +142,16 @@ func RecreateDir(fs afero.Fs, path string, newFilePathFn func(string) string, ex
 				} else {
 					oldPath := filepath.Join(basePath, filePath)
 					newPath := newPathFn(filePath)
-					err = fs.MkdirAll(filepath.Dir(newPath), os.ModePerm)
-					if err == nil {
-						err = fs.Rename(oldPath, newPath)
+					if newPath != "" {
+						err = fs.MkdirAll(filepath.Dir(newPath), os.ModePerm)
 						if err == nil {
-							n++
+							err = fs.Rename(oldPath, newPath)
+							if err == nil {
+								n++
+							}
 						}
+					} else {
+						err = fs.RemoveAll(oldPath)
 					}
 				}
 				if err != nil {
