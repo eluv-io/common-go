@@ -131,7 +131,7 @@ func RecreateDir(fs afero.Fs, path string, newFilePathFn func(string, bool) stri
 		}
 		defer errors.Ignore(dir.Close)
 		for {
-			files, err := dir.Readdir(4096)
+			files, err := dir.Readdir(8192)
 			for _, file := range files {
 				filePath := filepath.Join(subPath, file.Name())
 				var err error
