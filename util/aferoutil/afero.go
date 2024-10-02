@@ -85,22 +85,22 @@ func MoveFile(fs afero.Fs, src, dst string) error {
 }
 
 // RecreateDir re-creates the given directory and all sub-directories to reduce filesystem overhead for the directories
-// (see https://github.com/openzfs/zfs/issues/4933). If newFilePathFn is specified, visited files will be moved to
-// newFilePathFn(filePath) relative to the given top directory; otherwise, files will be moved to the matching path in
-// the re-created directory. Returns the number of moved files. If newFilePathFn returns an empty string for a visited
-// file, the file will be removed instead of moved. Sub-directories in the given excludeDirs will not be traversed but
-// simply moved to the re-created directory.
+// (see https://github.com/openzfs/zfs/issues/4933). Returns the number of moved files. If newFilePathFn is specified,
+// visited files will be moved to newFilePathFn(filePath) relative to the given top directory; otherwise, files will be
+// moved to the matching path in the re-created directory. If newFilePathFn returns an empty string for a visited file,
+// the file will be removed instead of moved. Sub-directories in the given excludeDirs and empty sub-directories will
+// not be traversed but treated as a visited file and moved accordingly.
 // Note: Uses the ".recreate" file extension for interim directories so that RecreateDir can be retried upon failures
 // and resume progress
-func RecreateDir(fs afero.Fs, path string, newFilePathFn func(string) string, excludeDirs ...string) (int, error) {
+func RecreateDir(fs afero.Fs, path string, newFilePathFn func(string, bool) string, excludeDirs ...string) (int, error) {
 	e := errors.Template("RecreateDir", errors.K.IO, "path", path)
 	if newFilePathFn == nil {
-		newFilePathFn = func(p string) string {
+		newFilePathFn = func(p string, _ bool) string {
 			return p
 		}
 	}
-	newPathFn := func(p string) string {
-		newPath := newFilePathFn(p)
+	newPathFn := func(p string, isDir bool) string {
+		newPath := newFilePathFn(p, isDir)
 		if newPath == "" {
 			return ""
 		}
@@ -139,9 +139,18 @@ func RecreateDir(fs afero.Fs, path string, newFilePathFn func(string) string, ex
 					var m int
 					m, err = visitDir(basePath, filePath)
 					n += m
+					if err == nil && m == 0 {
+						newPath := newPathFn(filePath, true)
+						if newPath != "" {
+							err = fs.MkdirAll(newPath, os.ModePerm)
+							if err == nil {
+								n++
+							}
+						}
+					}
 				} else {
 					oldPath := filepath.Join(basePath, filePath)
-					newPath := newPathFn(filePath)
+					newPath := newPathFn(filePath, file.IsDir())
 					if newPath != "" {
 						err = fs.MkdirAll(filepath.Dir(newPath), os.ModePerm)
 						if err == nil {
