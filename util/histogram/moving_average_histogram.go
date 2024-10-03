@@ -83,16 +83,10 @@ func (m *MovingAverageHistogram) Observe(n time.Duration) {
 }
 
 func (m *MovingAverageHistogram) StatLastMinute(f func(h *DurationHistogram) time.Duration) time.Duration {
-	// We calculate this countToKeep in order to at least capture the last minute worth of data,
-	// accounting for the possibility of an empty period that just started.
-	countToKeep := int(time.Minute/m.durationPerHistogram) + 1
-	// This case occurs with the duration per histogram is not a divisor of a minute.
-	if time.Duration(countToKeep)*m.durationPerHistogram < time.Minute+m.durationPerHistogram {
-		countToKeep++
-	}
+	count := countToKeep(m.durationPerHistogram, time.Minute)
 
 	m.mu.Lock()
-	hists := make([]*DurationHistogram, countToKeep)
+	hists := make([]*DurationHistogram, count)
 	copy(hists, m.h)
 	m.mu.Unlock()
 
@@ -141,4 +135,15 @@ func (m *MovingAverageHistogram) StatWeighted(f func(h *DurationHistogram) time.
 	}
 
 	return statValue / time.Duration(totWeight)
+}
+
+func countToKeep(durationPerHistogram, durationToCover time.Duration) int {
+	// We calculate this countToKeep in order to at least capture the last minute worth of data,
+	// accounting for the possibility of an empty period that just started.
+	countToKeep := int(durationToCover/durationPerHistogram) + 1
+	// This case occurs with the duration per histogram is not a divisor of a minute.
+	if time.Duration(countToKeep)*durationPerHistogram < durationToCover+durationPerHistogram {
+		countToKeep++
+	}
+	return countToKeep
 }
