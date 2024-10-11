@@ -100,6 +100,31 @@ func NewDurationHistogram(t DurationHistogramType) *Histogram[time.Duration] {
 	return h
 }
 
+func NewDefaultThroughputHistogram() *Histogram[float64] {
+	bytePerSecond := float64(1)
+	kbps := bytePerSecond * 1000
+	mbps := kbps * 1000
+	bins := []*HistogramBin[float64]{
+		{Label: "0-100bps", Max: bytePerSecond * 100},
+		{Label: "100bps-5kbps", Max: kbps * 5},
+		{Label: "5kbps-15kbps", Max: kbps * 15},
+		{Label: "15kbps-50kbps", Max: kbps * 50},
+		{Label: "50kbps-100kbps", Max: kbps * 100},
+		{Label: "100kbps-500kbps", Max: kbps * 500},
+		{Label: "500kbps-1mbps", Max: mbps},
+		{Label: "1mbps-5mbps", Max: mbps * 5},
+		{Label: "5mbps-10mbps", Max: mbps * 10},
+		{Label: "10mbps-50mbps", Max: mbps * 50},
+		{Label: "50mbps-100mbps", Max: mbps * 100},
+		{Label: "100mbps-500mbps", Max: mbps * 500},
+		{Label: "500mbps-1gbps", Max: mbps * 1000},
+		{Label: "1gbps-"},
+	}
+
+	h, _ := NewHistogramBins(bins)
+	return h
+}
+
 func (h *Histogram[T]) LoadValues(values []*SerializedHistogramBin[T]) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
