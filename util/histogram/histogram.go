@@ -126,11 +126,15 @@ type HistogramBin[T Number] struct {
 	DSum  T     // sum of values of this bin
 }
 
+type DurationBin = HistogramBin[time.Duration]
+
 type SerializedHistogramBin[T Number] struct {
 	Label string `json:"label"`
 	Count int64  `json:"count"`
 	DSum  T      `json:"dsum"`
 }
+
+type SerializedDurationBin = SerializedHistogramBin[time.Duration]
 
 // NewHistogramBins creates a histogram from custom duration bins. The bins must be empty
 // (Count and DSum equal to 0), and provided in strictly increasing order of bin maximums.
@@ -196,6 +200,8 @@ type Histogram[T Number] struct {
 	// determine if two duration histograms have the same bin structure.
 	binHash string
 }
+
+type DurationHistogram = Histogram[time.Duration]
 
 func (h *Histogram[_]) TotalCount() int64 {
 	h.mu.Lock()
