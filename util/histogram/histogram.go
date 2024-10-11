@@ -30,6 +30,10 @@ func NewDefaultHistogram() *Histogram[time.Duration] {
 	return NewDurationHistogram(DefaultDurationHistogram)
 }
 
+func NewDefaultDurationHistogram() *DurationHistogram {
+	return NewDurationHistogram(DefaultDurationHistogram)
+}
+
 // NewDurationHistogram creates a new duration histogram with predefined
 // labeled duration bins.
 // note: label are provided since computing them produces string with useless
