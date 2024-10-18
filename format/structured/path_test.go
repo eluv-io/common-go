@@ -199,3 +199,41 @@ func TestPathParsePaths(t *testing.T) {
 		})
 	}
 }
+
+func TestP(t *testing.T) {
+	tests := []struct {
+		paths []string
+		want  Path
+	}{
+		{
+			paths: nil,
+			want:  nil,
+		},
+		{
+			paths: []string{},
+			want:  Path(nil),
+		},
+		{
+			paths: []string{"/"},
+			want:  Path(nil),
+		},
+		{
+			paths: []string{"a", "b", "c"},
+			want:  Path{"a", "b", "c"},
+		},
+		{
+			paths: []string{"", "a", "", "c", ""},
+			want:  Path{"a", "c"}, // empty segments are ignored
+		},
+		{
+			paths: []string{"/", "/a/b", "c/d/e"},
+			want:  Path{"a", "b", "c", "d", "e"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(jsonutil.MarshalCompactString(tt.paths), func(t *testing.T) {
+			res := P(tt.paths...)
+			require.Equal(t, tt.want, res)
+		})
+	}
+}

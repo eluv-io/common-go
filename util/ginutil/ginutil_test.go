@@ -7,12 +7,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
+
 	"github.com/eluv-io/apexlog-go/handlers/memory"
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/log-go"
-	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/require"
 )
 
 func init() {
@@ -39,7 +40,7 @@ func TestAbort(t *testing.T) {
 		{errors.E("op", errors.K.IO), 500},
 		{errors.E("op", errors.K.AVInput), 500},
 		{errors.E("op", errors.K.AVProcessing), 500},
-		{errors.E("op", errors.K.NotImplemented), 500},
+		{errors.E("op", errors.K.NotImplemented), 501},
 		{errors.E("op", errors.K.Unavailable), 503},
 	}
 

@@ -210,3 +210,19 @@ func EscapeSeparators(path string, separator ...string) string {
 	}
 	return strings.NewReplacer("~", "~0", sep, "~1").Replace(path)
 }
+
+// P creates a new path from the given paths or path segments with the default '/' separator. Each of the provided
+// strings is parsed as path and appended to the resulting path.
+//
+// Notes:
+//
+//   - a string containing the separator is always split into multiple segments. If you want to preserve
+//     segments with separators, use NewPath().
+//   - empty strings are ignored: P("a", "", "b") => /a/b
+func P(pathsOrSegments ...string) Path {
+	var p Path
+	for _, pathOrSeg := range pathsOrSegments {
+		p = p.append(ParsePath(pathOrSeg)...)
+	}
+	return p
+}
