@@ -8,6 +8,8 @@ import (
 	"github.com/eluv-io/errors-go"
 )
 
+const KindRangeNotSatisfiable = errors.Kind("range not satisfiable")
+
 type ContentRange struct {
 	Off, Len, TotalLen     int64
 	AdaptedOff, AdaptedLen int64
@@ -56,18 +58,18 @@ func (c *ContentRange) TotalSize() int64 {
 // [Byte Range]: https://tools.ietf.org/html/rfc7233#section-2.1
 // [RFC 7233, section 4]: https://tools.ietf.org/html/rfc7233#section-4
 func AdaptRange(off, len, totalLen int64) (*ContentRange, error) {
+	e := errors.Template("adapt-byte-range", KindRangeNotSatisfiable, "offset", off, "length", len, "total_length", totalLen)
 	var err error = nil
 	realOff := off
 	realLen := len
 	if off < 0 && len < 0 {
-		err = errors.E("adapt-byte-range", errors.K.Invalid, "reason", "negative offset and length")
+		err = e("reason", "negative offset and length")
 	} else if off < 0 {
 		realOff = totalLen - len
 	} else if len < 0 {
 		realLen = totalLen - off
 		if realLen < 0 {
-			err = errors.E("adapt-byte-range", errors.K.Invalid, "reason", "offset larger than total length",
-				"offset", off, "length", len, "total_length", totalLen)
+			err = e("reason", "offset larger than total length")
 		}
 	}
 	if err == nil {
@@ -75,8 +77,7 @@ func AdaptRange(off, len, totalLen int64) (*ContentRange, error) {
 			realLen = totalLen - realOff
 		}
 		if realOff < 0 || (realOff > totalLen && realOff > 0) {
-			err = errors.E("adapt-byte-range", errors.K.Invalid, "reason", "invalid offset result",
-				"offset", off, "length", len, "total_length", totalLen)
+			err = e("reason", "invalid offset result")
 		}
 	}
 	if err != nil {
