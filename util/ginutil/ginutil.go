@@ -61,6 +61,8 @@ func HttpStatus(err error) int {
 			code = http.StatusServiceUnavailable
 		case errors.K.NotImplemented:
 			code = http.StatusNotImplemented
+		case httputil.KindRangeNotSatisfiable:
+			code = http.StatusRequestedRangeNotSatisfiable
 		}
 	}
 	return code

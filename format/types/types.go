@@ -66,6 +66,9 @@ type QPWriteToken = *token.Token
 // LROHandle is a handle for long running bitcode operations
 type LROHandle = *token.Token
 
+// LocalMediaFile is a handle for local media file jobs
+type LocalMediaFile = *token.Token
+
 // Attributes is the type of content attributes
 type Attributes struct{}
 

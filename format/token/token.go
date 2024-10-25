@@ -91,6 +91,25 @@ func NewLRO(code Code, nid id.ID, bytes ...byte) (*Token, error) {
 	return res, nil
 }
 
+// NewLocalFile creates a new local file token. The bytes are arbitrary, but should be unique.
+func NewLocalFile(nid id.ID, qid id.ID, bts []byte) (*Token, error) {
+	e := errors.Template("init local file token", errors.K.Invalid)
+	if nid.AssertCode(id.QNode) != nil {
+		return nil, e("reason", "invalid nid", "nid", nid)
+	}
+	if qid.AssertCode(id.Q) != nil {
+		return nil, e("reason", "invalid qid", "qid", qid)
+	}
+	res := &Token{
+		Code:  LocalFile,
+		Bytes: bts,
+		QID:   qid,
+		NID:   nid,
+	}
+	res.MakeString()
+	return res, nil
+}
+
 // Code is the type of a Token
 type Code uint8
 
@@ -136,6 +155,7 @@ const (
 	QPartWriteV1      // 1st version: random bytes
 	QPartWrite        // 2nd version: scheme, flags, random bytes
 	LRO               // node ID, random bytes
+	LocalFile         // node ID, content ID, bytes = hash(offering + presentation + format + start + end)
 )
 
 const prefixLen = 4
@@ -148,6 +168,7 @@ var prefixToCode = map[string]Code{
 	"tqpw": QPartWriteV1,
 	"tqp_": QPartWrite, // QPartWrite new version
 	"tlro": LRO,
+	"tlf_": LocalFile,
 }
 var codeToName = map[Code]string{
 	UNKNOWN:      "unknown",
@@ -156,6 +177,7 @@ var codeToName = map[Code]string{
 	QPartWriteV1: "content part write token v1",
 	QPartWrite:   "content part write token",
 	LRO:          "bitcode LRO handle",
+	LocalFile:    "local file",
 }
 
 // NOTE: 5 char prefix - 2 underscores!
@@ -244,7 +266,7 @@ func (t *Token) MakeString() string {
 	case QWriteV1, QPartWriteV1:
 		b = make([]byte, len(t.Bytes))
 		copy(b, t.Bytes)
-	case QWrite, LRO:
+	case QWrite, LRO, LocalFile:
 		// prefix + base58(uvarint(len(QID) | QID |
 		//                 uvarint(len(NID) | NID |
 		//                 uvarint(len(RAND_BYTES) | RAND_BYTES)
@@ -353,10 +375,10 @@ func (t *Token) Describe() string {
 
 	add("type:   " + t.Code.Describe())
 	add("bytes:  0x" + hex.EncodeToString(t.Bytes))
-	if t.Code == QWrite {
+	if t.Code == QWrite || t.Code == LocalFile {
 		add("qid:    " + t.QID.String())
 	}
-	if t.Code == QWrite || t.Code == LRO {
+	if t.Code == QWrite || t.Code == LRO || t.Code == LocalFile {
 		add("nid:    " + t.NID.String())
 	}
 	if t.Code == QPartWrite {
@@ -452,7 +474,7 @@ func Parse(s string) (*Token, error) {
 	switch code {
 	case QWriteV1, QPartWriteV1:
 		return &Token{Code: code, Bytes: dec, s: s}, nil
-	case QWrite, LRO:
+	case QWrite, LRO, LocalFile:
 		// prefix + base58(uvarint(len(QID) | QID |
 		//                 uvarint(len(NID) | NID |
 		//                 uvarint(len(RAND_BYTES) | RAND_BYTES)

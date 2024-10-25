@@ -148,6 +148,23 @@ func TestWrappedJSON(t *testing.T) {
 	assert.True(t, s.Token.Equal(unmarshalled.Token))
 }
 
+func TestNewLocalFile(t *testing.T) {
+	validate := func(t *testing.T, tok *token.Token) {
+		require.NoError(t, tok.AssertCode(token.LocalFile))
+		require.Equal(t, nid, tok.NID)
+		require.Equal(t, qid, tok.QID)
+	}
+
+	tok, err := token.NewLocalFile(nid, qid, []byte("some bytes"))
+	require.NoError(t, err)
+	fmt.Println(tok)
+	validate(t, tok)
+
+	tok2, err := token.Parse(tok.String())
+	require.NoError(t, err)
+	validate(t, tok2)
+}
+
 func ExampleToken_Describe_Object() {
 	tok, _ := token.FromString("tq__3WhUFGKoJAzvqrDWiZtkcfQHiKp4Gda4KkiwuRgX6BTFfq7hNeji2hPDW6qZxLuk7xAju4bgm8iLwK")
 	fmt.Println(tok.Describe())
@@ -181,4 +198,16 @@ func ExampleToken_Describe_LRO() {
 	// type:   bitcode LRO handle
 	// bytes:  0x2df2a5d3d6c4e0830a95e7f1e8c779f6
 	// nid:    inod2KRn6vRvn8U3gczhSMJwd1
+}
+
+func ExampleToken_Describe_LocalFile() {
+	tok, _ := token.FromString("tlf_HSQJP67VzgDtDSwhGoSTog7XxkePrBfLagrm8p7QWUqUPiuoj1gp5MvrxS3awRCZu6oMQdNZPUWxM8b9uan")
+	fmt.Println(tok.Describe())
+
+	// Output:
+	//
+	// type:   local file
+	// bytes:  0x9cd9260a25a7013e0e9a48f7a83a5937
+	// qid:    iq__99d4kp14eSDEP7HWfjU4W6qmqDw
+	// nid:    inod3Sa5p3czRyYi8GnVGnh8gBDLaqJr
 }

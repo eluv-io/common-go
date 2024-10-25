@@ -19,6 +19,7 @@ import (
 	cbor "github.com/multiformats/go-multicodec/cbor"
 	mcjson "github.com/multiformats/go-multicodec/json"
 	mux "github.com/multiformats/go-multicodec/mux"
+	"golang.org/x/text/encoding/charmap"
 
 	"github.com/eluv-io/common-go/format/id"
 	eioutil "github.com/eluv-io/common-go/util/ioutil"
@@ -568,4 +569,17 @@ func ParseServerError(body io.ReadCloser, httpStatusCode int) error {
 		return e("body", string(resp))
 	}
 	return e(list.ErrorOrNil())
+}
+
+// SetContentDisposition sets the Content-Disposition header as a filename attachment.
+//
+// See https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Disposition
+// See https://datatracker.ietf.org/doc/html/rfc5987
+func SetContentDisposition(header http.Header, filename string) {
+	if isoName, err := charmap.ISO8859_1.NewEncoder().String(filename); err == nil {
+		header.Add("Content-Disposition", "attachment; filename=\""+isoName+"\"")
+	} else {
+		// we could always add this variant - multiple Content-Disposition headers are allowed
+		header.Add("Content-Disposition", "attachment; filename*=UTF-8''"+url.PathEscape(filename)+"")
+	}
 }
