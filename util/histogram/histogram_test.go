@@ -108,7 +108,7 @@ func TestDurationMaxBehavior(t *testing.T) {
 	h.Observe(11)
 	h.Observe(100)
 	require.Equal(t, int64(2), h.bins[1].Count)
-	require.Equal(t, int64(111), h.bins[1].DSum)
+	require.Equal(t, time.Duration(111), h.bins[1].DSum)
 
 	bins2 := []*HistogramBin[time.Duration]{
 		{Label: "0-10", Max: 10},
@@ -122,7 +122,7 @@ func TestDurationMaxBehavior(t *testing.T) {
 	h2.Observe(11)
 	h2.Observe(100)
 	require.Equal(t, int64(1), h2.bins[1].Count)
-	require.Equal(t, int64(11), h2.bins[1].DSum)
+	require.Equal(t, time.Duration(11), h2.bins[1].DSum)
 }
 
 func TestStandardDeviation(t *testing.T) {
@@ -340,7 +340,7 @@ func TestHistogramConcurrency(t *testing.T) {
 
 	// Summary statistics are a simple way to ensure it looks the way it should
 	require.Equal(t, int64(50), h.TotalCount())
-	require.Equal(t, int64(1275), h.TotalDSum())
+	require.Equal(t, time.Duration(1275), h.TotalDSum())
 	require.Equal(t, time.Duration(10), h.Quantile(0.2))
 	require.Equal(t, time.Duration(49), h.Quantile(0.99))
 	require.Equal(t, time.Duration(25), h.Quantile(0.5))
