@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 
 	"github.com/eluv-io/utc-go"
 
+	"github.com/eluv-io/common-go/util/ctxutil"
 	"github.com/eluv-io/common-go/util/traceutil"
 	"github.com/eluv-io/common-go/util/traceutil/trace"
 )
@@ -35,6 +37,57 @@ func TestStartSubSpan(t *testing.T) {
 	require.Equal(t, "root-span", root.Data.Name)
 	require.Len(t, root.Data.Subs, 1)
 	require.Equal(t, "sub-span", root.Data.Subs[0].(*trace.RecordingSpan).Data.Name)
+}
+
+func TestSlowSpanInit(t *testing.T) {
+	rootSp := traceutil.InitTracing("slow-span-test", true)
+	require.True(t, rootSp.IsRecording())
+
+	span := traceutil.StartSpan("should-not-appear")
+	require.NotNil(t, span)
+	require.False(t, span.IsRecording())
+
+	slowSp := traceutil.StartSlowSpan("should-appear")
+	require.NotNil(t, slowSp)
+	require.True(t, slowSp.IsRecording())
+
+	slowSp.SetSlowCutoff(5 * time.Second)
+
+	slowSp.End()
+
+	require.Greater(t, slowSp.Duration(), time.Duration(0))
+	require.Equal(t, 5*time.Second, slowSp.SlowCutoff())
+	span.End()
+	rootSp.End()
+
+	s := rootSp.Json()
+	require.Equal(t, 1, strings.Count(s, "should-appear"))
+	require.Equal(t, 0, strings.Count(s, "should-not-appear"))
+	require.Equal(t, 1, strings.Count(s, "slow-span-test"))
+}
+
+func TestInitTracing(t *testing.T) {
+	rootSp := traceutil.InitTracing("init-tracing-test", false)
+	require.Equal(t, ctxutil.Current().Span(), ctxutil.Current().SlowSpan())
+	require.True(t, rootSp.IsRecording())
+
+	span := traceutil.StartSpan("should-appear-regular")
+	require.NotNil(t, span)
+
+	slowSp := traceutil.StartSlowSpan("should-appear-slow")
+	require.NotNil(t, slowSp)
+	slowSp.Attribute("attr-1", "arbitrary-unique-value")
+
+	slowSp.End()
+	span.End()
+	rootSp.End()
+
+	s := rootSp.Json()
+	require.Equal(t, 1, strings.Count(s, "should-appear-regular"))
+	require.Equal(t, 1, strings.Count(s, "should-appear-slow"))
+	require.Equal(t, 1, strings.Count(s, "init-tracing-test"))
+	require.Equal(t, 1, strings.Count(s, "attr-1"))
+	require.Equal(t, 1, strings.Count(s, "arbitrary-unique-value"))
 }
 
 func TestWithSubSpan(t *testing.T) {

@@ -65,6 +65,14 @@ type ExtendedSpan interface {
 
 	// SetMarshalExtended sets the span to use an extended JSON representation during marshaling.
 	SetMarshalExtended()
+
+	// SetSlowCutoff sets the slow cutoff duration for the span. A span that exceeds this duration
+	// will be considered slow.
+	SetSlowCutoff(cutoff time.Duration)
+
+	// SlowCutoff is the slow cutoff duration for the span. A span that exceeds its slow cutoff is
+	// considered an ususually slow operation.
+	SlowCutoff() time.Duration
 }
 
 type Event struct {
@@ -95,6 +103,8 @@ func (n NoopSpan) Duration() time.Duration                              { return
 func (n NoopSpan) MaxDuration() time.Duration                           { return 0 }
 func (n NoopSpan) MarshalExtended() bool                                { return false }
 func (n NoopSpan) SetMarshalExtended()                                  {}
+func (n NoopSpan) SlowCutoff() time.Duration                            { return 0 }
+func (n NoopSpan) SetSlowCutoff(cutoff time.Duration)                   {}
 
 // ---------------------------------------------------------------------------------------------------------------------
 
@@ -114,6 +124,7 @@ type RecordingSpan struct {
 	startTime utc.UTC
 	endTime   utc.UTC
 	duration  time.Duration
+	cutoff    time.Duration
 	extended  bool
 }
 
@@ -265,6 +276,20 @@ func (s *RecordingSpan) MarshalExtended() bool {
 
 func (s *RecordingSpan) SetMarshalExtended() {
 	s.extended = true
+}
+
+func (s *RecordingSpan) SetSlowCutoff(cutoff time.Duration) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	s.cutoff = cutoff
+}
+
+func (s *RecordingSpan) SlowCutoff() time.Duration {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	return s.cutoff
 }
 
 func (s *RecordingSpan) MarshalJSON() ([]byte, error) {
