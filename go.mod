@@ -1,12 +1,13 @@
 module github.com/eluv-io/common-go
 
-go 1.19
+go 1.21.0
 
 require (
 	github.com/PaesslerAG/gval v1.1.2
 	github.com/PaesslerAG/jsonpath v0.1.1
 	github.com/beevik/etree v1.1.0
 	github.com/davecgh/go-spew v1.1.1
+	github.com/djherbis/times v1.6.0
 	github.com/eluv-io/apexlog-go v1.9.1-elv4
 	github.com/eluv-io/errors-go v1.0.3
 	github.com/eluv-io/inject-go v1.0.2
@@ -46,8 +47,8 @@ require (
 	github.com/go-playground/universal-translator v0.17.0 // indirect
 	github.com/go-playground/validator/v10 v10.4.1 // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
-	github.com/golang/protobuf v1.5.2 // indirect
-	github.com/google/uuid v1.3.0 // indirect
+	github.com/golang/protobuf v1.5.3 // indirect
+	github.com/google/uuid v1.4.0 // indirect
 	github.com/gopherjs/gopherjs v1.17.2 // indirect
 	github.com/json-iterator/go v1.1.9 // indirect
 	github.com/jtolds/gls v4.20.0+incompatible // indirect
@@ -58,10 +59,10 @@ require (
 	github.com/rjeczalik/notify v0.9.3 // indirect
 	github.com/smarty/assertions v1.15.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
-	golang.org/x/crypto v0.0.0-20211108221036-ceb1ce70b4fa // indirect
-	golang.org/x/sys v0.6.0 // indirect
-	golang.org/x/text v0.3.7 // indirect
-	google.golang.org/protobuf v1.26.0 // indirect
+	golang.org/x/crypto v0.16.0 // indirect
+	golang.org/x/sys v0.15.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
+	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
@@ -70,4 +71,5 @@ require (
 replace (
 	github.com/fxamacker/cbor/v2 => github.com/eluv-io/cbor/v2 v2.3.1-0.20230627215207-bd2cc685afdd
 	github.com/modern-go/gls => github.com/eluv-io/gls v1.0.0-elv1
+	github.com/spf13/afero => github.com/eluv-io/afero v1.11.1-0.20240924184135-9fbf4dcfd6f0
 )
