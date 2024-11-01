@@ -9,6 +9,7 @@ import (
 	"github.com/eluv-io/utc-go"
 
 	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/util/sliceutil"
 )
 
 // Span represents an operation that is named and timed. It may contain sub-spans, representing nested sub-operations. A
@@ -73,6 +74,10 @@ type ExtendedSpan interface {
 	// SlowCutoff is the slow cutoff duration for the span. A span that exceeds its slow cutoff is
 	// considered an ususually slow operation.
 	SlowCutoff() time.Duration
+
+	// SlowSpans returns all spans that have a sub-span that is slower than the cutoff. If there are no
+	// slow subspans beneath this span, or this span has not been concluded, it returns false.
+	SlowSpans() (Span, bool)
 }
 
 type Event struct {
@@ -105,6 +110,7 @@ func (n NoopSpan) MarshalExtended() bool                                { return
 func (n NoopSpan) SetMarshalExtended()                                  {}
 func (n NoopSpan) SlowCutoff() time.Duration                            { return 0 }
 func (n NoopSpan) SetSlowCutoff(cutoff time.Duration)                   {}
+func (n NoopSpan) SlowSpans() (Span, bool)                              { return nil, false }
 
 // ---------------------------------------------------------------------------------------------------------------------
 
@@ -292,10 +298,56 @@ func (s *RecordingSpan) SlowCutoff() time.Duration {
 	return s.cutoff
 }
 
+// SlowSpans returns all spans that have a sub-span that is slower than the cutoff. If there are no
+// slow subspans beneath this span, or this span has not been concluded, it returns false.
+func (s *RecordingSpan) SlowSpans() (Span, bool) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	if s.endTime == utc.Zero {
+		return nil, false
+	}
+	sCopy := s.copy()
+
+	if s.SlowCutoff() != time.Duration(0) && s.Duration() > s.SlowCutoff() {
+		return s, true
+	}
+
+	sawSlow := false
+	subsCopy := sliceutil.Copy(s.Data.Subs)
+	sCopy.Data.Subs = []Span{}
+	for _, sub := range subsCopy {
+		subC, slow := sub.(*RecordingSpan).SlowSpans()
+		sawSlow = sawSlow || slow
+		if slow {
+			sCopy.Data.Subs = append(sCopy.Data.Subs, subC)
+		}
+	}
+	return sCopy, sawSlow
+}
+
 func (s *RecordingSpan) MarshalJSON() ([]byte, error) {
 	if s.MarshalExtended() {
 		return json.Marshal(s.Data)
 	} else {
 		return json.Marshal(s.Data.recordingData)
 	}
+}
+
+// copy returns a shallow copy of a recording span. In particular, the referenced elements from
+// within the data (Attr, Events, Subs), cannot be modified.
+func (s *RecordingSpan) copy() *RecordingSpan {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	c := &RecordingSpan{
+		Parent:    s.Parent,
+		Data:      s.Data,
+		startTime: s.startTime,
+		endTime:   s.endTime,
+		duration:  s.duration,
+		cutoff:    s.cutoff,
+		extended:  s.extended,
+	}
+	return c
 }
