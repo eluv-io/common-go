@@ -334,12 +334,10 @@ func (s *RecordingSpan) MarshalJSON() ([]byte, error) {
 	}
 }
 
-// copy returns a shallow copy of a recording span. In particular, the referenced elements from
-// within the data (Attr, Events, Subs), cannot be modified.
+// copy returns a shallow copy of a recording span. The lock must be held while this function is
+// called. In particular, the referenced elements from within the data (Attr, Events, Subs), cannot
+// be modified.
 func (s *RecordingSpan) copy() *RecordingSpan {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
 	c := &RecordingSpan{
 		Parent:    s.Parent,
 		Data:      s.Data,
