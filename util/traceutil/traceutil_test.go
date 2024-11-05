@@ -41,6 +41,7 @@ func TestStartSubSpan(t *testing.T) {
 func TestSlowSpanInit(t *testing.T) {
 	rootSp := traceutil.InitTracing("slow-span-test", true)
 	require.True(t, rootSp.IsRecording())
+	require.True(t, rootSp.SlowOnly())
 
 	span := traceutil.StartSpan("should-not-appear")
 	require.NotNil(t, span)
@@ -49,20 +50,34 @@ func TestSlowSpanInit(t *testing.T) {
 	slowSp := traceutil.StartSlowSpan("should-appear")
 	require.NotNil(t, slowSp)
 	require.True(t, slowSp.IsRecording())
+	require.True(t, slowSp.SlowOnly())
 
-	slowSp.SetSlowCutoff(5 * time.Second)
+	slowSp.SetSlowCutoff(500 * time.Millisecond)
+	time.Sleep(1 * time.Second)
 
 	slowSp.End()
 
 	require.Greater(t, slowSp.Duration(), time.Duration(0))
-	require.Equal(t, 5*time.Second, slowSp.SlowCutoff())
+	require.Equal(t, 500*time.Millisecond, slowSp.SlowCutoff())
 	span.End()
-	rootSp.End()
 
+	// Testing marshalling before ending
 	s := rootSp.Json()
 	require.Equal(t, 1, strings.Count(s, "should-appear"))
 	require.Equal(t, 0, strings.Count(s, "should-not-appear"))
 	require.Equal(t, 1, strings.Count(s, "slow-span-test"))
+
+	rootSp.End()
+
+	s = rootSp.Json()
+	require.Equal(t, 1, strings.Count(s, "should-appear"))
+	require.Equal(t, 0, strings.Count(s, "should-not-appear"))
+	require.Equal(t, 1, strings.Count(s, "slow-span-test"))
+
+	s2, err, foundSlow := rootSp.MarshalSlowOnly()
+	require.NoError(t, err)
+	require.True(t, foundSlow)
+	require.Equal(t, 1, strings.Count(string(s2), "should-appear"))
 }
 
 func TestInitTracing(t *testing.T) {

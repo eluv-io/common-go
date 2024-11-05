@@ -78,9 +78,9 @@ type ExtendedSpan interface {
 	// considered an ususually slow operation.
 	SlowCutoff() time.Duration
 
-	// SlowSpans returns all spans that have a sub-span that is slower than the cutoff. If there are no
-	// slow subspans beneath this span, or this span has not been concluded, it returns false.
-	SlowSpans() (Span, bool)
+	// MarshalSlowOnly returns the marshalling of all spans for which a sub-span or parent span is
+	// slower than the cutoff.
+	MarshalSlowOnly() ([]byte, error, bool)
 }
 
 type Event struct {
@@ -114,7 +114,7 @@ func (n NoopSpan) MarshalExtended() bool                                { return
 func (n NoopSpan) SetMarshalExtended()                                  {}
 func (n NoopSpan) SlowCutoff() time.Duration                            { return 0 }
 func (n NoopSpan) SetSlowCutoff(cutoff time.Duration)                   {}
-func (n NoopSpan) SlowSpans() (Span, bool)                              { return nil, false }
+func (n NoopSpan) MarshalSlowOnly() ([]byte, error, bool)               { return nil, nil, false }
 
 // ---------------------------------------------------------------------------------------------------------------------
 
@@ -135,8 +135,10 @@ type RecordingSpan struct {
 	startTime utc.UTC
 	endTime   utc.UTC
 	duration  time.Duration
-	extended  bool
-	slowOnly  bool
+	// extended must not be protected by a lock, as child spans may look up to their parent span to
+	// determine marshalling behavior
+	extended bool
+	slowOnly bool
 }
 
 type recordingData struct {
@@ -172,10 +174,25 @@ func (s *RecordingSpan) End() {
 	if s.endTime != utc.Zero {
 		return
 	}
+	s.setEnd()
+}
+
+// setEnd assumes that the lock is held
+func (s *RecordingSpan) setEnd() {
+	if s.endTime != utc.Zero {
+		return
+	}
 	s.endTime = utc.Now()
 	s.duration = s.endTime.Sub(s.startTime)
 	s.Data.Duration = duration.Spec(s.duration).RoundTo(1)
 	s.Data.End = s.endTime.String()
+}
+
+func (s *RecordingSpan) undoEnd() {
+	s.endTime = utc.Zero
+	s.duration = 0
+	s.Data.Duration = 0
+	s.Data.End = ""
 }
 
 func (s *RecordingSpan) Attribute(name string, val interface{}) {
@@ -310,12 +327,11 @@ func (s *RecordingSpan) SlowCutoff() time.Duration {
 
 // SlowSpans returns all spans that have a sub-span that is slower than the cutoff. If there are no
 // slow subspans beneath this span, or this span has not been concluded, it returns false.
-func (s *RecordingSpan) SlowSpans() (Span, bool) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	if s.endTime == utc.Zero {
-		return nil, false
+func (s *RecordingSpan) slowSpans() (Span, bool) {
+	notEnded := s.endTime == utc.Zero
+	if notEnded {
+		s.setEnd()
+		defer s.undoEnd()
 	}
 	sCopy := s.copy()
 
@@ -327,21 +343,46 @@ func (s *RecordingSpan) SlowSpans() (Span, bool) {
 	subsCopy := sliceutil.Copy(s.Data.Subs)
 	sCopy.Data.Subs = []Span{}
 	for _, sub := range subsCopy {
-		subC, slow := sub.(*RecordingSpan).SlowSpans()
+		subC, slow := sub.(*RecordingSpan).slowSpans()
 		sawSlow = sawSlow || slow
 		if slow {
 			sCopy.Data.Subs = append(sCopy.Data.Subs, subC)
 		}
 	}
+
 	return sCopy, sawSlow
 }
 
 func (s *RecordingSpan) MarshalJSON() ([]byte, error) {
-	if s.MarshalExtended() {
-		return json.Marshal(s.Data)
-	} else {
-		return json.Marshal(s.Data.recordingData)
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	notEnded := s.endTime == utc.Zero
+	if notEnded {
+		s.setEnd()
+		defer s.undoEnd()
 	}
+
+	var ret []byte
+	var err error
+	if s.MarshalExtended() {
+		ret, err = json.Marshal(s.Data)
+	} else {
+		ret, err = json.Marshal(s.Data.recordingData)
+	}
+	return ret, err
+}
+
+func (s *RecordingSpan) MarshalSlowOnly() ([]byte, error, bool) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	slowSpans, sawSlow := s.slowSpans()
+	if !sawSlow {
+		return nil, nil, false
+	}
+	d, err := json.Marshal(slowSpans)
+	return d, err, true
 }
 
 // copy returns a shallow copy of a recording span. The lock must be held while this function is
