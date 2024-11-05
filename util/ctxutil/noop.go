@@ -38,14 +38,6 @@ func (n noop) StartSpan(_ string) trace.Span {
 	return trace.NoopSpan{}
 }
 
-func (n noop) StartSlowSpan(_ string) trace.Span {
-	return trace.NoopSpan{}
-}
-
 func (n noop) Span() trace.Span {
-	return trace.NoopSpan{}
-}
-
-func (n noop) SlowSpan() trace.Span {
 	return trace.NoopSpan{}
 }

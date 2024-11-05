@@ -96,9 +96,6 @@ type NoopSpan struct{}
 func (n NoopSpan) Start(ctx context.Context, _ string) (context.Context, Span) {
 	return ctx, n
 }
-func (n NoopSpan) StartSlow(ctx context.Context, _ string) (context.Context, Span) {
-	return ctx, n
-}
 
 func (n NoopSpan) End()                                                 {}
 func (n NoopSpan) Attribute(name string, val interface{})               {}

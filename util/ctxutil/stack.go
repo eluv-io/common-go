@@ -83,7 +83,7 @@ type ContextStack interface {
 	Go(fn func())
 
 	// InitTracing initializes tracing for the current goroutine with a root span created through the given tracer.
-	// If slowOnly is true, the root span will be a noop, and only the span for slow operations will record.
+	// If slowOnly is true, the root span will only record operations that are explicitly started as slow spans.
 	InitTracing(spanName string, slowOnly bool) trace.Span
 
 	// StartSpan starts a new span and pushes its context onto the stack of the current goroutine. The span pops the
@@ -186,12 +186,10 @@ func (c *contextStack) InitTracing(spanName string, slowOnly bool) trace.Span {
 func (c *contextStack) StartSpan(spanName string) trace.Span {
 	ctx := c.Ctx()
 	parentSpan := trace.SpanFromContext(ctx)
-
 	if !parentSpan.IsRecording() {
 		// fast path if tracing is disabled: no need to start a (noop) span and push its dummy ctx onto the stack...
 		return trace.NoopSpan{}
 	}
-
 	ctx, sp := parentSpan.Start(ctx, spanName)
 	release := c.Push(ctx)
 	return &span{
