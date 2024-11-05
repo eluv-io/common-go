@@ -309,7 +309,7 @@ func (s *RecordingSpan) SlowSpans() (Span, bool) {
 	}
 	sCopy := s.copy()
 
-	if s.SlowCutoff() != time.Duration(0) && s.Duration() > s.SlowCutoff() {
+	if s.cutoff != time.Duration(0) && s.duration > s.cutoff {
 		return s, true
 	}
 
