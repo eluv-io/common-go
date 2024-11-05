@@ -49,7 +49,9 @@ func WithSpan(spanName string, fn func() error) error {
 	return err
 }
 
-// Span retrieves the current span of this goroutine.
+// Span retrieves the current span of this goroutine. If this function is used to add attributes or
+// events to the span, span.SlowOnly should be checked to ensure that detailed tracing is not added
+// when unnecessary.
 func Span() trace.Span {
 	return current().Span()
 }
