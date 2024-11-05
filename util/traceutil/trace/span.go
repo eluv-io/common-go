@@ -81,9 +81,9 @@ type ExtendedSpan interface {
 }
 
 type Event struct {
-	Name string                 `json:"name"`
-	Time utc.UTC                `json:"-"`
-	Attr map[string]interface{} `json:"attr,omitempty"`
+	Name     string                 `json:"name"`
+	TimeInto duration.Spec          `json:"time_into"`
+	Attr     map[string]interface{} `json:"attr,omitempty"`
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -187,9 +187,9 @@ func (s *RecordingSpan) Event(name string, attributes map[string]interface{}) {
 	defer s.mutex.Unlock()
 
 	s.Data.Events = append(s.Data.Events, &Event{
-		Name: name,
-		Time: utc.Now(),
-		Attr: attributes,
+		Name:     name,
+		TimeInto: duration.Spec(utc.Now().Sub(s.startTime)),
+		Attr:     attributes,
 	})
 }
 
