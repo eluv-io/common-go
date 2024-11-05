@@ -31,16 +31,15 @@ type Span interface {
 	// IsRecording returns true if the span is active and recording events is enabled.
 	IsRecording() bool
 
+	// IsRecording returns true if the span is active and recording events is enabled.
+	SlowOnly() bool
+
 	// Json converts the span to its JSON representation.
 	Json() string
 
 	// Start creates and starts a sub-span. The returned context holds a reference to the sub-span and may be retrieved
 	// with SpanFromContext.
 	Start(ctx context.Context, name string) (context.Context, Span)
-
-	// StartSlow creates and starts a sub-span. The returned context holds a reference to the
-	// sub-span and may be retrieved with SlowSpanFromContext.
-	StartSlow(ctx context.Context, name string) (context.Context, Span)
 
 	// Attributes returns the span's attribute set.
 	Attributes() map[string]interface{}
@@ -105,6 +104,7 @@ func (n NoopSpan) End()                                                 {}
 func (n NoopSpan) Attribute(name string, val interface{})               {}
 func (n NoopSpan) Event(name string, attributes map[string]interface{}) {}
 func (n NoopSpan) IsRecording() bool                                    { return false }
+func (n NoopSpan) SlowOnly() bool                                       { return false }
 func (n NoopSpan) Json() string                                         { return "" }
 func (n NoopSpan) Attributes() map[string]interface{}                   { return nil }
 func (n NoopSpan) Events() []*Event                                     { return nil }
@@ -121,9 +121,10 @@ func (n NoopSpan) SlowSpans() (Span, bool)                              { return
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-func newSpan(name string) *RecordingSpan {
+func newSpan(name string, slowOnly bool) *RecordingSpan {
 	s := &RecordingSpan{
 		startTime: utc.Now(),
+		slowOnly:  slowOnly,
 	}
 	s.Data.Name = name
 	s.Data.Start = s.startTime.String()
@@ -138,6 +139,7 @@ type RecordingSpan struct {
 	endTime   utc.UTC
 	duration  time.Duration
 	extended  bool
+	slowOnly  bool
 }
 
 type recordingData struct {
@@ -156,26 +158,14 @@ type recordingExtendedData struct {
 }
 
 func (s *RecordingSpan) Start(ctx context.Context, name string) (context.Context, Span) {
-	return s.start(ctx, name, false)
-}
-
-func (s *RecordingSpan) StartSlow(ctx context.Context, name string) (context.Context, Span) {
-	return s.start(ctx, name, true)
-}
-
-func (s *RecordingSpan) start(ctx context.Context, name string, slow bool) (context.Context, Span) {
-	sub := newSpan(name)
+	sub := newSpan(name, s.slowOnly)
 	sub.Parent = s
 
 	s.mutex.Lock()
 	s.Data.Subs = append(s.Data.Subs, sub)
 	s.mutex.Unlock()
 
-	if slow {
-		return ContextWithSlowSpan(ctx, sub), sub
-	} else {
-		return ContextWithSpan(ctx, sub), sub
-	}
+	return ContextWithSpan(ctx, sub), sub
 }
 
 func (s *RecordingSpan) End() {
@@ -214,6 +204,10 @@ func (s *RecordingSpan) Event(name string, attributes map[string]interface{}) {
 
 func (s *RecordingSpan) IsRecording() bool {
 	return true
+}
+
+func (s *RecordingSpan) SlowOnly() bool {
+	return s.slowOnly
 }
 
 func (s *RecordingSpan) Json() string {

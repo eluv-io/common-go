@@ -12,7 +12,6 @@ import (
 
 	"github.com/eluv-io/utc-go"
 
-	"github.com/eluv-io/common-go/util/ctxutil"
 	"github.com/eluv-io/common-go/util/traceutil"
 	"github.com/eluv-io/common-go/util/traceutil/trace"
 )
@@ -68,8 +67,8 @@ func TestSlowSpanInit(t *testing.T) {
 
 func TestInitTracing(t *testing.T) {
 	rootSp := traceutil.InitTracing("init-tracing-test", false)
-	require.Equal(t, ctxutil.Current().Span(), ctxutil.Current().SlowSpan())
 	require.True(t, rootSp.IsRecording())
+	require.False(t, rootSp.SlowOnly())
 
 	span := traceutil.StartSpan("should-appear-regular")
 	require.NotNil(t, span)

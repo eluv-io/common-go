@@ -23,13 +23,17 @@ func InitTracing(spanName string, slowOnly bool) trace.Span {
 // StartSpan creates new sub-span of the goroutine's current span or a noop
 // span if there is no current span.
 func StartSpan(spanName string) trace.Span {
+	sp := current().Span()
+	if sp.SlowOnly() {
+		return trace.NoopSpan{}
+	}
 	return current().StartSpan(spanName)
 }
 
 // StartSlowSpan creates a new sub-span of the goroutine's current slow span or a noop span if there
 // is no current span. If tracing is fully enabled, this has the exact same behavior as StartSpan.
 func StartSlowSpan(spanName string) trace.Span {
-	return current().StartSlowSpan(spanName)
+	return current().StartSpan(spanName)
 }
 
 // WithSpan creates a new sub-span of the goroutine's current span and executes
@@ -48,11 +52,6 @@ func WithSpan(spanName string, fn func() error) error {
 // Span retrieves the current span of this goroutine.
 func Span() trace.Span {
 	return current().Span()
-}
-
-// SlowSpan retrieves the current slow span of this goroutine, used for tracking slow requests.
-func SlowSpan() trace.Span {
-	return current().SlowSpan()
 }
 
 // Ctx returns the current tracing context. Should only be used for backwards

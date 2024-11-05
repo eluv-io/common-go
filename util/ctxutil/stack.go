@@ -94,20 +94,8 @@ type ContextStack interface {
 	//	defer span.End()
 	StartSpan(spanName string) trace.Span
 
-	// StartSlowSpan starts a new span and pushes its context onto the stack of the current
-	// goroutine. The span pops the context upon calling span.End(). It differs from StartSpan in
-	// that it will almost always be used.
-	//
-	// Usage:
-	// 	span := r.cs.StartSpan("my span")
-	//	defer span.End()
-	StartSlowSpan(spanName string) trace.Span
-
 	// Span retrieves the goroutine's current span.
 	Span() trace.Span
-
-	// SlowSpan retrieves the goroutine's current slow span.
-	SlowSpan() trace.Span
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -185,9 +173,7 @@ func (c *contextStack) InitTracing(spanName string, slowOnly bool) trace.Span {
 	if slowOnly {
 		ctx, sp = trace.StartSlowSpan(c.Ctx(), spanName)
 	} else {
-		var rootCtx context.Context
-		rootCtx, sp = trace.StartRootSpan(c.Ctx(), spanName)
-		ctx = trace.ContextWithSlowSpan(rootCtx, sp)
+		ctx, sp = trace.StartRootSpan(c.Ctx(), spanName)
 	}
 	release := c.Push(ctx)
 	return &span{
@@ -198,34 +184,15 @@ func (c *contextStack) InitTracing(spanName string, slowOnly bool) trace.Span {
 }
 
 func (c *contextStack) StartSpan(spanName string) trace.Span {
-	return c.startSpan(spanName, false)
-}
-
-func (c *contextStack) StartSlowSpan(spanName string) trace.Span {
-	return c.startSpan(spanName, true)
-}
-
-func (c *contextStack) startSpan(spanName string, slow bool) trace.Span {
 	ctx := c.Ctx()
-	var parentSpan trace.Span
-	if slow {
-		parentSpan, slow = trace.SlowSpanFromContext(ctx)
-	} else {
-		parentSpan = trace.SpanFromContext(ctx)
-	}
+	parentSpan := trace.SpanFromContext(ctx)
 
 	if !parentSpan.IsRecording() {
 		// fast path if tracing is disabled: no need to start a (noop) span and push its dummy ctx onto the stack...
 		return trace.NoopSpan{}
 	}
 
-	var sp trace.Span
-	if slow {
-		ctx, sp = parentSpan.StartSlow(ctx, spanName)
-	} else {
-		ctx, sp = parentSpan.Start(ctx, spanName)
-	}
-
+	ctx, sp := parentSpan.Start(ctx, spanName)
 	release := c.Push(ctx)
 	return &span{
 		gid:     goutil.GoID(),
@@ -236,11 +203,6 @@ func (c *contextStack) startSpan(spanName string, slow bool) trace.Span {
 
 func (c *contextStack) Span() trace.Span {
 	return trace.SpanFromContext(c.Ctx())
-}
-
-func (c *contextStack) SlowSpan() trace.Span {
-	s, _ := trace.SlowSpanFromContext(c.Ctx())
-	return s
 }
 
 func (c *contextStack) WithValue(key interface{}, val interface{}) func() {
