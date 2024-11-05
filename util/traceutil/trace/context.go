@@ -47,7 +47,7 @@ func SpanFromContext(ctx context.Context) Span {
 // should generally never actually be returned, however.
 func SlowSpanFromContext(ctx context.Context) Span {
 	val := ctx.Value(activeSpanKey)
-	if sp, ok := val.(Span); ok {
+	if sp, ok := val.(Span); ok && sp.IsRecording() {
 		return sp
 	}
 	valSlow := ctx.Value(slowSpanKey)
