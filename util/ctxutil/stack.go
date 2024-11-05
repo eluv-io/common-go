@@ -3,6 +3,7 @@ package ctxutil
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"runtime/debug"
 	"sync"
 
@@ -133,6 +134,8 @@ func (c *contextStack) Push(ctx context.Context) func() {
 		parent: se.stack,
 	}
 	se.stack = s
+	gid := goutil.GoID()
+	log.Info(fmt.Sprintf("NATE push GID %d", gid), "stack", string(debug.Stack()))
 	return func() {
 		c.pop(s)
 	}
@@ -145,6 +148,8 @@ func (c *contextStack) pop(expect *stack) {
 
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
+
+	log.Info(fmt.Sprintf("NATE pop GID %d", gid), "stack", string(debug.Stack()))
 
 	e, ok := c.stacks[gid]
 	if !ok {
