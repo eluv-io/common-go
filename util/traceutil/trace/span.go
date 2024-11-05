@@ -130,13 +130,13 @@ type RecordingSpan struct {
 	startTime utc.UTC
 	endTime   utc.UTC
 	duration  time.Duration
-	cutoff    time.Duration
 	extended  bool
 }
 
 type recordingData struct {
 	Name     string                 `json:"name"`
 	Duration duration.Spec          `json:"time"`
+	Cutoff   duration.Spec          `json:"cutoff,omitempty"`
 	Attr     map[string]interface{} `json:"attr,omitempty"`
 	Events   []*Event               `json:"evnt,omitempty"`
 	Subs     []Span                 `json:"subs,omitempty"`
@@ -288,14 +288,14 @@ func (s *RecordingSpan) SetSlowCutoff(cutoff time.Duration) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	s.cutoff = cutoff
+	s.Data.Cutoff = duration.Spec(cutoff).RoundTo(1)
 }
 
 func (s *RecordingSpan) SlowCutoff() time.Duration {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	return s.cutoff
+	return s.Data.Cutoff.Duration()
 }
 
 // SlowSpans returns all spans that have a sub-span that is slower than the cutoff. If there are no
@@ -309,7 +309,7 @@ func (s *RecordingSpan) SlowSpans() (Span, bool) {
 	}
 	sCopy := s.copy()
 
-	if s.cutoff != time.Duration(0) && s.duration > s.cutoff {
+	if s.Data.Cutoff.Duration() != time.Duration(0) && s.duration > s.Data.Cutoff.Duration() {
 		return s, true
 	}
 
@@ -344,7 +344,6 @@ func (s *RecordingSpan) copy() *RecordingSpan {
 		startTime: s.startTime,
 		endTime:   s.endTime,
 		duration:  s.duration,
-		cutoff:    s.cutoff,
 		extended:  s.extended,
 	}
 	return c
