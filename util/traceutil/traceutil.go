@@ -50,6 +50,11 @@ func Span() trace.Span {
 	return current().Span()
 }
 
+// SlowSpan retrieves the current slow span of this goroutine, used for tracking slow requests.
+func SlowSpan() trace.Span {
+	return current().SlowSpan()
+}
+
 // Ctx returns the current tracing context. Should only be used for backwards
 // compatibility until old code is converted to use StartSpan directly.
 func Ctx() context.Context {
