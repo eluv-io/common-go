@@ -38,6 +38,10 @@ type Span interface {
 	// with SpanFromContext.
 	Start(ctx context.Context, name string) (context.Context, Span)
 
+	// StartSlow creates and starts a sub-span. The returned context holds a reference to the
+	// sub-span and may be retrieved with SlowSpanFromContext.
+	StartSlow(ctx context.Context, name string) (context.Context, Span)
+
 	// Attributes returns the span's attribute set.
 	Attributes() map[string]interface{}
 
@@ -91,6 +95,9 @@ type Event struct {
 type NoopSpan struct{}
 
 func (n NoopSpan) Start(ctx context.Context, _ string) (context.Context, Span) {
+	return ctx, n
+}
+func (n NoopSpan) StartSlow(ctx context.Context, _ string) (context.Context, Span) {
 	return ctx, n
 }
 
@@ -149,6 +156,14 @@ type recordingExtendedData struct {
 }
 
 func (s *RecordingSpan) Start(ctx context.Context, name string) (context.Context, Span) {
+	return s.start(ctx, name, false)
+}
+
+func (s *RecordingSpan) StartSlow(ctx context.Context, name string) (context.Context, Span) {
+	return s.start(ctx, name, true)
+}
+
+func (s *RecordingSpan) start(ctx context.Context, name string, slow bool) (context.Context, Span) {
 	sub := newSpan(name)
 	sub.Parent = s
 
@@ -156,7 +171,11 @@ func (s *RecordingSpan) Start(ctx context.Context, name string) (context.Context
 	s.Data.Subs = append(s.Data.Subs, sub)
 	s.mutex.Unlock()
 
-	return ContextWithSpan(ctx, sub), sub
+	if slow {
+		return ContextWithSlowSpan(ctx, sub), sub
+	} else {
+		return ContextWithSpan(ctx, sub), sub
+	}
 }
 
 func (s *RecordingSpan) End() {

@@ -40,19 +40,20 @@ func SpanFromContext(ctx context.Context) Span {
 	return NoopSpan{}
 }
 
-// SpanFromContext returns the `Span` that should be use for tracking slow requests.
+// SpanFromContext returns the `Span` that should be use for tracking slow requests, and if the
+// returned span should be used only for slow requests.
 //
 // If full tracing is enabled, that will be the span returned. Otherwise, it will return the span
 // specifically for slow requests. If neither is found, it will return a no-op span. The no-op span
 // should generally never actually be returned, however.
-func SlowSpanFromContext(ctx context.Context) Span {
+func SlowSpanFromContext(ctx context.Context) (Span, bool) {
 	val := ctx.Value(activeSpanKey)
 	if sp, ok := val.(Span); ok && sp.IsRecording() {
-		return sp
+		return sp, false
 	}
 	valSlow := ctx.Value(slowSpanKey)
 	if sp, ok := valSlow.(Span); ok {
-		return sp
+		return sp, true
 	}
-	return NoopSpan{}
+	return NoopSpan{}, false
 }

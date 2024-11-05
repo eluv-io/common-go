@@ -209,7 +209,7 @@ func (c *contextStack) startSpan(spanName string, slow bool) trace.Span {
 	ctx := c.Ctx()
 	var parentSpan trace.Span
 	if slow {
-		parentSpan = trace.SlowSpanFromContext(ctx)
+		parentSpan, slow = trace.SlowSpanFromContext(ctx)
 	} else {
 		parentSpan = trace.SpanFromContext(ctx)
 	}
@@ -218,7 +218,14 @@ func (c *contextStack) startSpan(spanName string, slow bool) trace.Span {
 		// fast path if tracing is disabled: no need to start a (noop) span and push its dummy ctx onto the stack...
 		return trace.NoopSpan{}
 	}
-	ctx, sp := parentSpan.Start(ctx, spanName)
+
+	var sp trace.Span
+	if slow {
+		ctx, sp = parentSpan.StartSlow(ctx, spanName)
+	} else {
+		ctx, sp = parentSpan.Start(ctx, spanName)
+	}
+
 	release := c.Push(ctx)
 	return &span{
 		gid:     goutil.GoID(),
@@ -232,7 +239,8 @@ func (c *contextStack) Span() trace.Span {
 }
 
 func (c *contextStack) SlowSpan() trace.Span {
-	return trace.SlowSpanFromContext(c.Ctx())
+	s, _ := trace.SlowSpanFromContext(c.Ctx())
+	return s
 }
 
 func (c *contextStack) WithValue(key interface{}, val interface{}) func() {
