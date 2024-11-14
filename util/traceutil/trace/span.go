@@ -31,7 +31,7 @@ type Span interface {
 	// IsRecording returns true if the span is active and recording events is enabled.
 	IsRecording() bool
 
-	// IsRecording returns true if the span is active and recording events is enabled.
+	// SlowOnly returns true if the span is active and is only for slow request tracing.
 	SlowOnly() bool
 
 	// Json converts the span to its JSON representation.
@@ -171,9 +171,6 @@ func (s *RecordingSpan) End() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
-	if s.endTime != utc.Zero {
-		return
-	}
 	s.setEnd()
 }
 
@@ -325,8 +322,6 @@ func (s *RecordingSpan) SlowCutoff() time.Duration {
 	return s.Data.Cutoff.Duration()
 }
 
-// SlowSpans returns all spans that have a sub-span that is slower than the cutoff. If there are no
-// slow subspans beneath this span, or this span has not been concluded, it returns false.
 func (s *RecordingSpan) slowSpans() (Span, bool) {
 	notEnded := s.endTime == utc.Zero
 	if notEnded {
@@ -396,6 +391,7 @@ func (s *RecordingSpan) copy() *RecordingSpan {
 		endTime:   s.endTime,
 		duration:  s.duration,
 		extended:  s.extended,
+		slowOnly:  s.slowOnly,
 	}
 	return c
 }
