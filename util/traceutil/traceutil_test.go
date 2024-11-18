@@ -87,6 +87,7 @@ func TestInitTracing(t *testing.T) {
 
 	span := traceutil.StartSpan("should-appear-regular")
 	require.NotNil(t, span)
+	require.True(t, span.IsRecording())
 
 	slowSp := traceutil.StartSlowSpan("should-appear-slow")
 	require.NotNil(t, slowSp)
