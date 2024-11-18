@@ -31,15 +31,15 @@ type Span interface {
 	// IsRecording returns true if the span is active and recording events is enabled.
 	IsRecording() bool
 
-	// IsRecording returns true if the span is active and recording events is enabled.
-	SlowOnly() bool
+	// Tags returns the tags ...
+	Tags() []string
 
 	// Json converts the span to its JSON representation.
 	Json() string
 
 	// Start creates and starts a sub-span. The returned context holds a reference to the sub-span and may be retrieved
 	// with SpanFromContext.
-	Start(ctx context.Context, name string) (context.Context, Span)
+	Start(ctx context.Context, name string, acceptor ...SpanAcceptor) (context.Context, Span)
 
 	// Attributes returns the span's attribute set.
 	Attributes() map[string]interface{}
@@ -49,6 +49,24 @@ type Span interface {
 
 	// FindByName returns the first sub span with the given name (depth-first) or nil if not found.
 	FindByName(name string) Span
+
+	FilterSpans(filterFn func(rec Span) bool) (Span, bool)
+}
+
+type SpanAcceptor interface {
+	Accept(tags []string) bool
+}
+
+type Str string
+
+func (s Str) Accept(tags []string) bool {
+	return s == "" || len(tags) == 0 || sliceutil.Contains(tags, string(s))
+}
+
+type NoStr string
+
+func (s NoStr) Accept(tags []string) bool {
+	return s == "" || len(tags) == 0 || !sliceutil.Contains(tags, string(s))
 }
 
 type ExtendedSpan interface {
@@ -77,10 +95,6 @@ type ExtendedSpan interface {
 	// SlowCutoff is the slow cutoff duration for the span. A span that exceeds its slow cutoff is
 	// considered an ususually slow operation.
 	SlowCutoff() time.Duration
-
-	// MarshalSlowOnly returns the marshalling of all spans for which a sub-span or parent span is
-	// slower than the cutoff.
-	MarshalSlowOnly() ([]byte, error, bool)
 }
 
 type Event struct {
@@ -93,7 +107,7 @@ type Event struct {
 
 type NoopSpan struct{}
 
-func (n NoopSpan) Start(ctx context.Context, _ string) (context.Context, Span) {
+func (n NoopSpan) Start(ctx context.Context, _ string, _ ...SpanAcceptor) (context.Context, Span) {
 	return ctx, n
 }
 
@@ -101,7 +115,7 @@ func (n NoopSpan) End()                                                 {}
 func (n NoopSpan) Attribute(name string, val interface{})               {}
 func (n NoopSpan) Event(name string, attributes map[string]interface{}) {}
 func (n NoopSpan) IsRecording() bool                                    { return false }
-func (n NoopSpan) SlowOnly() bool                                       { return false }
+func (n NoopSpan) Tags() []string                                       { return nil }
 func (n NoopSpan) Json() string                                         { return "" }
 func (n NoopSpan) Attributes() map[string]interface{}                   { return nil }
 func (n NoopSpan) Events() []*Event                                     { return nil }
@@ -114,14 +128,14 @@ func (n NoopSpan) MarshalExtended() bool                                { return
 func (n NoopSpan) SetMarshalExtended()                                  {}
 func (n NoopSpan) SlowCutoff() time.Duration                            { return 0 }
 func (n NoopSpan) SetSlowCutoff(cutoff time.Duration)                   {}
-func (n NoopSpan) MarshalSlowOnly() ([]byte, error, bool)               { return nil, nil, false }
+func (n NoopSpan) FilterSpans(_ func(rec Span) bool) (Span, bool)       { return nil, false }
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-func newSpan(name string, slowOnly bool) *RecordingSpan {
+func newSpan(name string, tags []string) *RecordingSpan {
 	s := &RecordingSpan{
 		startTime: utc.Now(),
-		slowOnly:  slowOnly,
+		tags:      tags,
 	}
 	s.Data.Name = name
 	s.Data.Start = s.startTime.String()
@@ -138,7 +152,7 @@ type RecordingSpan struct {
 	// extended must not be protected by a lock, as child spans may look up to their parent span to
 	// determine marshalling behavior
 	extended bool
-	slowOnly bool
+	tags     []string
 }
 
 type recordingData struct {
@@ -156,8 +170,12 @@ type recordingExtendedData struct {
 	End   string `json:"end"`
 }
 
-func (s *RecordingSpan) Start(ctx context.Context, name string) (context.Context, Span) {
-	sub := newSpan(name, s.slowOnly)
+func (s *RecordingSpan) Start(ctx context.Context, name string, acceptor ...SpanAcceptor) (context.Context, Span) {
+	if len(acceptor) > 0 && acceptor[0] != nil && !acceptor[0].Accept(s.Tags()) {
+		return ctx, NoopSpan{}
+	}
+
+	sub := newSpan(name, s.tags)
 	sub.Parent = s
 
 	s.mutex.Lock()
@@ -220,8 +238,8 @@ func (s *RecordingSpan) IsRecording() bool {
 	return true
 }
 
-func (s *RecordingSpan) SlowOnly() bool {
-	return s.slowOnly
+func (s *RecordingSpan) Tags() []string {
+	return s.tags
 }
 
 func (s *RecordingSpan) Json() string {
@@ -325,32 +343,33 @@ func (s *RecordingSpan) SlowCutoff() time.Duration {
 	return s.Data.Cutoff.Duration()
 }
 
-// SlowSpans returns all spans that have a sub-span that is slower than the cutoff. If there are no
-// slow subspans beneath this span, or this span has not been concluded, it returns false.
-func (s *RecordingSpan) slowSpans() (Span, bool) {
+// FilterSpans returns all spans that satisfy the filter function or have a sub-span satisfying it.
+// If none satisfy the filter, or this span has not been concluded, it returns false.
+func (s *RecordingSpan) FilterSpans(filterFn func(rec Span) bool) (Span, bool) {
 	notEnded := s.endTime == utc.Zero
 	if notEnded {
 		s.setEnd()
 		defer s.undoEnd()
 	}
-	sCopy := s.copy()
 
-	if s.Data.Cutoff.Duration() != time.Duration(0) && s.duration > s.Data.Cutoff.Duration() {
+	if filterFn(s) {
 		return s, true
 	}
 
-	sawSlow := false
+	sCopy := s.copy()
+	selected := false
 	subsCopy := sliceutil.Copy(s.Data.Subs)
 	sCopy.Data.Subs = []Span{}
 	for _, sub := range subsCopy {
-		subC, slow := sub.(*RecordingSpan).slowSpans()
-		sawSlow = sawSlow || slow
+		subr := sub.(*RecordingSpan)
+		subC, slow := subr.FilterSpans(filterFn)
+		selected = selected || slow
 		if slow {
 			sCopy.Data.Subs = append(sCopy.Data.Subs, subC)
 		}
 	}
 
-	return sCopy, sawSlow
+	return sCopy, selected
 }
 
 func (s *RecordingSpan) MarshalJSON() ([]byte, error) {
@@ -373,18 +392,6 @@ func (s *RecordingSpan) MarshalJSON() ([]byte, error) {
 	return ret, err
 }
 
-func (s *RecordingSpan) MarshalSlowOnly() ([]byte, error, bool) {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
-	slowSpans, sawSlow := s.slowSpans()
-	if !sawSlow {
-		return nil, nil, false
-	}
-	d, err := json.Marshal(slowSpans)
-	return d, err, true
-}
-
 // copy returns a shallow copy of a recording span. The lock must be held while this function is
 // called. In particular, the referenced elements from within the data (Attr, Events, Subs), cannot
 // be modified.
@@ -396,6 +403,7 @@ func (s *RecordingSpan) copy() *RecordingSpan {
 		endTime:   s.endTime,
 		duration:  s.duration,
 		extended:  s.extended,
+		tags:      s.tags,
 	}
 	return c
 }

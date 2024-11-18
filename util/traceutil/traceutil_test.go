@@ -2,6 +2,7 @@ package traceutil_test
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"regexp"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/eluv-io/common-go/util/sliceutil"
 	"github.com/eluv-io/utc-go"
 
 	"github.com/eluv-io/common-go/util/traceutil"
@@ -39,18 +41,22 @@ func TestStartSubSpan(t *testing.T) {
 }
 
 func TestSlowSpanInit(t *testing.T) {
-	rootSp := traceutil.InitTracing("slow-span-test", true)
+	rootSp := traceutil.InitTracing("slow-span-test", "slow")
 	require.True(t, rootSp.IsRecording())
-	require.True(t, rootSp.SlowOnly())
+	require.True(t, sliceutil.Contains(rootSp.Tags(), "slow"))
 
-	span := traceutil.StartSpan("should-not-appear")
+	span := traceutil.StartSpan("should-not-appear-red", trace.Str("red"))
 	require.NotNil(t, span)
 	require.False(t, span.IsRecording())
 
-	slowSp := traceutil.StartSlowSpan("should-appear")
+	span = traceutil.StartSpan("should-not-appear", trace.NoStr("slow"))
+	require.NotNil(t, span)
+	require.False(t, span.IsRecording())
+
+	slowSp := traceutil.StartSpan("should-appear", trace.Str("slow"))
 	require.NotNil(t, slowSp)
 	require.True(t, slowSp.IsRecording())
-	require.True(t, slowSp.SlowOnly())
+	require.True(t, sliceutil.Contains(slowSp.Tags(), "slow"))
 
 	slowSp.SetSlowCutoff(500 * time.Millisecond)
 	time.Sleep(1 * time.Second)
@@ -74,22 +80,39 @@ func TestSlowSpanInit(t *testing.T) {
 	require.Equal(t, 0, strings.Count(s, "should-not-appear"))
 	require.Equal(t, 1, strings.Count(s, "slow-span-test"))
 
-	s2, err, foundSlow := rootSp.MarshalSlowOnly()
-	require.NoError(t, err)
+	filterFn := func(rec trace.Span) bool {
+		type sc interface {
+			SlowCutoff() time.Duration
+		}
+		r, ok := rec.(sc)
+		if !ok {
+			return false
+		}
+		if r.SlowCutoff() != time.Duration(0) && rec.Duration() > r.SlowCutoff() {
+			return true
+		}
+		return false
+	}
+
+	span2, foundSlow := rootSp.FilterSpans(filterFn)
 	require.True(t, foundSlow)
+	s2, err := json.Marshal(span2)
+	require.NoError(t, err)
 	require.Equal(t, 1, strings.Count(string(s2), "should-appear"))
 }
 
 func TestInitTracing(t *testing.T) {
-	rootSp := traceutil.InitTracing("init-tracing-test", false)
+	rootSp := traceutil.InitTracing("init-tracing-test")
 	require.True(t, rootSp.IsRecording())
-	require.False(t, rootSp.SlowOnly())
+	require.False(t, sliceutil.Contains(rootSp.Tags(), "slow"))
 
-	span := traceutil.StartSpan("should-appear-regular")
+	span := traceutil.StartSpan("should-appear-regular", nil)
 	require.NotNil(t, span)
+	require.True(t, span.IsRecording())
 
-	slowSp := traceutil.StartSlowSpan("should-appear-slow")
+	slowSp := traceutil.StartSpan("should-appear-slow", trace.Str("slow"))
 	require.NotNil(t, slowSp)
+	require.True(t, slowSp.IsRecording())
 	slowSp.Attribute("attr-1", "arbitrary-unique-value")
 
 	slowSp.End()

@@ -24,7 +24,7 @@ func TestContextStack(t *testing.T) {
 func TestContextStackTracing(t *testing.T) {
 	stack := ctxutil.NewStack()
 
-	span := stack.InitTracing("test-span", false)
+	span := stack.InitTracing("test-span")
 
 	obj := anObjectWithTracing{cs: stack}
 	obj.A()
