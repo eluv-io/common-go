@@ -90,6 +90,7 @@ func TestInitTracing(t *testing.T) {
 
 	slowSp := traceutil.StartSlowSpan("should-appear-slow")
 	require.NotNil(t, slowSp)
+	require.True(t, slowSp.IsRecording())
 	slowSp.Attribute("attr-1", "arbitrary-unique-value")
 
 	slowSp.End()
