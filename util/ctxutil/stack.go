@@ -83,9 +83,9 @@ type ContextStack interface {
 	Go(fn func())
 
 	// InitTracing initializes tracing for the current goroutine with a root span created through the given tracer.
-	// The root span will record operations that are started as spans accepting the given tags.
-	// An empty or nil tags parameter implies all spans are started.
-	InitTracing(spanName string, tags ...string) trace.Span
+	// The root span will record operations that are started as spans accepted by the given tags acceptor.
+	// An empty or nil accept parameter implies all spans are started.
+	InitTracing(spanName string, accept ...trace.SpanAcceptor) trace.Span
 
 	// StartSpan starts a new span and pushes its context onto the stack of the current goroutine. The span pops the
 	// context upon calling span.End().
@@ -93,7 +93,7 @@ type ContextStack interface {
 	// Usage:
 	// 	span := r.cs.StartSpan("my span")
 	//	defer span.End()
-	StartSpan(spanName string, accept ...trace.SpanAcceptor) trace.Span
+	StartSpan(spanName string, tags ...string) trace.Span
 
 	// Span retrieves the goroutine's current span.
 	Span() trace.Span
@@ -168,8 +168,8 @@ func (c *contextStack) Go(fn func()) {
 
 }
 
-func (c *contextStack) InitTracing(spanName string, tags ...string) trace.Span {
-	ctx, sp := trace.StartRootSpan(c.Ctx(), spanName, tags...)
+func (c *contextStack) InitTracing(spanName string, accept ...trace.SpanAcceptor) trace.Span {
+	ctx, sp := trace.StartRootSpan(c.Ctx(), spanName, accept...)
 	release := c.Push(ctx)
 	return &span{
 		gid:     goutil.GoID(),
@@ -178,14 +178,14 @@ func (c *contextStack) InitTracing(spanName string, tags ...string) trace.Span {
 	}
 }
 
-func (c *contextStack) StartSpan(spanName string, acceptor ...trace.SpanAcceptor) trace.Span {
+func (c *contextStack) StartSpan(spanName string, tags ...string) trace.Span {
 	ctx := c.Ctx()
 	parentSpan := trace.SpanFromContext(ctx)
 	if !parentSpan.IsRecording() {
 		// fast path if tracing is disabled: no need to start a (noop) span and push its dummy ctx onto the stack...
 		return trace.NoopSpan{}
 	}
-	ctx, sp := parentSpan.Start(ctx, spanName, acceptor...)
+	ctx, sp := parentSpan.Start(ctx, spanName, tags...)
 	if !sp.IsRecording() {
 		return trace.NoopSpan{}
 	}

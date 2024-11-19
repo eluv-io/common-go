@@ -31,15 +31,15 @@ type Span interface {
 	// IsRecording returns true if the span is active and recording events is enabled.
 	IsRecording() bool
 
-	// Tags returns the tags ...
-	Tags() []string
+	// Acceptor returns a string view of the tags acceptor
+	Acceptor() string
 
 	// Json converts the span to its JSON representation.
 	Json() string
 
 	// Start creates and starts a sub-span. The returned context holds a reference to the sub-span and may be retrieved
 	// with SpanFromContext.
-	Start(ctx context.Context, name string, acceptor ...SpanAcceptor) (context.Context, Span)
+	Start(ctx context.Context, name string, tags ...string) (context.Context, Span)
 
 	// Attributes returns the span's attribute set.
 	Attributes() map[string]interface{}
@@ -55,19 +55,30 @@ type Span interface {
 
 type SpanAcceptor interface {
 	Accept(tags []string) bool
+	String() string
 }
 
 type Str string
 
 func (s Str) Accept(tags []string) bool {
-	return s == "" || len(tags) == 0 || sliceutil.Contains(tags, string(s))
+	return sliceutil.Contains(tags, string(s))
 }
+
+func (s Str) String() string { return string(s) }
 
 type NoStr string
 
 func (s NoStr) Accept(tags []string) bool {
 	return s == "" || len(tags) == 0 || !sliceutil.Contains(tags, string(s))
 }
+func (s NoStr) String() string { return "!" + string(s) }
+
+type acceptAllSpans struct{}
+
+func (a acceptAllSpans) Accept(tags []string) bool { return true }
+func (a acceptAllSpans) String() string            { return "" }
+
+var AcceptAllSpans acceptAllSpans
 
 type ExtendedSpan interface {
 	// StartTime returns the start time of the span.
@@ -107,35 +118,39 @@ type Event struct {
 
 type NoopSpan struct{}
 
-func (n NoopSpan) Start(ctx context.Context, _ string, _ ...SpanAcceptor) (context.Context, Span) {
+func (n NoopSpan) Start(ctx context.Context, _ string, _ ...string) (context.Context, Span) {
 	return ctx, n
 }
 
-func (n NoopSpan) End()                                                 {}
-func (n NoopSpan) Attribute(name string, val interface{})               {}
-func (n NoopSpan) Event(name string, attributes map[string]interface{}) {}
-func (n NoopSpan) IsRecording() bool                                    { return false }
-func (n NoopSpan) Tags() []string                                       { return nil }
-func (n NoopSpan) Json() string                                         { return "" }
-func (n NoopSpan) Attributes() map[string]interface{}                   { return nil }
-func (n NoopSpan) Events() []*Event                                     { return nil }
-func (n NoopSpan) FindByName(string) Span                               { return nil }
-func (n NoopSpan) StartTime() utc.UTC                                   { return utc.Zero }
-func (n NoopSpan) EndTime() utc.UTC                                     { return utc.Zero }
-func (n NoopSpan) Duration() time.Duration                              { return 0 }
-func (n NoopSpan) MaxDuration() time.Duration                           { return 0 }
-func (n NoopSpan) MarshalExtended() bool                                { return false }
-func (n NoopSpan) SetMarshalExtended()                                  {}
-func (n NoopSpan) SlowCutoff() time.Duration                            { return 0 }
-func (n NoopSpan) SetSlowCutoff(cutoff time.Duration)                   {}
-func (n NoopSpan) FilterSpans(_ func(rec Span) bool) (Span, bool)       { return nil, false }
+func (n NoopSpan) End()                                           {}
+func (n NoopSpan) Attribute(_ string, _ interface{})              {}
+func (n NoopSpan) Event(_ string, _ map[string]interface{})       {}
+func (n NoopSpan) IsRecording() bool                              { return false }
+func (n NoopSpan) Acceptor() string                               { return "" }
+func (n NoopSpan) Json() string                                   { return "" }
+func (n NoopSpan) Attributes() map[string]interface{}             { return nil }
+func (n NoopSpan) Events() []*Event                               { return nil }
+func (n NoopSpan) FindByName(string) Span                         { return nil }
+func (n NoopSpan) StartTime() utc.UTC                             { return utc.Zero }
+func (n NoopSpan) EndTime() utc.UTC                               { return utc.Zero }
+func (n NoopSpan) Duration() time.Duration                        { return 0 }
+func (n NoopSpan) MaxDuration() time.Duration                     { return 0 }
+func (n NoopSpan) MarshalExtended() bool                          { return false }
+func (n NoopSpan) SetMarshalExtended()                            {}
+func (n NoopSpan) SlowCutoff() time.Duration                      { return 0 }
+func (n NoopSpan) SetSlowCutoff(cutoff time.Duration)             {}
+func (n NoopSpan) FilterSpans(_ func(rec Span) bool) (Span, bool) { return nil, false }
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-func newSpan(name string, tags []string) *RecordingSpan {
+func newSpan(name string, accept SpanAcceptor) *RecordingSpan {
+	var acceptor SpanAcceptor = AcceptAllSpans
+	if accept != nil {
+		acceptor = accept
+	}
 	s := &RecordingSpan{
 		startTime: utc.Now(),
-		tags:      tags,
+		acceptor:  acceptor,
 	}
 	s.Data.Name = name
 	s.Data.Start = s.startTime.String()
@@ -152,7 +167,7 @@ type RecordingSpan struct {
 	// extended must not be protected by a lock, as child spans may look up to their parent span to
 	// determine marshalling behavior
 	extended bool
-	tags     []string
+	acceptor SpanAcceptor
 }
 
 type recordingData struct {
@@ -170,12 +185,12 @@ type recordingExtendedData struct {
 	End   string `json:"end"`
 }
 
-func (s *RecordingSpan) Start(ctx context.Context, name string, acceptor ...SpanAcceptor) (context.Context, Span) {
-	if len(acceptor) > 0 && acceptor[0] != nil && !acceptor[0].Accept(s.Tags()) {
+func (s *RecordingSpan) Start(ctx context.Context, name string, tags ...string) (context.Context, Span) {
+	if !s.acceptor.Accept(tags) {
 		return ctx, NoopSpan{}
 	}
 
-	sub := newSpan(name, s.tags)
+	sub := newSpan(name, s.acceptor)
 	sub.Parent = s
 
 	s.mutex.Lock()
@@ -238,8 +253,8 @@ func (s *RecordingSpan) IsRecording() bool {
 	return true
 }
 
-func (s *RecordingSpan) Tags() []string {
-	return s.tags
+func (s *RecordingSpan) Acceptor() string {
+	return s.acceptor.String()
 }
 
 func (s *RecordingSpan) Json() string {
@@ -403,7 +418,7 @@ func (s *RecordingSpan) copy() *RecordingSpan {
 		endTime:   s.endTime,
 		duration:  s.duration,
 		extended:  s.extended,
-		tags:      s.tags,
+		acceptor:  s.acceptor,
 	}
 	return c
 }

@@ -7,8 +7,12 @@ type contextKey struct{}
 var activeSpanKey = contextKey{}
 
 // StartRootSpan starts a new top-level span and registers it with the given context.
-func StartRootSpan(ctx context.Context, name string, tags ...string) (context.Context, Span) {
-	sub := newSpan(name, tags)
+func StartRootSpan(ctx context.Context, name string, accept ...SpanAcceptor) (context.Context, Span) {
+	var acceptor SpanAcceptor
+	if len(accept) > 0 {
+		acceptor = accept[0]
+	}
+	sub := newSpan(name, acceptor)
 	return ContextWithSpan(ctx, sub), sub
 }
 

@@ -30,11 +30,11 @@ func (n noop) Go(fn func()) {
 	go fn()
 }
 
-func (n noop) InitTracing(_ string, _ ...string) trace.Span {
+func (n noop) InitTracing(_ string, _ ...trace.SpanAcceptor) trace.Span {
 	return trace.NoopSpan{}
 }
 
-func (n noop) StartSpan(_ string, _ ...trace.SpanAcceptor) trace.Span {
+func (n noop) StartSpan(_ string, _ ...string) trace.Span {
 	return trace.NoopSpan{}
 }
 

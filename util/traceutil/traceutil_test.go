@@ -11,7 +11,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/eluv-io/common-go/util/sliceutil"
 	"github.com/eluv-io/utc-go"
 
 	"github.com/eluv-io/common-go/util/traceutil"
@@ -41,22 +40,22 @@ func TestStartSubSpan(t *testing.T) {
 }
 
 func TestSlowSpanInit(t *testing.T) {
-	rootSp := traceutil.InitTracing("slow-span-test", "slow")
+	rootSp := traceutil.InitTracing("slow-span-test", trace.Str("slow"))
 	require.True(t, rootSp.IsRecording())
-	require.True(t, sliceutil.Contains(rootSp.Tags(), "slow"))
+	require.True(t, strings.Contains(rootSp.Acceptor(), "slow"))
 
-	span := traceutil.StartSpan("should-not-appear-red", trace.Str("red"))
+	span := traceutil.StartSpan("should-not-appear-red", "red")
 	require.NotNil(t, span)
 	require.False(t, span.IsRecording())
 
-	span = traceutil.StartSpan("should-not-appear", trace.NoStr("slow"))
+	span = traceutil.StartSpan("should-not-appear")
 	require.NotNil(t, span)
 	require.False(t, span.IsRecording())
 
-	slowSp := traceutil.StartSpan("should-appear", trace.Str("slow"))
+	slowSp := traceutil.StartSpan("should-appear", "slow")
 	require.NotNil(t, slowSp)
 	require.True(t, slowSp.IsRecording())
-	require.True(t, sliceutil.Contains(slowSp.Tags(), "slow"))
+	require.True(t, strings.Contains(slowSp.Acceptor(), "slow"))
 
 	slowSp.SetSlowCutoff(500 * time.Millisecond)
 	time.Sleep(1 * time.Second)
@@ -104,13 +103,13 @@ func TestSlowSpanInit(t *testing.T) {
 func TestInitTracing(t *testing.T) {
 	rootSp := traceutil.InitTracing("init-tracing-test")
 	require.True(t, rootSp.IsRecording())
-	require.False(t, sliceutil.Contains(rootSp.Tags(), "slow"))
+	require.False(t, strings.Contains(rootSp.Acceptor(), "slow"))
 
-	span := traceutil.StartSpan("should-appear-regular", nil)
+	span := traceutil.StartSpan("should-appear-regular")
 	require.NotNil(t, span)
 	require.True(t, span.IsRecording())
 
-	slowSp := traceutil.StartSpan("should-appear-slow", trace.Str("slow"))
+	slowSp := traceutil.StartSpan("should-appear-slow", "slow")
 	require.NotNil(t, slowSp)
 	require.True(t, slowSp.IsRecording())
 	slowSp.Attribute("attr-1", "arbitrary-unique-value")

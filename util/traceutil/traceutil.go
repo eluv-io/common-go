@@ -16,20 +16,20 @@ func current() ctxutil.ContextStack {
 //
 // If slowOnly is true, only spans that are explicitly created with StartSlowSpan wiill be recorded,
 // and even then only persisted if they end up being slower than expected.
-func InitTracing(spanName string, tags ...string) trace.Span {
-	return current().InitTracing(spanName, tags...)
+func InitTracing(spanName string, accept ...trace.SpanAcceptor) trace.Span {
+	return current().InitTracing(spanName, accept...)
 }
 
 // StartSpan creates new sub-span of the goroutine's current span or a noop
 // span if there is no current span.
-func StartSpan(spanName string, acceptor ...trace.SpanAcceptor) trace.Span {
-	return current().StartSpan(spanName, acceptor...)
+func StartSpan(spanName string, tags ...string) trace.Span {
+	return current().StartSpan(spanName, tags...)
 }
 
 // WithSpan creates a new sub-span of the goroutine's current span and executes
 // the given function within the sub-span.
-func WithSpan(spanName string, fn func() error) error {
-	span := current().StartSpan(spanName)
+func WithSpan(spanName string, fn func() error, tags ...string) error {
+	span := current().StartSpan(spanName, tags...)
 	defer span.End()
 
 	err := fn()
@@ -54,20 +54,20 @@ func Ctx() context.Context {
 
 // StartSubSpan creates new sub-span of the context's current span or a noop
 // span if there is no current span.
-func StartSubSpan(ctx context.Context, spanName string) (context.Context, trace.Span) {
+func StartSubSpan(ctx context.Context, spanName string, tags ...string) (context.Context, trace.Span) {
 	if ctx == nil {
 		return nil, trace.NoopSpan{}
 	}
-	return trace.SpanFromContext(ctx).Start(ctx, spanName)
+	return trace.SpanFromContext(ctx).Start(ctx, spanName, tags...)
 }
 
 // WithSubSpan executes the given function in a new sub-span of the context's
 // current span or a noop span if there is no current span.
-func WithSubSpan(ctx context.Context, spanName string, fn func(ctx context.Context) error) error {
+func WithSubSpan(ctx context.Context, spanName string, fn func(ctx context.Context) error, tags ...string) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	ctx, span := trace.SpanFromContext(ctx).Start(ctx, spanName)
+	ctx, span := trace.SpanFromContext(ctx).Start(ctx, spanName, tags...)
 	defer span.End()
 	err := fn(ctx)
 	if err != nil {
