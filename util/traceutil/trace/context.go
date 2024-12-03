@@ -8,7 +8,13 @@ var activeSpanKey = contextKey{}
 
 // StartRootSpan starts a new top-level span and registers it with the given context.
 func StartRootSpan(ctx context.Context, name string) (context.Context, Span) {
-	sub := newSpan(name)
+	sub := newSpan(name, false)
+	return ContextWithSpan(ctx, sub), sub
+}
+
+// StartSlowSpan starts a new top-level slow span and registers it with the given context.
+func StartSlowSpan(ctx context.Context, name string) (context.Context, Span) {
+	sub := newSpan(name, true)
 	return ContextWithSpan(ctx, sub), sub
 }
 

@@ -83,7 +83,8 @@ type ContextStack interface {
 	Go(fn func())
 
 	// InitTracing initializes tracing for the current goroutine with a root span created through the given tracer.
-	InitTracing(spanName string) trace.Span
+	// If slowOnly is true, the root span will only record operations that are explicitly started as slow spans.
+	InitTracing(spanName string, slowOnly bool) trace.Span
 
 	// StartSpan starts a new span and pushes its context onto the stack of the current goroutine. The span pops the
 	// context upon calling span.End().
@@ -166,8 +167,14 @@ func (c *contextStack) Go(fn func()) {
 
 }
 
-func (c *contextStack) InitTracing(spanName string) trace.Span {
-	ctx, sp := trace.StartRootSpan(c.Ctx(), spanName)
+func (c *contextStack) InitTracing(spanName string, slowOnly bool) trace.Span {
+	var sp trace.Span
+	var ctx context.Context
+	if slowOnly {
+		ctx, sp = trace.StartSlowSpan(c.Ctx(), spanName)
+	} else {
+		ctx, sp = trace.StartRootSpan(c.Ctx(), spanName)
+	}
 	release := c.Push(ctx)
 	return &span{
 		gid:     goutil.GoID(),

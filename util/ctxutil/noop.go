@@ -30,7 +30,7 @@ func (n noop) Go(fn func()) {
 	go fn()
 }
 
-func (n noop) InitTracing(_ string) trace.Span {
+func (n noop) InitTracing(_ string, slowOnly bool) trace.Span {
 	return trace.NoopSpan{}
 }
 
