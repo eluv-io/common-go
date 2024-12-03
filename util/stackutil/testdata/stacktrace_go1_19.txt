@@ -1,0 +1,569 @@
+goroutine 36194 [running]:
+testing.(*M).startAlarm.func1()
+	/usr/local/Cellar/go/1.19.4/libexec/src/testing/testing.go:2036 +0x8e
+created by time.goFunc
+	/usr/local/Cellar/go/1.19.4/libexec/src/time/sleep.go:176 +0x32
+
+goroutine 1 [chan receive, 1 minutes]:
+testing.(*T).Run(0xc007affba0, {0x102ca5641?, 0x11bc18d1540f1?}, 0x1030f0f68)
+	/usr/local/Cellar/go/1.19.4/libexec/src/testing/testing.go:1494 +0x37a
+testing.runTests.func1(0xc007affba0?)
+	/usr/local/Cellar/go/1.19.4/libexec/src/testing/testing.go:1846 +0x6e
+testing.tRunner(0xc007affba0, 0xc007b9fcd8)
+	/usr/local/Cellar/go/1.19.4/libexec/src/testing/testing.go:1446 +0x10b
+testing.runTests(0xc007c01c20?, {0x104c02140, 0x9, 0x9}, {0x106377108?, 0x40?, 0x104c25be0?})
+	/usr/local/Cellar/go/1.19.4/libexec/src/testing/testing.go:1844 +0x456
+testing.(*M).Run(0xc007c01c20)
+	/usr/local/Cellar/go/1.19.4/libexec/src/testing/testing.go:1726 +0x5d9
+main.main()
+	_testmain.go:69 +0x1aa
+
+goroutine 11 [chan receive, 10 minutes]:
+github.com/rjeczalik/notify.(*recursiveTree).dispatch(0xc000180190)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/rjeczalik/notify@v0.9.3/tree_recursive.go:125 +0x48
+created by github.com/rjeczalik/notify.newRecursiveTree
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/rjeczalik/notify@v0.9.3/tree_recursive.go:119 +0x165
+
+goroutine 12 [chan receive, 10 minutes]:
+github.com/ethereum/go-ethereum/core.(*txSenderCacher).cache(0x0?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:63 +0x3b
+created by github.com/ethereum/go-ethereum/core.newTxSenderCacher
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:55 +0x75
+
+goroutine 13 [chan receive, 10 minutes]:
+github.com/ethereum/go-ethereum/core.(*txSenderCacher).cache(0x0?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:63 +0x3b
+created by github.com/ethereum/go-ethereum/core.newTxSenderCacher
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:55 +0x75
+
+goroutine 14 [chan receive, 10 minutes]:
+github.com/ethereum/go-ethereum/core.(*txSenderCacher).cache(0x0?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:63 +0x3b
+created by github.com/ethereum/go-ethereum/core.newTxSenderCacher
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:55 +0x75
+
+goroutine 15 [chan receive, 10 minutes]:
+github.com/ethereum/go-ethereum/core.(*txSenderCacher).cache(0x0?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:63 +0x3b
+created by github.com/ethereum/go-ethereum/core.newTxSenderCacher
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:55 +0x75
+
+goroutine 16 [chan receive, 10 minutes]:
+github.com/ethereum/go-ethereum/core.(*txSenderCacher).cache(0x0?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:63 +0x3b
+created by github.com/ethereum/go-ethereum/core.newTxSenderCacher
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:55 +0x75
+
+goroutine 50 [chan receive, 10 minutes]:
+github.com/ethereum/go-ethereum/core.(*txSenderCacher).cache(0x0?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:63 +0x3b
+created by github.com/ethereum/go-ethereum/core.newTxSenderCacher
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:55 +0x75
+
+goroutine 51 [chan receive, 10 minutes]:
+github.com/ethereum/go-ethereum/core.(*txSenderCacher).cache(0x0?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:63 +0x3b
+created by github.com/ethereum/go-ethereum/core.newTxSenderCacher
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:55 +0x75
+
+goroutine 52 [chan receive, 10 minutes]:
+github.com/ethereum/go-ethereum/core.(*txSenderCacher).cache(0x0?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:63 +0x3b
+created by github.com/ethereum/go-ethereum/core.newTxSenderCacher
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:55 +0x75
+
+goroutine 53 [chan receive, 10 minutes]:
+github.com/ethereum/go-ethereum/core.(*txSenderCacher).cache(0x0?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:63 +0x3b
+created by github.com/ethereum/go-ethereum/core.newTxSenderCacher
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:55 +0x75
+
+goroutine 54 [chan receive, 10 minutes]:
+github.com/ethereum/go-ethereum/core.(*txSenderCacher).cache(0x69222c65736c6166?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:63 +0x3b
+created by github.com/ethereum/go-ethereum/core.newTxSenderCacher
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:55 +0x75
+
+goroutine 55 [chan receive, 10 minutes]:
+github.com/ethereum/go-ethereum/core.(*txSenderCacher).cache(0x646e655074696d6d?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:63 +0x3b
+created by github.com/ethereum/go-ethereum/core.newTxSenderCacher
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:55 +0x75
+
+goroutine 56 [chan receive, 10 minutes]:
+github.com/ethereum/go-ethereum/core.(*txSenderCacher).cache(0x1034a4668?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:63 +0x3b
+created by github.com/ethereum/go-ethereum/core.newTxSenderCacher
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:55 +0x75
+
+goroutine 57 [chan receive, 10 minutes]:
+github.com/ethereum/go-ethereum/core.(*txSenderCacher).cache(0xc000ad1fb8?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:63 +0x3b
+created by github.com/ethereum/go-ethereum/core.newTxSenderCacher
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:55 +0x75
+
+goroutine 58 [chan receive, 10 minutes]:
+github.com/ethereum/go-ethereum/core.(*txSenderCacher).cache(0x0?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:63 +0x3b
+created by github.com/ethereum/go-ethereum/core.newTxSenderCacher
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:55 +0x75
+
+goroutine 59 [chan receive, 10 minutes]:
+github.com/ethereum/go-ethereum/core.(*txSenderCacher).cache(0x0?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:63 +0x3b
+created by github.com/ethereum/go-ethereum/core.newTxSenderCacher
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:55 +0x75
+
+goroutine 60 [chan receive, 10 minutes]:
+github.com/ethereum/go-ethereum/core.(*txSenderCacher).cache(0x0?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:63 +0x3b
+created by github.com/ethereum/go-ethereum/core.newTxSenderCacher
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/core/tx_cacher.go:55 +0x75
+
+goroutine 61 [chan receive]:
+github.com/ethereum/go-ethereum/metrics.(*meterArbiter).tick(0x104c24fa0)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/metrics/meter.go:290 +0x65
+created by github.com/ethereum/go-ethereum/metrics.NewMeterForced
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/metrics/meter.go:71 +0xc5
+
+goroutine 62 [select]:
+github.com/ethereum/go-ethereum/consensus/ethash.(*remoteSealer).loop(0xc0009d6780)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/consensus/ethash/sealer.go:279 +0x205
+created by github.com/ethereum/go-ethereum/consensus/ethash.startRemoteSealer
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/ethereum/go-ethereum@v1.10.19/consensus/ethash/sealer.go:263 +0x319
+
+goroutine 63 [chan receive]:
+github.com/eluv-io/common-go/util/byteutil.NewPool.func1()
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/byteutil/pool.go:43 +0x4a
+created by github.com/eluv-io/common-go/util/byteutil.NewPool
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/byteutil/pool.go:42 +0x125
+
+goroutine 185 [chan receive]:
+gopkg.in/natefinch/lumberjack%2ev2.(*Logger).millRun(0xc007c48fc0)
+	/Users/luk/dev/qluvio/git/pkg/mod/gopkg.in/natefinch/lumberjack.v2@v2.2.1/lumberjack.go:379 +0x45
+created by gopkg.in/natefinch/lumberjack%2ev2.(*Logger).mill.func1
+	/Users/luk/dev/qluvio/git/pkg/mod/gopkg.in/natefinch/lumberjack.v2@v2.2.1/lumberjack.go:390 +0x96
+
+goroutine 6329 [sync.Cond.Wait, 6 minutes]:
+sync.runtime_notifyListWait(0xc00050da10, 0x0)
+	/usr/local/Cellar/go/1.19.4/libexec/src/runtime/sema.go:517 +0x14c
+sync.(*Cond).Wait(0xc000b0c250?)
+	/usr/local/Cellar/go/1.19.4/libexec/src/sync/cond.go:70 +0x8c
+github.com/eluv-io/common-go/util/multiqueue.(*multiQueue).Pop(0xc007cc8c90)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/multiqueue/multiqueue.go:77 +0x112
+github.com/eluv-io/common-go/util/syncutil.(*workerPool).start.func1()
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/syncutil/workerpool.go:90 +0x34
+created by github.com/eluv-io/common-go/util/syncutil.(*workerPool).start
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/syncutil/workerpool.go:88 +0x56
+
+goroutine 11069 [syscall]:
+syscall.syscall(0x64fa4e86?, 0x2783c2ec?, 0xc0?, 0x0?)
+	/usr/local/Cellar/go/1.19.4/libexec/src/runtime/sys_darwin.go:23 +0x7f
+syscall.fcntl(0x0?, 0xc00ad316f0?, 0xc00829a8b8?)
+	/usr/local/Cellar/go/1.19.4/libexec/src/syscall/zsyscall_darwin_amd64.go:319 +0x30
+internal/poll.(*FD).Fsync.func1(...)
+	/usr/local/Cellar/go/1.19.4/libexec/src/internal/poll/fd_fsync_darwin.go:18
+internal/poll.ignoringEINTR(...)
+	/usr/local/Cellar/go/1.19.4/libexec/src/internal/poll/fd_posix.go:74
+internal/poll.(*FD).Fsync(0xc00829a8f0?)
+	/usr/local/Cellar/go/1.19.4/libexec/src/internal/poll/fd_fsync_darwin.go:17 +0xfc
+os.(*File).Sync(0xc00ad316f0)
+	/usr/local/Cellar/go/1.19.4/libexec/src/os/file_posix.go:168 +0x4e
+github.com/syndtr/goleveldb/leveldb/storage.syncDir({0xc0005dd0e0?, 0x64?})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/syndtr/goleveldb@v1.0.1-0.20210819022825-2ae1ddf74ef7/leveldb/storage/file_storage_unix.go:94 +0x74
+github.com/syndtr/goleveldb/leveldb/storage.(*fileStorage).setMeta(0xc014754a10, {0xc0005dd0e0?, 0x29?})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/syndtr/goleveldb@v1.0.1-0.20210819022825-2ae1ddf74ef7/leveldb/storage/file_storage.go:272 +0x5be
+github.com/syndtr/goleveldb/leveldb/storage.(*fileStorage).SetMeta(0xc00aaae000?, {0x1034c4800?, 0xc00fa38020?})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/syndtr/goleveldb@v1.0.1-0.20210819022825-2ae1ddf74ef7/leveldb/storage/file_storage.go:292 +0x12c
+github.com/syndtr/goleveldb/leveldb.(*session).newManifest(0xc00ecd9a40, 0x0, 0x0)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/syndtr/goleveldb@v1.0.1-0.20210819022825-2ae1ddf74ef7/leveldb/session_util.go:462 +0x622
+github.com/syndtr/goleveldb/leveldb.(*session).create(...)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/syndtr/goleveldb@v1.0.1-0.20210819022825-2ae1ddf74ef7/leveldb/session.go:125
+github.com/syndtr/goleveldb/leveldb.Open({0x1034ed1a0?, 0xc014754a10?}, 0xc007bd3600?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/syndtr/goleveldb@v1.0.1-0.20210819022825-2ae1ddf74ef7/leveldb/db.go:194 +0x16f
+github.com/syndtr/goleveldb/leveldb.OpenFile({0xc0005dd0e0?, 0x5a?}, 0x0)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/syndtr/goleveldb@v1.0.1-0.20210819022825-2ae1ddf74ef7/leveldb/db.go:225 +0x5d
+github.com/qluvio/content-fabric/mdstore/leveldb.NewWithOptions({0xc0005dd0e0, 0x5a}, {0x1328c24a8?, 0xc00a0d3db0}, 0xc00829af10?)
+	/Users/luk/dev/qluvio/git/content-fabric/mdstore/leveldb/ldb.go:38 +0x53
+github.com/qluvio/content-fabric/node.newStore(0xc00e7c7320?, {0x1328c24a8, 0xc00a0d3db0}, {0x1034cab40, 0xc00e7c7320})
+	/Users/luk/dev/qluvio/git/content-fabric/node/store.go:17 +0xa5
+reflect.Value.call({0x1028918c0?, 0x1030f0700?, 0x1005f89a0?}, {0x102c9f9e4, 0x4}, {0xc00d5c6230, 0x3, 0x40?})
+	/usr/local/Cellar/go/1.19.4/libexec/src/reflect/value.go:584 +0x8c5
+reflect.Value.Call({0x1028918c0?, 0x1030f0700?, 0x0?}, {0xc00d5c6230?, 0xc00829b6c0?, 0x1005f81f2?})
+	/usr/local/Cellar/go/1.19.4/libexec/src/reflect/value.go:368 +0xbc
+github.com/eluv-io/inject-go.callConstructor({0x1028918c0, 0x1030f0700}, {0xc00d5c6230?, 0x100005f6f?, 0x1?})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/binding.go:195 +0xc9
+github.com/eluv-io/inject-go.(*constructorBinding).get(0xc00d661500)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/binding.go:109 +0x11d
+github.com/eluv-io/inject-go.(*loader).load.func1()
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/loader.go:19 +0x2a
+sync.(*Once).doSlow(0xc00829b860?, 0x1005f804d?)
+	/usr/local/Cellar/go/1.19.4/libexec/src/sync/once.go:74 +0xc2
+sync.(*Once).Do(...)
+	/usr/local/Cellar/go/1.19.4/libexec/src/sync/once.go:65
+github.com/eluv-io/inject-go.(*loader).load(0xc014555080?, 0x1034ce1f0?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/loader.go:18 +0x54
+github.com/eluv-io/inject-go.(*singletonConstructorBinding).get(0xc00e7c7720?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/binding.go:126 +0x3b
+github.com/eluv-io/inject-go.(*injector).get(0x1?, {0x1034ce1f0?, 0xc00e02b710?})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/injector.go:374 +0x46
+github.com/eluv-io/inject-go.(*injector).getReflectValues(0x100010287?, {0xc007d57b40, 0x2, 0x104c62501?})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/injector.go:397 +0x72
+github.com/eluv-io/inject-go.(*constructorBinding).get(0xc00d43a300)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/binding.go:105 +0x39
+github.com/eluv-io/inject-go.(*loader).load.func1()
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/loader.go:19 +0x2a
+sync.(*Once).doSlow(0xc00829ba90?, 0x1005f808a?)
+	/usr/local/Cellar/go/1.19.4/libexec/src/sync/once.go:74 +0xc2
+sync.(*Once).Do(...)
+	/usr/local/Cellar/go/1.19.4/libexec/src/sync/once.go:65
+github.com/eluv-io/inject-go.(*loader).load(0xc00e7c7a20?, 0x1034ce1f0?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/loader.go:18 +0x54
+github.com/eluv-io/inject-go.(*singletonConstructorBinding).get(0xc00e7c7720?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/binding.go:126 +0x3b
+github.com/eluv-io/inject-go.(*injector).get(0xc00829bb18?, {0x1034ce1f0?, 0xc00e02af20?})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/injector.go:374 +0x46
+github.com/eluv-io/inject-go.(*injector).getReflectValues(0x100010287?, {0xc00aa40be0, 0xa, 0x104c62501?})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/injector.go:397 +0x72
+github.com/eluv-io/inject-go.(*constructorBinding).get(0xc00d43a720)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/binding.go:105 +0x39
+github.com/eluv-io/inject-go.(*loader).load.func1()
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/loader.go:19 +0x2a
+sync.(*Once).doSlow(0xc00829bcc0?, 0x1005f808a?)
+	/usr/local/Cellar/go/1.19.4/libexec/src/sync/once.go:74 +0xc2
+sync.(*Once).Do(...)
+	/usr/local/Cellar/go/1.19.4/libexec/src/sync/once.go:65
+github.com/eluv-io/inject-go.(*loader).load(0xc00e7c7d60?, 0x1034ce1f0?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/loader.go:18 +0x54
+github.com/eluv-io/inject-go.(*singletonConstructorBinding).get(0xc00e7c7720?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/binding.go:126 +0x3b
+github.com/eluv-io/inject-go.(*injector).get(0x1?, {0x1034ce1f0?, 0xc00da48de0?})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/injector.go:374 +0x46
+github.com/eluv-io/inject-go.(*injector).getReflectValues(0xc00e7c7720?, {0xc01087f560, 0x9, 0x0?})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/injector.go:397 +0x72
+github.com/eluv-io/inject-go.(*injector).Call(0xd?, {0x102988360?, 0x1030f0778})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/injector.go:299 +0x1a5
+github.com/eluv-io/common-go/util/injectutil.Call({0x1034fea40?, 0xc00e7c7720?}, {0x102988360?, 0x1030f0778?})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/injectutil/injectutil.go:15 +0x3b
+github.com/qluvio/content-fabric/space.(*injector).Call(0xc00d9cb0b0?, {0x102988360?, 0x1030f0778?})
+	/Users/luk/dev/qluvio/git/content-fabric/space/space.go:114 +0x3d
+github.com/qluvio/content-fabric/qapi.newQSpaces(0xc0078b2358, {0x1034bf360, 0xc0147adaa0}, {0x1034bf060?, 0x104c62570}, {0x1034ca938?, 0xc0147adb60}, {0x1034cab40, 0xc00e7c7320})
+	/Users/luk/dev/qluvio/git/content-fabric/qapi/qspace.go:80 +0x699
+reflect.Value.call({0x1028f0b00?, 0x1030f07e8?, 0x1005f89a0?}, {0x102c9f9e4, 0x4}, {0xc00d307000, 0x5, 0xc014554f60?})
+	/usr/local/Cellar/go/1.19.4/libexec/src/reflect/value.go:584 +0x8c5
+reflect.Value.Call({0x1028f0b00?, 0x1030f07e8?, 0x0?}, {0xc00d307000?, 0xc00829d8c8?, 0x1005f81f2?})
+	/usr/local/Cellar/go/1.19.4/libexec/src/reflect/value.go:368 +0xbc
+github.com/eluv-io/inject-go.callConstructor({0x1028f0b00, 0x1030f07e8}, {0xc00d307000?, 0x1000df144?, 0xc00829d930?})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/binding.go:195 +0xc9
+github.com/eluv-io/inject-go.(*constructorBinding).get(0xc0147ad6e0)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/binding.go:109 +0x11d
+github.com/eluv-io/inject-go.(*loader).load.func1()
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/loader.go:19 +0x2a
+sync.(*Once).doSlow(0xc00829da68?, 0x1005f808a?)
+	/usr/local/Cellar/go/1.19.4/libexec/src/sync/once.go:74 +0xc2
+sync.(*Once).Do(...)
+	/usr/local/Cellar/go/1.19.4/libexec/src/sync/once.go:65
+github.com/eluv-io/inject-go.(*loader).load(0xc00ee9a7e0?, 0x1034ce1f0?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/loader.go:18 +0x54
+github.com/eluv-io/inject-go.(*singletonConstructorBinding).get(0xc014554c00?)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/binding.go:126 +0x3b
+github.com/eluv-io/inject-go.(*injector).get(0x0?, {0x1034ce1f0?, 0xc00da48070?})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/injector.go:374 +0x46
+github.com/eluv-io/inject-go.(*injector).getReflectValues(0xc014554c00?, {0xc00e7c7260, 0x2, 0x0?})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/injector.go:397 +0x72
+github.com/eluv-io/inject-go.(*injector).Call(0x100010287?, {0x102804ec0?, 0x1030f0da8})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/injector.go:299 +0x1a5
+github.com/eluv-io/common-go/util/injectutil.Call({0x1034fea40?, 0xc014554c00?}, {0x102804ec0?, 0x1030f0da8?})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/injectutil/injectutil.go:15 +0x3b
+github.com/qluvio/content-fabric/qfab/daemon.toHandlerFunc({0x1034fea40, 0xc014554c00}, {0x102804ec0?, 0x1030f0da8?})
+	/Users/luk/dev/qluvio/git/content-fabric/qfab/daemon/groups.go:124 +0x1be
+github.com/qluvio/content-fabric/qfab/daemon.registerMiddleware({0x1034fea40, 0xc014554c00}, {0x1034f2280, 0xc00b3b9520}, {0x104bfee40?, 0x9, 0x1000ea255?})
+	/Users/luk/dev/qluvio/git/content-fabric/qfab/daemon/groups.go:84 +0x99
+github.com/qluvio/content-fabric/qfab/daemon.RegisterGroups({0x1034fea40, 0xc014554c00}, {0x1034f2280, 0xc00b3b9520})
+	/Users/luk/dev/qluvio/git/content-fabric/qfab/daemon/groups.go:58 +0x49
+reflect.Value.call({0x1028130e0?, 0x1030f0838?, 0x0?}, {0x102c9f9e4, 0x4}, {0xc0147ada10, 0x2, 0xc00d645fe0?})
+	/usr/local/Cellar/go/1.19.4/libexec/src/reflect/value.go:584 +0x8c5
+reflect.Value.Call({0x1028130e0?, 0x1030f0838?, 0x2?}, {0xc0147ada10?, 0x0?, 0x0?})
+	/usr/local/Cellar/go/1.19.4/libexec/src/reflect/value.go:368 +0xbc
+github.com/eluv-io/inject-go.(*injector).Call(0x0?, {0x1028130e0?, 0x1030f0838})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/injector.go:303 +0x317
+github.com/eluv-io/common-go/util/injectutil.Call({0x1034fea40?, 0xc014554c00?}, {0x1028130e0?, 0x1030f0838?})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/injectutil/injectutil.go:15 +0x3b
+github.com/qluvio/content-fabric/qfab/daemon.daemonInit({0x1034fea40, 0xc014554c00})
+	/Users/luk/dev/qluvio/git/content-fabric/qfab/daemon/daemon.go:97 +0x1c8
+reflect.Value.call({0x1027ca800?, 0x1030f0858?, 0x0?}, {0x102c9f9e4, 0x4}, {0xc000b90018, 0x1, 0xc00d645ed0?})
+	/usr/local/Cellar/go/1.19.4/libexec/src/reflect/value.go:584 +0x8c5
+reflect.Value.Call({0x1027ca800?, 0x1030f0858?, 0x1?}, {0xc000b90018?, 0x0?, 0x0?})
+	/usr/local/Cellar/go/1.19.4/libexec/src/reflect/value.go:368 +0xbc
+github.com/eluv-io/inject-go.(*injector).Call(0xc007693080?, {0x1027ca800?, 0x1030f0858})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/injector.go:303 +0x317
+github.com/eluv-io/inject-go.(*injector).init(0xc014554c00, {0xc00829ef78, 0x2, 0x2})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/injector.go:55 +0x2fe
+github.com/eluv-io/inject-go.newInjector({0xc007693080, 0x77}, {0xc00829ef78, 0x2, 0x2})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/injector.go:26 +0xbc
+github.com/eluv-io/inject-go.NewNamedInjector(...)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/inject.go:529
+github.com/eluv-io/inject-go.NewInjector({0xc00829ef78, 0x2, 0x2})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/inject-go@v1.0.2/inject.go:521 +0x4d
+github.com/qluvio/content-fabric/qfab/daemon.Injector({0x1034ff5a8, 0xc00b3cc340})
+	/Users/luk/dev/qluvio/git/content-fabric/qfab/daemon/daemon.go:59 +0x128
+github.com/qluvio/content-fabric/qparts_test.runDaemon(0x100427518?, {0x1034d8ee0, 0xc00e709a70})
+	/Users/luk/dev/qluvio/git/content-fabric/qparts/net_test.go:708 +0x75
+github.com/qluvio/content-fabric/qparts_test.TestNet.func1.1.2()
+	/Users/luk/dev/qluvio/git/content-fabric/qparts/net_test.go:64 +0x56
+github.com/qluvio/content-fabric/test.Convey.func1()
+	/Users/luk/dev/qluvio/git/content-fabric/test/convey.go:23 +0x70
+github.com/smartystreets/goconvey/convey.parseAction.func1({0x102cf8e58, 0xc0147699b0})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/smartystreets/goconvey@v1.7.2/convey/discovery.go:89 +0x1b
+github.com/smartystreets/goconvey/convey.(*context).conveyInner(0xc007cf8a80, {0x102cf8e58?, 0xc0147698f0?}, 0xc00e02aab0)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/smartystreets/goconvey@v1.7.2/convey/context.go:279 +0x177
+github.com/smartystreets/goconvey/convey.(*context).Convey.func1()
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/smartystreets/goconvey@v1.7.2/convey/context.go:166 +0x2c
+github.com/jtolds/gls.(*ContextManager).SetValues.func1(0x0)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/jtolds/gls@v4.20.0+incompatible/context.go:97 +0x46a
+github.com/jtolds/gls.EnsureGoroutineId(0xc014769980)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/jtolds/gls@v4.20.0+incompatible/gid.go:19 +0xfb
+github.com/jtolds/gls.(*ContextManager).SetValues(0xc000d90230, 0xc0147698f0, 0xc00e709b00)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/jtolds/gls@v4.20.0+incompatible/context.go:63 +0x16a
+github.com/smartystreets/goconvey/convey.(*context).Convey(0xc007c04a80, {0xc00829f4a8?, 0x1034b7b20?, 0x106377f01?})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/smartystreets/goconvey@v1.7.2/convey/context.go:165 +0x35c
+github.com/smartystreets/goconvey/convey.Convey({0xc00829f4a8, 0x2, 0x2})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/smartystreets/goconvey@v1.7.2/convey/doc.go:78 +0x75
+github.com/qluvio/content-fabric/test.Convey({0x102cf8e58, 0x1f}, 0xc00a0d34a0)
+	/Users/luk/dev/qluvio/git/content-fabric/test/convey.go:21 +0xd2
+github.com/qluvio/content-fabric/qparts_test.TestNet.func1.1()
+	/Users/luk/dev/qluvio/git/content-fabric/qparts/net_test.go:63 +0x265
+github.com/qluvio/content-fabric/test.Convey.func1()
+	/Users/luk/dev/qluvio/git/content-fabric/test/convey.go:23 +0x70
+github.com/smartystreets/goconvey/convey.parseAction.func1({0x102d00fb4, 0xc014769830})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/smartystreets/goconvey@v1.7.2/convey/discovery.go:89 +0x1b
+github.com/smartystreets/goconvey/convey.(*context).conveyInner(0xc007c04a80, {0x102d00fb4?, 0xc0147697a0?}, 0xc00e02aa00)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/smartystreets/goconvey@v1.7.2/convey/context.go:279 +0x177
+github.com/smartystreets/goconvey/convey.(*context).Convey.func1()
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/smartystreets/goconvey@v1.7.2/convey/context.go:166 +0x2c
+github.com/jtolds/gls.(*ContextManager).SetValues.func1(0x0)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/jtolds/gls@v4.20.0+incompatible/context.go:97 +0x46a
+github.com/jtolds/gls.EnsureGoroutineId(0xc014769800)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/jtolds/gls@v4.20.0+incompatible/gid.go:19 +0xfb
+github.com/jtolds/gls.(*ContextManager).SetValues(0xc000d90230, 0xc0147697a0, 0xc00e709aa0)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/jtolds/gls@v4.20.0+incompatible/context.go:63 +0x16a
+github.com/smartystreets/goconvey/convey.(*context).Convey(0xc007c04930, {0xc00829f950?, 0x1034b7b20?, 0x106377f01?})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/smartystreets/goconvey@v1.7.2/convey/context.go:165 +0x35c
+created by testing.(*T).Run
+	/usr/local/Cellar/go/1.19.4/libexec/src/testing/testing.go:1493 +0x35f
+
+goroutine 202 [chan receive, 10 minutes]:
+github.com/qluvio/content-fabric/extapi/avtest.(*XcQueue).Start.func1(0xc00a10c820)
+	/Users/luk/dev/qluvio/git/content-fabric/extapi/avtest/xcqueue.go:53 +0x74
+created by github.com/qluvio/content-fabric/extapi/avtest.(*XcQueue).Start
+	/Users/luk/dev/qluvio/git/content-fabric/extapi/avtest/xcqueue.go:40 +0x65
+
+goroutine 22506 [chan receive]:
+github.com/qluvio/content-fabric/extapi/avtest.(*XcQueue).Start.func1(0xc011dc4190)
+	/Users/luk/dev/qluvio/git/content-fabric/extapi/avtest/xcqueue.go:53 +0x74
+created by github.com/qluvio/content-fabric/extapi/avtest.(*XcQueue).Start
+	/Users/luk/dev/qluvio/git/content-fabric/extapi/avtest/xcqueue.go:40 +0x65
+
+goroutine 7351 [chan receive, 5 minutes]:
+github.com/qluvio/content-fabric/extapi/avtest.(*XcQueue).Start.func1(0xc00a10def0)
+	/Users/luk/dev/qluvio/git/content-fabric/extapi/avtest/xcqueue.go:53 +0x74
+created by github.com/qluvio/content-fabric/extapi/avtest.(*XcQueue).Start
+	/Users/luk/dev/qluvio/git/content-fabric/extapi/avtest/xcqueue.go:40 +0x65
+
+goroutine 1885 [sync.Cond.Wait, 8 minutes]:
+sync.runtime_notifyListWait(0xc00771bf90, 0x0)
+	/usr/local/Cellar/go/1.19.4/libexec/src/runtime/sema.go:517 +0x14c
+sync.(*Cond).Wait(0xc00828dd38?)
+	/usr/local/Cellar/go/1.19.4/libexec/src/sync/cond.go:70 +0x8c
+github.com/eluv-io/common-go/util/multiqueue.(*multiQueue).Pop(0xc000c9dd40)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/multiqueue/multiqueue.go:77 +0x112
+github.com/eluv-io/common-go/util/syncutil.(*workerPool).start.func1()
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/syncutil/workerpool.go:90 +0x34
+created by github.com/eluv-io/common-go/util/syncutil.(*workerPool).start
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/syncutil/workerpool.go:88 +0x56
+
+goroutine 3739 [sync.Cond.Wait, 7 minutes]:
+sync.runtime_notifyListWait(0xc008306ed0, 0x0)
+	/usr/local/Cellar/go/1.19.4/libexec/src/runtime/sema.go:517 +0x14c
+sync.(*Cond).Wait(0xc0005e5f48?)
+	/usr/local/Cellar/go/1.19.4/libexec/src/sync/cond.go:70 +0x8c
+github.com/eluv-io/common-go/util/multiqueue.(*multiQueue).Pop(0xc007cc8c00)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/multiqueue/multiqueue.go:77 +0x112
+github.com/eluv-io/common-go/util/syncutil.(*workerPool).start.func1()
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/syncutil/workerpool.go:90 +0x34
+created by github.com/eluv-io/common-go/util/syncutil.(*workerPool).start
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/syncutil/workerpool.go:88 +0x56
+
+goroutine 26636 [chan receive]:
+github.com/qluvio/content-fabric/extapi/avtest.(*XcQueue).Start.func1(0xc00faaf450)
+	/Users/luk/dev/qluvio/git/content-fabric/extapi/avtest/xcqueue.go:53 +0x74
+created by github.com/qluvio/content-fabric/extapi/avtest.(*XcQueue).Start
+	/Users/luk/dev/qluvio/git/content-fabric/extapi/avtest/xcqueue.go:40 +0x65
+
+goroutine 2378 [select, 8 minutes]:
+database/sql.(*DB).connectionOpener(0xc000565e10, {0x1034dba68, 0xc007680940})
+	/usr/local/Cellar/go/1.19.4/libexec/src/database/sql/sql.go:1224 +0x8d
+created by database/sql.OpenDB
+	/usr/local/Cellar/go/1.19.4/libexec/src/database/sql/sql.go:792 +0x18d
+
+goroutine 3114 [select, 7 minutes]:
+database/sql.(*DB).connectionOpener(0xc0082e4820, {0x1034dba68, 0xc000573bc0})
+	/usr/local/Cellar/go/1.19.4/libexec/src/database/sql/sql.go:1224 +0x8d
+created by database/sql.OpenDB
+	/usr/local/Cellar/go/1.19.4/libexec/src/database/sql/sql.go:792 +0x18d
+
+goroutine 18781 [chan receive, 1 minutes]:
+github.com/qluvio/content-fabric/extapi/avtest.(*XcQueue).Start.func1(0xc0109d05a0)
+	/Users/luk/dev/qluvio/git/content-fabric/extapi/avtest/xcqueue.go:53 +0x74
+created by github.com/qluvio/content-fabric/extapi/avtest.(*XcQueue).Start
+	/Users/luk/dev/qluvio/git/content-fabric/extapi/avtest/xcqueue.go:40 +0x65
+
+goroutine 35500 [sync.Cond.Wait]:
+sync.runtime_notifyListWait(0xc00dae30d0, 0x0)
+	/usr/local/Cellar/go/1.19.4/libexec/src/runtime/sema.go:517 +0x14c
+sync.(*Cond).Wait(0x1008b6b62?)
+	/usr/local/Cellar/go/1.19.4/libexec/src/sync/cond.go:70 +0x8c
+github.com/eluv-io/common-go/util/multiqueue.(*multiQueue).Pop(0xc013f9d8f0)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/multiqueue/multiqueue.go:77 +0x112
+github.com/eluv-io/common-go/util/syncutil.(*workerPool).start.func1()
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/syncutil/workerpool.go:90 +0x34
+created by github.com/eluv-io/common-go/util/syncutil.(*workerPool).start
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/syncutil/workerpool.go:88 +0x56
+
+goroutine 36157 [select]:
+google.golang.org/grpc/internal/transport.(*controlBuffer).get(0xc007c60370, 0x1)
+	/Users/luk/dev/qluvio/git/pkg/mod/google.golang.org/grpc@v1.51.0/internal/transport/controlbuf.go:408 +0x115
+google.golang.org/grpc/internal/transport.(*loopyWriter).run(0xc01093a9c0)
+	/Users/luk/dev/qluvio/git/pkg/mod/google.golang.org/grpc@v1.51.0/internal/transport/controlbuf.go:535 +0x85
+google.golang.org/grpc/internal/transport.newHTTP2Client.func6()
+	/Users/luk/dev/qluvio/git/pkg/mod/google.golang.org/grpc@v1.51.0/internal/transport/http2_client.go:442 +0x6a
+created by google.golang.org/grpc/internal/transport.newHTTP2Client
+	/Users/luk/dev/qluvio/git/pkg/mod/google.golang.org/grpc@v1.51.0/internal/transport/http2_client.go:440 +0x20ec
+
+goroutine 35970 [select]:
+github.com/syndtr/goleveldb/leveldb.(*DB).mpoolDrain(0xc0000fdc00)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/syndtr/goleveldb@v1.0.1-0.20210819022825-2ae1ddf74ef7/leveldb/db_state.go:110 +0x113
+created by github.com/syndtr/goleveldb/leveldb.openDB
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/syndtr/goleveldb@v1.0.1-0.20210819022825-2ae1ddf74ef7/leveldb/db.go:149 +0x52a
+
+goroutine 35928 [select]:
+database/sql.(*DB).connectionOpener(0xc0148af2b0, {0x1034dba68, 0xc00db04c00})
+	/usr/local/Cellar/go/1.19.4/libexec/src/database/sql/sql.go:1224 +0x8d
+created by database/sql.OpenDB
+	/usr/local/Cellar/go/1.19.4/libexec/src/database/sql/sql.go:792 +0x18d
+
+goroutine 36177 [select]:
+github.com/syndtr/goleveldb/leveldb.(*session).refLoop(0xc00ecd9a40)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/syndtr/goleveldb@v1.0.1-0.20210819022825-2ae1ddf74ef7/leveldb/session_util.go:189 +0x59b
+created by github.com/syndtr/goleveldb/leveldb.newSession
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/syndtr/goleveldb@v1.0.1-0.20210819022825-2ae1ddf74ef7/leveldb/session.go:93 +0x2e5
+
+goroutine 36167 [sync.Cond.Wait]:
+sync.runtime_notifyListWait(0xc00b5b0dd0, 0x0)
+	/usr/local/Cellar/go/1.19.4/libexec/src/runtime/sema.go:517 +0x14c
+sync.(*Cond).Wait(0xc00e03f690?)
+	/usr/local/Cellar/go/1.19.4/libexec/src/sync/cond.go:70 +0x8c
+github.com/eluv-io/common-go/util/multiqueue.(*multiQueue).Pop(0xc011648900)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/multiqueue/multiqueue.go:77 +0x112
+github.com/eluv-io/common-go/util/syncutil.(*workerPool).start.func1()
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/syncutil/workerpool.go:90 +0x34
+created by github.com/eluv-io/common-go/util/syncutil.(*workerPool).start
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/syncutil/workerpool.go:88 +0x56
+
+goroutine 36168 [sync.Cond.Wait]:
+sync.runtime_notifyListWait(0xc00b5b0ed0, 0x0)
+	/usr/local/Cellar/go/1.19.4/libexec/src/runtime/sema.go:517 +0x14c
+sync.(*Cond).Wait(0x0?)
+	/usr/local/Cellar/go/1.19.4/libexec/src/sync/cond.go:70 +0x8c
+github.com/eluv-io/common-go/util/multiqueue.(*multiQueue).Pop(0xc011648a20)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/multiqueue/multiqueue.go:77 +0x112
+github.com/eluv-io/common-go/util/syncutil.(*workerPool).start.func1()
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/syncutil/workerpool.go:90 +0x34
+created by github.com/eluv-io/common-go/util/syncutil.(*workerPool).start
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/syncutil/workerpool.go:88 +0x56
+
+goroutine 36020 [sync.Cond.Wait]:
+sync.runtime_notifyListWait(0xc007826510, 0x0)
+	/usr/local/Cellar/go/1.19.4/libexec/src/runtime/sema.go:517 +0x14c
+sync.(*Cond).Wait(0xc00b4ea7b0?)
+	/usr/local/Cellar/go/1.19.4/libexec/src/sync/cond.go:70 +0x8c
+github.com/eluv-io/common-go/util/multiqueue.(*multiQueue).Pop(0xc013f9a300)
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/multiqueue/multiqueue.go:77 +0x112
+github.com/eluv-io/common-go/util/syncutil.(*workerPool).start.func1()
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/syncutil/workerpool.go:90 +0x34
+created by github.com/eluv-io/common-go/util/syncutil.(*workerPool).start
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/eluv-io/common-go@v1.0.18-0.20230705125959-7e0d8de26f86/util/syncutil/workerpool.go:88 +0x56
+
+goroutine 36071 [select]:
+database/sql.(*DB).connectionOpener(0xc00b3e9ad0, {0x1034dba68, 0xc0079b2680})
+	/usr/local/Cellar/go/1.19.4/libexec/src/database/sql/sql.go:1224 +0x8d
+created by database/sql.OpenDB
+	/usr/local/Cellar/go/1.19.4/libexec/src/database/sql/sql.go:792 +0x18d
+
+goroutine 36184 [IO wait]:
+internal/poll.runtime_pollWait(0x1328bd9a8, 0x72)
+	/usr/local/Cellar/go/1.19.4/libexec/src/runtime/netpoll.go:305 +0x89
+internal/poll.(*pollDesc).wait(0xc0117b7680?, 0xc00a916000?, 0x0)
+	/usr/local/Cellar/go/1.19.4/libexec/src/internal/poll/fd_poll_runtime.go:84 +0x32
+internal/poll.(*pollDesc).waitRead(...)
+	/usr/local/Cellar/go/1.19.4/libexec/src/internal/poll/fd_poll_runtime.go:89
+internal/poll.(*FD).Read(0xc0117b7680, {0xc00a916000, 0x8000, 0x8000})
+	/usr/local/Cellar/go/1.19.4/libexec/src/internal/poll/fd_unix.go:167 +0x25a
+net.(*netFD).Read(0xc0117b7680, {0xc00a916000?, 0x55?, 0x40?})
+	/usr/local/Cellar/go/1.19.4/libexec/src/net/fd_posix.go:55 +0x29
+net.(*conn).Read(0xc011224b48, {0xc00a916000?, 0x10401?, 0x1040100000000?})
+	/usr/local/Cellar/go/1.19.4/libexec/src/net/net.go:183 +0x45
+github.com/soheilhy/cmux.(*bufferedReader).Read(0xc007a8c1d0, {0xc00a916000, 0x1090039f8?, 0x8000})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/soheilhy/cmux@v0.1.5-0.20210205191134-5ec6847320e5/buffer.go:53 +0x135
+github.com/soheilhy/cmux.(*MuxConn).Read(0xa010401?, {0xc00a916000?, 0x30?, 0xa010401?})
+	/Users/luk/dev/qluvio/git/pkg/mod/github.com/soheilhy/cmux@v0.1.5-0.20210205191134-5ec6847320e5/cmux.go:297 +0x25
+bufio.(*Reader).Read(0xc011949ce0, {0xc00afc8660, 0x9, 0x104c295a0?})
+	/usr/local/Cellar/go/1.19.4/libexec/src/bufio/bufio.go:237 +0x1bb
+io.ReadAtLeast({0x1034bb280, 0xc011949ce0}, {0xc00afc8660, 0x9, 0x9}, 0x9)
+	/usr/local/Cellar/go/1.19.4/libexec/src/io/io.go:332 +0x9a
+io.ReadFull(...)
+	/usr/local/Cellar/go/1.19.4/libexec/src/io/io.go:351
+golang.org/x/net/http2.readFrameHeader({0xc00afc8660?, 0x9?, 0x1000706a0?}, {0x1034bb280?, 0xc011949ce0?})
+	/Users/luk/dev/qluvio/git/pkg/mod/golang.org/x/net@v0.5.0/http2/frame.go:237 +0x6e
+golang.org/x/net/http2.(*Framer).ReadFrame(0xc00afc8620)
+	/Users/luk/dev/qluvio/git/pkg/mod/golang.org/x/net@v0.5.0/http2/frame.go:498 +0x95
+google.golang.org/grpc/internal/transport.(*http2Server).HandleStreams(0xc00e004b60, 0x45d964b800?, 0xc00e815b80?)
+	/Users/luk/dev/qluvio/git/pkg/mod/google.golang.org/grpc@v1.51.0/internal/transport/http2_server.go:610 +0x174
+google.golang.org/grpc.(*Server).serveStreams(0xc00c9ce000, {0x1034eba40?, 0xc00e004b60})
+	/Users/luk/dev/qluvio/git/pkg/mod/google.golang.org/grpc@v1.51.0/server.go:949 +0x142
+google.golang.org/grpc.(*Server).handleRawConn.func1()
+	/Users/luk/dev/qluvio/git/pkg/mod/google.golang.org/grpc@v1.51.0/server.go:891 +0x46
+created by google.golang.org/grpc.(*Server).handleRawConn
+	/Users/luk/dev/qluvio/git/pkg/mod/google.golang.org/grpc@v1.51.0/server.go:890 +0x185
+
+goroutine 35973 [select]:
+database/sql.(*DB).connectionOpener(0xc0110a89c0, {0x1034dba68, 0xc008be8500})
+	/usr/local/Cellar/go/1.19.4/libexec/src/database/sql/sql.go:1224 +0x8d
+created by database/sql.OpenDB
+	/usr/local/Cellar/go/1.19.4/libexec/src/database/sql/sql.go:792 +0x18d
+
+goroutine 36130 [select]:
+database/sql.(*DB).connectionOpener(0xc00ef1a340, {0x1034dba68, 0xc00e6dd380})
+	/usr/local/Cellar/go/1.19.4/libexec/src/database/sql/sql.go:1224 +0x8d
+created by database/sql.OpenDB
+	/usr/local/Cellar/go/1.19.4/libexec/src/database/sql/sql.go:792 +0x18d
+
+goroutine 36173 [select]:
+github.com/qluvio/content-fabric/registry.(*hook).Wait(0x1034baba0?, 0xc010919a70?)
+	/Users/luk/dev/qluvio/git/content-fabric/registry/registry.go:237 +0x65
+github.com/qluvio/content-fabric/qfab/daemon/dynconfig.(*Updater).start.func1()
+	/Users/luk/dev/qluvio/git/content-fabric/qfab/daemon/dynconfig/updater.go:77 +0x51
+created by github.com/qluvio/content-fabric/qfab/daemon/dynconfig.(*Updater).start
+	/Users/luk/dev/qluvio/git/content-fabric/qfab/daemon/dynconfig/updater.go:75 +0x65
+
+goroutine 36101 [chan receive]:
+github.com/qluvio/content-fabric/extapi/avtest.(*XcQueue).Start.func1(0xc00d380ff0)
+	/Users/luk/dev/qluvio/git/content-fabric/extapi/avtest/xcqueue.go:53 +0x74
+created by github.com/qluvio/content-fabric/extapi/avtest.(*XcQueue).Start
+	/Users/luk/dev/qluvio/git/content-fabric/extapi/avtest/xcqueue.go:40 +0x65
+
+goroutine 36174 [select]:
+google.golang.org/grpc.(*ccBalancerWrapper).watcher(0xc007cc2480)
+	/Users/luk/dev/qluvio/git/pkg/mod/google.golang.org/grpc@v1.51.0/balancer_conn_wrappers.go:115 +0x73
+created by google.golang.org/grpc.newCCBalancerWrapper
+	/Users/luk/dev/qluvio/git/pkg/mod/google.golang.org/grpc@v1.51.0/balancer_conn_wrappers.go:76 +0x22a

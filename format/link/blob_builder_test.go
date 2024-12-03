@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/eluv-io/common-go/format/encryption"
 	"github.com/eluv-io/common-go/format/link"
-
-	"github.com/stretchr/testify/require"
 )
 
 func TestBlobLinkBuilder(t *testing.T) {
@@ -34,10 +34,9 @@ func TestBlobLinkBuilder(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, "./blob", lnk.String())
 
-			blob, err := lnk.AsBlob()
-			require.NoError(t, err)
-			require.Equal(t, test.expData, blob.Data)
-			require.Equal(t, test.expScheme, blob.EncryptionScheme)
+			require.NotNil(t, lnk.Blob.Data)
+			require.Equal(t, test.expData, lnk.Blob.Data)
+			require.Equal(t, test.expScheme, lnk.Blob.EncryptionScheme)
 		})
 	}
 }
