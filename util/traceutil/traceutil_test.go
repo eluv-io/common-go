@@ -169,3 +169,11 @@ func TestExtendedSpan(t *testing.T) {
 func removeMs(s string) string {
 	return regexp.MustCompile(`\.00\dZ`).ReplaceAllString(s, "")
 }
+
+func TestNilAppend(t *testing.T) {
+	rg := map[string][]int{}
+	rg["a"] = append(rg["a"], 1)
+	println(len(rg["a"]))
+	println(rg["a"][0])
+	t.Fail()
+}

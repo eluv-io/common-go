@@ -38,6 +38,10 @@ func (n noop) StartSpan(_ string) trace.Span {
 	return trace.NoopSpan{}
 }
 
+func (n noop) SubSpan(_ trace.Span, _ string) func() {
+	return func() {}
+}
+
 func (n noop) Span() trace.Span {
 	return trace.NoopSpan{}
 }
