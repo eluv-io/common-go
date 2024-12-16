@@ -94,9 +94,8 @@ type ContextStack interface {
 	//	defer span.End()
 	StartSpan(spanName string) trace.Span
 
-	// SubSpan creates a new sub span of the given parent span and pushes its context onto the stack
-	// of the current goroutine. Defer-call the returned function to end the span and pop the
-	// context.
+	// SubSpan creates a new sub span of the given parent span and pushes its context onto the
+	// stack. Defer-call the returned function to end the span and pop the context.
 	SubSpan(parent trace.Span, spanName string) (release func())
 
 	// Span retrieves the goroutine's current span.
@@ -205,9 +204,8 @@ func (c *contextStack) StartSpan(spanName string) trace.Span {
 }
 
 func (c *contextStack) SubSpan(parent trace.Span, spanName string) (release func()) {
-	ctx := Current()
-	spCtx, sp := parent.Start(ctx.Ctx(), spanName)
-	pop := ctx.Push(spCtx)
+	spCtx, sp := parent.Start(c.Ctx(), spanName)
+	pop := c.Push(spCtx)
 	return func() {
 		sp.End()
 		pop()
