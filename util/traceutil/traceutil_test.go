@@ -2,6 +2,7 @@ package traceutil_test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"regexp"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/utc-go"
 
 	"github.com/eluv-io/common-go/util/traceutil"
@@ -168,4 +170,112 @@ func TestExtendedSpan(t *testing.T) {
 
 func removeMs(s string) string {
 	return regexp.MustCompile(`\.00\dZ`).ReplaceAllString(s, "")
+}
+
+func TestSlowSpanEnd2End(t *testing.T) {
+
+	t.Run("not slow", func(t *testing.T) {
+		rootSp := traceutil.InitTracing("slow-span-test", true)
+		rootSp.Attribute("label", "api-request")
+
+		handleRequest(0)
+
+		bts, err, ok := rootSp.MarshalSlowOnly()
+		require.Empty(t, bts)
+		require.NoError(t, err)
+		require.False(t, ok)
+	})
+
+	t.Run("slow", func(t *testing.T) {
+		rootSp := traceutil.InitTracing("slow-span-test", true)
+		rootSp.Attribute("label", "api-request")
+
+		{
+			span := traceutil.StartSpan("should-not-appear")
+			require.NotNil(t, span)
+			require.False(t, span.IsRecording())
+			span.End()
+		}
+
+		handleRequest(time.Second)
+
+		bts, err, ok := rootSp.MarshalSlowOnly()
+		require.True(t, ok)
+		require.NoError(t, err)
+		fmt.Println(jsonutil.MustPretty(string(bts)))
+		require.Contains(t, string(bts), "live-playout")
+		require.Contains(t, string(bts), "api-request")
+		require.NotContains(t, string(bts), "should-not-appear")
+	})
+
+	t.Run("slow, but no slow span initialized", func(t *testing.T) {
+		handleRequest(time.Second)
+
+		bts, err, ok := traceutil.Span().MarshalSlowOnly()
+		require.Empty(t, bts)
+		require.NoError(t, err)
+		require.False(t, ok)
+	})
+
+	t.Run("full tracing, not slow", func(t *testing.T) {
+		rootSp := traceutil.InitTracing("slow-span-test", false)
+		rootSp.Attribute("label", "api-request")
+
+		{
+			span := traceutil.StartSpan("should-not-appear")
+			require.NotNil(t, span)
+			require.True(t, span.IsRecording())
+			span.End()
+		}
+
+		handleRequest(0)
+
+		bts, err, ok := rootSp.MarshalSlowOnly()
+		require.Empty(t, bts)
+		require.NoError(t, err)
+		require.False(t, ok)
+	})
+
+	t.Run("full tracing, slow", func(t *testing.T) {
+		rootSp := traceutil.InitTracing("slow-span-test", false)
+		rootSp.Attribute("label", "api-request")
+
+		{
+			span := traceutil.StartSpan("should-appear")
+			require.NotNil(t, span)
+			require.True(t, span.IsRecording())
+			span.End()
+		}
+
+		handleRequest(time.Second)
+
+		bts, err, ok := rootSp.MarshalSlowOnly()
+		require.True(t, ok)
+		require.NoError(t, err)
+		fmt.Println(jsonutil.MustPretty(string(bts)))
+		require.Contains(t, string(bts), "live-playout")
+		require.Contains(t, string(bts), "api-request")
+		require.Contains(t, string(bts), "should-appear")
+	})
+
+}
+
+func handleRequest(sleep time.Duration) {
+	span := traceutil.StartSlowSpan("handle-request")
+	defer span.End()
+
+	livePlayout(sleep)
+}
+
+func livePlayout(sleep time.Duration) {
+	span := traceutil.StartSlowSpan("live-playout")
+	defer span.End()
+
+	traceutil.Span().FindAncestorByAttr("label", "api-request").SetSlowCutoff(500 * time.Millisecond)
+	// alternatively, we could also use the local span instance since we have it:
+	// span.FindAncestorByAttr("label", "api-request").SetSlowCutoff(500 * time.Millisecond)
+
+	if sleep > 0 {
+		time.Sleep(sleep)
+	}
 }

@@ -81,6 +81,10 @@ type ExtendedSpan interface {
 	// MarshalSlowOnly returns the marshalling of all spans for which a sub-span or parent span is
 	// slower than the cutoff.
 	MarshalSlowOnly() ([]byte, error, bool)
+
+	// FindAncestorByAttr returns the ancestor span (or self) that contains the given attribute. Returns a noop span if
+	// not found.
+	FindAncestorByAttr(name string, value any) Span
 }
 
 type Event struct {
@@ -97,24 +101,25 @@ func (n NoopSpan) Start(ctx context.Context, _ string) (context.Context, Span) {
 	return ctx, n
 }
 
-func (n NoopSpan) End()                                                 {}
-func (n NoopSpan) Attribute(name string, val interface{})               {}
-func (n NoopSpan) Event(name string, attributes map[string]interface{}) {}
-func (n NoopSpan) IsRecording() bool                                    { return false }
-func (n NoopSpan) SlowOnly() bool                                       { return false }
-func (n NoopSpan) Json() string                                         { return "" }
-func (n NoopSpan) Attributes() map[string]interface{}                   { return nil }
-func (n NoopSpan) Events() []*Event                                     { return nil }
-func (n NoopSpan) FindByName(string) Span                               { return nil }
-func (n NoopSpan) StartTime() utc.UTC                                   { return utc.Zero }
-func (n NoopSpan) EndTime() utc.UTC                                     { return utc.Zero }
-func (n NoopSpan) Duration() time.Duration                              { return 0 }
-func (n NoopSpan) MaxDuration() time.Duration                           { return 0 }
-func (n NoopSpan) MarshalExtended() bool                                { return false }
-func (n NoopSpan) SetMarshalExtended()                                  {}
-func (n NoopSpan) SlowCutoff() time.Duration                            { return 0 }
-func (n NoopSpan) SetSlowCutoff(cutoff time.Duration)                   {}
-func (n NoopSpan) MarshalSlowOnly() ([]byte, error, bool)               { return nil, nil, false }
+func (n NoopSpan) End()                                     {}
+func (n NoopSpan) Attribute(_ string, _ interface{})        {}
+func (n NoopSpan) Event(_ string, _ map[string]interface{}) {}
+func (n NoopSpan) IsRecording() bool                        { return false }
+func (n NoopSpan) SlowOnly() bool                           { return false }
+func (n NoopSpan) Json() string                             { return "" }
+func (n NoopSpan) Attributes() map[string]interface{}       { return nil }
+func (n NoopSpan) Events() []*Event                         { return nil }
+func (n NoopSpan) FindByName(string) Span                   { return nil }
+func (n NoopSpan) StartTime() utc.UTC                       { return utc.Zero }
+func (n NoopSpan) EndTime() utc.UTC                         { return utc.Zero }
+func (n NoopSpan) Duration() time.Duration                  { return 0 }
+func (n NoopSpan) MaxDuration() time.Duration               { return 0 }
+func (n NoopSpan) MarshalExtended() bool                    { return false }
+func (n NoopSpan) SetMarshalExtended()                      {}
+func (n NoopSpan) SlowCutoff() time.Duration                { return 0 }
+func (n NoopSpan) SetSlowCutoff(_ time.Duration)            {}
+func (n NoopSpan) MarshalSlowOnly() ([]byte, error, bool)   { return nil, nil, false }
+func (n NoopSpan) FindAncestorByAttr(_ string, _ any) Span  { return n }
 
 // ---------------------------------------------------------------------------------------------------------------------
 
@@ -370,9 +375,8 @@ func (s *RecordingSpan) MarshalJSON() ([]byte, error) {
 
 func (s *RecordingSpan) MarshalSlowOnly() ([]byte, error, bool) {
 	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
 	slowSpans, sawSlow := s.slowSpans()
+	s.mutex.Unlock() // release lock so that it doesn't deadlock with MarshalJSON in case this span is also a slow span!
 	if !sawSlow {
 		return nil, nil, false
 	}
@@ -394,4 +398,22 @@ func (s *RecordingSpan) copy() *RecordingSpan {
 		slowOnly:  s.slowOnly,
 	}
 	return c
+}
+
+func (s *RecordingSpan) FindAncestorByAttr(name string, value any) Span {
+	a := s
+	for a != nil {
+		if v, ok := s.attr(name, a); ok && v == value {
+			return a
+		}
+		a, _ = a.Parent.(*RecordingSpan)
+	}
+	return NoopSpan{}
+}
+
+func (s *RecordingSpan) attr(name string, a *RecordingSpan) (any, bool) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	v, ok := a.Data.Attr[name]
+	return v, ok
 }
