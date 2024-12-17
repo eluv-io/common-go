@@ -13,13 +13,26 @@ func current() ctxutil.ContextStack {
 }
 
 // InitTracing initializes performance tracing for the current goroutine.
-func InitTracing(spanName string) trace.Span {
-	return current().InitTracing(spanName)
+//
+// If slowOnly is true, only spans that are explicitly created with StartSlowSpan wiill be recorded,
+// and even then only persisted if they end up being slower than expected.
+func InitTracing(spanName string, slowOnly bool) trace.Span {
+	return current().InitTracing(spanName, slowOnly)
 }
 
 // StartSpan creates new sub-span of the goroutine's current span or a noop
 // span if there is no current span.
 func StartSpan(spanName string) trace.Span {
+	sp := current().Span()
+	if sp.SlowOnly() {
+		return trace.NoopSpan{}
+	}
+	return current().StartSpan(spanName)
+}
+
+// StartSlowSpan creates a new sub-span of the goroutine's current slow span or a noop span if there
+// is no current span. If tracing is fully enabled, this has the exact same behavior as StartSpan.
+func StartSlowSpan(spanName string) trace.Span {
 	return current().StartSpan(spanName)
 }
 
@@ -36,7 +49,9 @@ func WithSpan(spanName string, fn func() error) error {
 	return err
 }
 
-// Span retrieves the current span of this goroutine.
+// Span retrieves the current span of this goroutine. If this function is used to add attributes or
+// events to the span, span.SlowOnly should be checked to ensure that detailed tracing is not added
+// when unnecessary.
 func Span() trace.Span {
 	return current().Span()
 }
