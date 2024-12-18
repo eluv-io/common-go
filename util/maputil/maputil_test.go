@@ -192,3 +192,17 @@ func TestCopyMSI(t *testing.T) {
 	require.Equal(t, ma2["one"], ma["one"])
 	require.Equal(t, ma2["two"], ma["two"])
 }
+
+func TestClear(t *testing.T) {
+	{
+		m := map[string]string{"k1": "v1", "k2": "v2"}
+		Clear(m)
+		require.Empty(t, m)
+	}
+	{
+		m := map[int]int{1: 10, 2: 20}
+		Clear(m)
+		require.Empty(t, m)
+	}
+
+}

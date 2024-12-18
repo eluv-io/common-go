@@ -17,6 +17,7 @@ import (
 	"github.com/mr-tron/base58"
 	"github.com/multiformats/go-varint"
 
+	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/sign"
 	"github.com/eluv-io/common-go/format/structured"
@@ -1129,7 +1130,7 @@ func (t *Token) VerifyTimes(maxValidity, timeSkew time.Duration) error {
 			return e("reason", "max token validity period expired",
 				"issued_at", t.IssuedAt,
 				"now", now,
-				"max_validity", maxValidity)
+				"max_validity", duration.Spec(maxValidity))
 		}
 	}
 

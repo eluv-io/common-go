@@ -13,7 +13,6 @@ import (
 	"github.com/eluv-io/common-go/format/structured"
 	"github.com/eluv-io/common-go/format/types"
 	"github.com/eluv-io/common-go/util/ethutil"
-	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/utc-go"
 )
@@ -210,11 +209,9 @@ func TestTokenBuilders(t *testing.T) {
 
 					require.Equal(t, test.wantType, tok.Type)
 					test.validate(t, tok)
-					// fmt.Println(jsonutil.MarshalString(tok.TokenData))
-					jsn, err := tok.TokenData.EncodeJSON()
+
+					_, err = tok.TokenData.EncodeJSON()
 					require.NoError(t, err)
-					fmt.Println(jsonutil.MustPretty(string(jsn)))
-					fmt.Println(eat.Describe(encoded))
 				})
 			}
 		})
