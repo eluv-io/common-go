@@ -11,7 +11,7 @@ import (
 
 func TestCleanup(t *testing.T) {
 	// make sure cleanup works with wrapped spans
-	root := newLogSpan(Current().InitTracing("root"))
+	root := newLogSpan(Current().InitTracing("root", false))
 
 	wg := sync.WaitGroup{}
 	for i := 0; i < 100; i++ {

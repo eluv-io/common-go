@@ -2,6 +2,7 @@ package syncutil
 
 import (
 	"sync"
+	"sync/atomic"
 )
 
 type ConcurrencyLimiter interface {
@@ -18,7 +19,7 @@ type ConcurrencyLimiter interface {
 
 func NewConcurrencyLimiter(limit int) ConcurrencyLimiter {
 	if limit <= 0 {
-		limit = 1
+		return &noopLimiter{}
 	}
 	return &concurrencyLimiter{
 		limit:   limit,
@@ -65,4 +66,25 @@ func (c *concurrencyLimiter) Count() int {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	return c.count
+}
+
+type noopLimiter struct {
+	count atomic.Int32
+}
+
+func (n *noopLimiter) TryAcquire() bool {
+	n.Acquire()
+	return true
+}
+
+func (n *noopLimiter) Acquire() {
+	_ = n.count.Add(1)
+}
+
+func (n *noopLimiter) Release() {
+	_ = n.count.Add(-1)
+}
+
+func (n *noopLimiter) Count() int {
+	return int(n.count.Load())
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/eluv-io/apexlog-go/handlers/memory"
 	"github.com/eluv-io/common-go/util/ctxutil"
 	"github.com/eluv-io/common-go/util/jsonutil"
+	"github.com/eluv-io/common-go/util/traceutil"
 	"github.com/eluv-io/common-go/util/traceutil/trace"
 	"github.com/eluv-io/log-go"
 )
@@ -24,7 +25,7 @@ func TestContextStack(t *testing.T) {
 func TestContextStackTracing(t *testing.T) {
 	stack := ctxutil.NewStack()
 
-	span := stack.InitTracing("test-span")
+	span := stack.InitTracing("test-span", false)
 
 	obj := anObjectWithTracing{cs: stack}
 	obj.A()
@@ -40,6 +41,34 @@ func TestContextStackTracing(t *testing.T) {
 	require.Equal(t, 13, strings.Count(trc, "name"))
 	require.Equal(t, 13, strings.Count(trc, "time"))
 	require.Contains(t, trc, `"current-func":"C"`)
+}
+
+func TestContextStackSubspan(t *testing.T) {
+
+	rootSp := traceutil.InitTracing("test-span", false)
+
+	wg := sync.WaitGroup{}
+
+	fUsingRootSp := func() {
+		defer wg.Done()
+		release := ctxutil.Current().SubSpan(rootSp, "sub-span")
+		defer release()
+
+		subSp := traceutil.StartSpan("sub-span-2")
+		subSp.Attribute("key", "val")
+		subSp.End()
+	}
+
+	wg.Add(1)
+	go fUsingRootSp()
+	wg.Wait()
+
+	rootSp.End()
+	trc := rootSp.Json()
+
+	require.Contains(t, trc, `"sub-span"`)
+	require.Contains(t, trc, `"sub-span-2"`)
+	require.Contains(t, trc, `"attr":{"key":"val"}`)
 }
 
 func TestContextStackTracingDisabled(t *testing.T) {

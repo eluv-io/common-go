@@ -75,7 +75,7 @@ func Parallel2() {
 }
 
 func ExampleMultiGoRoutine() {
-	rootSpan := traceutil.InitTracing("root span")
+	rootSpan := traceutil.InitTracing("root span", false)
 
 	Sequential()
 	Parallel()
