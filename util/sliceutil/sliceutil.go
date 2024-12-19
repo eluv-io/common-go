@@ -222,3 +222,21 @@ func Reverse[T any](slice []T) {
 		slice[i], slice[max-i] = slice[max-i], slice[i]
 	}
 }
+
+// First returns the first element of the given slice. Returns the zero value if the slice is empty.
+func First[T any](slice []T) T {
+	if len(slice) == 0 {
+		var zero T
+		return zero
+	}
+	return slice[0]
+}
+
+// Last returns the last element of the given slice. Returns the zero value if the slice is empty.
+func Last[T any](slice []T) T {
+	if len(slice) == 0 {
+		var zero T
+		return zero
+	}
+	return slice[len(slice)-1]
+}
