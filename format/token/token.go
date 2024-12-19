@@ -100,6 +100,9 @@ func NewLocalFile(nid id.ID, qid id.ID, bts []byte) (*Token, error) {
 	if qid.AssertCode(id.Q) != nil {
 		return nil, e("reason", "invalid qid", "qid", qid)
 	}
+	if len(bts) == 0 {
+		return nil, e("reason", "byte slice empty")
+	}
 	res := &Token{
 		Code:  LocalFile,
 		Bytes: bts,
