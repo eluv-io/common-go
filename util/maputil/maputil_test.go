@@ -192,3 +192,21 @@ func TestCopyMSI(t *testing.T) {
 	require.Equal(t, ma2["one"], ma["one"])
 	require.Equal(t, ma2["two"], ma["two"])
 }
+
+func TestCopyGeneric(t *testing.T) {
+	msi := map[string]interface{}{
+		"un":   1,
+		"deux": "two",
+	}
+	m2 := Copy(msi)
+	require.Equal(t, msi, m2)
+
+	mis := map[int]string{
+		1: "one",
+		2: "two",
+	}
+	var m3 map[int]string
+	m3 = Copy(mis)
+	require.Equal(t, mis, m3)
+
+}
