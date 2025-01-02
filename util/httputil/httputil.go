@@ -14,13 +14,13 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin/binding"
+	"golang.org/x/text/encoding/charmap"
 
 	"github.com/eluv-io/common-go/format/codecs"
-	"github.com/eluv-io/common-go/util/httputil/byterange"
-	"github.com/eluv-io/errors-go"
-
 	"github.com/eluv-io/common-go/format/id"
+	"github.com/eluv-io/common-go/util/httputil/byterange"
 	eioutil "github.com/eluv-io/common-go/util/ioutil"
+	"github.com/eluv-io/errors-go"
 )
 
 const (
@@ -530,4 +530,17 @@ func ParseServerError(body io.ReadCloser, httpStatusCode int) error {
 		return e("body", string(resp))
 	}
 	return e(list.ErrorOrNil())
+}
+
+// SetContentDisposition sets the Content-Disposition header as a filename attachment.
+//
+// See https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Disposition
+// See https://datatracker.ietf.org/doc/html/rfc5987
+func SetContentDisposition(header http.Header, filename string) {
+	if isoName, err := charmap.ISO8859_1.NewEncoder().String(filename); err == nil {
+		header.Add("Content-Disposition", "attachment; filename=\""+isoName+"\"")
+	} else {
+		// we could always add this variant - multiple Content-Disposition headers are allowed
+		header.Add("Content-Disposition", "attachment; filename*=UTF-8''"+url.PathEscape(filename)+"")
+	}
 }

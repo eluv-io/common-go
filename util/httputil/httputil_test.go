@@ -11,11 +11,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/eluv-io/errors-go"
-
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/util/httputil"
 	"github.com/eluv-io/common-go/util/jsonutil"
+	"github.com/eluv-io/errors-go"
 )
 
 func TestGetBytesRange(t *testing.T) {
@@ -316,4 +315,23 @@ func TestParseServerError(t *testing.T) {
 		},
 	})
 	match(errors.NoTrace(errors.K.NotFound, err), httputil.ParseServerError(r(body), http.StatusNotFound))
+}
+
+func TestSetContentDispositionAttachment(t *testing.T) {
+	tests := []struct {
+		filename string
+		headers  []string
+	}{
+		{"abc.txt", []string{"attachment; filename=\"abc.txt\""}},
+		{"file with spaces.txt", []string{"attachment; filename=\"file with spaces.txt\""}},
+		{"£ / € / 🚀", []string{"attachment; filename*=UTF-8''%C2%A3%20%2F%20%E2%82%AC%20%2F%20%F0%9F%9A%80"}},
+	}
+
+	for _, test := range tests {
+		t.Run(test.filename, func(t *testing.T) {
+			h := http.Header{}
+			httputil.SetContentDisposition(h, test.filename)
+			require.Equal(t, test.headers, h["Content-Disposition"])
+		})
+	}
 }

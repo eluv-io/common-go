@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/constraints"
 )
 
 var appendTests = []struct {
@@ -263,7 +264,9 @@ func TestCopy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(fmt.Sprint(tt.target), func(t *testing.T) {
 			dup := Copy(tt.target)
+			cln := Clone(tt.target)
 			assert.Equalf(t, tt.want, dup, "Copy(%v)", tt.target)
+			assert.Equalf(t, tt.want, cln, "Copy(%v)", tt.target)
 
 			// modify target and ensure it's not reflected in duplicate
 			if len(tt.target) > 0 {
@@ -384,6 +387,38 @@ func TestRemove(t *testing.T) {
 	}
 }
 
+type absInt int
+
+func (n absInt) Equal(other absInt) bool {
+	if n < 0 {
+		n = -n
+	}
+	if other < 0 {
+		other = -other
+	}
+	return n == other
+}
+
+func TestRemoveEqualer(t *testing.T) {
+	tests := []struct {
+		slice []absInt
+		el    absInt
+		want  []absInt
+		wantN int
+	}{
+		{[]absInt{1, 2, 3, 4, 5, 6}, 3, []absInt{1, 2, 4, 5, 6}, 1},
+		{[]absInt{1, 2, 3, 4, 5, 6}, -3, []absInt{1, 2, 4, 5, 6}, 1},
+	}
+
+	for i, test := range tests {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			res, n := Remove(test.slice, test.el)
+			require.Equal(t, test.want, res)
+			require.Equal(t, test.wantN, n)
+		})
+	}
+}
+
 func TestRemoveIndex(t *testing.T) {
 	tests := []struct {
 		slice  []string
@@ -474,6 +509,98 @@ func TestReverse(t *testing.T) {
 		t.Run(fmt.Sprint(test.slce), func(t *testing.T) {
 			Reverse(test.slce)
 			require.Equal(t, test.want, test.slce)
+		})
+	}
+}
+
+func TestCompare(t *testing.T) {
+	type testCase[T constraints.Ordered] struct {
+		name string
+		s1   []T
+		s2   []T
+		want int
+	}
+	tests := []testCase[int]{
+		{"both nil", nil, nil, 0},
+		{"both empty", []int{}, []int{}, 0},
+		{"nil & empty", nil, []int{}, 0},
+		{"identical", []int{1, 2, 3}, []int{1, 2, 3}, 0},
+		{"shorter", []int{1, 2}, []int{1, 2, 3}, -1},
+		{"longer", []int{1, 2, 3}, []int{1, 2}, 1},
+		{"smaller", []int{1, 2, 3}, []int{1, 3, 3}, -1},
+		{"larger", []int{1, 2, 3}, []int{1, 1, 3}, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, Compare(tt.s1, tt.s2), "Compare(%v, %v)", tt.s1, tt.s2)
+		})
+	}
+}
+
+func TestFirst(t *testing.T) {
+	tests := []struct {
+		slce []string
+		want string
+	}{
+		{
+			slce: nil,
+			want: "",
+		},
+		{
+			slce: []string{},
+			want: "",
+		},
+		{
+			slce: []string{"a"},
+			want: "a",
+		},
+		{
+			slce: []string{"a", "b"},
+			want: "a",
+		},
+		{
+			slce: []string{"a", "b", "c"},
+			want: "a",
+		},
+	}
+	for _, test := range tests {
+		t.Run(fmt.Sprint(test.slce), func(t *testing.T) {
+			res := First(test.slce)
+			require.Equal(t, test.want, res)
+		})
+	}
+}
+
+func TestLast(t *testing.T) {
+	tests := []struct {
+		slce []string
+		want string
+	}{
+		{
+			slce: nil,
+			want: "",
+		},
+		{
+			slce: []string{},
+			want: "",
+		},
+		{
+			slce: []string{"a"},
+			want: "a",
+		},
+		{
+			slce: []string{"a", "b"},
+			want: "b",
+		},
+		{
+			slce: []string{"a", "b", "c"},
+			want: "c",
+		},
+	}
+	for _, test := range tests {
+		t.Run(fmt.Sprint(test.slce), func(t *testing.T) {
+			res := Last(test.slce)
+			require.Equal(t, test.want, res)
 		})
 	}
 }
