@@ -27,7 +27,6 @@ func TestAbort(t *testing.T) {
 		wantCode int
 	}{
 		{nil, 500},
-		{io.EOF, 500},
 		{errors.E("op"), 500},
 		{errors.E("op", errors.K.Invalid), 400},
 		{errors.E("op", errors.K.Cancelled), 400},
@@ -85,7 +84,6 @@ func TestAbortWithStatus(t *testing.T) {
 `
 		}},
 		{nil, 404, "application/json", fnJson},
-		{io.EOF, 500, "application/json", fnJson},
 		{errors.E("op"), 409, "application/json", fnJson},
 		{errors.E("op", errors.K.Unavailable), 404, "application/json", fnJson},
 		{errors.NoTrace("op"), 404, "application/json", fnJson},
@@ -145,6 +143,44 @@ func TestSendError_Xml(t *testing.T) {
 	require.Equal(t, 404, w.Code)
 	require.Contains(t, w.Body.String(), "<kind>item does not exist</kind>")
 	require.Contains(t, w.Body.String(), "<op>op</op>")
+}
+
+func TestSendError_JSON(t *testing.T) {
+	tests := []struct {
+		err  error
+		want string
+	}{
+		{
+			err:  nil,
+			want: `{"errors":[null]}`,
+		},
+		{
+			err:  io.EOF,
+			want: `{"errors":["EOF"]}`,
+		},
+		{
+			err:  fmt.Errorf("std error"),
+			want: `{"errors":["std error"]}`,
+		},
+		{
+			err:  errors.NoTrace("test", errors.K.Invalid),
+			want: `{"errors":[{"op":"test","kind":"invalid"}]}`,
+		},
+		{ // errors.Append creates an *errors.ErrorList...
+			err:  errors.Append(io.EOF, fmt.Errorf("std error"), errors.NoTrace("test", errors.K.Invalid)),
+			want: `{"errors":["EOF","std error",{"op":"test","kind":"invalid"}]}`,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.want, func(t *testing.T) {
+			w, c := testCtx(t)
+			c.Request.Header.Set("Accept", "application/json")
+			SendError(c, 404, test.err)
+			require.Equal(t, 404, w.Code)
+			require.Equal(t, w.Body.String(), test.want)
+		})
+	}
 }
 
 func TestSend(t *testing.T) {

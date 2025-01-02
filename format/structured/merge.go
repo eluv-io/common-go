@@ -27,10 +27,10 @@ type mergeCtx struct {
 	MergeOptions
 }
 
-// MergeWithOptions merges the given source data structures into the target structure at the provided path. The merge operation
-// first merges all source structures into a consolidated source before merging that into the target structure at the
-// provided path. In case of conflicts (see below) priority is given to the sources in reverse order (i.e. last source
-// wins).
+// MergeWithOptions merges the given source data structures into the target structure at the provided path. The merge
+// operation first merges all source structures into a consolidated source before merging that into the target structure
+// at the provided path. In case of conflicts (see below) priority is given to the sources in reverse order (i.e. last
+// source wins).
 //
 // The merge operation traverses the target structure starting at path. For each sub-path, it finds the same sub-path in
 // the source. If the data types are different, the source value replaces the target value. If the data types are the

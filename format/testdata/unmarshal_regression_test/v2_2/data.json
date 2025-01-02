@@ -1,0 +1,56 @@
+{
+  "Hashes": [
+    "hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7",
+    "hqpedYvWGgmzmerRxa2Rzv6dqjDogfCZE7dwSuDnfgaSfGbMeXXnT",
+    "hql_7TmHLg49Qd4NtgfcPeWKAG7fsk7HujeMHaE33Bwm2kLYDdjqYJw"
+  ],
+  "IDs": [
+    "iacc1W7LcTy7",
+    "inod2fsjuJhzMUo6zhj1Nm7DPA",
+    "iusrVCFjezf8Pry4kUKU1MpY75"
+  ],
+  "Keys": [
+    "kpec21qpqGEr7h2sBvpshR98rp75HrG8ipXxXroUJYE7gCggrB",
+    "kped77f3gGVKqVm8ituv6harnvMX85H3YPnQ8GBDTmZbiRDX",
+    "kpsr4ikBWWzn8edKSULEwPNfrvMoD4vA1onMUb88PtpCHDDH",
+    "kpblAF9e8Q5n37HWZaeL5oq8dNrwVbW9Xvd5A4JewKhkWgMYkT6ZertGEnm1MpmLjLbQHE"
+  ],
+  "Links": [
+    {
+      ".": {
+        "auto_update": {
+          "tag": "default"
+        }
+      },
+      "/": "./meta/public/name",
+      "some": "prop"
+    },
+    {
+      "/": "/qfab/hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7/meta/public/name"
+    },
+    {
+      "/": "./blob",
+      "data": "c29tZSBibG9iIGRhdGE="
+    },
+    {
+      "/": "./blob",
+      "data": "c29tZSBibG9iIGRhdGE=",
+      "encryption": "cgck"
+    }
+  ],
+  "Links2": [
+    {
+      ".": {
+        "auto_update": {
+          "tag": "default"
+        }
+      },
+      "/": "/qfab/hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7/rep/some/rep/call",
+      "key1": "val1",
+      "key2": "val2"
+    },
+    {
+      "/": "/qfab/hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7/files/some/file#100-543"
+    }
+  ]
+}

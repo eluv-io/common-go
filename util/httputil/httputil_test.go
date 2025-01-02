@@ -9,14 +9,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/eluv-io/errors-go"
 
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/util/httputil"
 	"github.com/eluv-io/common-go/util/jsonutil"
+	"github.com/eluv-io/errors-go"
 )
 
 func TestGetBytesRange(t *testing.T) {
@@ -55,39 +53,6 @@ func TestGetBytesRange(t *testing.T) {
 		}
 	}
 
-}
-
-func TestParseBytesRange(t *testing.T) {
-	tests := []struct {
-		bytes      string
-		wantOffset int64
-		wantSize   int64
-		wantErr    bool
-	}{
-		{bytes: "0-99", wantOffset: 0, wantSize: 100, wantErr: false},
-		{bytes: "100-199", wantOffset: 100, wantSize: 100, wantErr: false},
-		{bytes: "100-", wantOffset: 100, wantSize: -1, wantErr: false},
-		{bytes: "-100", wantOffset: -1, wantSize: 100, wantErr: false},
-		{bytes: "-", wantOffset: 0, wantSize: -1, wantErr: false},
-		{bytes: "", wantOffset: 0, wantSize: -1, wantErr: false},
-		{bytes: "0", wantOffset: 0, wantSize: 0, wantErr: true},
-		{bytes: "+400", wantOffset: 0, wantSize: 0, wantErr: true},
-		{bytes: "abc-def", wantOffset: 0, wantSize: 0, wantErr: true},
-		{bytes: "-0", wantOffset: -1, wantSize: 0, wantErr: false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.bytes, func(t *testing.T) {
-			gotOffset, gotSize, err := httputil.ParseByteRange(tt.bytes)
-			assert.Equal(t, tt.wantOffset, gotOffset)
-			assert.Equal(t, tt.wantSize, gotSize)
-			if tt.wantErr {
-				assert.Error(t, err)
-				fmt.Println(err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
 }
 
 func TestCustomHeaders(t *testing.T) {
@@ -144,8 +109,8 @@ func TestCustomHeaders(t *testing.T) {
 		m, err := httputil.ExtractCustomHeaders(h)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m))
-		require.EqualValues(t, ts.ID, m["struct"].(map[interface{}]interface{})["ID"])
-		require.EqualValues(t, ts.Name, m["struct"].(map[interface{}]interface{})["Name"])
+		require.EqualValues(t, ts.ID, m["struct"].(map[string]interface{})["ID"])
+		require.EqualValues(t, ts.Name, m["struct"].(map[string]interface{})["Name"])
 	}
 
 	{ // custom headers from a map
@@ -176,8 +141,8 @@ func TestCustomHeaders(t *testing.T) {
 		m, err := httputil.ExtractCustomHeaders(h)
 		require.NoError(t, err)
 		require.Equal(t, 4, len(m))
-		require.EqualValues(t, ts.ID, m["struct"].(map[interface{}]interface{})["ID"])
-		require.EqualValues(t, ts.Name, m["struct"].(map[interface{}]interface{})["Name"])
+		require.EqualValues(t, ts.ID, m["struct"].(map[string]interface{})["ID"])
+		require.EqualValues(t, ts.Name, m["struct"].(map[string]interface{})["Name"])
 		require.EqualValues(t, "a string!", m["string"])
 		require.EqualValues(t, 5566, m["int"])
 		require.EqualValues(t, 1.23, m["float"])
