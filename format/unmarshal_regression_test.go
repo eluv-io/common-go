@@ -10,7 +10,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/eluv-io/common-go/format"
 	"github.com/eluv-io/common-go/format/codecs"
 	"github.com/eluv-io/common-go/format/encryption"
 	"github.com/eluv-io/common-go/format/hash"
@@ -175,7 +174,7 @@ var dataV1 = &DataStructV1{
 
 var (
 	blobData  = []byte("some blob data")
-	cborCodec = format.NewFactory().NewMetadataCodec()
+	cborCodec = codecs.NewCborV2Codec()
 )
 
 func marshal(t require.TestingT, data interface{}) ([]byte, []byte) {

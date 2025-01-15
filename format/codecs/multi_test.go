@@ -18,7 +18,7 @@ func TestMultiCodecs(t *testing.T) {
 		codecs.JsonMultiCodec,
 		codecs.CborV1MultiCodec,
 		codecs.CborV2MultiCodec,
-		codecs.CborMuxCodec,
+		codecs.CborV2MuxCodec,
 	}
 
 	tests := []struct {

@@ -95,9 +95,9 @@ func TestNil(t *testing.T) {
 	require.True(t, tokWrapper.Token.IsNil())
 
 	buf := bytes.NewBuffer(nil)
-	err = codecs.CborMuxCodec.Encoder(buf).Encode(tokWrapper)
+	err = codecs.CborV2MuxCodec.Encoder(buf).Encode(tokWrapper)
 	require.NoError(t, err)
-	err = codecs.CborMuxCodec.Decoder(buf).Decode(&tokWrapper)
+	err = codecs.CborV2MuxCodec.Decoder(buf).Decode(&tokWrapper)
 	require.NoError(t, err)
 	require.True(t, tokWrapper.Token.IsNil())
 }

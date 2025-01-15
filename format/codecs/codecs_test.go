@@ -13,19 +13,19 @@ func TestGobCodec(t *testing.T) {
 }
 
 func TestCborCodec(t *testing.T) {
-	runCodecTest(t, NewCborCodec())
-	runCodecTestInterface(t, NewCborCodec())
+	runCodecTest(t, NewCborV2Codec())
+	runCodecTestInterface(t, NewCborV2Codec())
 }
 
-// TestCborV1Codec encodes data with CborV1MultiCodec and decodes it with CborMuxCodec.
+// TestCborV1Codec encodes data with CborV1MultiCodec and decodes it with CborV2MuxCodec.
 func TestCborV1Codec(t *testing.T) {
 	{
 		buf, data := encode(t, CborV1MultiCodec)
-		decode(CborMuxCodec, buf, data, t)
+		decode(CborV2MuxCodec, buf, data, t)
 	}
 	{
 		buf, data := encode(t, CborV1MultiCodec)
-		decodeInterface(CborMuxCodec, buf, data, t)
+		decodeInterface(CborV2MuxCodec, buf, data, t)
 	}
 }
 

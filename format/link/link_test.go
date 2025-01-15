@@ -454,7 +454,7 @@ func testJSON(t *testing.T, lnk *link.Link, expJson string) {
 }
 
 func testCBOR(t *testing.T, lnk *link.Link) {
-	codec := codecs.NewCborCodec()
+	codec := codecs.NewCborV2Codec()
 
 	buf := &bytes.Buffer{}
 	err := codec.Encoder(buf).Encode(lnk)
@@ -498,7 +498,7 @@ func testWrappedCBOR(t *testing.T, tc testCase) {
 	s := Wrapper{
 		Link: *tc.lnk,
 	}
-	codec := codecs.NewCborCodec()
+	codec := codecs.NewCborV2Codec()
 
 	buf := &bytes.Buffer{}
 	err := codec.Encoder(buf).Encode(s)
@@ -528,7 +528,7 @@ func replaceHashes(s string) string {
 }
 
 func cbor(t *testing.T, src interface{}) interface{} {
-	codec := codecs.NewCborCodec()
+	codec := codecs.NewCborV2Codec()
 	buf := &bytes.Buffer{}
 	err := codec.Encoder(buf).Encode(src)
 	require.NoError(t, err)

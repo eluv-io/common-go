@@ -18,7 +18,7 @@ import (
 	"github.com/eluv-io/common-go/util/maputil"
 )
 
-var cborCodec = codecs.NewCborCodec()
+var cborCodec = codecs.NewCborV2Codec()
 
 func TestIDTag(t *testing.T) {
 	factory := format.NewFactory()

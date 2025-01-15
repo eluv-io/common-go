@@ -104,7 +104,7 @@ func TestBlobLinkCborMarshaling(t *testing.T) {
 	data := []byte("###blob bytes###")
 	lnk := link.NewBlobBuilder().Data(data).EncryptionScheme(encryption.None).MustBuild()
 
-	codec := codecs.NewCborCodec()
+	codec := codecs.NewCborV2Codec()
 
 	{
 		lnkBuf := &bytes.Buffer{}
@@ -170,7 +170,7 @@ func xTestDecodeSlice(t *testing.T) {
 
 	watch := timeutil.StartWatch()
 	log.Info("start")
-	//err = codecutil.MapDecode(data, &target)
+	// err = codecutil.MapDecode(data, &target)
 	err = mapstructure.Decode(data, &target)
 	log.Info("end", "duration", watch.Duration())
 

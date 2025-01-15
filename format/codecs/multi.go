@@ -32,7 +32,7 @@ type MultiCodec interface {
 	// the version during decoding.
 	//
 	// This feature is needed in order to support mux codecs where encoding uses versions, but where legacy data was
-	// encoded without versions. See CborMuxCodec and TestVersionedMux.
+	// encoded without versions. See CborV2MuxCodec and TestVersionedMux.
 	DisableVersions() MultiCodec
 }
 

@@ -33,8 +33,10 @@ var (
 	JsonMultiCodec   = NewMultiCodec(JsonCodec, JsonMultiCodecPath)
 	CborV1MultiCodec = NewMultiCodec(CborV1Codec, CborV1MultiCodecPath)
 	CborV2MultiCodec = NewMultiCodec(CborV2Codec, CborV2MultiCodecPath)
-	// CborMuxCodec is the codec producing versioned V2 format and supports decoding un-versioned V1 format.
-	CborMuxCodec = NewMuxCodec(CborV2MultiCodec, CborV1MultiCodec.DisableVersions())
+	// CborV1MuxCodec is the codec producing un-versioned V1 format and supports decoding versioned V2 format.
+	CborV1MuxCodec = NewMuxCodec(CborV1MultiCodec.DisableVersions(), CborV2MultiCodec)
+	// CborV2MuxCodec is the codec producing versioned V2 format and supports decoding un-versioned V1 format.
+	CborV2MuxCodec = NewMuxCodec(CborV2MultiCodec, CborV1MultiCodec.DisableVersions())
 )
 
 // NewGobCodec creates a new streaming MultiCodec using the encoding/gob format.
@@ -47,9 +49,16 @@ func NewJsonCodec() MultiCodec {
 	return JsonMultiCodec
 }
 
-// NewCborCodec creates a new streaming MultiCodec using the CBOR format.
+// NewCborCodec returns a MultiCodec using the CBOR format. It encodes/decodes un-versioned V1 format and supports
+// decoding versioned V2 format.
 func NewCborCodec() MultiCodec {
-	return CborMuxCodec
+	return CborV1MuxCodec
+}
+
+// NewCborV2Codec returns a MultiCodec using the CBOR format. It encodes/decodes versioned V2 format and supports
+// decoding un-versioned V1 format.
+func NewCborV2Codec() MultiCodec {
+	return CborV2MuxCodec
 }
 
 // MdsImexCodec returns the codec for metadata store exports / imports.
@@ -60,13 +69,13 @@ func MdsImexCodec() MultiCodec {
 // CborEncode encodes the given value as CBOR and writes it to the writer without MultiCodec support (i.e. no MultiCodec
 // header is written).
 func CborEncode(w io.Writer, v interface{}) error {
-	return CborV2Codec.Encoder(w).Encode(v)
+	return NewCborCodec().Encoder(w).Encode(v)
 }
 
 // CborDecode decodes cbor-encoded data from the provided reader into the given data structure. The data is not expected
 // to have a MultiCodec header.
 func CborDecode(r io.Reader, v interface{}) error {
-	return CborV2Codec.Decoder(r).Decode(v)
+	return NewCborCodec().Decoder(r).Decode(v)
 }
 
 func makeGobCodec() Codec {

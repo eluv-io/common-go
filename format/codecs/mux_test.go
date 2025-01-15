@@ -67,9 +67,9 @@ type testStructV2 struct {
 //   - An initial data structure is encoded with the cbor V1 codec.
 //   - Then the codec is upgraded to V2 for improved performance and versioning is added for future-proofing.
 //   - Then the data structure changes and now gets encoded in a new format (as a CBOR array instead of a map).
-//   - Finally, all three versions of the encoded data are decoded with the same CborMuxCodec.
+//   - Finally, all three versions of the encoded data are decoded with the same CborV2MuxCodec.
 //
-// In order to make decoding of the initial encoded data work, the CborMuxCodec disables versions on the legacy
+// In order to make decoding of the initial encoded data work, the CborV2MuxCodec disables versions on the legacy
 // CborV1MultiCodec, since that data was encoded without version information.
 func TestVersionedMux(t *testing.T) {
 	hsh := hash.MustParse("hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7")
@@ -90,14 +90,14 @@ func TestVersionedMux(t *testing.T) {
 	require.NoError(t, codecs.CborV1MultiCodec.Encoder(bufCbor).Encode(dataV1))
 
 	bufCborV2DataV1 := new(bytes.Buffer)
-	require.NoError(t, codecs.CborMuxCodec.VersionedEncoder(bufCborV2DataV1).EncodeVersioned(1, dataV1))
+	require.NoError(t, codecs.CborV2MuxCodec.VersionedEncoder(bufCborV2DataV1).EncodeVersioned(1, dataV1))
 
 	bufCborV2DataV2 := new(bytes.Buffer)
-	require.NoError(t, codecs.CborMuxCodec.VersionedEncoder(bufCborV2DataV2).EncodeVersioned(2, dataV2))
+	require.NoError(t, codecs.CborV2MuxCodec.VersionedEncoder(bufCborV2DataV2).EncodeVersioned(2, dataV2))
 
 	for i, buf := range []*bytes.Buffer{bufCbor, bufCborV2DataV1, bufCborV2DataV2} {
 		fmt.Println(buf.String())
-		obj, version, err := codecs.CborMuxCodec.VersionedDecoder(buf).DecodeVersioned(
+		obj, version, err := codecs.CborV2MuxCodec.VersionedDecoder(buf).DecodeVersioned(
 			func(version uint, codec string) interface{} {
 				if codec == codecs.CborV1MultiCodec.Header().Path() {
 					return &testStruct{}
