@@ -75,8 +75,8 @@ func Add(m map[string]interface{}, nameValuePairs ...interface{}) map[string]int
 }
 
 // Copy creates a shallow copy of the given map.
-func Copy(m map[string]interface{}) map[string]interface{} {
-	cp := make(map[string]interface{}, len(m))
+func Copy[K comparable, T any](m map[K]T) map[K]T {
+	cp := make(map[K]T, len(m))
 	for k, v := range m {
 		cp[k] = v
 	}
