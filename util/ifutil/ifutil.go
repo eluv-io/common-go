@@ -30,9 +30,22 @@ func IsNil(obj interface{}) bool {
 	return false
 }
 
+// FirstNonNil returns the first argument that is not nil as determined by the IsNil function. Returns the zero value
+// for the argument type if all arguments are nil.
+func FirstNonNil[T any](objs ...T) T {
+	for _, obj := range objs {
+		if !IsNil(obj) {
+			return obj
+		}
+	}
+	var zero T
+	return zero
+}
+
 // IsEmpty returns true if the given object is considered "empty":
 //   - nil
-//   - collections with no element (arrays, slices, maps, channels)
+//   - collections with no element (arrays, slices, maps)
+//   - unbuffered channels or buffered channels without any buffered elements
 //   - nil pointer or pointer to an empty object
 //   - the zero value for all other types
 func IsEmpty(obj interface{}) bool {
@@ -58,6 +71,36 @@ func IsEmpty(obj interface{}) bool {
 		zero := reflect.Zero(val.Type())
 		return reflect.DeepEqual(obj, zero.Interface())
 	}
+}
+
+// FirstNonEmpty returns the first argument that is not empty as determined by the IsEmpty function. Returns the zero
+// value for the argument type if all arguments are empty.
+func FirstNonEmpty[T any](objs ...T) T {
+	for _, obj := range objs {
+		if !IsEmpty(obj) {
+			return obj
+		}
+	}
+	var zero T
+	return zero
+}
+
+// IsZero returns true if the given argument is the zero value of its type, false otherwise.
+func IsZero[T comparable](t T) bool {
+	var zero T
+	return t == zero
+}
+
+// FirstNonZero returns the first argument that is not the zero value as determined by the IsZero function. Returns the
+// zero value for the argument type if all arguments are empty.
+func FirstNonZero[T comparable](ts ...T) T {
+	for _, t := range ts {
+		if !IsZero(t) {
+			return t
+		}
+	}
+	var zero T
+	return zero
 }
 
 var spewConfig = spew.ConfigState{

@@ -6,8 +6,9 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/eluv-io/utc-go"
 	"github.com/stretchr/testify/require"
+
+	"github.com/eluv-io/utc-go"
 )
 
 var oneBillion = time.Unix(1000000000, 0)
@@ -17,11 +18,11 @@ func TestCBOR(t *testing.T) {
 
 	buf := &bytes.Buffer{}
 
-	err := codec.Encoder(buf).Encode(ut)
+	err := cborCodec.Encoder(buf).Encode(ut)
 	require.NoError(t, err)
 
 	var utDecoded utc.UTC
-	err = codec.Decoder(buf).Decode(&utDecoded)
+	err = cborCodec.Decoder(buf).Decode(&utDecoded)
 	require.NoError(t, err)
 
 	require.Equal(t, ut.String(), utDecoded.String())
@@ -37,11 +38,11 @@ func TestWrappedCBOR(t *testing.T) {
 
 	buf := &bytes.Buffer{}
 
-	err := codec.Encoder(buf).Encode(wrapper)
+	err := cborCodec.Encoder(buf).Encode(wrapper)
 	require.NoError(t, err)
 
 	var wrapperDecoded Wrapper
-	err = codec.Decoder(buf).Decode(&wrapperDecoded)
+	err = cborCodec.Decoder(buf).Decode(&wrapperDecoded)
 	require.NoError(t, err)
 
 	require.Equal(t, ut.String(), wrapperDecoded.UTC.String())
@@ -55,11 +56,11 @@ func TestGenericCBOR(t *testing.T) {
 
 	buf := &bytes.Buffer{}
 
-	err := codec.Encoder(buf).Encode(m)
+	err := cborCodec.Encoder(buf).Encode(m)
 	require.NoError(t, err)
 
 	var mDecoded interface{}
-	err = codec.Decoder(buf).Decode(&mDecoded)
+	err = cborCodec.Decoder(buf).Decode(&mDecoded)
 	require.NoError(t, err)
 
 	genDecoded := mDecoded.(map[string]interface{})["billion"]

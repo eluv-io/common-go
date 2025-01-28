@@ -2,6 +2,7 @@ package numberutil_test
 
 import (
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/eluv-io/common-go/util/numberutil"
@@ -82,4 +83,22 @@ func TestAsFloat64(t *testing.T) {
 	assertAsFloat64(t, 12.5, 12.5)
 	assertAsFloat64(t, 12.0, float32(12.0))
 	assertAsFloat64(t, 12.5, float32(12.5))
+}
+
+func TestMin(t *testing.T) {
+	require.Equal(t, 0, numberutil.Min(0, 0))
+	require.Equal(t, 1, numberutil.Min(1, 2))
+	require.Equal(t, uint(1), numberutil.Min(uint(1), uint(2)))
+	require.Equal(t, 1.5, numberutil.Min(1.5, 2.4))
+	require.True(t, math.IsNaN(numberutil.Min(math.NaN(), 2.4)))
+	require.True(t, math.IsNaN(numberutil.Min(2.4, math.NaN())))
+}
+
+func TestMax(t *testing.T) {
+	require.Equal(t, 0, numberutil.Max(0, 0))
+	require.Equal(t, 2, numberutil.Max(1, 2))
+	require.Equal(t, uint(2), numberutil.Max(uint(1), uint(2)))
+	require.Equal(t, 2.4, numberutil.Max(1.5, 2.4))
+	require.True(t, math.IsNaN(numberutil.Max(math.NaN(), 2.4)))
+	require.True(t, math.IsNaN(numberutil.Max(2.4, math.NaN())))
 }

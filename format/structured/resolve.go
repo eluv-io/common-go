@@ -438,9 +438,9 @@ func resolveTransform(path Path, target interface{}, transform TransformerFn) (i
 				val = val.Elem()
 			}
 
-			if typ.Kind() == reflect.Map && typ.Key() == stringType {
+			if typ.Kind() == reflect.Map && stringType.ConvertibleTo(typ.Key()) {
 				// MAP
-				vv := val.MapIndex(reflect.ValueOf(path[idx]))
+				vv := val.MapIndex(reflect.ValueOf(path[idx]).Convert(typ.Key()))
 				if !vv.IsValid() {
 					return nil, e(errors.K.NotExist,
 						"reason", "map field not found",

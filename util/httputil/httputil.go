@@ -11,17 +11,14 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin/binding"
-	mc "github.com/multiformats/go-multicodec"
-	cbor "github.com/multiformats/go-multicodec/cbor"
-	mcjson "github.com/multiformats/go-multicodec/json"
-	mux "github.com/multiformats/go-multicodec/mux"
 	"golang.org/x/text/encoding/charmap"
 
+	"github.com/eluv-io/common-go/format/codecs"
 	"github.com/eluv-io/common-go/format/id"
+	"github.com/eluv-io/common-go/util/httputil/byterange"
 	eioutil "github.com/eluv-io/common-go/util/ioutil"
 	"github.com/eluv-io/errors-go"
 )
@@ -36,7 +33,7 @@ const (
 
 var (
 	// codec used for custom headers
-	customHeaderMultiCodec *mux.Multicodec
+	customHeaderMultiCodec codecs.MultiCodec
 	// A regular expression to match the error returned by net/http when the
 	// configured number of redirects is exhausted. This error isn't typed
 	// specifically so we resort to matching on the error string.
@@ -48,11 +45,10 @@ var (
 )
 
 func init() {
-	customHeaderMultiCodec = mux.MuxMulticodec([]mc.Multicodec{
-		cbor.Multicodec(),
-		mcjson.Multicodec(false),
-	}, mux.SelectFirst)
-	customHeaderMultiCodec.Wrap = false
+	customHeaderMultiCodec = codecs.NewMuxCodec(
+		codecs.CborV1MultiCodec,
+		codecs.NewJsonCodec(),
+	)
 }
 
 // GetBytesRange extracts "byte range" as verbatim string from an
@@ -95,42 +91,7 @@ func GetBytesRange(request *http.Request) (string, error) {
 //
 // [Byte Range]: https://tools.ietf.org/html/rfc7233#section-2.1
 func ParseByteRange(r string) (offset, size int64, err error) {
-	if r == "" {
-		return 0, -1, nil
-	}
-
-	var first, last int64 = -1, -1
-	ends := strings.Split(r, "-")
-	if len(ends) != 2 {
-		return 0, 0, errors.E("byte range", errors.K.Invalid, "bytes", r)
-	}
-
-	if ends[0] != "" {
-		first, err = strconv.ParseInt(ends[0], 10, 64)
-		if err != nil {
-			return 0, 0, errors.E("byte range", errors.K.Invalid, err, "bytes", r)
-		}
-	}
-
-	if ends[1] != "" {
-		last, err = strconv.ParseInt(ends[1], 10, 64)
-		if err != nil {
-			return 0, 0, errors.E("byte range", errors.K.Invalid, err, "bytes", r)
-		} else if last < first {
-			return 0, 0, errors.E("byte range", errors.K.Invalid, errors.Str("first > last"), "bytes", r)
-		}
-	}
-
-	switch {
-	case first == -1 && last == -1:
-		return 0, -1, nil
-	case first == -1:
-		return first, last, nil
-	case last == -1:
-		return first, last, nil
-	default:
-		return first, last - first + 1, nil
-	}
+	return byterange.Parse(r)
 }
 
 // ExtractCustomHeaders extracts custom HTTP headers prefixed with

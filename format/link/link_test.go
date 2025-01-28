@@ -2,6 +2,7 @@ package link_test
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/eluv-io/errors-go"
 
 	"github.com/eluv-io/common-go/format/codecs"
+	"github.com/eluv-io/common-go/format/encryption"
 	"github.com/eluv-io/common-go/format/hash"
 	"github.com/eluv-io/common-go/format/link"
 	"github.com/eluv-io/common-go/format/structured"
@@ -89,6 +91,10 @@ var linkTests = []testCase{
 		str:  "/qfab/hq__2w1SR2eY9LChsaY5f3EE2G4RhroKnmL7dsyB7Wm2qvbRG5UF9GoPVgFvD1nFqe9Pt4hF7/rep/bla#10-19",
 		lnk:  create(qHash(), link.S.Rep, structured.ParsePath("bla#10-19")),
 	},
+	{
+		name: "blob",
+		lnk:  link.NewBlobBuilder().Data([]byte("###blob bytes###")).EncryptionScheme(encryption.None).MustBuild(),
+	},
 }
 
 func TestLinks(t *testing.T) {
@@ -98,7 +104,11 @@ func TestLinks(t *testing.T) {
 				testStringConversion(t, test)
 			})
 			t.Run("json", func(t *testing.T) {
-				testJSON(t, test.lnk, fmt.Sprintf(`{"/":"%s"}`, test.str))
+				json := ""
+				if test.str != "" {
+					json = fmt.Sprintf(`{"/":"%s"}`, test.str)
+				}
+				testJSON(t, test.lnk, json)
 			})
 			t.Run("wrapped-json", func(t *testing.T) {
 				testWrappedJSON(t, test)
@@ -148,7 +158,11 @@ func TestLinkProperties(t *testing.T) {
 			// })
 
 			t.Run("json", func(t *testing.T) {
-				testJSON(t, tc.lnk, fmt.Sprintf(`{".":{"k3":"v3"},"/":"%s","k1":"v1","k2":"v2"}`, test.str))
+				json := ""
+				if test.str != "" {
+					json = fmt.Sprintf(`{".":{"k3":"v3"},"/":"%s","k1":"v1","k2":"v2"}`, test.str)
+				}
+				testJSON(t, tc.lnk, json)
 			})
 			t.Run("wrapped-json", func(t *testing.T) {
 				testWrappedJSON(t, tc)
@@ -159,17 +173,19 @@ func TestLinkProperties(t *testing.T) {
 
 func TestUnmarshalMap(t *testing.T) {
 	for _, test := range linkTests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Run("UnmarshalMap", func(t *testing.T) {
-				m := map[string]interface{}{
-					"/": test.str,
-				}
-				var lnk link.Link
-				err := lnk.UnmarshalMap(m)
-				require.NoError(t, err)
-				require.Equal(t, test.lnk, &lnk)
+		if test.str != "" {
+			t.Run(test.name, func(t *testing.T) {
+				t.Run("UnmarshalMap", func(t *testing.T) {
+					m := map[string]interface{}{
+						"/": test.str,
+					}
+					var lnk link.Link
+					err := lnk.UnmarshalMap(m)
+					require.NoError(t, err)
+					require.Equal(t, test.lnk, &lnk)
+				})
 			})
-		})
+		}
 	}
 	t.Run("not a link", func(t *testing.T) {
 		var lnk link.Link
@@ -354,6 +370,12 @@ func TestExtra(t *testing.T) {
 			newLnk := cbor(t, test.link).(link.Link)
 			require.Empty(t, newLnk.Extra.Container)
 			require.Empty(t, newLnk.Extra.ResolutionError)
+			// ensure that no Extra values are in the props
+			require.True(t, structured.Wrap(newLnk.Props).At("./auto_update").IsError())
+			require.True(t, structured.Wrap(newLnk.Props).At("./container").IsError())
+			require.True(t, structured.Wrap(newLnk.Props).At("./resolution_error").IsError())
+			require.True(t, structured.Wrap(newLnk.Props).At("./authorization").IsError())
+			require.True(t, structured.Wrap(newLnk.Props).At("./enforce_auth").IsError())
 
 			// but authorization & enforce_auth is stored
 			require.Equal(t, test.link.Extra.Authorization, newLnk.Extra.Authorization)
@@ -396,6 +418,11 @@ func TestToLink(t *testing.T) {
 }
 
 func testStringConversion(t *testing.T, tc testCase) {
+	if tc.str == "" {
+		// link has no full string rep
+		return
+	}
+
 	linkString := tc.lnk.String()
 	assert.Equal(t, tc.str, linkString)
 
@@ -422,6 +449,27 @@ func testJSON(t *testing.T, lnk *link.Link, expJson string) {
 	assert.NoError(t, err)
 	assert.Equal(t, lnk, &unmarshalled)
 	assert.Equal(t, *lnk, unmarshalled)
+
+	testCBOR(t, lnk)
+}
+
+func testCBOR(t *testing.T, lnk *link.Link) {
+	codec := codecs.NewCborV2Codec()
+
+	buf := &bytes.Buffer{}
+	err := codec.Encoder(buf).Encode(lnk)
+	assert.NoError(t, err)
+
+	fmt.Println(hex.EncodeToString(buf.Bytes()))
+
+	var unmarshalled interface{}
+	err = codec.Decoder(buf).Decode(&unmarshalled)
+	assert.NoError(t, err)
+
+	unmarshalledLink, ok := unmarshalled.(link.Link)
+	assert.True(t, ok)
+	assert.Equal(t, lnk, &unmarshalledLink)
+	assert.Equal(t, *lnk, unmarshalled)
 }
 
 type Wrapper struct {
@@ -442,6 +490,27 @@ func testWrappedJSON(t *testing.T, tc testCase) {
 	err = json.Unmarshal(b, &unmarshalled)
 	assert.NoError(t, err)
 	assert.Equal(t, s, unmarshalled)
+
+	testWrappedCBOR(t, tc)
+}
+
+func testWrappedCBOR(t *testing.T, tc testCase) {
+	s := Wrapper{
+		Link: *tc.lnk,
+	}
+	codec := codecs.NewCborV2Codec()
+
+	buf := &bytes.Buffer{}
+	err := codec.Encoder(buf).Encode(s)
+	assert.NoError(t, err)
+
+	fmt.Println(hex.EncodeToString(buf.Bytes()))
+
+	var unmarshalled Wrapper
+	err = codec.Decoder(buf).Decode(&unmarshalled)
+	assert.NoError(t, err)
+
+	assert.Equal(t, s, unmarshalled)
 }
 
 func create(target *hash.Hash, sel link.Selector, path structured.Path, offAndLen ...int64) *link.Link {
@@ -459,10 +528,12 @@ func replaceHashes(s string) string {
 }
 
 func cbor(t *testing.T, src interface{}) interface{} {
-	codec := codecs.NewCborCodec()
+	codec := codecs.NewCborV2Codec()
 	buf := &bytes.Buffer{}
 	err := codec.Encoder(buf).Encode(src)
 	require.NoError(t, err)
+
+	fmt.Println(hex.EncodeToString(bytes.SplitN(buf.Bytes(), []byte{'\n'}, 2)[1]))
 
 	var decoded interface{}
 	err = codec.Decoder(buf).Decode(&decoded)
