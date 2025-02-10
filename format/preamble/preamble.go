@@ -7,10 +7,10 @@ import (
 	"math"
 	"strings"
 
+	"github.com/eluv-io/common-go/format/codecs/header"
 	"github.com/eluv-io/common-go/util/ioutil"
 	"github.com/eluv-io/common-go/util/stringutil"
 	"github.com/eluv-io/errors-go"
-	"github.com/multiformats/go-multicodec"
 )
 
 // Write writes the given preamble to the specified writer
@@ -33,10 +33,10 @@ func Write(w io.Writer, preambleData []byte, preambleFormat ...string) (int64, e
 	if !isFormat(preambleFmt) {
 		return 0, errors.E("preamble write", errors.K.Invalid, "reason", "invalid preamble format", "format", preambleFmt)
 	}
-	header := multicodec.Header([]byte(preambleFmt))
+	hdr := header.New(preambleFmt)
 	sz := make([]byte, binary.MaxVarintLen64)
-	n := binary.PutUvarint(sz, uint64(len(header)+len(preambleData)))
-	mr := io.MultiReader(bytes.NewReader(sz[:n]), bytes.NewReader(header), bytes.NewReader(preambleData))
+	n := binary.PutUvarint(sz, uint64(len(hdr)+len(preambleData)))
+	mr := io.MultiReader(bytes.NewReader(sz[:n]), bytes.NewReader(hdr), bytes.NewReader(preambleData))
 	preambleSize, err := io.Copy(w, mr)
 	if err != nil {
 		return 0, errors.E("preamble write", errors.K.IO, err)
@@ -102,15 +102,17 @@ func Read(r io.ReadSeeker, noSeek bool, sizeLimit ...int64) (preambleData []byte
 		return
 	}
 	buf := bytes.NewBuffer(data)
-	header, err := multicodec.ReadHeader(buf)
-	if err == io.EOF || err == io.ErrUnexpectedEOF || err == multicodec.ErrVarints || err == multicodec.ErrHeaderInvalid {
-		err = errors.E("preamble read", errors.K.NotExist, err, "reason", "preamble header not found")
-		return
-	} else if err != nil {
-		err = errors.E("preamble read", errors.K.IO, err)
+	hdr, err := header.ReadHeader(buf)
+	if err != nil {
+		root := errors.GetRootCause(err)
+		if root == io.EOF || root == io.ErrUnexpectedEOF || root == header.ErrVarints || root == header.ErrHeaderInvalid {
+			err = errors.E("preamble read", errors.K.NotExist, err, "reason", "preamble header not found")
+		} else {
+			err = errors.E("preamble read", errors.K.IO, err)
+		}
 		return
 	}
-	preambleFormat = string(multicodec.HeaderPath(header))
+	preambleFormat = hdr.Path()
 	if !isFormat(preambleFormat) {
 		err = errors.E("preamble read", errors.K.NotExist, "reason", "preamble header not found")
 		return

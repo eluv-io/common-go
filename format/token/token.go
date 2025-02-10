@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/mr-tron/base58/base58"
 
 	"github.com/eluv-io/errors-go"
@@ -254,7 +255,7 @@ func (t *Token) String() string {
 	if t.s != "" {
 		return t.s
 	}
-	// we should never go there when t.s is computed in constructor
+	// we should never get here if t.s is computed in constructor
 	return t.MakeString()
 }
 
@@ -333,6 +334,28 @@ func (t *Token) prefix() string {
 	return p
 }
 
+func (t *Token) MarshalCBOR() ([]byte, error) {
+	return cbor.Marshal(t.String())
+}
+
+func (t *Token) UnmarshalCBOR(b []byte) error {
+	var s string
+	err := cbor.Unmarshal(b, &s)
+	if err != nil {
+		return errors.E("unmarshal hash", err, errors.K.Invalid)
+	}
+	parsed, err := FromString(s)
+	if err != nil {
+		return errors.E("unmarshal hash", err, errors.K.Invalid)
+	}
+	if parsed == nil {
+		// empty string parses to nil token... best we can do is ignore it...
+		return nil
+	}
+	*t = *parsed
+	return nil
+}
+
 // MarshalText implements custom marshaling using the string representation.
 func (t *Token) MarshalText() ([]byte, error) {
 	return []byte(t.String()), nil
@@ -369,6 +392,10 @@ func (t *Token) Equal(o *Token) bool {
 
 // Describe returns a textual description of this token.
 func (t *Token) Describe() string {
+	if t == nil {
+		return "nil"
+	}
+
 	sb := strings.Builder{}
 
 	add := func(s string) {
@@ -393,6 +420,9 @@ func (t *Token) Describe() string {
 
 func (t *Token) Validate() (err error) {
 	e := errors.Template("validate token", errors.K.Invalid)
+	if t == nil {
+		return e("reason", "token is nil")
+	}
 	if t.Code == QWrite {
 		err = t.QID.AssertCode(id.Q)
 	}
@@ -481,7 +511,7 @@ func Parse(s string) (*Token, error) {
 		// prefix + base58(uvarint(len(QID) | QID |
 		//                 uvarint(len(NID) | NID |
 		//                 uvarint(len(RAND_BYTES) | RAND_BYTES)
-		res := &Token{Code: code, s: s}
+		res := &Token{Code: code}
 		r := bytes.NewReader(dec)
 
 		res.QID, err = decodeBytes(r)
@@ -504,6 +534,9 @@ func Parse(s string) (*Token, error) {
 			return nil, e(err)
 		}
 
+		// fill string cache here instead of using s in struct initializer to consistently generate a tqw__ instead of
+		// tq__ (as long as the qwPrefix hack is in use)
+		res.MakeString()
 		return res, nil
 	case QPartWrite:
 		// prefix + base58(byte(SCHEME) | byte(FLAGS) |

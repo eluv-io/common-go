@@ -104,7 +104,7 @@ func (b *Builder) EnforceAuth(force bool) *Builder {
 }
 
 func (b *Builder) Build() (*Link, error) {
-	err := b.l.Validate(true)
+	err := b.l.Validate()
 	if err != nil {
 		return nil, err
 	}

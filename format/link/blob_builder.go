@@ -1,8 +1,6 @@
 package link
 
 import (
-	"encoding/base64"
-
 	"github.com/eluv-io/common-go/format/encryption"
 )
 
@@ -15,6 +13,9 @@ func NewBlobBuilder() *BlobBuilder {
 		b: NewBuilder(),
 	}
 	b.b.Selector(S.Blob)
+	b.b.l.Blob = &Blob{
+		EncryptionScheme: encryption.None,
+	}
 	return b
 }
 
@@ -23,12 +24,32 @@ type BlobBuilder struct {
 }
 
 func (b *BlobBuilder) EncryptionScheme(scheme encryption.Scheme) *BlobBuilder {
-	b.b.AddProp("encryption", scheme.String())
+	b.b.l.Blob.EncryptionScheme = scheme
 	return b
 }
 
 func (b *BlobBuilder) Data(data []byte) *BlobBuilder {
-	b.b.AddProp("data", base64.StdEncoding.EncodeToString(data))
+	b.b.l.Blob.Data = data
+	return b
+}
+
+func (b *BlobBuilder) KID(kid string) *BlobBuilder {
+	b.b.l.Blob.KID = kid
+	return b
+}
+
+func (b *BlobBuilder) ReplaceProps(p map[string]interface{}) *BlobBuilder {
+	b.b.ReplaceProps(p)
+	return b
+}
+
+func (b *BlobBuilder) AddProps(p map[string]interface{}) *BlobBuilder {
+	b.b.AddProps(p)
+	return b
+}
+
+func (b *BlobBuilder) AddProp(key string, val interface{}) *BlobBuilder {
+	b.b.AddProp(key, val)
 	return b
 }
 

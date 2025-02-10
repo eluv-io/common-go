@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/eluv-io/errors-go"
-
+	"github.com/eluv-io/common-go/format/encryption"
 	"github.com/eluv-io/common-go/format/hash"
 	"github.com/eluv-io/common-go/format/structured"
-	"github.com/eluv-io/common-go/util/httputil"
+	"github.com/eluv-io/common-go/util/httputil/byterange"
+	"github.com/eluv-io/errors-go"
 )
 
 const ABSOLUTE_LINK_PREFIX = "/qfab/"
@@ -55,7 +55,7 @@ func NewLink(target *hash.Hash, sel Selector, path structured.Path, offAndLen ..
 		Off:      off,
 		Len:      siz,
 	}
-	err := link.Validate(true)
+	err := link.Validate()
 	if err != nil {
 		return nil, err
 	}
@@ -65,6 +65,8 @@ func NewLink(target *hash.Hash, sel Selector, path structured.Path, offAndLen ..
 // Link represents a reference to another structure in the content object data
 // model. See /doc/design/content_data_model.md for details.
 type Link struct {
+	// NOTE: DO NOT CHANGE FIELD TYPES, THEIR ORDER OR REMOVE ANY FIELDS SINCE STRUCT IS ENCODED AS ARRAY!
+	_        struct{} `cbor:",toarray"` // encode struct as array
 	Target   *hash.Hash
 	Selector Selector
 	Path     structured.Path
@@ -72,6 +74,7 @@ type Link struct {
 	Len      int64
 	Props    map[string]interface{}
 	Extra    Extra
+	Blob     *Blob
 }
 
 // String returns the Link as a string.
@@ -123,12 +126,15 @@ func (l Link) String() string {
 
 func (l *Link) MarshalMap() map[string]interface{} {
 	m := make(map[string]interface{})
-	for key, val := range l.Props {
-		m[key] = val
+	if l.Props != nil {
+		_, _ = structured.Merge(m, nil, structured.Copy(l.Props))
 	}
 	m["/"] = l.String()
 	if !l.Extra.IsEmpty() {
-		structured.Merge(m, structured.Path{"."}, l.Extra.MarshalMap())
+		m = structured.Wrap(structured.Merge(m, structured.Path{"."}, l.Extra.MarshalMap())).Map()
+	}
+	if l.Blob != nil {
+		m = structured.Wrap(structured.Merge(m, nil, l.Blob.MarshalMap())).Map()
 	}
 	return m
 }
@@ -156,39 +162,44 @@ func (l *Link) UnmarshalMap(m map[string]interface{}) error {
 	val.Delete("/")
 
 	if extra := val.Get("."); !extra.IsError() {
-		err := extra.Decode(&l.Extra)
+		err := l.Extra.UnmarshalValueAndRemove(extra)
 		if err != nil {
 			return err
 		}
-		extra.Delete("auto_update")
-		extra.Delete("container")
-		extra.Delete("resolution_error")
-		extra.Delete("authorization")
-		extra.Delete("enforce_auth")
 		if len(extra.Map()) == 0 {
 			val.Delete(".")
 		}
 	}
 	l.Extra.Container = "" // ignore container
 
+	err := l.UnmarshalText([]byte(linkText))
+	if err != nil {
+		return err
+	}
+
+	if l.Selector == S.Blob {
+		l.Blob = &Blob{
+			EncryptionScheme: encryption.None,
+		}
+		err = l.Blob.UnmarshalValueAndRemove(val)
+		if err != nil {
+			return err
+		}
+	}
+
 	l.Props = val.Map()
 	if len(l.Props) == 0 {
 		l.Props = nil
 	}
 
-	err := l.UnmarshalText([]byte(linkText))
-	if err == nil {
-		err = l.Validate(true)
-	}
-	if err != nil {
-		return err
-	}
-	return nil
+	return l.Validate()
 }
 
-// MarshalCBOR converts this link to a generic map structure, suitable for
-// encoding in CBOR.
-func (l *Link) MarshalCBOR() map[string]interface{} {
+// MarshalCBORV1 converts this link to a generic map structure, suitable for encoding in CBOR.
+//
+// Deprecated: cbor un/marshaling is now performed with github.com/fxamacker/cbor/v2 and uses struct tags. Also, blob
+// links are now not stored in link props anymore.
+func (l *Link) MarshalCBORV1() map[string]interface{} {
 	m := make(map[string]interface{})
 	if !l.Target.IsNil() {
 		m["Target"] = l.Target
@@ -209,6 +220,13 @@ func (l *Link) MarshalCBOR() map[string]interface{} {
 	if len(extra) > 0 {
 		m["Extra"] = extra
 	}
+	if l.Blob != nil {
+		blobProps := l.Blob.MarshalMap()
+		for k, v := range l.Props {
+			blobProps[k] = v
+		}
+		l.Props = blobProps
+	}
 	l.cleanupProps()
 	if len(l.Props) > 0 {
 		m["Props"] = l.Props
@@ -216,7 +234,11 @@ func (l *Link) MarshalCBOR() map[string]interface{} {
 	return m
 }
 
-func (l *Link) UnmarshalCBOR(t map[string]interface{}) {
+// UnmarshalCBORV1 unmarshals link data from a map - used with codecs.LinkConverter.
+//
+// Deprecated: cbor un/marshaling is now performed with github.com/fxamacker/cbor/v2 and uses struct tags. Also, blob
+// links are now not stored in link props anymore.
+func (l *Link) UnmarshalCBORV1(t map[string]interface{}) {
 	var e interface{}
 	var ok bool
 	if e, ok = t["Target"]; ok {
@@ -242,6 +264,14 @@ func (l *Link) UnmarshalCBOR(t map[string]interface{}) {
 	}
 	if e, ok = t["Props"]; ok {
 		l.Props = e.(map[string]interface{})
+		// the new Link (version 2) expects blob-related properties to be removed and parsed into a Blob struct
+		if l.Selector == S.Blob {
+			l.Blob = &Blob{}
+			_ = l.Blob.UnmarshalValueAndRemove(structured.Wrap(e))
+		}
+		if len(l.Props) == 0 {
+			l.Props = nil
+		}
 	}
 }
 
@@ -285,13 +315,13 @@ func (l *Link) UnmarshalText(text []byte) error {
 	}
 
 	if err != nil {
-		return e().WithCause(err)
+		return e(err)
 	}
 
 	if !isRelative {
 		l.Target, err = hash.FromString(p[0])
 		if err != nil {
-			return e().WithCause(err)
+			return e(err)
 		}
 		p = p[1:]
 		switch l.Target.Type.Code {
@@ -315,7 +345,7 @@ func (l *Link) UnmarshalText(text []byte) error {
 		l.Path = p[1:]
 	}
 
-	err = l.Validate(false)
+	err = l.validateCore()
 	if err != nil {
 		return errors.E("unmarshal link", err)
 	}
@@ -329,7 +359,7 @@ func (l *Link) parseByteRange(s string) (string, error) {
 	idx := strings.LastIndex(s, "#")
 	if idx != -1 {
 		bRange := s[idx+1:]
-		l.Off, l.Len, err = httputil.ParseByteRange(bRange)
+		l.Off, l.Len, err = byterange.Parse(bRange)
 		if err != nil {
 			// '#' is legal anywhere in the
 			for _, r := range bRange {
@@ -345,7 +375,30 @@ func (l *Link) parseByteRange(s string) (string, error) {
 	return s, nil
 }
 
-func (l *Link) Validate(includeProps bool) error {
+func (l *Link) Validate() error {
+	if err := l.validateCore(); err != nil {
+		return err
+	}
+
+	e := errors.Template("validate link", errors.K.Invalid, "link", l)
+
+	switch l.Selector {
+	case S.Blob:
+		if err := l.Blob.Validate(); err != nil {
+			return e(err)
+		}
+	default:
+		if l.Blob != nil {
+			return e("reason", "blob struct must be nil")
+		}
+	}
+
+	return nil
+}
+
+// validateCore validates only core data that is available when encoding/decoding to/from the string representation.
+// This excludes Extra and Blob structs.
+func (l *Link) validateCore() error {
 	e := errors.Template("validate link", errors.K.Invalid, "link", l)
 	if l.IsAbsolute() {
 		switch l.Target.Type.Code {
@@ -365,25 +418,16 @@ func (l *Link) Validate(includeProps bool) error {
 	}
 
 	switch l.Selector {
-	case S.File, S.Rep, S.Bitcode:
+	case S.File, S.Rep, S.Blob, S.Bitcode:
 		// no additional verification
 	case S.Meta:
 		if l.Off != 0 || l.Len != -1 {
 			return e("reason", "byte range not allowed for meta link")
 		}
-	case S.Blob:
-		if includeProps {
-			if l.Props["data"] == nil {
-				return e("reason", "no data specified for blob link")
-			}
-			_, err := l.AsBlob()
-			if err != nil {
-				return e(err)
-			}
-		}
 	default:
 		return e("reason", "invalid selector")
 	}
+
 	return nil
 }
 
@@ -393,10 +437,6 @@ func (l *Link) IsAbsolute() bool {
 
 func (l *Link) IsRelative() bool {
 	return l.Target.IsNil()
-}
-
-func (l *Link) AsBlob() (*BlobLink, error) {
-	return NewBlobLink(l)
 }
 
 func (l *Link) IsSigned() bool {
@@ -409,6 +449,10 @@ func (l *Link) Clone() Link {
 	res := *l
 	res.Props = structured.Copy(l.Props).(map[string]interface{})
 	res.Extra.AutoUpdate = res.Extra.AutoUpdate.Clone()
+	if l.Blob != nil {
+		blob := *l.Blob
+		res.Blob = &blob
+	}
 	return res
 }
 
@@ -454,9 +498,9 @@ func AsLink(val interface{}) *Link {
 // nil and false otherwise.
 //
 // The following objects are successfully converted:
-// * *Link (returned unchanged)
-// * Link
-// * a map[string]interface{} with a "/" key that unmarshals successfully to a link object
+//   - *Link (returned unchanged)
+//   - Link
+//   - a map[string]interface{} with a "/" key that unmarshals successfully to a link object
 func ToLink(target interface{}) (*Link, bool) {
 	switch t := target.(type) {
 	case Link:

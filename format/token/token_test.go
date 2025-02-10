@@ -1,6 +1,7 @@
 package token_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -8,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/eluv-io/common-go/format/codecs"
 	"github.com/eluv-io/common-go/format/encryption"
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/token"
@@ -36,10 +38,10 @@ func TestBackwardsCompatibilityHack(t *testing.T) {
 	tok, err := token.Parse("tq__8UmhDD9cZah58THfAYPf3Shj9hVzfwT51Cf4ZHKpayajzZRyMwCPiSpfS5yqRZfjkDjrtXuRmDa")
 	require.NoError(t, err)
 
-	tokBackwardsCompat, err := token.Parse("tq__8UmhDD9cZah58THfAYPf3Shj9hVzfwT51Cf4ZHKpayajzZRyMwCPiSpfS5yqRZfjkDjrtXuRmDa")
+	tokBackwardsCompat, err := token.Parse("tqw__8UmhDD9cZah58THfAYPf3Shj9hVzfwT51Cf4ZHKpayajzZRyMwCPiSpfS5yqRZfjkDjrtXuRmDa")
 	require.NoError(t, err)
 
-	require.Equal(t, tok, tokBackwardsCompat)
+	require.True(t, tok.Equal(tokBackwardsCompat))
 }
 
 func TestConversion(t *testing.T) {
@@ -72,11 +74,38 @@ func testConversion(t *testing.T, tok *token.Token, code token.Code, prefix stri
 	assert.Equal(t, "blub"+encoded, fmt.Sprintf("blub%s", tok))
 }
 
+func TestNil(t *testing.T) {
+	tok := (*token.Token)(nil)
+	require.Nil(t, tok)
+	require.True(t, tok.IsNil())
+	require.False(t, tok.IsValid())
+	require.True(t, tok.Equal(nil))
+	require.Contains(t, tok.AssertCode(token.QWrite).Error(), "token is nil")
+	require.Equal(t, "nil", tok.Describe())
+	require.Contains(t, tok.Validate().Error(), "token is nil")
+
+	bts, err := json.Marshal(tok)
+	require.NoError(t, err)
+	require.Equal(t, `null`, string(bts))
+	tokWrapper := struct {
+		Token *token.Token `json:"token"`
+	}{}
+	err = json.Unmarshal([]byte(`{"token":null}`), &tokWrapper)
+	require.NoError(t, err)
+	require.True(t, tokWrapper.Token.IsNil())
+
+	buf := bytes.NewBuffer(nil)
+	err = codecs.CborV2MuxCodec.Encoder(buf).Encode(tokWrapper)
+	require.NoError(t, err)
+	err = codecs.CborV2MuxCodec.Decoder(buf).Decode(&tokWrapper)
+	require.NoError(t, err)
+	require.True(t, tokWrapper.Token.IsNil())
+}
+
 func TestInvalidStringConversions(t *testing.T) {
 	tests := []struct {
 		tok string
 	}{
-		{tok: ""},
 		{tok: "blub"},
 		{tok: "tqw_"},
 		{tok: "qwt_00001111"},

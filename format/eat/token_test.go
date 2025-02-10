@@ -51,15 +51,15 @@ var baseUnsignedToken = &eat.Token{
 		SID: sid,
 		LID: lid,
 		QID: qid,
-		//EthAddr: clientAddr,
-		//EthTxHash: txh.Bytes(),
-		//GrantType: "read",
-		//IssuedAt:  utc.Now().Truncate(time.Second),                // legacy format has second precision
-		//Expires:   utc.Now().Truncate(time.Second).Add(time.Hour), // legacy format has second precision
-		//Ctx: map[string]interface{}{
+		// EthAddr: clientAddr,
+		// EthTxHash: txh.Bytes(),
+		// GrantType: "read",
+		// IssuedAt:  utc.Now().Truncate(time.Second),                // legacy format has second precision
+		// Expires:   utc.Now().Truncate(time.Second).Add(time.Hour), // legacy format has second precision
+		// Ctx: map[string]interface{}{
 		//	"key1": "val1",
 		//	"key2": "val2",
-		//},
+		// },
 	},
 }
 var baseSignedToken = &eat.Token{
@@ -69,17 +69,17 @@ var baseSignedToken = &eat.Token{
 	TokenData: eat.TokenData{
 		SID: sid,
 		LID: lid,
-		//EthAddr:   clientAddr,
+		// EthAddr:   clientAddr,
 		EthTxHash: txh,
-		//Ctx:       map[string]interface{}{},
-		//QID:       qid,
-		//GrantType: "read",
-		//IssuedAt:  utc.Now().Truncate(time.Second),                // legacy format has second precision
-		//Expires:   utc.Now().Truncate(time.Second).Add(time.Hour), // legacy format has second precision
-		//Ctx: map[string]interface{}{
+		// Ctx:       map[string]interface{}{},
+		// QID:       qid,
+		// GrantType: "read",
+		// IssuedAt:  utc.Now().Truncate(time.Second),                // legacy format has second precision
+		// Expires:   utc.Now().Truncate(time.Second).Add(time.Hour), // legacy format has second precision
+		// Ctx: map[string]interface{}{
 		//	"key1": "val1",
 		//	"key2": "val2",
-		//},
+		// },
 	},
 }
 
@@ -512,7 +512,7 @@ func TestLegacySignedTokenParseError(t *testing.T) {
 }
 
 func TestOTPBackwardsCompat(t *testing.T) {
-	//st := &eat.Token{
+	// st := &eat.Token{
 	//	Type:    eat.Types.StateChannel(),
 	//	SigType: eat.SigTypes.Unsigned(),
 	//	Format:  eat.Formats.CborCompressed(),
@@ -529,12 +529,12 @@ func TestOTPBackwardsCompat(t *testing.T) {
 	//			"key2": "val2",
 	//		},
 	//	},
-	//}
+	// }
 	//
-	//sign(t, st)
+	// sign(t, st)
 	//
-	//stEnc, err := st.Encode()
-	//require.NoError(t, err)
+	// stEnc, err := st.Encode()
+	// require.NoError(t, err)
 
 	stEnc, err := eat.NewStateChannel(sid, lid, qid, clientAddr.Hex()).
 		WithGrant(eat.Grants.Read).
@@ -593,7 +593,7 @@ func TestOTPBackwardsCompat(t *testing.T) {
 	res, err := eat.Parse(s)
 	require.NoError(t, err)
 	require.Equal(t, eat.Types.StateChannel(), res.Type)
-	//fmt.Println(res.Explain())
+	// fmt.Println(res.Explain())
 
 }
 

@@ -14,8 +14,8 @@ func Clone[T any](target []T) []T {
 
 // Copy returns a shallow copy of the given slice. Returns nil if the given slice is nil. Returns an empty slice if
 // the given slice is empty.
-func Copy[T any](target []T) []T {
-	return CopyWithCap(target, 0)
+func Copy[T any](source []T) []T {
+	return CopyWithCap(source, 0)
 }
 
 // CopyWithCap returns a copy of the given slice. Returns nil if the given slice is nil. Returns an empty slice if
@@ -23,18 +23,18 @@ func Copy[T any](target []T) []T {
 //
 // The duplicate slice will be created with the given capacity (or the original capacity if smaller than the slice's
 // length).
-func CopyWithCap[T any](target []T, capacity int) []T {
-	if target == nil {
+func CopyWithCap[T any](source []T, capacity int) []T {
+	if source == nil {
 		return nil
 	}
 
-	c := cap(target)
+	c := cap(source)
 	if capacity > c {
 		c = capacity
 	}
 
-	dup := make([]T, len(target), c)
-	copy(dup, target)
+	dup := make([]T, len(source), c)
+	copy(dup, source)
 	return dup
 }
 
