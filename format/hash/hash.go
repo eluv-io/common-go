@@ -16,6 +16,7 @@ import (
 
 	ei "github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/preamble"
+	"github.com/eluv-io/common-go/util/byteutil"
 	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/log-go"
 	"github.com/eluv-io/utc-go"
@@ -31,10 +32,20 @@ const (
 	QPart                   // regular part hash
 	QPartLive               // live part that generates a regular part upon finalization for vod
 	QPartLiveTransient      // live part that doesn't generate a regular part upon finalization
+	CPart                   // content part hash including storage ID
+	CPartLive               // live content part hash including storage ID
+
+	// live content part hash including storage ID that doesn't generate a regular part upon finalization
+	// PENDING(LUK): is this really needed?
+	CPartLiveTransient
 )
 
 func (c Code) IsLive() bool {
-	return c == QPartLive || c == QPartLiveTransient
+	return c == QPartLive || c == QPartLiveTransient || c == CPartLive || c == CPartLiveTransient
+}
+
+func (c Code) hasStorageId() bool {
+	return c == CPart || c == CPartLive || c == CPartLiveTransient
 }
 
 // FromString parses the given string and returns the hash.
@@ -110,6 +121,12 @@ func (t Type) Describe() string {
 		c = "live content part"
 	case QPartLiveTransient:
 		c = "transient live content part"
+	case CPart:
+		c = "content part with storage ID"
+	case CPartLive:
+		c = "live content part with storage ID"
+	case CPartLiveTransient:
+		c = "transient live content part"
 	}
 	switch t.Format {
 	case Unencrypted:
@@ -124,14 +141,20 @@ const prefixLen = 4
 
 var typeToPrefix = map[Type]string{}
 var prefixToType = map[string]Type{
-	"hunk": Type{UNKNOWN, Unencrypted},
-	"hq__": Type{Q, Unencrypted},
-	"hqp_": Type{QPart, Unencrypted},
-	"hqpe": Type{QPart, AES128AFGH},
-	"hql_": Type{QPartLive, Unencrypted},
-	"hqle": Type{QPartLive, AES128AFGH},
-	"hqt_": Type{QPartLiveTransient, Unencrypted},
-	"hqte": Type{QPartLiveTransient, AES128AFGH},
+	"hunk": {UNKNOWN, Unencrypted},
+	"hq__": {Q, Unencrypted},
+	"hqp_": {QPart, Unencrypted},
+	"hqpe": {QPart, AES128AFGH},
+	"hql_": {QPartLive, Unencrypted},
+	"hqle": {QPartLive, AES128AFGH},
+	"hqt_": {QPartLiveTransient, Unencrypted},
+	"hqte": {QPartLiveTransient, AES128AFGH},
+	"hcp_": {CPart, Unencrypted},
+	"hcpe": {CPart, AES128AFGH},
+	"hcl_": {CPartLive, Unencrypted},
+	"hcle": {CPartLive, AES128AFGH},
+	"hct_": {CPartLiveTransient, Unencrypted},
+	"hcte": {CPartLiveTransient, AES128AFGH},
 }
 
 func init() {
@@ -155,6 +178,9 @@ func init() {
 //	QPartLive:          type (1 byte) | expiration (var bytes) | digest (var bytes)
 //	QPartLiveTransient: type (1 byte) | expiration (var bytes) | digest (var bytes)
 //	(Old) QPartLive:    type (1 byte) | digest (24-25 bytes)
+//	CPart:              type (1 byte) | storage ID (var bytes) | digest (var bytes) | size (var bytes) | id (var bytes)
+//	CPartLive:          type (1 byte) | storage ID (var bytes) | expiration (var bytes) | digest (var bytes)
+//	CPartLiveTransient: type (1 byte) | storage ID (var bytes) | expiration (var bytes) | digest (var bytes)
 type Hash struct {
 	Type         Type
 	Digest       []byte
@@ -162,6 +188,7 @@ type Hash struct {
 	PreambleSize int64
 	ID           ei.ID
 	Expiration   utc.UTC
+	StorageId    uint
 	s            string
 }
 
@@ -300,6 +327,18 @@ func FromDecodedBytes(htype Type, b []byte) (*Hash, error) {
 	var size, preambleSize int64
 	var id ei.ID
 	var expiration utc.UTC
+	var storageId uint64
+
+	if htype.Code.hasStorageId() {
+		// Parse storage ID
+		var m int
+		storageId, m = binary.Uvarint(b[n:])
+		if m <= 0 {
+			return nil, e("reason", "invalid storage ID")
+		}
+		n += m
+	}
+
 	if !htype.Code.IsLive() {
 		// Parse digest
 		m := sha256.Size
@@ -347,7 +386,15 @@ func FromDecodedBytes(htype Type, b []byte) (*Hash, error) {
 		digest = b[n:]
 	}
 
-	return &Hash{Type: htype, Digest: digest, Size: size, PreambleSize: preambleSize, ID: id, Expiration: expiration}, nil
+	return &Hash{
+		Type:         htype,
+		Digest:       digest,
+		Size:         size,
+		PreambleSize: preambleSize,
+		ID:           id,
+		Expiration:   expiration,
+		StorageId:    uint(storageId),
+	}, nil
 }
 
 func (h *Hash) String() string {
@@ -364,36 +411,60 @@ func (h *Hash) String() string {
 
 // DecodedBytes converts this hash to base58-decoded bytes.
 func (h *Hash) DecodedBytes() []byte {
-	if len(h.Digest) > 0 {
-		var b []byte
-		if !h.IsLive() {
-			b = make([]byte, len(h.Digest))
-
-			copy(b, h.Digest)
-
-			s := make([]byte, binary.MaxVarintLen64)
-			n := binary.PutUvarint(s, uint64(h.Size))
-			b = append(b, s[:n]...)
-
-			if h.Type.Code == QPart && h.PreambleSize > 0 {
-				n := binary.PutUvarint(s, uint64(h.PreambleSize))
-				b = append(b, s[:n]...)
-			} else if h.Type.Code == Q && h.ID.IsValid() {
-				b = append(b, h.ID.Bytes()...)
-			}
-		} else {
-			b = make([]byte, binary.MaxVarintLen64)
-
-			var n int
-			if !h.Expiration.IsZero() {
-				n = binary.PutUvarint(b, uint64(h.Expiration.Unix()))
-			}
-
-			b = append(b[:n], h.Digest...)
-		}
-		return b
+	if len(h.Digest) == 0 {
+		return nil
 	}
-	return nil
+
+	var b []byte
+	if !h.IsLive() {
+		bufLen := len(h.Digest) + byteutil.LenUvarInt(uint64(h.Size))
+		if h.hasStorageId() {
+			bufLen += byteutil.LenUvarInt(uint64(h.StorageId))
+		}
+		if h.Type.Code == QPart && h.PreambleSize > 0 {
+			bufLen += byteutil.LenUvarInt(uint64(h.PreambleSize))
+		} else if h.Type.Code == Q && h.ID.IsValid() {
+			bufLen += len(h.ID.Bytes())
+		}
+
+		b = make([]byte, bufLen)
+		n := 0
+
+		if h.hasStorageId() {
+			n += binary.PutUvarint(b[n:], uint64(h.StorageId))
+		}
+
+		n += copy(b[n:], h.Digest)
+		n += binary.PutUvarint(b[n:], uint64(h.Size))
+
+		if h.Type.Code == QPart && h.PreambleSize > 0 {
+			n += binary.PutUvarint(b[n:], uint64(h.PreambleSize))
+		} else if h.Type.Code == Q && h.ID.IsValid() {
+			n += copy(b[n:], h.ID.Bytes())
+		}
+	} else {
+		expirationUnix := h.Expiration.Unix()
+		bufLen := len(h.Digest)
+		if !h.Expiration.IsZero() {
+			bufLen += byteutil.LenUvarInt(uint64(expirationUnix))
+		}
+		if h.hasStorageId() {
+			bufLen += byteutil.LenUvarInt(uint64(h.StorageId))
+		}
+
+		b = make([]byte, bufLen)
+		n := 0
+
+		if h.hasStorageId() {
+			n += binary.PutUvarint(b[n:], uint64(h.StorageId))
+		}
+		if !h.Expiration.IsZero() {
+			n += binary.PutUvarint(b[n:], uint64(expirationUnix))
+		}
+
+		n += copy(b[n:], h.Digest)
+	}
+	return b
 }
 
 func (h *Hash) IsNil() bool {
@@ -402,6 +473,10 @@ func (h *Hash) IsNil() bool {
 
 func (h *Hash) IsLive() bool {
 	return h != nil && h.Type.Code.IsLive()
+}
+
+func (h *Hash) hasStorageId() bool {
+	return h != nil && h.Type.Code.hasStorageId()
 }
 
 // AssertType checks whether the hash's type equals the provided type
@@ -502,9 +577,9 @@ func (h *Hash) As(c Code, id ei.ID) (*Hash, error) {
 	} else if h.IsLive() || c.IsLive() {
 		return nil, errors.NoTrace("convert hash", errors.K.Invalid, "reason", "no conversion for live parts", "hash", h, "code", c)
 	} else if _, ok := typeToPrefix[Type{c, h.Type.Format}]; !ok {
-		return nil, errors.NoTrace("convert hash", errors.K.Invalid, "reason", "invaid type", "code", c, "format", h.Type.Format)
+		return nil, errors.NoTrace("convert hash", errors.K.Invalid, "reason", "invalid type", "code", c, "format", h.Type.Format)
 	}
-	var res Hash = *h
+	var res = *h // copy
 	res.Type.Code = c
 	res.s = ""
 	if c != Q {
@@ -571,6 +646,11 @@ func (h *Hash) Describe() string {
 	}
 
 	add("type:          " + h.Type.Describe())
+	sc := "default"
+	if h.hasStorageId() {
+		sc = strconv.FormatUint(uint64(h.StorageId), 10)
+	}
+	add("storage ID: " + sc)
 	add("digest:        0x" + hex.EncodeToString(h.Digest))
 	if !h.IsLive() {
 		add("size:          " + strconv.FormatInt(h.Size, 10))
@@ -596,11 +676,12 @@ func (h *Hash) Describe() string {
 // Digest encapsulates a message digest function which produces a specific type of Hash
 type Digest struct {
 	hash.Hash
-	preamble *preamble.Sizer
-	htype    Type
-	id       ei.ID
-	size     int64
-	psize    int64
+	preamble  *preamble.Sizer
+	htype     Type
+	id        ei.ID
+	size      int64
+	psize     int64
+	storageId uint
 }
 
 // make sure Digest implements the Hash interface
@@ -635,6 +716,11 @@ func (d *Digest) WithID(i ei.ID) *Digest {
 	if d.htype.Code == Q {
 		d.id = i
 	}
+	return d
+}
+
+func (d *Digest) WithStorageId(sc uint) *Digest {
+	d.storageId = sc
 	return d
 }
 
