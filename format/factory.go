@@ -16,8 +16,6 @@ import (
 // Factory provides all format-related constructors and generators like codecs,
 // digests, etc.
 type Factory interface {
-	// NewContentDigest returns a digest object for calculating content hashes.
-	NewContentDigest(format hash.Format, id QID) *hash.Digest
 	// NewContentPartDigest returns a digest object for calculating content hashes.
 	NewContentPartDigest(format hash.Format) *hash.Digest
 
@@ -98,11 +96,6 @@ func NewFactory() Factory {
 // Factory is the factory for all format-related generators like codecs,
 // digests, etc.
 type factory struct{}
-
-// NewContentDigest returns a digest object for calculating content hashes.
-func (f *factory) NewContentDigest(format hash.Format, id QID) *hash.Digest {
-	return hash.NewDigest(sha256.New(), hash.Type{hash.Q, format}).WithID(id)
-}
 
 // NewContentPartDigest returns a digest object for calculating content hashes.
 func (f *factory) NewContentPartDigest(format hash.Format) *hash.Digest {
