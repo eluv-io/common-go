@@ -1,6 +1,8 @@
 package sliceutil
 
 import (
+	"fmt"
+	"math/bits"
 	"reflect"
 
 	"golang.org/x/exp/constraints"
@@ -8,13 +10,13 @@ import (
 
 // Clone is an alias of Copy and returns a shallow copy of the given slice. Returns nil if the given slice is nil.
 // Returns an empty slice if the given slice is empty.
-func Clone[T any](target []T) []T {
+func Clone[S ~[]E, E any](target S) S {
 	return CopyWithCap(target, 0)
 }
 
 // Copy returns a shallow copy of the given slice. Returns nil if the given slice is nil. Returns an empty slice if
 // the given slice is empty.
-func Copy[T any](source []T) []T {
+func Copy[S ~[]E, E any](source S) S {
 	return CopyWithCap(source, 0)
 }
 
@@ -23,7 +25,7 @@ func Copy[T any](source []T) []T {
 //
 // The duplicate slice will be created with the given capacity (or the original capacity if smaller than the slice's
 // length).
-func CopyWithCap[T any](source []T, capacity int) []T {
+func CopyWithCap[S ~[]E, E any](source S, capacity int) S {
 	if source == nil {
 		return nil
 	}
@@ -33,7 +35,7 @@ func CopyWithCap[T any](source []T, capacity int) []T {
 		c = capacity
 	}
 
-	dup := make([]T, len(source), c)
+	dup := make(S, len(source), c)
 	copy(dup, source)
 	return dup
 }
@@ -41,7 +43,7 @@ func CopyWithCap[T any](source []T, capacity int) []T {
 // Append appends all elements of source to target.
 //
 // If makeCopy is true, it returns the result in a newly allocated slice and leaves the source/target slices unchanged.
-func Append[T any](source []T, target []T, makeCopy bool) (res []T) {
+func Append[S ~[]E, E any](source S, target S, makeCopy bool) (res S) {
 	if source == nil && target == nil {
 		return nil
 	}
@@ -58,7 +60,7 @@ func Append[T any](source []T, target []T, makeCopy bool) (res []T) {
 // appended elements.
 //
 // If makeCopy is true, it returns the result in a newly allocated slice and leaves the source/target slices unchanged.
-func Squash[T any](source []T, target []T, makeCopy bool) (res []T) {
+func Squash[S ~[]E, E any](source S, target S, makeCopy bool) (res S) {
 	if source == nil && target == nil {
 		return nil
 	}
@@ -79,7 +81,7 @@ func Squash[T any](source []T, target []T, makeCopy bool) (res []T) {
 // SquashAndDedupe appends all elements of source to target and returns the deduped result.
 //
 // If makeCopy is true, it returns the result in a newly allocated slice and leaves the source/target slices unchanged.
-func SquashAndDedupe[T any](source []T, target []T, makeCopy bool) (res []T) {
+func SquashAndDedupe[S ~[]E, E any](source S, target S, makeCopy bool) (res S) {
 	if source == nil && target == nil {
 		return nil
 	}
@@ -91,14 +93,14 @@ func SquashAndDedupe[T any](source []T, target []T, makeCopy bool) (res []T) {
 // Dedupe removes any duplicates of all elements in target slice.
 //
 // If makeCopy is true, it returns the result in a newly allocated slice and leaves the target slice unchanged.
-func Dedupe[T any](target []T, makeCopy bool) (res []T) {
+func Dedupe[S ~[]E, E any](target S, makeCopy bool) (res S) {
 	if target == nil {
 		return nil
 	}
 
 	res = target[:0] // empty slice with same backing array as target
 	if makeCopy {
-		res = make([]T, 0, len(target))
+		res = make(S, 0, len(target))
 	}
 	for _, el := range target {
 		if !Contains(res, el) {
@@ -122,16 +124,16 @@ func deepEqual[T any](e1, e2 T) bool {
 }
 
 // Contains returns true if the given slice contains the given elements, false otherwise.
-func Contains[T any](slice []T, element T) (res bool) {
-	if _, ok := any(element).(Equaler[T]); ok {
-		return ContainsFn(slice, element, eq[T])
+func Contains[S ~[]E, E any](slice S, element E) (res bool) {
+	if _, ok := any(element).(Equaler[E]); ok {
+		return ContainsFn(slice, element, eq[E])
 	}
-	return ContainsFn(slice, element, deepEqual[T])
+	return ContainsFn(slice, element, deepEqual[E])
 }
 
 // ContainsFn returns true if the slice contains the given element using the provided function to compare elements,
 // false otherwise.
-func ContainsFn[T any](slice []T, element T, equal func(e1, e2 T) bool) (res bool) {
+func ContainsFn[S ~[]E, E any](slice S, element E, equal func(e1, e2 E) bool) (res bool) {
 	for _, el := range slice {
 		if equal(el, element) {
 			return true
@@ -142,19 +144,19 @@ func ContainsFn[T any](slice []T, element T, equal func(e1, e2 T) bool) (res boo
 
 // Remove removes all occurrences of an element from the given slice. Returns the new slice and the number of removed
 // elements.
-func Remove[T any](slice []T, element T) ([]T, int) {
-	if _, ok := any(element).(Equaler[T]); ok {
-		return RemoveFn(slice, element, eq[T])
+func Remove[S ~[]E, E any](slice S, element E) (S, int) {
+	if _, ok := any(element).(Equaler[E]); ok {
+		return RemoveFn(slice, element, eq[E])
 	}
-	return RemoveFn(slice, element, func(e1, e2 T) bool {
+	return RemoveFn(slice, element, func(e1, e2 E) bool {
 		return reflect.DeepEqual(e1, e2)
 	})
 }
 
 // RemoveFn removes all occurrences of an element from the given slice, using the provided function to compare elements.
 // Returns the new slice and the number of removed elements.
-func RemoveFn[T any](slice []T, element T, equal func(e1, e2 T) bool) ([]T, int) {
-	return RemoveMatch(slice, func(e T) bool {
+func RemoveFn[S ~[]E, E any](slice S, element E, equal func(e1, e2 E) bool) (S, int) {
+	return RemoveMatch(slice, func(e E) bool {
 		return equal(e, element)
 	})
 }
@@ -162,8 +164,8 @@ func RemoveFn[T any](slice []T, element T, equal func(e1, e2 T) bool) ([]T, int)
 // RemoveMatch removes all elements that match according to the provided match function from the given slice. Removal is
 // performed inline, freed up slots at the end of the slice are zeroed out. Returns the updated slice and the number of
 // removed elements.
-func RemoveMatch[T any](slice []T, match func(e T) bool) ([]T, int) {
-	var zero T
+func RemoveMatch[S ~[]E, E any](slice S, match func(e E) bool) (S, int) {
+	var zero E
 	removed := 0
 	for i := 0; i < len(slice); i++ {
 		if match(slice[i]) {
@@ -181,11 +183,11 @@ func RemoveMatch[T any](slice []T, match func(e T) bool) ([]T, int) {
 
 // RemoveIndex removes the element at the given index from the provided slice. Removes nothing if the index is
 // out-of-bounds.
-func RemoveIndex[T any](slice []T, idx int) []T {
+func RemoveIndex[S ~[]E, E any](slice S, idx int) S {
 	if idx < 0 || idx >= len(slice) {
 		return slice
 	}
-	var zero T
+	var zero E
 	copy(slice[idx:], slice[idx+1:])
 	slice[len(slice)-1] = zero
 	return slice[:len(slice)-1]
@@ -195,7 +197,7 @@ func RemoveIndex[T any](slice []T, idx int) []T {
 // element is not equal to the other. The result of comparing the first non-matching elements is returned. If both
 // slices are equal until one of them ends, the shorter slice is considered less than the longer one. The result is 0 if
 // s1 == s2, -1 if s1 < s2, and +1 if s1 > s2. Comparisons involving floating point NaNs are ignored.
-func Compare[T constraints.Ordered](s1, s2 []T) int {
+func Compare[S ~[]E, E constraints.Ordered](s1, s2 S) int {
 	s2len := len(s2)
 	for i, v1 := range s1 {
 		if i >= s2len {
@@ -216,7 +218,7 @@ func Compare[T constraints.Ordered](s1, s2 []T) int {
 }
 
 // Reverse reverses the order of the elements in the provided slice.
-func Reverse[T any](slice []T) {
+func Reverse[S ~[]E, E any](slice S) {
 	max := len(slice) - 1
 	for i := 0; i < (max+1)/2; i++ {
 		slice[i], slice[max-i] = slice[max-i], slice[i]
@@ -224,19 +226,69 @@ func Reverse[T any](slice []T) {
 }
 
 // First returns the first element of the given slice. Returns the zero value if the slice is empty.
-func First[T any](slice []T) T {
+func First[S ~[]E, E any](slice S) E {
 	if len(slice) == 0 {
-		var zero T
+		var zero E
 		return zero
 	}
 	return slice[0]
 }
 
 // Last returns the last element of the given slice. Returns the zero value if the slice is empty.
-func Last[T any](slice []T) T {
+func Last[S ~[]E, E any](slice S) E {
 	if len(slice) == 0 {
-		var zero T
+		var zero E
 		return zero
 	}
 	return slice[len(slice)-1]
+}
+
+// Convert converts a slice of type T to a slice of type C using the provided conversion function.
+func Convert[S ~[]E, E, C any](slice S, convert func(E) C) (converted []C) {
+	if slice == nil {
+		return nil
+	}
+	converted = make([]C, len(slice))
+	for i, el := range slice {
+		converted[i] = convert(el)
+	}
+	return converted
+}
+
+// ConvertString converts a slice of types implementing the fmt.Stringer interface to a slice of string.
+func ConvertString[T fmt.Stringer](slice []T) (converted []string) {
+	return Convert(slice, func(el T) string {
+		return el.String()
+	})
+}
+
+// RepeatElement returns a new slice that repeats the provided element the given number of times. The result has length
+// and capacity (count). The result is never nil. Repeat panics if count is negative or if the result of (len(x) *
+// count) overflows.
+func RepeatElement[E any](el E, count int) []E {
+	return Repeat([]E{el}, count)
+}
+
+// Repeat returns a new slice that repeats the provided slice the given number of times. The result has length and
+// capacity (len(x) * count). The result is never nil. Repeat panics if count is negative or if the result of (len(x) *
+// count) overflows.
+//
+// Note: this is a copy of stdlib's slices.Repeat function in go1.24.
+func Repeat[S ~[]E, E any](x S, count int) S {
+	if count < 0 {
+		panic("cannot be negative")
+	}
+
+	const maxInt = ^uint(0) >> 1
+	hi, lo := bits.Mul(uint(len(x)), uint(count))
+	if hi > 0 || lo > maxInt {
+		panic("the result of (len(x) * count) overflows")
+	}
+
+	newslice := make(S, int(lo)) // lo = len(x) * count
+	n := copy(newslice, x)
+	for n < len(newslice) {
+		n += copy(newslice[n:], newslice[:n])
+	}
+	return newslice
 }
