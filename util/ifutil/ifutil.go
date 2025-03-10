@@ -134,7 +134,7 @@ func Diff(labelA string, a interface{}, labelB string, b interface{}) string {
 // Must takes an object and an error, and panics if the error is not nil. It can be used for
 // inlining function calls when you know that the function won't error.
 func Must[T any](value T, err error) T {
-	if err != nil {
+	if !IsNil(err) {
 		panic(err)
 	}
 	return value

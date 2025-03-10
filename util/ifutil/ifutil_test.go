@@ -6,6 +6,7 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type chanType = chan bool
@@ -246,6 +247,23 @@ func TestFirstNonZero(t *testing.T) {
 	assert.Equal(t, 1.0, FirstNonZero(0.0, 1.0, 2.0))
 	assert.Equal(t, "", FirstNonZero[string]())
 	assert.Equal(t, "a", FirstNonZero("", "a", "b"))
+}
+
+// verr implements error
+type verr struct{}
+
+func (e *verr) Error() string { return "" }
+
+func TestMust(t *testing.T) {
+	validate := func() *verr {
+		return nil
+	}
+
+	// Basic tests
+	require.Panics(t, func() { Must(1, fmt.Errorf("encountered error")) })
+	require.Equal(t, 1, Must(1, nil))
+	// Must cannot panic on things that implement error but are nil
+	require.Equal(t, 1, Must(1, validate()))
 }
 
 func ExampleDiff() {
