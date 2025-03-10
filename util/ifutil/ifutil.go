@@ -130,3 +130,18 @@ func Diff(labelA string, a interface{}, labelB string, b interface{}) string {
 	}
 	return diff[:len(diff)-2]
 }
+
+// Must takes an object and an error, and panics if the error is not nil. It can be used for
+// inlining function calls when you know that the function won't error.
+func Must[T any](value T, err error) T {
+	if !IsNil(err) {
+		panic(err)
+	}
+	return value
+}
+
+// IgnoreErr takes an object and an error, and ignores the error. It can be used for inlining
+// function calls.
+func IgnoreErr[T any](value T, _ error) T {
+	return value
+}
