@@ -248,3 +248,61 @@ func testCtx(t *testing.T) (*httptest.ResponseRecorder, *gin.Context) {
 	require.NoError(t, err)
 	return w, c
 }
+
+func TestSendErrorAfterWrite(t *testing.T) {
+	tests := []struct {
+		description string
+		err         error
+	}{
+		{description: `eof`, err: io.EOF},
+		{description: `with-stack`, err: errors.E("omg", errors.K.Invalid)},
+		{description: `no-error`, err: nil},
+	}
+	//log.Get("/").SetLevel("debug")
+
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+
+			var panicErr interface{}
+
+			handler := func(c *gin.Context) {
+				defer func() {
+					panicErr = recover()
+				}()
+				c.Writer.WriteHeader(http.StatusOK)
+				c.Writer.Header().Set("Content-Length", "10")
+				c.Writer.Header().Add("a-key", "a-value")
+				_, err := c.Writer.Write([]byte("0123456789"))
+				require.NoError(t, err)
+				var sendErr error
+				if test.err != nil {
+					sendErr = errors.E("xx", test.err)
+				}
+				SendError(c, http.StatusInternalServerError, sendErr)
+			}
+			srv, _ := testHttpCtx(handler)
+			srv.Start()
+			defer srv.Close()
+
+			request, err := http.NewRequest("GET", srv.URL, nil)
+			request.Header.Set("Accept", "application/json")
+			require.NoError(t, err)
+
+			resp, err := srv.Client().Do(request)
+			require.Nil(t, panicErr)
+			require.NoError(t, err)
+
+			require.Equal(t, http.StatusOK, resp.StatusCode)
+			rbytes, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			require.Equal(t, string(rbytes), "0123456789")
+		})
+	}
+}
+
+func testHttpCtx(hf gin.HandlerFunc) (*httptest.Server, *gin.Engine) {
+	c := gin.New()
+	c.Handle("GET", "", hf)
+	srv := httptest.NewUnstartedServer(c)
+	return srv, c
+}
