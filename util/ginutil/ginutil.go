@@ -99,11 +99,11 @@ func AbortHeadWithStatus(c *gin.Context, code int) {
 func SendError(c *gin.Context, code int, err error) {
 	if c.Writer.Written() {
 		getLog(c).Warn("api error - response already written",
-			"written_size", c.Writer.Size(),
 			"code", code,
+			"error", errors.ClearStacktrace(err),
+			"written_size", c.Writer.Size(),
 			"written_code", c.Writer.Status(),
-			"written_headers", c.Writer.Header(),
-			"error", errors.ClearStacktrace(err))
+			"written_headers", c.Writer.Header())
 		if err != nil {
 			getLog(c).Debug("api error - response already written - stack trace", err)
 		}
