@@ -97,6 +97,18 @@ func AbortHeadWithStatus(c *gin.Context, code int) {
 // on the "accept" headers of the request. The data is marshaled to JSON if no accept headers are specified. No data is
 // marshaled if an accept headers other than 'application/json' or 'application/xml' is specified.
 func SendError(c *gin.Context, code int, err error) {
+	if c.Writer.Written() {
+		getLog(c).Warn("api error - response already written",
+			"code", code,
+			"error", errors.ClearStacktrace(err),
+			"written_size", c.Writer.Size(),
+			"written_code", c.Writer.Status(),
+			"written_headers", c.Writer.Header())
+		if err != nil {
+			getLog(c).Debug("api error - response already written - stack trace", err)
+		}
+		return
+	}
 	if err != nil {
 		getLog(c).Debug("api error", "code", code, "error", err)
 	}
