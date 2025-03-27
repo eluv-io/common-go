@@ -9,44 +9,59 @@ import (
 
 func TestSortedKeys(t *testing.T) {
 	type args struct {
-		m map[string]interface{}
+		m map[string]string
 	}
 	tests := []struct {
-		name string
-		args args
-		want []string
+		name             string
+		args             args
+		wantSortedKeys   []string             // sorted keys
+		wantSortedValues []string             // sorted values
+		wantSorted       []string             // values sorted by keys
+		wantSortedPairs  []KV[string, string] // sorted KV pairs
 	}{
 		{
 			name: "nil",
 			args: args{
 				m: nil,
 			},
-			want: []string{},
+			wantSortedKeys:   []string{},
+			wantSortedValues: []string{},
+			wantSorted:       []string{},
+			wantSortedPairs:  []KV[string, string]{},
 		},
 		{
 			name: "empty",
 			args: args{
-				m: map[string]interface{}{},
+				m: map[string]string{},
 			},
-			want: []string{},
+			wantSortedKeys:   []string{},
+			wantSortedValues: []string{},
+			wantSorted:       []string{},
+			wantSortedPairs:  []KV[string, string]{},
 		},
 		{
-			name: "m1",
+			name: "map1",
 			args: args{
-				m: map[string]interface{}{
-					"k1": "v1",
-					"k2": "v2",
-					"k3": "v3",
-					"k4": "v4",
+				m: map[string]string{
+					"k1": "v2",
+					"k2": "v3",
+					"k3": "v4",
+					"k4": "v1",
 				},
 			},
-			want: []string{"k1", "k2", "k3", "k4"},
+			wantSortedKeys:   []string{"k1", "k2", "k3", "k4"},
+			wantSortedValues: []string{"v1", "v2", "v3", "v4"},
+			wantSorted:       []string{"v2", "v3", "v4", "v1"},
+			wantSortedPairs:  []KV[string, string]{{"k1", "v2"}, {"k2", "v3"}, {"k3", "v4"}, {"k4", "v1"}},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.Equal(t, tt.want, SortedKeys(tt.args.m))
-			require.Equal(t, tt.want, SortedStringKeys(tt.args.m))
+			require.Equal(t, tt.wantSortedKeys, SortedKeys(tt.args.m))
+			require.Equal(t, tt.wantSortedKeys, SortedStringKeys(tt.args.m))
+			require.Equal(t, tt.wantSortedValues, SortedValues(tt.args.m))
+			require.Equal(t, tt.wantSorted, Sorted(tt.args.m))
+			require.Equal(t, tt.wantSortedPairs, SortedPairs(tt.args.m))
 		})
 	}
 }
