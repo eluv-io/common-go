@@ -45,14 +45,16 @@ var Modes = struct {
 	Decoupled:  "decoupled",
 }
 
-// Cache is a thread-safe fixed size LRU cache.
-type Cache struct {
+type Cache = TypedCache[any, any]
+
+// TypedCache is a thread-safe fixed size LRU cache.
+type TypedCache[K any, V any] struct {
 	lru          *simplelru.LRU
 	lock         sync.RWMutex
 	Mode         ConstructionMode // defaults to Blocking...
 	namedLocks   syncutil.NamedLocks
 	metrics      Metrics
-	evictHandler func(key interface{}, value interface{}) // the external evict handler function
+	evictHandler func(key K, value V) // the external evict handler function
 }
 
 // Nil creates a cache that doesn't cache anything at all.
@@ -60,18 +62,32 @@ func Nil() *Cache {
 	return nil
 }
 
-// New creates an LRU cache of the given size. The size is set to 1 if <= 0
-func New(size int) *Cache {
-	return NewWithEvict(size, nil)
+// TypedNil creates a typed cache that doesn't cache anything at all.
+func TypedNil[K any, V any]() *TypedCache[K, V] {
+	return nil
 }
 
-// NewWithEvict constructs a fixed size cache with the given eviction
-// callback.
-func NewWithEvict(size int, onEvicted func(key interface{}, value interface{})) *Cache {
+// New creates an LRU cache of the given size. The size is set to 1 if <= 0
+func New(size int) *Cache {
+	return NewTyped[any, any](size)
+}
+
+// NewTyped creates a typed LRU cache of the given size. The size is set to 1 if <= 0
+func NewTyped[K any, V any](size int) *TypedCache[K, V] {
+	return NewTypedWithEvict[K, V](size, nil)
+}
+
+// NewWithEvict constructs a fixed size cache with the given eviction callback.
+func NewWithEvict(size int, onEvicted func(key any, value any)) *Cache {
+	return NewTypedWithEvict(size, onEvicted)
+}
+
+// NewTypedWithEvict constructs a typed, fixed size cache with the given eviction callback.
+func NewTypedWithEvict[K any, V any](size int, onEvicted func(key K, value V)) *TypedCache[K, V] {
 	if size <= 0 {
-		return Nil()
+		return TypedNil[K, V]()
 	}
-	c := &Cache{
+	c := &TypedCache[K, V]{
 		evictHandler: onEvicted,
 		metrics:      MakeMetrics(),
 	}
@@ -83,7 +99,7 @@ func NewWithEvict(size int, onEvicted func(key interface{}, value interface{})) 
 
 // WithMode sets the cache's construction mode and returns itself for call
 // chaining.
-func (c *Cache) WithMode(mode ConstructionMode) *Cache {
+func (c *TypedCache[K, V]) WithMode(mode ConstructionMode) *TypedCache[K, V] {
 	if c == nil {
 		return nil
 	}
@@ -93,7 +109,7 @@ func (c *Cache) WithMode(mode ConstructionMode) *Cache {
 }
 
 // WithName sets the cache's name and returns itself for call chaining.
-func (c *Cache) WithName(name string) *Cache {
+func (c *TypedCache[K, V]) WithName(name string) *TypedCache[K, V] {
 	if c == nil {
 		return nil
 	}
@@ -103,7 +119,7 @@ func (c *Cache) WithName(name string) *Cache {
 
 // WithMaxAge sets the cache's maxAge (only for collection in metrics) and
 // returns itself for call chaining.
-func (c *Cache) WithMaxAge(age duration.Spec) *Cache {
+func (c *TypedCache[K, V]) WithMaxAge(age duration.Spec) *TypedCache[K, V] {
 	if c == nil {
 		return nil
 	}
@@ -112,7 +128,7 @@ func (c *Cache) WithMaxAge(age duration.Spec) *Cache {
 }
 
 // WithEvictHandler sets the given evict handler.
-func (c *Cache) WithEvictHandler(onEvicted func(key interface{}, value interface{})) *Cache {
+func (c *TypedCache[K, V]) WithEvictHandler(onEvicted func(key K, value V)) *TypedCache[K, V] {
 	if c == nil {
 		return nil
 	}
@@ -121,7 +137,7 @@ func (c *Cache) WithEvictHandler(onEvicted func(key interface{}, value interface
 }
 
 // Purge is used to completely clear the cache
-func (c *Cache) Purge() {
+func (c *TypedCache[K, V]) Purge() {
 	if c == nil {
 		return
 	}
@@ -132,7 +148,7 @@ func (c *Cache) Purge() {
 
 // Add adds a value to the cache or updates an existing entry. Works exactly like Update(), but only returns whether an
 // an eviction occurred.
-func (c *Cache) Add(key, value interface{}) bool {
+func (c *TypedCache[K, V]) Add(key K, value V) bool {
 	_, evicted := c.Update(key, value)
 	return evicted
 }
@@ -145,8 +161,8 @@ func (c *Cache) Add(key, value interface{}) bool {
 // Update returns two booleans:
 //   - new: true if the key is new, false if it already existed and the entry was updated
 //   - evicted: true if an eviction occurred.
-func (c *Cache) Update(key interface{}, value interface{}) (new bool, evicted bool) {
-	return c.UpdateFn(key, func(_ interface{}) interface{} {
+func (c *TypedCache[K, V]) Update(key K, value V) (new bool, evicted bool) {
+	return c.UpdateFn(key, func(_ V) V {
 		return value
 	})
 }
@@ -159,7 +175,7 @@ func (c *Cache) Update(key interface{}, value interface{}) (new bool, evicted bo
 // Update returns two booleans:
 //   - new: true if the key is new, false if it already existed and the entry was updated
 //   - evicted: true if an eviction occurred.
-func (c *Cache) UpdateFn(key interface{}, update func(value interface{}) interface{}) (new bool, evicted bool) {
+func (c *TypedCache[K, V]) UpdateFn(key K, update func(value V) V) (new bool, evicted bool) {
 	if c == nil {
 		return true, false
 	}
@@ -168,7 +184,7 @@ func (c *Cache) UpdateFn(key interface{}, update func(value interface{}) interfa
 	defer c.lock.Unlock()
 
 	c.metrics.Add()
-	val, found := c.lru.Peek(key)
+	val, found := c.peek(key)
 	if found {
 		// updating existing key is basically a remove and an add. Since simple
 		// lru doesn't count this as an eviction (and does not call the evict
@@ -177,7 +193,8 @@ func (c *Cache) UpdateFn(key interface{}, update func(value interface{}) interfa
 		val = update(val)
 	} else {
 		new = true
-		val = update(nil)
+		var zero V
+		val = update(zero)
 	}
 
 	evicted = c.lru.Add(key, val)
@@ -185,22 +202,32 @@ func (c *Cache) UpdateFn(key interface{}, update func(value interface{}) interfa
 }
 
 // Get looks up a key's value from the cache.
-func (c *Cache) Get(key interface{}) (interface{}, bool) {
+func (c *TypedCache[K, V]) Get(key K) (V, bool) {
+	var zero V
 	if c == nil {
-		return nil, false
+		return zero, false
 	}
 	// need the write lock, since this updates the recently-used list in
 	// simple.LRU!
 	c.lock.Lock()
 	defer c.lock.Unlock()
 
-	res, found := c.lru.Get(key)
+	res, found := c.get(key)
 	if found {
 		c.metrics.Hit()
 	} else {
 		c.metrics.Miss()
 	}
 	return res, found
+}
+
+func (c *TypedCache[K, V]) get(key K) (V, bool) {
+	res, found := c.lru.Get(key)
+	if found {
+		return res.(V), true
+	}
+	var zero V
+	return zero, false
 }
 
 // GetOrCreate looks up a key's value from the cache, creating it if necessary.
@@ -214,16 +241,16 @@ func (c *Cache) Get(key interface{}) (interface{}, bool) {
 //   - If the key exists and the evict parameter is not nil, then the first evict
 //     function is invoked with the retrieved value. If it returns true, the
 //     value is discarded from the cache and the constructor is called.
-func (c *Cache) GetOrCreate(
-	key interface{},
-	constructor func() (interface{}, error),
-	evict ...func(val interface{}) bool) (val interface{}, evicted bool, err error) {
+func (c *TypedCache[K, V]) GetOrCreate(
+	key K,
+	constructor func() (V, error),
+	evict ...func(val V) bool) (val V, evicted bool, err error) {
 
 	span := traceutil.StartSpan("lru.Cache.GetOrCreate")
 	defer span.End()
 	if span.IsRecording() {
 		orgConstructor := constructor
-		constructor = func() (interface{}, error) {
+		constructor = func() (V, error) {
 			span := traceutil.StartSpan("constructor")
 			defer span.End()
 			return orgConstructor()
@@ -239,7 +266,7 @@ func (c *Cache) GetOrCreate(
 		return val, false, err
 	}
 
-	var evictFn func(val interface{}) bool
+	var evictFn func(val V) bool
 	if len(evict) > 0 {
 		evictFn = evict[0]
 	}
@@ -254,13 +281,14 @@ func (c *Cache) GetOrCreate(
 	}
 
 	// should never get here!
-	return nil, false, errors.E("cache.GetValidOrCreate", errors.K.Invalid, "reason", "invalid construction mode", "mode", c.Mode)
+	var zero V
+	return zero, false, errors.E("cache.GetValidOrCreate", errors.K.Invalid, "reason", "invalid construction mode", "mode", c.Mode)
 }
 
-func (c *Cache) getOrCreateBlocking(
-	key interface{},
-	constructor func() (interface{}, error),
-	evict func(val interface{}) bool) (val interface{}, evicted bool, err error) {
+func (c *TypedCache[K, V]) getOrCreateBlocking(
+	key K,
+	constructor func() (V, error),
+	evict func(val V) bool) (val V, evicted bool, err error) {
 
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -275,17 +303,18 @@ func (c *Cache) getOrCreateBlocking(
 	val, err = constructor()
 	if err != nil {
 		c.metrics.Error()
-		return nil, false, err
+		var zero V
+		return zero, false, err
 	}
 	c.metrics.Add()
 	evicted = c.lru.Add(key, val)
 	return val, evicted, err
 }
 
-func (c *Cache) getOrCreateDecoupled(
-	key interface{},
-	constructor func() (interface{}, error),
-	evict func(val interface{}) bool) (val interface{}, evicted bool, err error) {
+func (c *TypedCache[K, V]) getOrCreateDecoupled(
+	key K,
+	constructor func() (V, error),
+	evict func(val V) bool) (val V, evicted bool, err error) {
 
 	// try to get the value with regular rw lock
 	var ok bool
@@ -314,7 +343,8 @@ func (c *Cache) getOrCreateDecoupled(
 	val, err = constructor()
 	if err != nil {
 		c.metrics.Error()
-		return nil, false, err
+		var zero V
+		return zero, false, err
 	}
 
 	// add it to the cache (using the regular rw lock)
@@ -322,10 +352,10 @@ func (c *Cache) getOrCreateDecoupled(
 	return val, evicted, nil
 }
 
-func (c *Cache) getOrCreateConcurrent(
-	key interface{},
-	constructor func() (interface{}, error),
-	evict func(val interface{}) bool) (val interface{}, evicted bool, err error) {
+func (c *TypedCache[K, V]) getOrCreateConcurrent(
+	key K,
+	constructor func() (V, error),
+	evict func(val V) bool) (val V, evicted bool, err error) {
 
 	// try to get the value with regular rw lock
 	var ok bool
@@ -340,7 +370,8 @@ func (c *Cache) getOrCreateConcurrent(
 		c.lock.Lock()
 		c.metrics.Error()
 		c.lock.Unlock()
-		return nil, false, err
+		var zero V
+		return zero, false, err
 	}
 
 	// add it to the cache
@@ -350,7 +381,7 @@ func (c *Cache) getOrCreateConcurrent(
 
 // Contains checks if a key is in the cache, without updating the recent-ness
 // or deleting it for being stale.
-func (c *Cache) Contains(key interface{}) bool {
+func (c *TypedCache[K, V]) Contains(key K) bool {
 	if c == nil {
 		return false
 	}
@@ -361,19 +392,29 @@ func (c *Cache) Contains(key interface{}) bool {
 
 // Peek returns value associated with the given key (or nil if not found) without updating
 // the "recently used"-ness of the key.
-func (c *Cache) Peek(key interface{}) (interface{}, bool) {
+func (c *TypedCache[K, V]) Peek(key K) (V, bool) {
 	if c == nil {
-		return nil, false
+		var zero V
+		return zero, false
 	}
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.lru.Peek(key)
+	return c.peek(key)
+}
+
+func (c *TypedCache[K, V]) peek(key K) (V, bool) {
+	val, ok := c.lru.Peek(key)
+	if !ok {
+		var zero V
+		return zero, ok
+	}
+	return val.(V), ok
 }
 
 // ContainsOrAdd checks if a key is in the cache without updating the
 // recent-ness or deleting it for being stale, and if not, adds the value.
 // Returns whether found and whether an eviction occurred.
-func (c *Cache) ContainsOrAdd(key, value interface{}) (ok, evict bool) {
+func (c *TypedCache[K, V]) ContainsOrAdd(key K, value V) (ok, evict bool) {
 	if c == nil {
 		return false, false
 	}
@@ -390,7 +431,7 @@ func (c *Cache) ContainsOrAdd(key, value interface{}) (ok, evict bool) {
 }
 
 // Remove removes the provided key from the cache.
-func (c *Cache) Remove(key interface{}) {
+func (c *TypedCache[K, V]) Remove(key K) {
 	if c == nil {
 		return
 	}
@@ -401,7 +442,7 @@ func (c *Cache) Remove(key interface{}) {
 }
 
 // RemoveOldest removes the oldest item from the cache.
-func (c *Cache) RemoveOldest() {
+func (c *TypedCache[K, V]) RemoveOldest() {
 	if c == nil {
 		return
 	}
@@ -412,17 +453,27 @@ func (c *Cache) RemoveOldest() {
 }
 
 // Keys returns a slice of the keys in the cache, from oldest to newest.
-func (c *Cache) Keys() []interface{} {
+func (c *TypedCache[K, V]) Keys() (keys []K) {
 	if c == nil {
-		return make([]interface{}, 0)
+		return make([]K, 0)
 	}
 	c.lock.RLock()
 	defer c.lock.RUnlock()
-	return c.lru.Keys()
+
+	return c.keys()
+}
+
+func (c *TypedCache[K, V]) keys() (keys []K) {
+	ikeys := c.lru.Keys()
+	keys = make([]K, 0, len(ikeys))
+	for _, k := range ikeys {
+		keys = append(keys, k.(K))
+	}
+	return keys
 }
 
 // Len returns the number of items in the cache.
-func (c *Cache) Len() int {
+func (c *TypedCache[K, V]) Len() int {
 	if c == nil {
 		return 0
 	}
@@ -432,7 +483,7 @@ func (c *Cache) Len() int {
 }
 
 // Metrics returns a copy of the cache's runtime properties.
-func (c *Cache) Metrics() Metrics {
+func (c *TypedCache[K, V]) Metrics() Metrics {
 	if c == nil {
 		return MakeMetrics()
 	}
@@ -440,17 +491,17 @@ func (c *Cache) Metrics() Metrics {
 }
 
 // CollectMetrics returns a copy of the cache's runtime properties.
-func (c *Cache) CollectMetrics() jsonutil.GenericMarshaler {
+func (c *TypedCache[K, V]) CollectMetrics() jsonutil.GenericMarshaler {
 	m := c.Metrics()
 	return &m
 }
 
 // onEvict is the evict handler registered with the simple LRU and is used to
 // update the item count. Relays to the external evict handler if present.
-func (c *Cache) onEvict(key interface{}, value interface{}) {
+func (c *TypedCache[K, V]) onEvict(key interface{}, value interface{}) {
 	c.metrics.Remove()
 	if c.evictHandler != nil {
-		c.evictHandler(key, value)
+		c.evictHandler(key.(K), value.(V))
 	}
 }
 
@@ -460,13 +511,15 @@ func (c *Cache) onEvict(key interface{}, value interface{}) {
 // compatibility). It also updates all necessary metrics accordingly.
 // optFn is an optional function that gets called (within the write lock if
 // requested).
-func (c *Cache) getOrEvict(
-	key interface{},
+func (c *TypedCache[K, V]) getOrEvict(
+	key K,
 	lock bool,
-	evict func(val interface{}) bool, optFn func()) (interface{}, bool) {
+	evict func(val V) bool,
+	optFn func()) (V, bool) {
 
+	var zero V
 	if c == nil {
-		return nil, false
+		return zero, false
 	}
 
 	if lock {
@@ -480,7 +533,7 @@ func (c *Cache) getOrEvict(
 		defer optFn()
 	}
 
-	val, ok := c.lru.Get(key)
+	val, ok := c.get(key)
 	if ok {
 		if evict == nil || !evict(val) {
 			c.metrics.Hit()
@@ -492,12 +545,12 @@ func (c *Cache) getOrEvict(
 	}
 	c.metrics.Miss()
 
-	return nil, false
+	return zero, false
 }
 
 // runWithWriteLock runs the given function within the write mutex of the cache.
 // Allows other cache types in the package to use the cache's main mutex.
-func (c *Cache) runWithWriteLock(fn func()) {
+func (c *TypedCache[K, V]) runWithWriteLock(fn func()) {
 	if c == nil {
 		return
 	}
