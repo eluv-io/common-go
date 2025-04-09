@@ -14,7 +14,7 @@ var full = struct {
 	buf   []byte
 	mutex sync.Mutex
 }{
-	buf: make([]byte, 1024*1024),
+	buf: make([]byte, 10*1024*1024),
 }
 
 // FullStack creates a full dump of all the stack traces of all current
