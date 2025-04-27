@@ -90,6 +90,15 @@ func TestFrom(t *testing.T) {
 			want: nil,
 		},
 		{
+			name: "nil value",
+			args: args{
+				nameValuePairs: []interface{}{"k1", nil},
+			},
+			want: map[string]interface{}{
+				"k1": nil,
+			},
+		},
+		{
 			name: "pairs",
 			args: args{
 				nameValuePairs: []interface{}{"k1", "v1", "k2", "v2", "k3", "v3", "k4", "v4"},

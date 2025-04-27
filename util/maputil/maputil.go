@@ -131,7 +131,12 @@ func Add[Map ~map[K]V, K comparable, V any](m Map, nameValuePairs ...interface{}
 		m = make(Map, len(nameValuePairs)/2)
 	}
 	for idx := 0; idx < len(nameValuePairs)-1; idx += 2 {
-		m[nameValuePairs[idx].(K)] = nameValuePairs[idx+1].(V)
+		if v, ok := nameValuePairs[idx+1].(V); ok {
+			m[nameValuePairs[idx].(K)] = v
+		} else {
+			var zero V
+			m[nameValuePairs[idx].(K)] = zero
+		}
 	}
 	return m
 }
