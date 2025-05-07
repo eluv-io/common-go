@@ -14,7 +14,7 @@ require (
 	github.com/eluv-io/log-go v1.0.4
 	github.com/eluv-io/utc-go v1.0.0
 	github.com/ethereum/go-ethereum v1.10.19
-	github.com/fxamacker/cbor/v2 v2.4.0
+	github.com/fxamacker/cbor/v2 v2.8.0
 	github.com/gammazero/deque v0.1.0
 	github.com/ghodss/yaml v1.0.0
 	github.com/gin-gonic/gin v1.7.7
@@ -35,6 +35,7 @@ require (
 	github.com/ugorji/go/codec v1.1.7
 	go.uber.org/atomic v1.9.0
 	golang.org/x/exp v0.0.0-20220426173459-3bcf042a4bf5
+	golang.org/x/text v0.14.0
 )
 
 require (
@@ -61,7 +62,6 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/crypto v0.16.0 // indirect
 	golang.org/x/sys v0.15.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
@@ -69,7 +69,7 @@ require (
 )
 
 replace (
-	github.com/fxamacker/cbor/v2 => github.com/eluv-io/cbor/v2 v2.3.1-0.20230627215207-bd2cc685afdd
+	github.com/fxamacker/cbor/v2 v2.8.0 => github.com/eluv-io/cbor/v2 v2.8.1-0.20250506081522-e7b11bfa1dad
 	github.com/modern-go/gls => github.com/eluv-io/gls v1.0.0-elv1
 	github.com/spf13/afero => github.com/eluv-io/afero v1.11.1-0.20240924184135-9fbf4dcfd6f0
 )
