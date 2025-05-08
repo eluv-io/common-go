@@ -249,6 +249,31 @@ func TestFirstNonZero(t *testing.T) {
 	assert.Equal(t, "a", FirstNonZero("", "a", "b"))
 }
 
+func Test_FirstOrDefault(t *testing.T) {
+	assert.Equal(t, nil, FirstOrDefault[any](nil, nil))
+	assert.Equal(t, nil, FirstOrDefault[any]([]any{nil, nil}, nil))
+
+	assert.Equal(t, nonEmptyChan, FirstOrDefault(nil, nonEmptyChan))
+	assert.Equal(t, nonEmptyChan, FirstOrDefault([]chanType{nil, nil}, nonEmptyChan))
+	assert.Equal(t, nonEmptyChan, FirstOrDefault([]chanType{nonEmptyChan, nil}, nil))
+	assert.Equal(t, nonEmptyChan, FirstOrDefault([]chanType{nil, nonEmptyChan}, nil))
+
+	assert.Equal(t, aStruct, FirstOrDefault(nil, aStruct))
+	assert.Equal(t, aStruct, FirstOrDefault([]structType{{}}, aStruct))
+	assert.Equal(t, aStruct, FirstOrDefault([]structType{aStruct}, structType{}))
+
+	assert.Equal(t, &aStruct, FirstOrDefault(nil, &aStruct))
+	assert.Equal(t, &aStruct, FirstOrDefault([]*structType{zeroStructPtr}, &aStruct))
+	assert.Equal(t, &aStruct, FirstOrDefault([]*structType{&aStruct}, zeroStructPtr))
+
+	assert.Equal(t, 1, FirstOrDefault(nil, 1))
+	assert.Equal(t, 1, FirstOrDefault([]int{1, 2}, 5))
+	assert.Equal(t, 1.1, FirstOrDefault(nil, 1.1))
+	assert.Equal(t, 1.0, FirstOrDefault([]float64{1.0, 2.0}, 5.0))
+	assert.Equal(t, "def", FirstOrDefault([]string{}, "def"))
+	assert.Equal(t, "a", FirstOrDefault([]string{"", "a", "b"}, "def")) // empty string is zero value!
+}
+
 // verr implements error
 type verr struct{}
 

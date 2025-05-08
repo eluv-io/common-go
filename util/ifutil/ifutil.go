@@ -103,6 +103,23 @@ func FirstNonZero[T comparable](ts ...T) T {
 	return zero
 }
 
+// FirstOrDefault returns the first element from the given slice or the provided default value if the slice is empty or
+// the first element is the type's zero value. Useful to initialize optional function parameters with a default value:
+//
+//	func Foo(optInclude ...bool) {
+//		include = FirstOrDefault(optInclude, false)
+//		...
+//	}
+func FirstOrDefault[T comparable](opts []T, defaultValue T) T {
+	var zero T
+	for _, opt := range opts {
+		if opt != zero {
+			return opt
+		}
+	}
+	return defaultValue
+}
+
 var spewConfig = spew.ConfigState{
 	Indent:                  " ",
 	DisablePointerAddresses: true,
