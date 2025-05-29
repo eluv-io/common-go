@@ -40,8 +40,8 @@ type Meter interface {
 	// Goal returns the targeted number of events for this meter to reach.
 	Goal() int64
 
-	// Start returns the time when the meter started.
-	Start() utc.UTC
+	// Started returns the time when the meter started.
+	Started() utc.UTC
 
 	// Count returns the number of events recorded.
 	Count() int64
@@ -94,7 +94,7 @@ type meter struct {
 	stopped       atomic.Bool
 }
 
-func (m *meter) Start() utc.UTC {
+func (m *meter) Started() utc.UTC {
 	return m.start
 }
 
@@ -114,6 +114,7 @@ func (m *meter) Stop() {
 		return
 	}
 	m.ticker.Unregister(m)
+	m.tick()
 }
 
 func (m *meter) Count() int64 {
@@ -124,7 +125,8 @@ func (m *meter) Mark(n int64) {
 	if m.stopped.Load() {
 		return
 	}
-	m.data.tempCount.Add(n)
+	m.data.totalCount.Add(n)
+	m.movingAverage.Update(n)
 }
 
 func (m *meter) Rate() float64 {
@@ -143,12 +145,13 @@ func (m *meter) Tick() {
 	if m.stopped.Load() {
 		return
 	}
+	m.tick()
+}
 
+func (m *meter) tick() {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	n := m.data.tick()
-	m.movingAverage.Update(n)
 	m.movingAverage.Tick()
 	m.data.updateRates(m.movingAverage.Rate(), m.start)
 
@@ -161,16 +164,18 @@ func (m *meter) Snapshot() Meter {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
-	meter := &meter{
-		ticker:        m.ticker,
+	snapshot := &meter{
 		data:          m.data.Snapshot(),
 		movingAverage: m.movingAverage.Snapshot(),
 		start:         m.start,
 	}
-	meter.goal.Store(m.goal.Load())
-	meter.stopped.Store(true)
+	snapshot.goal.Store(m.goal.Load())
+	if snapshot.Count() > snapshot.goal.Load() {
+		snapshot.goal.Store(snapshot.Count())
+	}
+	snapshot.stopped.Store(true)
 
-	return meter
+	return snapshot
 }
 
 func (m *meter) ETC() (utc.UTC, time.Duration) {
@@ -198,7 +203,7 @@ func (m *meter) Fields() []any {
 	goal := strconv.FormatInt(s.Goal(), 10)
 	return []any{
 		"progress", fmt.Sprintf("%s (%*s/%s)", Percentage(s.Count(), s.Goal()), len(goal), strconv.FormatInt(s.Count(), 10), goal),
-		"duration", fmt.Sprintf("%-6s", duration.Spec(utc.Since(s.Start())).RoundTo(2)),
+		"duration", fmt.Sprintf("%-6s", duration.Spec(utc.Since(s.Started())).RoundTo(2)),
 		"etc", etc.Round(time.Minute).Format(utc.ISO8601NoSec),
 		"etr", fmt.Sprintf("%6s", duration.Spec(etr).RoundTo(2)),
 	}
@@ -222,7 +227,6 @@ func (m *meter) String() string {
 
 // meterData is a struct that holds the data for the meter.
 type meterData struct {
-	tempCount      atomic.Int64 // event count since last tick, reset
 	totalCount     atomic.Int64 // total event count
 	rate, rateMean float64      // updated under meter's write lock
 }
@@ -233,15 +237,8 @@ func (m *meterData) Snapshot() *meterData {
 		rate:     m.rate,
 		rateMean: m.rateMean,
 	}
-	snapshot.tempCount.Store(m.tempCount.Load())
 	snapshot.totalCount.Store(m.totalCount.Load())
 	return snapshot
-}
-
-func (m *meterData) tick() int64 {
-	n := m.tempCount.Swap(0)
-	m.totalCount.Add(n)
-	return n
 }
 
 func (m *meterData) updateRates(rate float64, start utc.UTC) {

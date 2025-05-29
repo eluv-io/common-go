@@ -12,6 +12,28 @@ import (
 	"github.com/eluv-io/utc-go"
 )
 
+func TestMeterBasic(t *testing.T) {
+	var snap progress.Meter
+	goal := int64(60)
+
+	ticker := timeutil.NewManualTicker()
+	m := progress.NewMeter(goal, ticker)
+
+	m.Mark(goal)
+	snap = m.Snapshot()
+	require.Equal(t, goal, snap.Count())
+	etc, etr := snap.ETC()
+	require.Equal(t, utc.UTC{}, etc) // no etc set yet
+	require.Equal(t, time.Duration(0), etr)
+
+	m.Stop() // this should update the count
+	snap = m.Snapshot()
+	require.Equal(t, goal, snap.Count())
+	etc, etr = snap.ETC()
+	require.InDelta(t, etc.UnixMilli(), utc.Now().UnixMilli(), 100)
+	require.Equal(t, time.Duration(0), etr)
+}
+
 func TestMeter(t *testing.T) {
 	testMeter(t)
 }
@@ -103,7 +125,7 @@ func ExampleMeter() {
 	// 1970-01-01T00:00:50.000Z INFO  in progress               logger=/ progress=83.33% (50/60) duration=50s    etc=1970-01-01T00:01Z etr=17.58s
 	// 1970-01-01T00:00:55.000Z INFO  in progress               logger=/ progress=91.67% (55/60) duration=55s    etc=1970-01-01T00:01Z etr= 8.29s
 	// 1970-01-01T00:01:00.000Z INFO  at goal                   logger=/ progress=  100% (60/60) duration=1m     etc=1970-01-01T00:01Z etr=    0s
-	// 1970-01-01T00:01:05.000Z INFO  beyond goal, before tick  logger=/ progress=  100% (60/60) duration=1m5s   etc=1970-01-01T00:01Z etr=    0s
+	// 1970-01-01T00:01:05.000Z INFO  beyond goal, before tick  logger=/ progress=  100% (65/65) duration=1m5s   etc=1970-01-01T00:01Z etr=    0s
 	// 1970-01-01T00:01:05.000Z INFO  beyond goal, after tick   logger=/ progress=  100% (65/65) duration=1m5s   etc=1970-01-01T00:01Z etr=    0s
 	// 1970-01-01T00:01:05.000Z INFO  updated goal              logger=/ progress=92.86% (65/70) duration=1m5s   etc=1970-01-01T00:01Z etr= 7.53s
 	// 1970-01-01T00:01:10.000Z INFO  reached updated goal      logger=/ progress=  100% (70/70) duration=1m10s  etc=1970-01-01T00:01Z etr=    0s
