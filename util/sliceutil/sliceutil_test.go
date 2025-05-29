@@ -605,6 +605,78 @@ func TestLast(t *testing.T) {
 	}
 }
 
+func TestConvert(t *testing.T) {
+	tests := []struct {
+		slice         []int
+		fn            func(int) int
+		wantConverted []int
+	}{
+		{nil, nil, nil},
+		{[]int{}, nil, []int{}},
+		{[]int{1, 2, 3}, func(i int) int { return i + 1 }, []int{2, 3, 4}},
+		{[]int{1, 2, 3, 4}, func(i int) int { return -i }, []int{-1, -2, -3, -4}},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprint(tt.slice), func(t *testing.T) {
+			assert.Equal(t, tt.wantConverted, Convert(tt.slice, tt.fn))
+		})
+	}
+}
+
+func TestConvertString(t *testing.T) {
+	tests := []struct {
+		slice         []FmtStringer
+		wantConverted []string
+	}{
+		{nil, nil},
+		{[]FmtStringer{}, []string{}},
+		{[]FmtStringer{{1}, {2}, {3}}, []string{"1", "2", "3"}},
+		{[]FmtStringer{{1.1}, {2.2}, {3.3}}, []string{"1.1", "2.2", "3.3"}},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprint(tt.slice), func(t *testing.T) {
+			assert.Equal(t, tt.wantConverted, ConvertString(tt.slice))
+		})
+	}
+}
+
+func TestRepeatElement(t *testing.T) {
+	tests := []struct {
+		el    string
+		count int
+		want  []string
+	}{
+		{"a", 0, []string{}},
+		{"a", 1, []string{"a"}},
+		{"a", 3, []string{"a", "a", "a"}},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprint(tt.el, "x", tt.count, "=", tt.want), func(t *testing.T) {
+			assert.Equal(t, tt.want, RepeatElement(tt.el, tt.count))
+		})
+	}
+}
+
+func TestRepeat(t *testing.T) {
+	tests := []struct {
+		slice []int
+		count int
+		want  []int
+	}{
+		{[]int{}, 0, []int{}},
+		{[]int{}, 3, []int{}},
+		{[]int{1}, 0, []int{}},
+		{[]int{1}, 1, []int{1}},
+		{[]int{1}, 3, []int{1, 1, 1}},
+		{[]int{1, 2, 3}, 2, []int{1, 2, 3, 1, 2, 3}},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprint(tt.slice, "x", tt.count, "=", tt.want), func(t *testing.T) {
+			assert.Equal(t, tt.want, Repeat(tt.slice, tt.count))
+		})
+	}
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 func newEq(i int) *Eq {
@@ -622,4 +694,14 @@ func (e *Eq) Equal(other *Eq) bool {
 
 func (e *Eq) String() string {
 	return fmt.Sprintf("%d-%4d", e.i, e.rnd)
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+type FmtStringer struct {
+	i any
+}
+
+func (is FmtStringer) String() string {
+	return fmt.Sprint(is.i)
 }
