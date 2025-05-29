@@ -120,9 +120,9 @@ func FromJsonStruct(i interface{}) (m interface{}, err error) {
 	return
 }
 
-// Add adds the given nameValuePairs to the given map. If the map is nil, it creates a map[string]interface{} and adds
-// all name value pairs to it. Panics if the "names" are not of type K or the values of type V. If there is an odd
-// number of nameValuePairs, the last one is ignored.
+// Add adds the given nameValuePairs to the given map. If the map is nil, it creates a map[K]V and adds
+// all name value pairs to it. Panics if the "names" are not of type K. Assigns the zero value if values are not of type
+// V. If there is an odd number of nameValuePairs, the last one is ignored.
 func Add[Map ~map[K]V, K comparable, V any](m Map, nameValuePairs ...interface{}) Map {
 	if len(nameValuePairs)/2 == 0 {
 		return m
