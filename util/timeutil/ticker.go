@@ -6,9 +6,11 @@ import (
 )
 
 // Ticker is a utility that calls the Tick() function of all registered listeners at a configured interval from a single
-// goroutine. Tickers must be registered to start receiving ticks and unregistered to stop. A Ticker is similar to a
-// time.Ticker, but provides notifications through a function call instead of a channel and allows for multiple
-// listeners.
+// goroutine. TickListeners must be registered to start receiving ticks and unregistered to stop. A TickListener's
+// Tick() function must return "fast" (may not block) for the Ticker to deliver ticks in a timely fashion.
+//
+// A Ticker is similar to a time.Ticker, but provides notifications through a function call instead of a channel and
+// allows for multiple listeners.
 type Ticker interface {
 	Register(TickListener)
 	Unregister(TickListener)
