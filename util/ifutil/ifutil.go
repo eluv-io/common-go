@@ -68,8 +68,7 @@ func IsEmpty(obj interface{}) bool {
 		return IsEmpty(val.Elem().Interface())
 	// for all other types, compare against the zero value
 	default:
-		zero := reflect.Zero(val.Type())
-		return reflect.DeepEqual(obj, zero.Interface())
+		return IsZero(obj)
 	}
 }
 
@@ -86,9 +85,16 @@ func FirstNonEmpty[T any](objs ...T) T {
 }
 
 // IsZero returns true if the given argument is the zero value of its type, false otherwise.
-func IsZero[T comparable](t T) bool {
-	var zero T
-	return t == zero
+func IsZero(v interface{}) bool {
+	if v == nil {
+		return true
+	}
+	val := reflect.ValueOf(v)
+	if val.IsValid() {
+		return val.IsZero()
+	}
+	// If the value is not valid, it means it's the zero reflect.Value.
+	return true
 }
 
 // FirstNonZero returns the first argument that is not the zero value as determined by the IsZero function. Returns the

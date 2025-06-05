@@ -156,6 +156,12 @@ func TestIsEmpty(t *testing.T) {
 	asrt.False(IsEmpty(true))
 	asrt.False(IsEmpty(int8(3)))
 	asrt.False(IsEmpty(int16(-1)))
+
+	var vs = ""
+	var vi interface{}
+	vi = vs
+	asrt.True(IsEmpty(vs))
+	asrt.True(IsEmpty(vi))
 }
 
 func TestFirstNonEmpty(t *testing.T) {
@@ -223,6 +229,12 @@ func TestIsZero(t *testing.T) {
 	asrt.False(IsZero(true))
 	asrt.False(IsZero(int8(3)))
 	asrt.False(IsZero(int16(-1)))
+
+	var vs = ""
+	var vi interface{}
+	vi = vs
+	asrt.True(IsZero(vs))
+	asrt.True(IsZero(vi))
 }
 
 func TestFirstNonZero(t *testing.T) {
