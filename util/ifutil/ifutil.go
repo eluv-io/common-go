@@ -68,8 +68,7 @@ func IsEmpty(obj interface{}) bool {
 		return IsEmpty(val.Elem().Interface())
 	// for all other types, compare against the zero value
 	default:
-		zero := reflect.Zero(val.Type())
-		return reflect.DeepEqual(obj, zero.Interface())
+		return IsZero(obj)
 	}
 }
 
@@ -86,9 +85,11 @@ func FirstNonEmpty[T any](objs ...T) T {
 }
 
 // IsZero returns true if the given argument is the zero value of its type, false otherwise.
-func IsZero[T comparable](t T) bool {
-	var zero T
-	return t == zero
+func IsZero(v interface{}) bool {
+	if v == nil {
+		return true
+	}
+	return reflect.ValueOf(v).IsZero()
 }
 
 // FirstNonZero returns the first argument that is not the zero value as determined by the IsZero function. Returns the
@@ -103,18 +104,17 @@ func FirstNonZero[T comparable](ts ...T) T {
 	return zero
 }
 
-// FirstOrDefault returns the first element from the given slice or the provided default value if the slice is empty or
-// the first element is the type's zero value. Useful to initialize optional function parameters with a default value:
+// FirstOrDefault returns the first non-zero element from the given slice or the provided default value otherwise.
+// Useful for initializing optional function parameters with a default value:
 //
 //	func Foo(optInclude ...bool) {
 //		include = FirstOrDefault(optInclude, false)
 //		...
 //	}
-func FirstOrDefault[T comparable](opts []T, defaultValue T) T {
-	var zero T
-	for _, opt := range opts {
-		if opt != zero {
-			return opt
+func FirstOrDefault[T any](opts []T, defaultValue T) T {
+	for _, t := range opts {
+		if !IsZero(t) {
+			return t
 		}
 	}
 	return defaultValue

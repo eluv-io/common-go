@@ -38,6 +38,9 @@ var (
 
 	aStruct = structType{"a"}
 	aFunc   = TestIsNil
+
+	zeroString                  = ""
+	zeroStringIface interface{} = zeroString
 )
 
 func TestIsNil(t *testing.T) {
@@ -156,6 +159,9 @@ func TestIsEmpty(t *testing.T) {
 	asrt.False(IsEmpty(true))
 	asrt.False(IsEmpty(int8(3)))
 	asrt.False(IsEmpty(int16(-1)))
+
+	asrt.True(IsEmpty(zeroString))
+	asrt.True(IsEmpty(zeroStringIface))
 }
 
 func TestFirstNonEmpty(t *testing.T) {
@@ -223,6 +229,9 @@ func TestIsZero(t *testing.T) {
 	asrt.False(IsZero(true))
 	asrt.False(IsZero(int8(3)))
 	asrt.False(IsZero(int16(-1)))
+
+	asrt.True(IsZero(zeroString))
+	asrt.True(IsZero(zeroStringIface))
 }
 
 func TestFirstNonZero(t *testing.T) {
@@ -272,6 +281,8 @@ func Test_FirstOrDefault(t *testing.T) {
 	assert.Equal(t, 1.0, FirstOrDefault([]float64{1.0, 2.0}, 5.0))
 	assert.Equal(t, "def", FirstOrDefault([]string{}, "def"))
 	assert.Equal(t, "a", FirstOrDefault([]string{"", "a", "b"}, "def")) // empty string is zero value!
+	assert.Equal(t, "def", FirstOrDefault([]interface{}{zeroString, zeroStringIface}, "def"))
+	assert.Equal(t, "a", FirstOrDefault([]interface{}{zeroString, zeroStringIface, "a"}, "def"))
 }
 
 // verr implements error
