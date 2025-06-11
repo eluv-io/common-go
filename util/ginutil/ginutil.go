@@ -1,6 +1,8 @@
 package ginutil
 
 import (
+	"encoding"
+	"encoding/json"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -25,16 +27,21 @@ const loggerKey = "ginutil.LOGGER"
 // of all goroutines. The logger (an instance of eluv-io/log-go) can be set in the gin context under the "LOGGER" key.
 // If not set, the root logger will be used.
 func Abort(c *gin.Context, err error) {
-	AbortWithStatus(c, abortCode(c, err), err)
+	code := HttpStatus(err)
+	if code == http.StatusInternalServerError {
+		dumpGoRoutines(c)
+	}
+	AbortWithStatus(c, code, err)
 }
 
 // AbortHead aborts the current HTTP HEAD request with the HTTP status code set according to the
 // given error type.
 func AbortHead(c *gin.Context, err error) {
-	AbortHeadWithStatus(c, abortCode(c, err))
+	AbortHeadWithStatus(c, HttpStatus(err))
 }
 
-func abortCode(c *gin.Context, err error) int {
+// HttpStatus returns the HTTP status code for the given error. The status code is determined based on the error kind.
+func HttpStatus(err error) int {
 	code := http.StatusInternalServerError
 	if e, ok := err.(*errors.Error); ok {
 		switch e.Kind() {
@@ -54,11 +61,11 @@ func abortCode(c *gin.Context, err error) int {
 			code = http.StatusNotAcceptable
 		case errors.K.Unavailable:
 			code = http.StatusServiceUnavailable
-		case errors.K.Other:
-			dumpGoRoutines(c)
+		case errors.K.NotImplemented:
+			code = http.StatusNotImplemented
+		case httputil.KindRangeNotSatisfiable:
+			code = http.StatusRequestedRangeNotSatisfiable
 		}
-	} else {
-		dumpGoRoutines(c)
 	}
 	return code
 }
@@ -90,18 +97,46 @@ func AbortHeadWithStatus(c *gin.Context, code int) {
 // on the "accept" headers of the request. The data is marshaled to JSON if no accept headers are specified. No data is
 // marshaled if an accept headers other than 'application/json' or 'application/xml' is specified.
 func SendError(c *gin.Context, code int, err error) {
+	if c.Writer.Written() {
+		getLog(c).Warn("api error - response already written",
+			"code", code,
+			"error", errors.ClearStacktrace(err),
+			"written_size", c.Writer.Size(),
+			"written_code", c.Writer.Status(),
+			"written_headers", c.Writer.Header())
+		if err != nil {
+			getLog(c).Debug("api error - response already written - stack trace", err)
+		}
+		return
+	}
 	if err != nil {
 		getLog(c).Debug("api error", "code", code, "error", err)
 	}
+
 	c.Writer.Header().Del("Content-Type")
 	c.Writer.Header().Del("Cache-Control")
+
 	switch c.NegotiateFormat(gin.MIMEJSON, gin.MIMEXML) {
-	case binding.MIMEJSON:
-		c.JSON(code, gin.H{"errors": []interface{}{err}})
 	case binding.MIMEXML:
 		c.Render(code, httputil.NewCustomXMLRenderer(gin.H{"errors": []interface{}{err}}))
 	default:
-		c.JSON(code, gin.H{"errors": []interface{}{err}})
+		switch t := err.(type) {
+		case *errors.ErrorList:
+			// error list marshals exactly as we want it: {"errors": [ e1, e2, ... ]}
+			c.JSON(code, t)
+		case json.Marshaler,
+			encoding.TextMarshaler:
+			// this includes *errors.Error: the error marshals correctly
+			c.JSON(code, gin.H{"errors": []interface{}{t}})
+		default:
+			if err != nil {
+				// convert error to string before marshalling
+				c.JSON(code, gin.H{"errors": []interface{}{err.Error()}})
+			} else {
+				// we could not send a body at all, but for backwards compatibility let's keep this...
+				c.JSON(code, gin.H{"errors": []interface{}{err}})
+			}
+		}
 	}
 }
 

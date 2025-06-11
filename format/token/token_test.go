@@ -1,6 +1,7 @@
 package token_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -8,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/eluv-io/common-go/format/codecs"
 	"github.com/eluv-io/common-go/format/encryption"
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/token"
@@ -36,10 +38,10 @@ func TestBackwardsCompatibilityHack(t *testing.T) {
 	tok, err := token.Parse("tq__8UmhDD9cZah58THfAYPf3Shj9hVzfwT51Cf4ZHKpayajzZRyMwCPiSpfS5yqRZfjkDjrtXuRmDa")
 	require.NoError(t, err)
 
-	tokBackwardsCompat, err := token.Parse("tq__8UmhDD9cZah58THfAYPf3Shj9hVzfwT51Cf4ZHKpayajzZRyMwCPiSpfS5yqRZfjkDjrtXuRmDa")
+	tokBackwardsCompat, err := token.Parse("tqw__8UmhDD9cZah58THfAYPf3Shj9hVzfwT51Cf4ZHKpayajzZRyMwCPiSpfS5yqRZfjkDjrtXuRmDa")
 	require.NoError(t, err)
 
-	require.Equal(t, tok, tokBackwardsCompat)
+	require.True(t, tok.Equal(tokBackwardsCompat))
 }
 
 func TestConversion(t *testing.T) {
@@ -72,11 +74,38 @@ func testConversion(t *testing.T, tok *token.Token, code token.Code, prefix stri
 	assert.Equal(t, "blub"+encoded, fmt.Sprintf("blub%s", tok))
 }
 
+func TestNil(t *testing.T) {
+	tok := (*token.Token)(nil)
+	require.Nil(t, tok)
+	require.True(t, tok.IsNil())
+	require.False(t, tok.IsValid())
+	require.True(t, tok.Equal(nil))
+	require.Contains(t, tok.AssertCode(token.QWrite).Error(), "token is nil")
+	require.Equal(t, "nil", tok.Describe())
+	require.Contains(t, tok.Validate().Error(), "token is nil")
+
+	bts, err := json.Marshal(tok)
+	require.NoError(t, err)
+	require.Equal(t, `null`, string(bts))
+	tokWrapper := struct {
+		Token *token.Token `json:"token"`
+	}{}
+	err = json.Unmarshal([]byte(`{"token":null}`), &tokWrapper)
+	require.NoError(t, err)
+	require.True(t, tokWrapper.Token.IsNil())
+
+	buf := bytes.NewBuffer(nil)
+	err = codecs.CborV2MuxCodec.Encoder(buf).Encode(tokWrapper)
+	require.NoError(t, err)
+	err = codecs.CborV2MuxCodec.Decoder(buf).Decode(&tokWrapper)
+	require.NoError(t, err)
+	require.True(t, tokWrapper.Token.IsNil())
+}
+
 func TestInvalidStringConversions(t *testing.T) {
 	tests := []struct {
 		tok string
 	}{
-		{tok: ""},
 		{tok: "blub"},
 		{tok: "tqw_"},
 		{tok: "qwt_00001111"},
@@ -148,7 +177,33 @@ func TestWrappedJSON(t *testing.T) {
 	assert.True(t, s.Token.Equal(unmarshalled.Token))
 }
 
-func ExampleToken_Describe_Object() {
+func TestNewLocalFile(t *testing.T) {
+	validate := func(tok *token.Token) {
+		require.NoError(t, tok.AssertCode(token.LocalFile))
+		require.Equal(t, nid, tok.NID)
+		require.Equal(t, qid, tok.QID)
+	}
+
+	tok, err := token.NewLocalFile(nid, qid, []byte("some bytes"))
+	require.NoError(t, err)
+	fmt.Println(tok)
+	validate(tok)
+
+	tok2, err := token.Parse(tok.String())
+	require.NoError(t, err)
+	validate(tok2)
+
+	validateError := func(tok *token.Token, err error) {
+		require.Nil(t, tok)
+		require.Error(t, err)
+	}
+	validateError(token.NewLocalFile(nid, qid, nil))
+	validateError(token.NewLocalFile(nid, qid, []byte{}))
+	validateError(token.NewLocalFile(nil, qid, []byte{1}))
+	validateError(token.NewLocalFile(nid, nil, []byte{1}))
+}
+
+func ExampleToken_Describe_object() {
 	tok, _ := token.FromString("tq__3WhUFGKoJAzvqrDWiZtkcfQHiKp4Gda4KkiwuRgX6BTFfq7hNeji2hPDW6qZxLuk7xAju4bgm8iLwK")
 	fmt.Println(tok.Describe())
 
@@ -160,7 +215,7 @@ func ExampleToken_Describe_Object() {
 	// nid:    inod2KRn6vRvn8U3gczhSMJwd1
 }
 
-func ExampleToken_Describe_Part() {
+func ExampleToken_Describe_part() {
 	tok, _ := token.FromString("tqp_NHG92YAkoUg7dnCrWT8J3RLp6")
 	fmt.Println(tok.Describe())
 
@@ -172,7 +227,7 @@ func ExampleToken_Describe_Part() {
 	// flags:  [preamble]
 }
 
-func ExampleToken_Describe_LRO() {
+func ExampleToken_Describe_lro() {
 	tok, _ := token.FromString("tlro12hb4zikV2ArEoXXyUV6xKJPfC6Ff2siNKDKBVM6js8adif81")
 	fmt.Println(tok.Describe())
 
@@ -181,4 +236,16 @@ func ExampleToken_Describe_LRO() {
 	// type:   bitcode LRO handle
 	// bytes:  0x2df2a5d3d6c4e0830a95e7f1e8c779f6
 	// nid:    inod2KRn6vRvn8U3gczhSMJwd1
+}
+
+func ExampleToken_Describe_localFile() {
+	tok, _ := token.FromString("tlf_HSQJP67VzgDtDSwhGoSTog7XxkePrBfLagrm8p7QWUqUPiuoj1gp5MvrxS3awRCZu6oMQdNZPUWxM8b9uan")
+	fmt.Println(tok.Describe())
+
+	// Output:
+	//
+	// type:   local file
+	// bytes:  0x9cd9260a25a7013e0e9a48f7a83a5937
+	// qid:    iq__99d4kp14eSDEP7HWfjU4W6qmqDw
+	// nid:    inod3Sa5p3czRyYi8GnVGnh8gBDLaqJr
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/constraints"
 )
 
 var appendTests = []struct {
@@ -242,7 +243,7 @@ func TestDedupe(t *testing.T) {
 	}
 }
 
-func TestDuplicate(t *testing.T) {
+func TestCopy(t *testing.T) {
 	tests := []struct {
 		target []interface{}
 		want   []interface{}
@@ -263,7 +264,9 @@ func TestDuplicate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(fmt.Sprint(tt.target), func(t *testing.T) {
 			dup := Copy(tt.target)
+			cln := Clone(tt.target)
 			assert.Equalf(t, tt.want, dup, "Copy(%v)", tt.target)
+			assert.Equalf(t, tt.want, cln, "Copy(%v)", tt.target)
 
 			// modify target and ensure it's not reflected in duplicate
 			if len(tt.target) > 0 {
@@ -274,7 +277,7 @@ func TestDuplicate(t *testing.T) {
 	}
 }
 
-func TestDuplicateWithCap(t *testing.T) {
+func TestCopyWithCap(t *testing.T) {
 	tests := []struct {
 		target       []interface{}
 		capacity     int
@@ -384,6 +387,38 @@ func TestRemove(t *testing.T) {
 	}
 }
 
+type absInt int
+
+func (n absInt) Equal(other absInt) bool {
+	if n < 0 {
+		n = -n
+	}
+	if other < 0 {
+		other = -other
+	}
+	return n == other
+}
+
+func TestRemoveEqualer(t *testing.T) {
+	tests := []struct {
+		slice []absInt
+		el    absInt
+		want  []absInt
+		wantN int
+	}{
+		{[]absInt{1, 2, 3, 4, 5, 6}, 3, []absInt{1, 2, 4, 5, 6}, 1},
+		{[]absInt{1, 2, 3, 4, 5, 6}, -3, []absInt{1, 2, 4, 5, 6}, 1},
+	}
+
+	for i, test := range tests {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			res, n := Remove(test.slice, test.el)
+			require.Equal(t, test.want, res)
+			require.Equal(t, test.wantN, n)
+		})
+	}
+}
+
 func TestRemoveIndex(t *testing.T) {
 	tests := []struct {
 		slice  []string
@@ -478,6 +513,170 @@ func TestReverse(t *testing.T) {
 	}
 }
 
+func TestCompare(t *testing.T) {
+	type testCase[T constraints.Ordered] struct {
+		name string
+		s1   []T
+		s2   []T
+		want int
+	}
+	tests := []testCase[int]{
+		{"both nil", nil, nil, 0},
+		{"both empty", []int{}, []int{}, 0},
+		{"nil & empty", nil, []int{}, 0},
+		{"identical", []int{1, 2, 3}, []int{1, 2, 3}, 0},
+		{"shorter", []int{1, 2}, []int{1, 2, 3}, -1},
+		{"longer", []int{1, 2, 3}, []int{1, 2}, 1},
+		{"smaller", []int{1, 2, 3}, []int{1, 3, 3}, -1},
+		{"larger", []int{1, 2, 3}, []int{1, 1, 3}, 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, Compare(tt.s1, tt.s2), "Compare(%v, %v)", tt.s1, tt.s2)
+		})
+	}
+}
+
+func TestFirst(t *testing.T) {
+	tests := []struct {
+		slce []string
+		want string
+	}{
+		{
+			slce: nil,
+			want: "",
+		},
+		{
+			slce: []string{},
+			want: "",
+		},
+		{
+			slce: []string{"a"},
+			want: "a",
+		},
+		{
+			slce: []string{"a", "b"},
+			want: "a",
+		},
+		{
+			slce: []string{"a", "b", "c"},
+			want: "a",
+		},
+	}
+	for _, test := range tests {
+		t.Run(fmt.Sprint(test.slce), func(t *testing.T) {
+			res := First(test.slce)
+			require.Equal(t, test.want, res)
+		})
+	}
+}
+
+func TestLast(t *testing.T) {
+	tests := []struct {
+		slce []string
+		want string
+	}{
+		{
+			slce: nil,
+			want: "",
+		},
+		{
+			slce: []string{},
+			want: "",
+		},
+		{
+			slce: []string{"a"},
+			want: "a",
+		},
+		{
+			slce: []string{"a", "b"},
+			want: "b",
+		},
+		{
+			slce: []string{"a", "b", "c"},
+			want: "c",
+		},
+	}
+	for _, test := range tests {
+		t.Run(fmt.Sprint(test.slce), func(t *testing.T) {
+			res := Last(test.slce)
+			require.Equal(t, test.want, res)
+		})
+	}
+}
+
+func TestConvert(t *testing.T) {
+	tests := []struct {
+		slice         []int
+		fn            func(int) int
+		wantConverted []int
+	}{
+		{nil, nil, nil},
+		{[]int{}, nil, []int{}},
+		{[]int{1, 2, 3}, func(i int) int { return i + 1 }, []int{2, 3, 4}},
+		{[]int{1, 2, 3, 4}, func(i int) int { return -i }, []int{-1, -2, -3, -4}},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprint(tt.slice), func(t *testing.T) {
+			assert.Equal(t, tt.wantConverted, Convert(tt.slice, tt.fn))
+		})
+	}
+}
+
+func TestConvertString(t *testing.T) {
+	tests := []struct {
+		slice         []FmtStringer
+		wantConverted []string
+	}{
+		{nil, nil},
+		{[]FmtStringer{}, []string{}},
+		{[]FmtStringer{{1}, {2}, {3}}, []string{"1", "2", "3"}},
+		{[]FmtStringer{{1.1}, {2.2}, {3.3}}, []string{"1.1", "2.2", "3.3"}},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprint(tt.slice), func(t *testing.T) {
+			assert.Equal(t, tt.wantConverted, ConvertString(tt.slice))
+		})
+	}
+}
+
+func TestRepeatElement(t *testing.T) {
+	tests := []struct {
+		el    string
+		count int
+		want  []string
+	}{
+		{"a", 0, []string{}},
+		{"a", 1, []string{"a"}},
+		{"a", 3, []string{"a", "a", "a"}},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprint(tt.el, "x", tt.count, "=", tt.want), func(t *testing.T) {
+			assert.Equal(t, tt.want, RepeatElement(tt.el, tt.count))
+		})
+	}
+}
+
+func TestRepeat(t *testing.T) {
+	tests := []struct {
+		slice []int
+		count int
+		want  []int
+	}{
+		{[]int{}, 0, []int{}},
+		{[]int{}, 3, []int{}},
+		{[]int{1}, 0, []int{}},
+		{[]int{1}, 1, []int{1}},
+		{[]int{1}, 3, []int{1, 1, 1}},
+		{[]int{1, 2, 3}, 2, []int{1, 2, 3, 1, 2, 3}},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprint(tt.slice, "x", tt.count, "=", tt.want), func(t *testing.T) {
+			assert.Equal(t, tt.want, Repeat(tt.slice, tt.count))
+		})
+	}
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 func newEq(i int) *Eq {
@@ -495,4 +694,14 @@ func (e *Eq) Equal(other *Eq) bool {
 
 func (e *Eq) String() string {
 	return fmt.Sprintf("%d-%4d", e.i, e.rnd)
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+type FmtStringer struct {
+	i any
+}
+
+func (is FmtStringer) String() string {
+	return fmt.Sprint(is.i)
 }

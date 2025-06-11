@@ -9,6 +9,7 @@ import (
 	"github.com/eluv-io/utc-go"
 
 	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/util/sliceutil"
 )
 
 // Span represents an operation that is named and timed. It may contain sub-spans, representing nested sub-operations. A
@@ -29,6 +30,9 @@ type Span interface {
 
 	// IsRecording returns true if the span is active and recording events is enabled.
 	IsRecording() bool
+
+	// SlowOnly returns true if the span is active and is only for slow request tracing.
+	SlowOnly() bool
 
 	// Json converts the span to its JSON representation.
 	Json() string
@@ -65,11 +69,27 @@ type ExtendedSpan interface {
 
 	// SetMarshalExtended sets the span to use an extended JSON representation during marshaling.
 	SetMarshalExtended()
+
+	// SetSlowCutoff sets the slow cutoff duration for the span. A span that exceeds this duration
+	// will be considered slow.
+	SetSlowCutoff(cutoff time.Duration)
+
+	// SlowCutoff is the slow cutoff duration for the span. A span that exceeds its slow cutoff is
+	// considered an ususually slow operation.
+	SlowCutoff() time.Duration
+
+	// MarshalSlowOnly returns the marshalling of all spans for which a sub-span or parent span is
+	// slower than the cutoff.
+	MarshalSlowOnly() ([]byte, error, bool)
+
+	// FindAncestorByAttr returns the ancestor span (or self) that contains the given attribute. Returns a noop span if
+	// not found.
+	FindAncestorByAttr(name string, value any) Span
 }
 
 type Event struct {
 	Name string                 `json:"name"`
-	Time utc.UTC                `json:"-"`
+	At   duration.Spec          `json:"at"`
 	Attr map[string]interface{} `json:"attr,omitempty"`
 }
 
@@ -81,26 +101,32 @@ func (n NoopSpan) Start(ctx context.Context, _ string) (context.Context, Span) {
 	return ctx, n
 }
 
-func (n NoopSpan) End()                                                 {}
-func (n NoopSpan) Attribute(name string, val interface{})               {}
-func (n NoopSpan) Event(name string, attributes map[string]interface{}) {}
-func (n NoopSpan) IsRecording() bool                                    { return false }
-func (n NoopSpan) Json() string                                         { return "" }
-func (n NoopSpan) Attributes() map[string]interface{}                   { return nil }
-func (n NoopSpan) Events() []*Event                                     { return nil }
-func (n NoopSpan) FindByName(string) Span                               { return nil }
-func (n NoopSpan) StartTime() utc.UTC                                   { return utc.Zero }
-func (n NoopSpan) EndTime() utc.UTC                                     { return utc.Zero }
-func (n NoopSpan) Duration() time.Duration                              { return 0 }
-func (n NoopSpan) MaxDuration() time.Duration                           { return 0 }
-func (n NoopSpan) MarshalExtended() bool                                { return false }
-func (n NoopSpan) SetMarshalExtended()                                  {}
+func (n NoopSpan) End()                                     {}
+func (n NoopSpan) Attribute(_ string, _ interface{})        {}
+func (n NoopSpan) Event(_ string, _ map[string]interface{}) {}
+func (n NoopSpan) IsRecording() bool                        { return false }
+func (n NoopSpan) SlowOnly() bool                           { return false }
+func (n NoopSpan) Json() string                             { return "" }
+func (n NoopSpan) Attributes() map[string]interface{}       { return nil }
+func (n NoopSpan) Events() []*Event                         { return nil }
+func (n NoopSpan) FindByName(string) Span                   { return nil }
+func (n NoopSpan) StartTime() utc.UTC                       { return utc.Zero }
+func (n NoopSpan) EndTime() utc.UTC                         { return utc.Zero }
+func (n NoopSpan) Duration() time.Duration                  { return 0 }
+func (n NoopSpan) MaxDuration() time.Duration               { return 0 }
+func (n NoopSpan) MarshalExtended() bool                    { return false }
+func (n NoopSpan) SetMarshalExtended()                      {}
+func (n NoopSpan) SlowCutoff() time.Duration                { return 0 }
+func (n NoopSpan) SetSlowCutoff(_ time.Duration)            {}
+func (n NoopSpan) MarshalSlowOnly() ([]byte, error, bool)   { return nil, nil, false }
+func (n NoopSpan) FindAncestorByAttr(_ string, _ any) Span  { return n }
 
 // ---------------------------------------------------------------------------------------------------------------------
 
-func newSpan(name string) *RecordingSpan {
+func newSpan(name string, slowOnly bool) *RecordingSpan {
 	s := &RecordingSpan{
 		startTime: utc.Now(),
+		slowOnly:  slowOnly,
 	}
 	s.Data.Name = name
 	s.Data.Start = s.startTime.String()
@@ -114,12 +140,16 @@ type RecordingSpan struct {
 	startTime utc.UTC
 	endTime   utc.UTC
 	duration  time.Duration
-	extended  bool
+	// extended must not be protected by a lock, as child spans may look up to their parent span to
+	// determine marshalling behavior
+	extended bool
+	slowOnly bool
 }
 
 type recordingData struct {
 	Name     string                 `json:"name"`
 	Duration duration.Spec          `json:"time"`
+	Cutoff   duration.Spec          `json:"cutoff,omitempty"`
 	Attr     map[string]interface{} `json:"attr,omitempty"`
 	Events   []*Event               `json:"evnt,omitempty"`
 	Subs     []Span                 `json:"subs,omitempty"`
@@ -132,7 +162,7 @@ type recordingExtendedData struct {
 }
 
 func (s *RecordingSpan) Start(ctx context.Context, name string) (context.Context, Span) {
-	sub := newSpan(name)
+	sub := newSpan(name, s.slowOnly)
 	sub.Parent = s
 
 	s.mutex.Lock()
@@ -146,6 +176,11 @@ func (s *RecordingSpan) End() {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
+	s.setEnd()
+}
+
+// setEnd assumes that the lock is held
+func (s *RecordingSpan) setEnd() {
 	if s.endTime != utc.Zero {
 		return
 	}
@@ -153,6 +188,13 @@ func (s *RecordingSpan) End() {
 	s.duration = s.endTime.Sub(s.startTime)
 	s.Data.Duration = duration.Spec(s.duration).RoundTo(1)
 	s.Data.End = s.endTime.String()
+}
+
+func (s *RecordingSpan) undoEnd() {
+	s.endTime = utc.Zero
+	s.duration = 0
+	s.Data.Duration = 0
+	s.Data.End = ""
 }
 
 func (s *RecordingSpan) Attribute(name string, val interface{}) {
@@ -171,13 +213,17 @@ func (s *RecordingSpan) Event(name string, attributes map[string]interface{}) {
 
 	s.Data.Events = append(s.Data.Events, &Event{
 		Name: name,
-		Time: utc.Now(),
+		At:   duration.Spec(utc.Now().Sub(s.startTime)),
 		Attr: attributes,
 	})
 }
 
 func (s *RecordingSpan) IsRecording() bool {
 	return true
+}
+
+func (s *RecordingSpan) SlowOnly() bool {
+	return s.slowOnly
 }
 
 func (s *RecordingSpan) Json() string {
@@ -267,10 +313,107 @@ func (s *RecordingSpan) SetMarshalExtended() {
 	s.extended = true
 }
 
-func (s *RecordingSpan) MarshalJSON() ([]byte, error) {
-	if s.MarshalExtended() {
-		return json.Marshal(s.Data)
-	} else {
-		return json.Marshal(s.Data.recordingData)
+func (s *RecordingSpan) SetSlowCutoff(cutoff time.Duration) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	s.Data.Cutoff = duration.Spec(cutoff).RoundTo(1)
+}
+
+func (s *RecordingSpan) SlowCutoff() time.Duration {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	return s.Data.Cutoff.Duration()
+}
+
+func (s *RecordingSpan) slowSpans() (Span, bool) {
+	notEnded := s.endTime == utc.Zero
+	if notEnded {
+		s.setEnd()
+		defer s.undoEnd()
 	}
+	sCopy := s.copy()
+
+	if s.Data.Cutoff.Duration() != time.Duration(0) && s.duration > s.Data.Cutoff.Duration() {
+		return s, true
+	}
+
+	sawSlow := false
+	subsCopy := sliceutil.Copy(s.Data.Subs)
+	sCopy.Data.Subs = []Span{}
+	for _, sub := range subsCopy {
+		subC, slow := sub.(*RecordingSpan).slowSpans()
+		sawSlow = sawSlow || slow
+		if slow {
+			sCopy.Data.Subs = append(sCopy.Data.Subs, subC)
+		}
+	}
+
+	return sCopy, sawSlow
+}
+
+func (s *RecordingSpan) MarshalJSON() ([]byte, error) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	notEnded := s.endTime == utc.Zero
+	if notEnded {
+		s.setEnd()
+		defer s.undoEnd()
+	}
+
+	var ret []byte
+	var err error
+	if s.MarshalExtended() {
+		ret, err = json.Marshal(s.Data)
+	} else {
+		ret, err = json.Marshal(s.Data.recordingData)
+	}
+	return ret, err
+}
+
+func (s *RecordingSpan) MarshalSlowOnly() ([]byte, error, bool) {
+	s.mutex.Lock()
+	slowSpans, sawSlow := s.slowSpans()
+	s.mutex.Unlock() // release lock so that it doesn't deadlock with MarshalJSON in case this span is also a slow span!
+	if !sawSlow {
+		return nil, nil, false
+	}
+	d, err := json.Marshal(slowSpans)
+	return d, err, true
+}
+
+// copy returns a shallow copy of a recording span. The lock must be held while this function is
+// called. In particular, the referenced elements from within the data (Attr, Events, Subs), cannot
+// be modified.
+func (s *RecordingSpan) copy() *RecordingSpan {
+	c := &RecordingSpan{
+		Parent:    s.Parent,
+		Data:      s.Data,
+		startTime: s.startTime,
+		endTime:   s.endTime,
+		duration:  s.duration,
+		extended:  s.extended,
+		slowOnly:  s.slowOnly,
+	}
+	return c
+}
+
+func (s *RecordingSpan) FindAncestorByAttr(name string, value any) Span {
+	a := s
+	for a != nil {
+		if v, ok := s.attr(name, a); ok && v == value {
+			return a
+		}
+		a, _ = a.Parent.(*RecordingSpan)
+	}
+	return NoopSpan{}
+}
+
+func (s *RecordingSpan) attr(name string, a *RecordingSpan) (any, bool) {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+	v, ok := a.Data.Attr[name]
+	return v, ok
 }

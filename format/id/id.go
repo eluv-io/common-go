@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/eluv-io/errors-go"
-	"github.com/eluv-io/log-go"
 	"github.com/mr-tron/base58/base58"
 	uuid "github.com/satori/go.uuid"
+
+	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/log-go"
 )
 
 // Code is the type of an ID
@@ -175,6 +176,9 @@ func (id *ID) UnmarshalText(text []byte) error {
 
 // As returns a copy of this ID with the given code as the type of the new ID.
 func (id ID) As(c Code) ID {
+	if !id.IsValid() {
+		return nil
+	}
 	buf := make([]byte, len(id))
 	copy(buf, id)
 	buf[0] = byte(c)

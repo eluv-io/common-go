@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/json"
+	"io"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -27,9 +28,9 @@ type ClientConfirmation struct {
 	Required           bool   `json:"required,omitempty"` // true if either aek or pek is set
 	// additional data from the client confirmation - not needed for now
 	// when needed this could be populated when the Authorization is built.
-	//IssuedAt utc.UTC                `json:"iat,omitempty"` // Issued At
-	//Expires  utc.UTC                `json:"exp,omitempty"` // Expiration Time
-	//Ctx      map[string]interface{} `json:"ctx,omitempty"` // additional, arbitrary information conveyed in the token
+	// IssuedAt utc.UTC                `json:"iat,omitempty"` // Issued At
+	// Expires  utc.UTC                `json:"exp,omitempty"` // Expiration Time
+	// Ctx      map[string]interface{} `json:"ctx,omitempty"` // additional, arbitrary information conveyed in the token
 }
 
 // RequiresConfirmation returns true if this references an ephemeral key, either
@@ -108,7 +109,7 @@ func (t *TokenData) DecodeJSON(bts []byte) error {
 // EncodeCBOR encodes the token data to CBOR in its optimized form.
 func (t *TokenData) EncodeCBOR() ([]byte, error) {
 	buf := &bytes.Buffer{}
-	err := codecs.NewCborEncoder(buf).Encode((&serData{}).copyFrom(t))
+	err := codecs.CborEncode(buf, (&serData{}).copyFrom(t))
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +119,7 @@ func (t *TokenData) EncodeCBOR() ([]byte, error) {
 // DecodeCBOR decodes the token data from its optimized CBOR form.
 func (t *TokenData) DecodeCBOR(bts []byte) error {
 	var data serData
-	err := codecs.NewCborDecoder(bytes.NewReader(bts)).Decode(&data)
+	err := codecs.CborDecode(bytes.NewReader(bts), &data)
 	if err != nil {
 		return err
 	}
@@ -223,6 +224,9 @@ func (t *TokenData) Decode(bts []byte) error {
 		err = dec.readCbor(&td.Cnf)
 		if err == nil {
 			t.Confirmation = td.Cnf.toClientConfirmation()
+		}
+		if err == io.EOF {
+			err = nil
 		}
 	}
 
@@ -369,7 +373,7 @@ func (e *tokenEncoder) writeBytes(b []byte) {
 }
 
 func (e *tokenEncoder) writeCbor(v interface{}) error {
-	return codecs.NewCborEncoder(&e.buf).Encode(v)
+	return codecs.CborEncode(&e.buf, v)
 }
 func newDecoder(b []byte) *tokenDecoder {
 	return &tokenDecoder{buf: bytes.NewBuffer(b)}
@@ -407,5 +411,5 @@ func (e *tokenDecoder) readBytes(b *[]byte) error {
 }
 
 func (e *tokenDecoder) readCbor(v interface{}) error {
-	return codecs.NewCborDecoder(e.buf).Decode(v)
+	return codecs.CborDecode(e.buf, v)
 }

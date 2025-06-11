@@ -65,6 +65,7 @@ type testStruct struct {
 	Hash   hash.Hash    `json:"hash"`
 	Token  *token.Token `json:"token"`
 	Link   link.Link    `json:"link"`
+	Bytes  []byte       `json:"bytes"`
 }
 
 var rnd = rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -84,6 +85,7 @@ func TestMapDecodeStruct(t *testing.T) {
 		*hsh,
 		tok,
 		*link.NewBuilder().Selector(link.S.Meta).P("some", "path").AddProp("custom", "prop").MustBuild(),
+		[]byte{1, 2, 3},
 	}
 
 	jsonText := jsonutil.Marshal(ts)
@@ -110,6 +112,7 @@ func TestMapDecodeStructCBOR(t *testing.T) {
 		*hsh,
 		token.Generate(token.QWrite),
 		*link.NewBuilder().Selector(link.S.Meta).P("some", "path").AddProp("custom", "prop").MustBuild(),
+		[]byte{1, 2, 3},
 	}
 
 	codec := format.NewFactory().NewMetadataCodec()

@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/mr-tron/base58/base58"
 
 	"github.com/eluv-io/errors-go"
@@ -91,6 +92,28 @@ func NewLRO(code Code, nid id.ID, bytes ...byte) (*Token, error) {
 	return res, nil
 }
 
+// NewLocalFile creates a new local file token. The bytes are arbitrary, but should be unique.
+func NewLocalFile(nid id.ID, qid id.ID, bts []byte) (*Token, error) {
+	e := errors.Template("init local file token", errors.K.Invalid)
+	if nid.AssertCode(id.QNode) != nil {
+		return nil, e("reason", "invalid nid", "nid", nid)
+	}
+	if qid.AssertCode(id.Q) != nil {
+		return nil, e("reason", "invalid qid", "qid", qid)
+	}
+	if len(bts) == 0 {
+		return nil, e("reason", "byte slice empty")
+	}
+	res := &Token{
+		Code:  LocalFile,
+		Bytes: bts,
+		QID:   qid,
+		NID:   nid,
+	}
+	res.MakeString()
+	return res, nil
+}
+
 // Code is the type of a Token
 type Code uint8
 
@@ -136,6 +159,7 @@ const (
 	QPartWriteV1      // 1st version: random bytes
 	QPartWrite        // 2nd version: scheme, flags, random bytes
 	LRO               // node ID, random bytes
+	LocalFile         // node ID, content ID, bytes = hash(offering + presentation + format + start + end)
 )
 
 const prefixLen = 4
@@ -148,6 +172,7 @@ var prefixToCode = map[string]Code{
 	"tqpw": QPartWriteV1,
 	"tqp_": QPartWrite, // QPartWrite new version
 	"tlro": LRO,
+	"tlf_": LocalFile,
 }
 var codeToName = map[Code]string{
 	UNKNOWN:      "unknown",
@@ -156,6 +181,7 @@ var codeToName = map[Code]string{
 	QPartWriteV1: "content part write token v1",
 	QPartWrite:   "content part write token",
 	LRO:          "bitcode LRO handle",
+	LocalFile:    "local file",
 }
 
 // NOTE: 5 char prefix - 2 underscores!
@@ -229,7 +255,7 @@ func (t *Token) String() string {
 	if t.s != "" {
 		return t.s
 	}
-	// we should never go there when t.s is computed in constructor
+	// we should never get here if t.s is computed in constructor
 	return t.MakeString()
 }
 
@@ -244,7 +270,7 @@ func (t *Token) MakeString() string {
 	case QWriteV1, QPartWriteV1:
 		b = make([]byte, len(t.Bytes))
 		copy(b, t.Bytes)
-	case QWrite, LRO:
+	case QWrite, LRO, LocalFile:
 		// prefix + base58(uvarint(len(QID) | QID |
 		//                 uvarint(len(NID) | NID |
 		//                 uvarint(len(RAND_BYTES) | RAND_BYTES)
@@ -308,6 +334,28 @@ func (t *Token) prefix() string {
 	return p
 }
 
+func (t *Token) MarshalCBOR() ([]byte, error) {
+	return cbor.Marshal(t.String())
+}
+
+func (t *Token) UnmarshalCBOR(b []byte) error {
+	var s string
+	err := cbor.Unmarshal(b, &s)
+	if err != nil {
+		return errors.E("unmarshal hash", err, errors.K.Invalid)
+	}
+	parsed, err := FromString(s)
+	if err != nil {
+		return errors.E("unmarshal hash", err, errors.K.Invalid)
+	}
+	if parsed == nil {
+		// empty string parses to nil token... best we can do is ignore it...
+		return nil
+	}
+	*t = *parsed
+	return nil
+}
+
 // MarshalText implements custom marshaling using the string representation.
 func (t *Token) MarshalText() ([]byte, error) {
 	return []byte(t.String()), nil
@@ -344,6 +392,10 @@ func (t *Token) Equal(o *Token) bool {
 
 // Describe returns a textual description of this token.
 func (t *Token) Describe() string {
+	if t == nil {
+		return "nil"
+	}
+
 	sb := strings.Builder{}
 
 	add := func(s string) {
@@ -353,10 +405,10 @@ func (t *Token) Describe() string {
 
 	add("type:   " + t.Code.Describe())
 	add("bytes:  0x" + hex.EncodeToString(t.Bytes))
-	if t.Code == QWrite {
+	if t.Code == QWrite || t.Code == LocalFile {
 		add("qid:    " + t.QID.String())
 	}
-	if t.Code == QWrite || t.Code == LRO {
+	if t.Code == QWrite || t.Code == LRO || t.Code == LocalFile {
 		add("nid:    " + t.NID.String())
 	}
 	if t.Code == QPartWrite {
@@ -368,6 +420,9 @@ func (t *Token) Describe() string {
 
 func (t *Token) Validate() (err error) {
 	e := errors.Template("validate token", errors.K.Invalid)
+	if t == nil {
+		return e("reason", "token is nil")
+	}
 	if t.Code == QWrite {
 		err = t.QID.AssertCode(id.Q)
 	}
@@ -452,11 +507,11 @@ func Parse(s string) (*Token, error) {
 	switch code {
 	case QWriteV1, QPartWriteV1:
 		return &Token{Code: code, Bytes: dec, s: s}, nil
-	case QWrite, LRO:
+	case QWrite, LRO, LocalFile:
 		// prefix + base58(uvarint(len(QID) | QID |
 		//                 uvarint(len(NID) | NID |
 		//                 uvarint(len(RAND_BYTES) | RAND_BYTES)
-		res := &Token{Code: code, s: s}
+		res := &Token{Code: code}
 		r := bytes.NewReader(dec)
 
 		res.QID, err = decodeBytes(r)
@@ -479,6 +534,9 @@ func Parse(s string) (*Token, error) {
 			return nil, e(err)
 		}
 
+		// fill string cache here instead of using s in struct initializer to consistently generate a tqw__ instead of
+		// tq__ (as long as the qwPrefix hack is in use)
+		res.MakeString()
 		return res, nil
 	case QPartWrite:
 		// prefix + base58(byte(SCHEME) | byte(FLAGS) |

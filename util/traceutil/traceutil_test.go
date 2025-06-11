@@ -2,13 +2,16 @@ package traceutil_test
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"regexp"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/utc-go"
 
 	"github.com/eluv-io/common-go/util/traceutil"
@@ -35,6 +38,74 @@ func TestStartSubSpan(t *testing.T) {
 	require.Equal(t, "root-span", root.Data.Name)
 	require.Len(t, root.Data.Subs, 1)
 	require.Equal(t, "sub-span", root.Data.Subs[0].(*trace.RecordingSpan).Data.Name)
+}
+
+func TestSlowSpanInit(t *testing.T) {
+	rootSp := traceutil.InitTracing("slow-span-test", true)
+	require.True(t, rootSp.IsRecording())
+	require.True(t, rootSp.SlowOnly())
+
+	span := traceutil.StartSpan("should-not-appear")
+	require.NotNil(t, span)
+	require.False(t, span.IsRecording())
+
+	slowSp := traceutil.StartSlowSpan("should-appear")
+	require.NotNil(t, slowSp)
+	require.True(t, slowSp.IsRecording())
+	require.True(t, slowSp.SlowOnly())
+
+	slowSp.SetSlowCutoff(500 * time.Millisecond)
+	time.Sleep(1 * time.Second)
+
+	slowSp.End()
+
+	require.Greater(t, slowSp.Duration(), time.Duration(0))
+	require.Equal(t, 500*time.Millisecond, slowSp.SlowCutoff())
+	span.End()
+
+	// Testing marshalling before ending
+	s := rootSp.Json()
+	require.Equal(t, 1, strings.Count(s, "should-appear"))
+	require.Equal(t, 0, strings.Count(s, "should-not-appear"))
+	require.Equal(t, 1, strings.Count(s, "slow-span-test"))
+
+	rootSp.End()
+
+	s = rootSp.Json()
+	require.Equal(t, 1, strings.Count(s, "should-appear"))
+	require.Equal(t, 0, strings.Count(s, "should-not-appear"))
+	require.Equal(t, 1, strings.Count(s, "slow-span-test"))
+
+	s2, err, foundSlow := rootSp.MarshalSlowOnly()
+	require.NoError(t, err)
+	require.True(t, foundSlow)
+	require.Equal(t, 1, strings.Count(string(s2), "should-appear"))
+}
+
+func TestInitTracing(t *testing.T) {
+	rootSp := traceutil.InitTracing("init-tracing-test", false)
+	require.True(t, rootSp.IsRecording())
+	require.False(t, rootSp.SlowOnly())
+
+	span := traceutil.StartSpan("should-appear-regular")
+	require.NotNil(t, span)
+	require.True(t, span.IsRecording())
+
+	slowSp := traceutil.StartSlowSpan("should-appear-slow")
+	require.NotNil(t, slowSp)
+	require.True(t, slowSp.IsRecording())
+	slowSp.Attribute("attr-1", "arbitrary-unique-value")
+
+	slowSp.End()
+	span.End()
+	rootSp.End()
+
+	s := rootSp.Json()
+	require.Equal(t, 1, strings.Count(s, "should-appear-regular"))
+	require.Equal(t, 1, strings.Count(s, "should-appear-slow"))
+	require.Equal(t, 1, strings.Count(s, "init-tracing-test"))
+	require.Equal(t, 1, strings.Count(s, "attr-1"))
+	require.Equal(t, 1, strings.Count(s, "arbitrary-unique-value"))
 }
 
 func TestWithSubSpan(t *testing.T) {
@@ -99,4 +170,112 @@ func TestExtendedSpan(t *testing.T) {
 
 func removeMs(s string) string {
 	return regexp.MustCompile(`\.00\dZ`).ReplaceAllString(s, "")
+}
+
+func TestSlowSpanEnd2End(t *testing.T) {
+
+	t.Run("not slow", func(t *testing.T) {
+		rootSp := traceutil.InitTracing("slow-span-test", true)
+		rootSp.Attribute("label", "api-request")
+
+		handleRequest(0)
+
+		bts, err, ok := rootSp.MarshalSlowOnly()
+		require.Empty(t, bts)
+		require.NoError(t, err)
+		require.False(t, ok)
+	})
+
+	t.Run("slow", func(t *testing.T) {
+		rootSp := traceutil.InitTracing("slow-span-test", true)
+		rootSp.Attribute("label", "api-request")
+
+		{
+			span := traceutil.StartSpan("should-not-appear")
+			require.NotNil(t, span)
+			require.False(t, span.IsRecording())
+			span.End()
+		}
+
+		handleRequest(time.Second)
+
+		bts, err, ok := rootSp.MarshalSlowOnly()
+		require.True(t, ok)
+		require.NoError(t, err)
+		fmt.Println(jsonutil.MustPretty(string(bts)))
+		require.Contains(t, string(bts), "live-playout")
+		require.Contains(t, string(bts), "api-request")
+		require.NotContains(t, string(bts), "should-not-appear")
+	})
+
+	t.Run("slow, but no slow span initialized", func(t *testing.T) {
+		handleRequest(time.Second)
+
+		bts, err, ok := traceutil.Span().MarshalSlowOnly()
+		require.Empty(t, bts)
+		require.NoError(t, err)
+		require.False(t, ok)
+	})
+
+	t.Run("full tracing, not slow", func(t *testing.T) {
+		rootSp := traceutil.InitTracing("slow-span-test", false)
+		rootSp.Attribute("label", "api-request")
+
+		{
+			span := traceutil.StartSpan("should-not-appear")
+			require.NotNil(t, span)
+			require.True(t, span.IsRecording())
+			span.End()
+		}
+
+		handleRequest(0)
+
+		bts, err, ok := rootSp.MarshalSlowOnly()
+		require.Empty(t, bts)
+		require.NoError(t, err)
+		require.False(t, ok)
+	})
+
+	t.Run("full tracing, slow", func(t *testing.T) {
+		rootSp := traceutil.InitTracing("slow-span-test", false)
+		rootSp.Attribute("label", "api-request")
+
+		{
+			span := traceutil.StartSpan("should-appear")
+			require.NotNil(t, span)
+			require.True(t, span.IsRecording())
+			span.End()
+		}
+
+		handleRequest(time.Second)
+
+		bts, err, ok := rootSp.MarshalSlowOnly()
+		require.True(t, ok)
+		require.NoError(t, err)
+		fmt.Println(jsonutil.MustPretty(string(bts)))
+		require.Contains(t, string(bts), "live-playout")
+		require.Contains(t, string(bts), "api-request")
+		require.Contains(t, string(bts), "should-appear")
+	})
+
+}
+
+func handleRequest(sleep time.Duration) {
+	span := traceutil.StartSlowSpan("handle-request")
+	defer span.End()
+
+	livePlayout(sleep)
+}
+
+func livePlayout(sleep time.Duration) {
+	span := traceutil.StartSlowSpan("live-playout")
+	defer span.End()
+
+	traceutil.Span().FindAncestorByAttr("label", "api-request").SetSlowCutoff(500 * time.Millisecond)
+	// alternatively, we could also use the local span instance since we have it:
+	// span.FindAncestorByAttr("label", "api-request").SetSlowCutoff(500 * time.Millisecond)
+
+	if sleep > 0 {
+		time.Sleep(sleep)
+	}
 }
