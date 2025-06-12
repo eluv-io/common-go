@@ -54,6 +54,8 @@ type Token struct {
 	//
 	// This is set only once, either during decoding, or during signing.
 	uncompressedTokenData []byte
+	// Cache of validation result.
+	validationResult *validationResult
 
 	Embedded       *Token
 	EmbeddedLength int // the length of the embedded token within the payload
@@ -275,6 +277,16 @@ func (t *Token) decodeLegacySigned(token string) (bool, error) {
 }
 
 func (t *Token) Validate() (err error) {
+	res := t.validationResult
+	if res != nil {
+		return res.err
+	}
+
+	defer func() {
+		// cache validation result
+		t.validationResult = &validationResult{err: err}
+	}()
+
 	e := errors.Template("validate auth token", errors.K.Invalid,
 		"type", t.Type,
 		"sig_type", t.SigType,
@@ -384,16 +396,16 @@ func (t *Token) Validate() (err error) {
 		// we now want editor signed tokens able to carry a 'subject' that
 		// is not necessarily the signer (use case: water-marking).
 
-		//uid := ethutil.AddressToID(t.EthAddr, id.User)
-		//subjid, err := id.User.FromString(t.Subject)
-		//if err != nil {
+		// uid := ethutil.AddressToID(t.EthAddr, id.User)
+		// subjid, err := id.User.FromString(t.Subject)
+		// if err != nil {
 		//	subjid, _ = ethutil.AddrToID(t.Subject, id.User)
-		//}
-		//if !uid.Equal(subjid) {
+		// }
+		// if !uid.Equal(subjid) {
 		//	return e("reason", "subject differs from signer",
 		//		"subject", subjid,
 		//		"signer", uid)
-		//}
+		// }
 
 		// require
 		validator.require("qid", t.QID)
@@ -1221,6 +1233,7 @@ func (t *Token) clearCaches() {
 	t.encoded = ""
 	t.payload = nil
 	t.uncompressedTokenData = nil
+	t.validationResult = nil
 }
 
 func Describe(tok string) (res string) {
@@ -1229,4 +1242,10 @@ func Describe(tok string) (res string) {
 		res = errors.E("describe", err).Error() + "\n"
 	}
 	return res + t.Explain()
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+
+type validationResult struct {
+	err error
 }
