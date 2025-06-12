@@ -11,11 +11,16 @@ import (
 
 // NewExpiringCache creates a new ExpiringCache.
 func NewExpiringCache(maxSize int, maxAge duration.Spec) *ExpiringCache {
-	cache := Nil()
+	return NewTypedExpiringCache[any, any](maxSize, maxAge)
+}
+
+// NewTypedExpiringCache creates a new TypedExpiringCache.
+func NewTypedExpiringCache[K any, V any](maxSize int, maxAge duration.Spec) *TypedExpiringCache[K, V] {
+	cache := TypedNil[K, *expiringEntry[V]]()
 	if maxSize > 0 && maxAge > 0 {
-		cache = New(maxSize)
+		cache = NewTyped[K, *expiringEntry[V]](maxSize)
 	}
-	res := &ExpiringCache{
+	res := &TypedExpiringCache[K, V]{
 		cache:  cache,
 		maxAge: maxAge.Duration(),
 	}
@@ -23,35 +28,44 @@ func NewExpiringCache(maxSize int, maxAge duration.Spec) *ExpiringCache {
 	return res
 }
 
-// ExpiringCache is an LRU cache that evicts entries from the cache when they
-// reach the configured max age. Expired entries are evicted lazily, i.e. only
-// when requested, and hence not garbage collected otherwise.
-type ExpiringCache struct {
-	cache            *Cache
+// ExpiringCache is an LRU cache that evicts entries from the cache when they reach the configured max age. Expired
+// entries are evicted lazily, and hence not garbage collected otherwise. Eviction occurs when
+//   - requesting an expired entry through Get, GetOrCreate, Remove
+//   - calling Len or Entries
+type ExpiringCache = TypedExpiringCache[any, any]
+
+// TypedExpiringCache is a typed LRU cache that evicts entries from the cache when they reach the configured max age.
+// Expired entries are evicted lazily, and hence not garbage collected otherwise. Eviction occurs when
+//   - requesting an expired entry through Get, GetOrCreate, Remove
+//   - calling Len or Entries
+type TypedExpiringCache[K any, V any] struct {
+	cache            *TypedCache[K, *expiringEntry[V]]
 	maxAge           time.Duration
 	resetAgeOnAccess bool // if true, resets the entries age to 0 on access
 }
 
 // WithMode sets the cache's construction mode.
-func (c *ExpiringCache) WithMode(mode ConstructionMode) *ExpiringCache {
+func (c *TypedExpiringCache[K, V]) WithMode(mode ConstructionMode) *TypedExpiringCache[K, V] {
 	c.cache.WithMode(mode)
 	return c
 }
 
 // WithResetAgeOnAccess turns resetting of an entry's age on access on or off.
-func (c *ExpiringCache) WithResetAgeOnAccess(set bool) *ExpiringCache {
+func (c *TypedExpiringCache[K, V]) WithResetAgeOnAccess(set bool) *TypedExpiringCache[K, V] {
 	c.resetAgeOnAccess = set
 	return c
 }
 
 // WithEvictHandler sets the given evict handler.
-func (c *ExpiringCache) WithEvictHandler(onEvicted func(key interface{}, value interface{})) *ExpiringCache {
-	c.cache.WithEvictHandler(onEvicted)
+func (c *TypedExpiringCache[K, V]) WithEvictHandler(onEvicted func(key K, value ExpiringEntry[V])) *TypedExpiringCache[K, V] {
+	c.cache.WithEvictHandler(func(key K, value *expiringEntry[V]) {
+		onEvicted(key, value)
+	})
 	return c
 }
 
 // WithName sets the cache's name and returns itself for call chaining.
-func (c *ExpiringCache) WithName(name string) *ExpiringCache {
+func (c *TypedExpiringCache[K, V]) WithName(name string) *TypedExpiringCache[K, V] {
 	if c == nil {
 		return nil
 	}
@@ -71,20 +85,21 @@ func (c *ExpiringCache) WithName(name string) *ExpiringCache {
 //   - If evict functions are passed and a non-expired cache entry exists, then
 //     the first evict function is invoked with the cached value. If it returns
 //     true, the value is discarded from the cache and the constructor is called.
-func (c *ExpiringCache) GetOrCreate(
-	key interface{},
-	constructor func() (interface{}, error),
-	evict ...func(val interface{}) bool) (val interface{}, evicted bool, err error) {
+func (c *TypedExpiringCache[K, V]) GetOrCreate(
+	key K,
+	constructor func() (V, error),
+	evict ...func(val ExpiringEntry[V]) bool) (val V, evicted bool, err error) {
 
 	now := utc.Now()
-	val, evicted, err = c.cache.GetOrCreate(
+	var entry *expiringEntry[V]
+	entry, evicted, err = c.cache.GetOrCreate(
 		key,
-		func() (interface{}, error) {
+		func() (*expiringEntry[V], error) {
 			val, err := constructor()
 			if err != nil {
 				return nil, err
 			}
-			return &expiringEntry{
+			return &expiringEntry[V]{
 				val: val,
 				ts:  now,
 			}, nil
@@ -92,18 +107,19 @@ func (c *ExpiringCache) GetOrCreate(
 		c.checkAge(now, evict...),
 	)
 	if err != nil {
-		return nil, evicted, err
+		var zero V
+		return zero, evicted, err
 	}
-	return val.(*expiringEntry).val, evicted, nil
+	return entry.val, evicted, nil
 }
 
-func (c *ExpiringCache) checkAge(now utc.UTC, evict ...func(val interface{}) bool) func(val interface{}) bool {
-	return func(val interface{}) bool {
+func (c *TypedExpiringCache[K, V]) checkAge(now utc.UTC, evict ...func(val ExpiringEntry[V]) bool) func(val *expiringEntry[V]) bool {
+	return func(val *expiringEntry[V]) bool {
 		if c.isExpired(val, now) {
 			return true
 		}
 		if c.resetAgeOnAccess {
-			val.(*expiringEntry).ts = now
+			val.ts = now
 		}
 		if len(evict) > 0 {
 			return evict[0](val)
@@ -112,10 +128,10 @@ func (c *ExpiringCache) checkAge(now utc.UTC, evict ...func(val interface{}) boo
 	}
 }
 
-func (c *ExpiringCache) isExpired(val interface{}, now utc.UTC) bool {
-	age := now.Sub(val.(*expiringEntry).ts)
+func (c *TypedExpiringCache[K, V]) isExpired(val *expiringEntry[V], now utc.UTC) bool {
+	age := now.Sub(val.ts)
 	if age >= c.maxAge {
-		traceutil.Span().Attribute("expired_entry_age", age)
+		traceutil.Span().Attribute("expired_entry_age", duration.Spec(age).RoundTo(1))
 		return true
 	}
 	return false
@@ -123,17 +139,18 @@ func (c *ExpiringCache) isExpired(val interface{}, now utc.UTC) bool {
 
 // Get returns the value stored for the given key and true if the key exists,
 // nil and false if the key does not exist or has expired.
-func (c *ExpiringCache) Get(key interface{}) (interface{}, bool) {
+func (c *TypedExpiringCache[K, V]) Get(key K) (V, bool) {
 	val, ok := c.cache.getOrEvict(key, true, c.checkAge(utc.Now()), nil)
 	if ok {
-		return val.(*expiringEntry).val, true
+		return val.val, true
 	}
-	return nil, false
+	var zero V
+	return zero, false
 }
 
 // Add adds a value to the cache.  Returns true if an eviction occurred.
-func (c *ExpiringCache) Add(key, value interface{}) bool {
-	return c.cache.Add(key, &expiringEntry{
+func (c *TypedExpiringCache[K, V]) Add(key K, value V) bool {
+	return c.cache.Add(key, &expiringEntry[V]{
 		val: value,
 		ts:  utc.Now(),
 	})
@@ -143,15 +160,15 @@ func (c *ExpiringCache) Add(key, value interface{}) bool {
 // It returns two booleans:
 //   - new: true if the key is new, false if it already existed and the entry was updated
 //   - evicted: true if an eviction occurred.
-func (c *ExpiringCache) Update(key, value interface{}) (new bool, evicted bool) {
-	return c.cache.UpdateFn(key, func(entry interface{}) interface{} {
-		if en, ok := entry.(*expiringEntry); ok {
-			en.val = value
-			en.ts = utc.Now()
+func (c *TypedExpiringCache[K, V]) Update(key K, value V) (new bool, evicted bool) {
+	return c.cache.UpdateFn(key, func(entry *expiringEntry[V]) *expiringEntry[V] {
+		if entry != nil {
+			entry.val = value
+			entry.ts = utc.Now()
 			return entry
 		}
 
-		return &expiringEntry{
+		return &expiringEntry[V]{
 			val: value,
 			ts:  utc.Now(),
 		}
@@ -159,12 +176,12 @@ func (c *ExpiringCache) Update(key, value interface{}) (new bool, evicted bool) 
 }
 
 // Remove removes the entry with the given key.
-func (c *ExpiringCache) Remove(key interface{}) {
+func (c *TypedExpiringCache[K, V]) Remove(key K) {
 	c.cache.Remove(key)
 }
 
 // Len returns the number of entries in the cache after evicting any expired entries.
-func (c *ExpiringCache) Len() (len int) {
+func (c *TypedExpiringCache[K, V]) Len() (len int) {
 	now := utc.Now()
 	c.cache.runWithWriteLock(func() {
 		c.evictExpired(now)
@@ -174,16 +191,16 @@ func (c *ExpiringCache) Len() (len int) {
 }
 
 // Entries returns all (non-expired) entries in the cache from oldest to newest.
-func (c *ExpiringCache) Entries() (entries []ExpiringEntry) {
+func (c *TypedExpiringCache[K, V]) Entries() (entries []ExpiringEntry[V]) {
 	now := utc.Now()
 	c.cache.runWithWriteLock(func() {
 		c.evictExpired(now)
 		keys := c.cache.lru.Keys()
-		entries = make([]ExpiringEntry, len(keys))
+		entries = make([]ExpiringEntry[V], len(keys))
 		for idx, key := range keys {
 			val, ok := c.cache.lru.Get(key)
 			if ok {
-				ee := val.(*expiringEntry)
+				ee := val.(*expiringEntry[V])
 				clone := *ee
 				entries[idx] = &clone
 			}
@@ -193,23 +210,23 @@ func (c *ExpiringCache) Entries() (entries []ExpiringEntry) {
 }
 
 // Purge removes all entries from the cache.
-func (c *ExpiringCache) Purge() {
+func (c *TypedExpiringCache[K, V]) Purge() {
 	c.cache.Purge()
 }
 
 // EvictExpired removes all expired entries.
-func (c *ExpiringCache) EvictExpired() {
+func (c *TypedExpiringCache[K, V]) EvictExpired() {
 	c.Len()
 }
 
 // evictExpired removes all expired entries
-func (c *ExpiringCache) evictExpired(now utc.UTC) {
+func (c *TypedExpiringCache[K, V]) evictExpired(now utc.UTC) {
 	for {
 		_, val, ok := c.cache.lru.GetOldest()
 		if !ok {
 			return
 		}
-		if c.isExpired(val, now) {
+		if c.isExpired(val.(*expiringEntry[V]), now) {
 			c.cache.lru.RemoveOldest()
 		} else {
 			return
@@ -218,30 +235,30 @@ func (c *ExpiringCache) evictExpired(now utc.UTC) {
 }
 
 // Metrics returns a copy of the cache's runtime properties.
-func (c *ExpiringCache) Metrics() Metrics {
+func (c *TypedExpiringCache[K, V]) Metrics() Metrics {
 	return c.cache.Metrics()
 }
 
 // CollectMetrics returns a copy of the cache's runtime properties.
-func (c *ExpiringCache) CollectMetrics() jsonutil.GenericMarshaler {
+func (c *TypedExpiringCache[K, V]) CollectMetrics() jsonutil.GenericMarshaler {
 	m := c.Metrics()
 	return &m
 }
 
-type ExpiringEntry interface {
-	Value() interface{}
+type ExpiringEntry[V any] interface {
+	Value() V
 	LastUpdated() utc.UTC
 }
 
-type expiringEntry struct {
-	val interface{}
+type expiringEntry[V any] struct {
+	val V
 	ts  utc.UTC
 }
 
-func (e *expiringEntry) Value() interface{} {
+func (e *expiringEntry[V]) Value() V {
 	return e.val
 }
 
-func (e *expiringEntry) LastUpdated() utc.UTC {
+func (e *expiringEntry[V]) LastUpdated() utc.UTC {
 	return e.ts
 }
