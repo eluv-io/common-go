@@ -131,7 +131,7 @@ func (c *TypedExpiringCache[K, V]) checkAge(now utc.UTC, evict ...func(val Expir
 func (c *TypedExpiringCache[K, V]) isExpired(val *expiringEntry[V], now utc.UTC) bool {
 	age := now.Sub(val.ts)
 	if age >= c.maxAge {
-		traceutil.Span().Attribute("expired_entry_age", age)
+		traceutil.Span().Attribute("expired_entry_age", duration.Spec(age).RoundTo(1))
 		return true
 	}
 	return false
