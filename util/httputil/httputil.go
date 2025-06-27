@@ -338,40 +338,57 @@ func UnmarshalTo(reqBody io.Reader, reqHeader http.Header, target interface{}, r
 	return nil
 }
 
-func GetReqNodes(headers http.Header) (map[string]bool, error) {
-	reqNodes := make(map[string]bool)
+func getNodes(header string, headers http.Header) (map[string]bool, error) {
+	name := strings.ToLower(strings.ReplaceAll(header, "-", "_"))
+	nodes := make(map[string]bool)
 
-	reqNodesStr, err := GetCustomHeader(headers, "Requested-Nodes")
+	nodesStr, err := GetCustomHeader(headers, header)
 	if err != nil {
-		return nil, errors.E("invalid requested_nodes", errors.K.Invalid, err)
+		return nil, errors.E("invalid "+name, errors.K.Invalid, err)
 	}
 
-	for _, nid := range strings.Split(reqNodesStr, ",") {
+	for _, nid := range strings.Split(nodesStr, ",") {
 		if nid == "" {
 			continue
 		}
 		_, err := id.QNode.FromString(nid)
 		if err != nil {
-			return nil, errors.E("invalid requested_nodes", errors.K.Invalid, err, "requested_nodes", reqNodesStr)
+			return nil, errors.E("invalid "+name, errors.K.Invalid, err, name, nodesStr)
 		}
-		reqNodes[nid] = true
+		nodes[nid] = true
 	}
 
-	return reqNodes, nil
+	return nodes, nil
+}
+
+func setNodes(header string, headers http.Header, nodes map[string]bool) {
+	nHeader := ""
+	for nid, _ := range nodes {
+		if nHeader != "" {
+			nHeader += ","
+		}
+		nHeader += nid
+	}
+
+	if nHeader != "" {
+		SetCustomHeader(headers, header, nHeader)
+	}
+}
+
+func GetReqNodes(headers http.Header) (map[string]bool, error) {
+	return getNodes("Requested-Nodes", headers)
 }
 
 func SetReqNodes(headers http.Header, reqNodes map[string]bool) {
-	rnHeader := ""
-	for nid, _ := range reqNodes {
-		if rnHeader != "" {
-			rnHeader += ","
-		}
-		rnHeader += nid
-	}
+	return setNodes("Requested-Nodes", headers, reqNodes)
+}
 
-	if rnHeader != "" {
-		SetCustomHeader(headers, "Requested-Nodes", rnHeader)
-	}
+func GetPubNodes(headers http.Header) (map[string]bool, error) {
+	return getNodes("Published-Nodes", headers)
+}
+
+func SetPubNodes(headers http.Header, pubNodes map[string]bool) {
+	return setNodes("Published-Nodes", headers, pubNodes)
 }
 
 // GetCombinedHeader returns all values of all header names as a single string,
