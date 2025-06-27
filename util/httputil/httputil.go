@@ -380,7 +380,7 @@ func GetReqNodes(headers http.Header) (map[string]bool, error) {
 }
 
 func SetReqNodes(headers http.Header, reqNodes map[string]bool) {
-	return setNodes("Requested-Nodes", headers, reqNodes)
+	setNodes("Requested-Nodes", headers, reqNodes)
 }
 
 func GetPubNodes(headers http.Header) (map[string]bool, error) {
@@ -388,7 +388,7 @@ func GetPubNodes(headers http.Header) (map[string]bool, error) {
 }
 
 func SetPubNodes(headers http.Header, pubNodes map[string]bool) {
-	return setNodes("Published-Nodes", headers, pubNodes)
+	setNodes("Published-Nodes", headers, pubNodes)
 }
 
 // GetCombinedHeader returns all values of all header names as a single string,
