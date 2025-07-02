@@ -125,7 +125,7 @@ func (t *tracker) Purge() {
 	t.sessions.Purge()
 }
 
-func (t *tracker) onEvicted(key interface{}, value interface{}) {
+func (t *tracker) onEvicted(key interface{}, value lru.ExpiringEntry[interface{}]) {
 	// called from Update or SessionMetrics while holding mutex
 	t.metrics.Removed++
 }
