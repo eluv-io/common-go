@@ -37,12 +37,27 @@ func New[T Number](capacity int) *SlidingWindow[T] {
 // [Welford's algorithm]: https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford%27s_online_algorithm
 //
 type SlidingWindow[T Number] struct {
-	entries  []*entry[T] // the values in the series, stored in a circular buffer
-	capacity int         // the maximum number of values in the series
-	oldest   int         // index of the oldest value
-	count    int         // number of values in the series
-	mean     float64     // mean of values in the series
-	m2       float64     // sum of squares of differences from the current mean
+	entries           []*entry[T] // the values in the series, stored in a circular buffer
+	capacity          int         // the maximum number of values in the series
+	oldest            int         // index of the oldest value
+	count             int         // number of values in the series
+	mean              float64     // mean of values in the series
+	m2                float64     // sum of squares of differences from the current mean
+	useSampleVariance bool        // whether to use sample variance (N-1) or population variance (N)
+}
+
+// UseSampleVariance sets the variance calculation to use sample variance (N-1) instead of population variance (N).
+// By default, sample variance is used.
+func (s *SlidingWindow[T]) UseSampleVariance() *SlidingWindow[T] {
+	s.useSampleVariance = true
+	return s
+}
+
+// UsePopulationVariance sets the variance calculation to use population variance (N) instead of sample variance (N-1).
+// By default, sample variance is used.
+func (s *SlidingWindow[T]) UsePopulationVariance() *SlidingWindow[T] {
+	s.useSampleVariance = false
+	return s
 }
 
 // Add adds a new value to the sliding window. If the window is full, it replaces the oldest value with the new one.
@@ -95,23 +110,19 @@ func (s *SlidingWindow[T]) Mean() float64 {
 
 // Variance returns the current variance of the values in the sliding window.
 func (s *SlidingWindow[T]) Variance() float64 {
-	if s.count == 1 {
-		return 0.0
-	}
-	return s.m2 / float64(s.count-1)
+	return variance(s.useSampleVariance, s.m2, s.count)
+}
+
+// Stddev returns the standard deviation of the values in the sliding window (square root of the variance).
+func (s *SlidingWindow[T]) Stddev() float64 {
+	return math.Sqrt(s.Variance())
 }
 
 // Statistics returns basic statistics of the values in the sliding window, optionally filtered by the specified start
 // time.
 func (s *SlidingWindow[T]) Statistics(startingAt ...utc.UTC) *Statistics[T] {
 	if s.count == 0 {
-		var zero T
-		return &Statistics[T]{
-			mean:     0.0,
-			variance: 0.0,
-			min:      zero,
-			max:      zero,
-		}
+		return &Statistics[T]{}
 	}
 
 	start := ifutil.FirstOrDefault(startingAt, utc.Zero)
@@ -129,15 +140,19 @@ func (s *SlidingWindow[T]) Statistics(startingAt ...utc.UTC) *Statistics[T] {
 		diff := float64(value) - s.mean
 		sum2 += diff * diff
 	}
-	slices.Sort(sortedValues)
 
 	count := len(sortedValues)
+	if count == 0 {
+		return &Statistics[T]{}
+	}
+
+	slices.Sort(sortedValues)
 	return &Statistics[T]{
 		sorted:   sortedValues,
 		mean:     float64(sum) / float64(count),
 		min:      sortedValues[0],
 		max:      sortedValues[count-1],
-		variance: sum2 / float64(count-1),
+		variance: variance(s.useSampleVariance, sum2, count),
 	}
 }
 
@@ -222,4 +237,18 @@ func (s *Statistics[T]) QuantileInterpolated(q float64) T {
 // Count returns the number of values in the series.
 func (s *Statistics[T]) Count() int {
 	return len(s.sorted)
+}
+
+// variance calculates the variance from the sum of squares of differences (m2) and the count of values. If
+// `useSampleVariance` is true, it uses sample variance (N-1) instead of population variance (N).
+//
+// See https://www.geeksforgeeks.org/maths/sample-variance-vs-population-variance/
+func variance(useSampleVariance bool, m2 float64, count int) float64 {
+	if useSampleVariance {
+		count--
+	}
+	if count <= 0 {
+		return 0.0
+	}
+	return m2 / float64(count)
 }
