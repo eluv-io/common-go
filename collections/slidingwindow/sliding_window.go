@@ -128,30 +128,42 @@ func (s *SlidingWindow[T]) Statistics(startingAt ...utc.UTC) *Statistics[T] {
 	start := ifutil.FirstOrDefault(startingAt, utc.Zero)
 	var sum T
 	var sum2 float64
-	sortedValues := make([]T, 0, s.count)
+	subset := make([]T, 0, s.count)
+
 	for i := 0; i < s.count; i++ {
 		e := s.entries[i]
 		if e.ts.Before(start) {
 			continue // skip entries before the starting time
 		}
 		value := e.value
-		sortedValues = append(sortedValues, value)
+		subset = append(subset, value)
 		sum += value
 		diff := float64(value) - s.mean
 		sum2 += diff * diff
 	}
 
-	count := len(sortedValues)
+	count := len(subset)
 	if count == 0 {
 		return &Statistics[T]{}
 	}
 
-	slices.Sort(sortedValues)
+	meanSubset := float64(sum) / float64(count)
+	if count != s.count {
+		// we were using the wrong mean (s.mean) in the variance calculation above, so we need to recalculate it with
+		// meanSubset...
+		sum2 = 0.0
+		for _, value := range subset {
+			diff := float64(value) - meanSubset
+			sum2 += diff * diff
+		}
+	}
+
+	slices.Sort(subset)
 	return &Statistics[T]{
-		sorted:   sortedValues,
-		mean:     float64(sum) / float64(count),
-		min:      sortedValues[0],
-		max:      sortedValues[count-1],
+		sorted:   subset,
+		mean:     meanSubset,
+		min:      subset[0],
+		max:      subset[count-1],
 		variance: variance(s.useSampleVariance, sum2, count),
 	}
 }

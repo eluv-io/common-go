@@ -194,7 +194,7 @@ func (c *RefCache) Release(key string) (evicted bool) {
 		// a cache usage error
 		log.Warn("RefCache: release called for unknown resource!",
 			"key", key,
-			"stack", errors.E("RefCache.Release", errors.K.Warn))
+			"stack", errors.E("RefCache.Release"))
 		return
 	}
 
@@ -204,7 +204,7 @@ func (c *RefCache) Release(key string) (evicted bool) {
 		// error above
 		log.Warn("RefCache: release called for resource under construction!",
 			"key", key,
-			"stack", errors.E("RefCache.Release", errors.K.Warn))
+			"stack", errors.E("RefCache.Release"))
 		return
 	}
 
@@ -220,7 +220,7 @@ func (c *RefCache) Release(key string) (evicted bool) {
 		log.Error("RefCache: reference count negative!",
 			"key", key,
 			"ref_count", ent.refCount,
-			"stack", errors.E("RefCache.Release", errors.K.Warn))
+			"stack", errors.E("RefCache.Release"))
 		ent.refCount = 0
 	}
 

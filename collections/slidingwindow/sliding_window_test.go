@@ -44,11 +44,18 @@ func TestSlidingWindow(t *testing.T) {
 	add(2)
 	split := clock.Now()
 	add(3)
+
+	// check mean and count
+	require.Equal(t, 2.0, sw.Mean())
+	require.Equal(t, 2.0/3.0, sw.Variance())
+	require.Equal(t, 3, sw.Count())
+
 	add(4)
 	add(5)
 
-	// Check the mean and count
+	// check mean and count
 	require.Equal(t, 3.0, sw.Mean())
+	require.Equal(t, 2.0, sw.Variance())
 	require.Equal(t, 5, sw.Count())
 
 	{
@@ -73,10 +80,11 @@ func TestSlidingWindow(t *testing.T) {
 	}
 
 	{
-		// validate stats of subset
+		// validate stats of subset [3,4,5]
 		sts := sw.Statistics(split)
 		require.Equal(t, 3, sts.Count())
 		require.Equal(t, 4.0, sts.Mean())
+		require.Equal(t, 2.0/3.0, sts.Variance())
 		require.Equal(t, 3, sts.Min())
 		require.Equal(t, 5, sts.Max())
 		require.Equal(t, 0, sts.Quantile(-1.0))
