@@ -192,7 +192,9 @@ func (c *RefCache) Release(key string) (evicted bool) {
 	ent, found := c.active[key]
 	if !found {
 		// a cache usage error
-		log.Warn("RefCache: release called for unknown resource!", "key", key)
+		log.Warn("RefCache: release called for unknown resource!",
+			"key", key,
+			"stack", errors.E("RefCache.Release", errors.K.Warn))
 		return
 	}
 
@@ -200,7 +202,9 @@ func (c *RefCache) Release(key string) (evicted bool) {
 	if err != nil {
 		// the entry is in the process of being created... that's similar to the
 		// error above
-		log.Warn("RefCache: release called for resource under construction!", "key", key)
+		log.Warn("RefCache: release called for resource under construction!",
+			"key", key,
+			"stack", errors.E("RefCache.Release", errors.K.Warn))
 		return
 	}
 
@@ -213,7 +217,10 @@ func (c *RefCache) Release(key string) (evicted bool) {
 
 	if ent.refCount < 0 {
 		// that should never happen and would indicate a bug in the cache implementation
-		log.Error("RefCache: reference count negative!", "key", key, "ref_count", ent.refCount)
+		log.Error("RefCache: reference count negative!",
+			"key", key,
+			"ref_count", ent.refCount,
+			"stack", errors.E("RefCache.Release", errors.K.Warn))
 		ent.refCount = 0
 	}
 
