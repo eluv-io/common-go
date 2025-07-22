@@ -439,7 +439,7 @@ func SetLiveHash(headers http.Header, liveHash types.QPHash) {
 	}
 }
 
-func GetPubConfirms(headers http.Header, key string) ([]string, error) {
+func GetPubConfirms(headers http.Header) ([]string, error) {
 	confirmsStr, err := GetCustomHeader(headers, "Publish-Confirmations")
 	if err != nil {
 		return nil, errors.E("invalid confirmations", errors.K.Invalid, err)
