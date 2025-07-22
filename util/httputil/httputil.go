@@ -436,8 +436,8 @@ func SetLiveHash(headers http.Header, liveHash types.QPHash) {
 	}
 }
 
-func GetConfirmations(headers http.Header, key string) ([]string, error) {
-	confirmsStr, err := GetCustomHeader(headers, "Confirmations")
+func GetPubConfirms(headers http.Header, key string) ([]string, error) {
+	confirmsStr, err := GetCustomHeader(headers, "Publish-Confirmations")
 	if err != nil {
 		return nil, errors.E("invalid confirmations", errors.K.Invalid, err)
 	}
@@ -445,9 +445,9 @@ func GetConfirmations(headers http.Header, key string) ([]string, error) {
 	return strings.Split(confirmsStr, ","), nil
 }
 
-func SetConfirmations(headers http.Header, confirmations []string) {
-	if len(confirmations) > 0 {
-		SetCustomHeader(headers, "Confirmations", strings.Join(confirmations, ","))
+func SetPubConfirms(headers http.Header, pubConfirms []string) {
+	if len(pubConfirms) > 0 {
+		SetCustomHeader(headers, "Publish-Confirmations", strings.Join(pubConfirms, ","))
 	}
 }
 
