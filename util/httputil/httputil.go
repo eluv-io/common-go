@@ -342,13 +342,15 @@ func UnmarshalTo(reqBody io.Reader, reqHeader http.Header, target interface{}, r
 
 func getNodes(headers http.Header, key string) (map[string]bool, error) {
 	name := strings.ReplaceAll(strings.ToLower(key), "-", "_")
-	nodes := make(map[string]bool)
 
 	nodesStr, err := GetCustomHeader(headers, key)
 	if err != nil {
 		return nil, errors.E("invalid "+name, errors.K.Invalid, err)
+	} else if nodesStr == "" {
+		return nil, nil
 	}
 
+	nodes := make(map[string]bool)
 	for _, nid := range strings.Split(nodesStr, ",") {
 		if nid == "" {
 			continue
@@ -397,6 +399,8 @@ func GetOriginNode(headers http.Header) (types.QNodeID, error) {
 	nodeStr, err := GetCustomHeader(headers, "Origin-Node")
 	if err != nil {
 		return nil, errors.E("invalid origin_node", errors.K.Invalid, err)
+	} else if nodeStr == "" {
+		return nil, nil
 	}
 
 	originNode, err := id.QNode.FromString(nodeStr)
@@ -417,6 +421,8 @@ func GetLiveHash(headers http.Header) (types.QPHash, error) {
 	hashStr, err := GetCustomHeader(headers, "Live-Hash")
 	if err != nil {
 		return nil, errors.E("invalid live_hash", errors.K.Invalid, err)
+	} else if hashStr == "" {
+		return nil, nil
 	}
 
 	liveHash, err := hash.FromString(hashStr)
@@ -440,6 +446,8 @@ func GetPubConfirms(headers http.Header, key string) ([]string, error) {
 	confirmsStr, err := GetCustomHeader(headers, "Publish-Confirmations")
 	if err != nil {
 		return nil, errors.E("invalid confirmations", errors.K.Invalid, err)
+	} else if confirmsStr == "" {
+		return nil, nil
 	}
 
 	return strings.Split(confirmsStr, ","), nil
