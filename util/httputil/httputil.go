@@ -425,10 +425,7 @@ func GetLiveHash(headers http.Header) (types.QPHash, error) {
 		return nil, nil
 	}
 
-	liveHash, err := hash.FromString(hashStr)
-	if err == nil && !liveHash.IsLive() {
-		err = errors.E("reason", "live_hash not live")
-	}
+	liveHash, err := hash.QPartLive.FromString(hashStr)
 	if err != nil {
 		return nil, errors.E("invalid live_hash", errors.K.Invalid, err, "live_hash", hashStr)
 	}
