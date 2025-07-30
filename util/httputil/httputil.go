@@ -17,7 +17,9 @@ import (
 	"golang.org/x/text/encoding/charmap"
 
 	"github.com/eluv-io/common-go/format/codecs"
+	"github.com/eluv-io/common-go/format/hash"
 	"github.com/eluv-io/common-go/format/id"
+	"github.com/eluv-io/common-go/format/types"
 	"github.com/eluv-io/common-go/util/httputil/byterange"
 	eioutil "github.com/eluv-io/common-go/util/ioutil"
 	"github.com/eluv-io/errors-go"
@@ -338,39 +340,119 @@ func UnmarshalTo(reqBody io.Reader, reqHeader http.Header, target interface{}, r
 	return nil
 }
 
-func GetReqNodes(headers http.Header) (map[string]bool, error) {
-	reqNodes := make(map[string]bool)
+func getNodes(headers http.Header, key string) (map[string]bool, error) {
+	name := strings.ReplaceAll(strings.ToLower(key), "-", "_")
 
-	reqNodesStr, err := GetCustomHeader(headers, "Requested-Nodes")
+	nodesStr, err := GetCustomHeader(headers, key)
 	if err != nil {
-		return nil, errors.E("invalid requested_nodes", errors.K.Invalid, err)
+		return nil, errors.E("invalid "+name, errors.K.Invalid, err)
+	} else if nodesStr == "" {
+		return nil, nil
 	}
 
-	for _, nid := range strings.Split(reqNodesStr, ",") {
+	nodes := make(map[string]bool)
+	for _, nid := range strings.Split(nodesStr, ",") {
 		if nid == "" {
 			continue
 		}
 		_, err := id.QNode.FromString(nid)
 		if err != nil {
-			return nil, errors.E("invalid requested_nodes", errors.K.Invalid, err, "requested_nodes", reqNodesStr)
+			return nil, errors.E("invalid "+name, errors.K.Invalid, err, name, nodesStr)
 		}
-		reqNodes[nid] = true
+		nodes[nid] = true
 	}
 
-	return reqNodes, nil
+	return nodes, nil
+}
+
+func setNodes(headers http.Header, key string, nodes map[string]bool) {
+	nHeader := ""
+	for nid, _ := range nodes {
+		if nHeader != "" {
+			nHeader += ","
+		}
+		nHeader += nid
+	}
+
+	if nHeader != "" {
+		SetCustomHeader(headers, key, nHeader)
+	}
+}
+
+func GetReqNodes(headers http.Header) (map[string]bool, error) {
+	return getNodes(headers, "Requested-Nodes")
 }
 
 func SetReqNodes(headers http.Header, reqNodes map[string]bool) {
-	rnHeader := ""
-	for nid, _ := range reqNodes {
-		if rnHeader != "" {
-			rnHeader += ","
-		}
-		rnHeader += nid
+	setNodes(headers, "Requested-Nodes", reqNodes)
+}
+
+func GetPubNodes(headers http.Header) (map[string]bool, error) {
+	return getNodes(headers, "Published-Nodes")
+}
+
+func SetPubNodes(headers http.Header, pubNodes map[string]bool) {
+	setNodes(headers, "Published-Nodes", pubNodes)
+}
+
+func GetOriginNode(headers http.Header) (types.QNodeID, error) {
+	nodeStr, err := GetCustomHeader(headers, "Origin-Node")
+	if err != nil {
+		return nil, errors.E("invalid origin_node", errors.K.Invalid, err)
+	} else if nodeStr == "" {
+		return nil, nil
 	}
 
-	if rnHeader != "" {
-		SetCustomHeader(headers, "Requested-Nodes", rnHeader)
+	originNode, err := id.QNode.FromString(nodeStr)
+	if err != nil {
+		return nil, errors.E("invalid origin_node", errors.K.Invalid, err, "origin_node", nodeStr)
+	}
+
+	return originNode, nil
+}
+
+func SetOriginNode(headers http.Header, originNode types.QNodeID) {
+	if !originNode.IsNil() {
+		SetCustomHeader(headers, "Origin-Node", originNode.String())
+	}
+}
+
+func GetLiveHash(headers http.Header) (types.QPHash, error) {
+	hashStr, err := GetCustomHeader(headers, "Live-Hash")
+	if err != nil {
+		return nil, errors.E("invalid live_hash", errors.K.Invalid, err)
+	} else if hashStr == "" {
+		return nil, nil
+	}
+
+	liveHash, err := hash.QPartLive.FromString(hashStr)
+	if err != nil {
+		return nil, errors.E("invalid live_hash", errors.K.Invalid, err, "live_hash", hashStr)
+	}
+
+	return liveHash, nil
+}
+
+func SetLiveHash(headers http.Header, liveHash types.QPHash) {
+	if !liveHash.IsNil() {
+		SetCustomHeader(headers, "Live-Hash", liveHash.String())
+	}
+}
+
+func GetPubConfirms(headers http.Header) ([]string, error) {
+	confirmsStr, err := GetCustomHeader(headers, "Publish-Confirmations")
+	if err != nil {
+		return nil, errors.E("invalid confirmations", errors.K.Invalid, err)
+	} else if confirmsStr == "" {
+		return nil, nil
+	}
+
+	return strings.Split(confirmsStr, ","), nil
+}
+
+func SetPubConfirms(headers http.Header, pubConfirms []string) {
+	if len(pubConfirms) > 0 {
+		SetCustomHeader(headers, "Publish-Confirmations", strings.Join(pubConfirms, ","))
 	}
 }
 

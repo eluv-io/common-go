@@ -11,10 +11,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/eluv-io/errors-go"
+
+	"github.com/eluv-io/common-go/format/hash"
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/util/httputil"
 	"github.com/eluv-io/common-go/util/jsonutil"
-	"github.com/eluv-io/errors-go"
 )
 
 func TestGetBytesRange(t *testing.T) {
@@ -229,15 +231,66 @@ func TestGetSetContentDisposition(t *testing.T) {
 	}
 }
 
-func TestSetReqNodes(t *testing.T) {
+func TestGetSetReqNodes(t *testing.T) {
 	inods := map[string]bool{
 		"inod42f2YMiWdwmPB8Ts34vKm24Su9LJ": true,
+		"inod4NCwnvo88W4KygHfBE652YfkjTeX": true,
 	}
-	h := make(http.Header)
-	httputil.SetReqNodes(h, inods)
-	m, err := httputil.GetReqNodes(h)
+	headers := make(http.Header)
+	httputil.SetReqNodes(headers, inods)
+	require.Len(t, headers["X-Content-Fabric-Requested-Nodes"], 1)
+	m, err := httputil.GetReqNodes(headers)
 	require.NoError(t, err)
-	require.True(t, m["inod42f2YMiWdwmPB8Ts34vKm24Su9LJ"])
+	for inod := range inods {
+		require.True(t, m[inod])
+	}
+}
+
+func TestGetSetPubNodes(t *testing.T) {
+	inods := map[string]bool{
+		"inod42f2YMiWdwmPB8Ts34vKm24Su9LJ": true,
+		"inod4NCwnvo88W4KygHfBE652YfkjTeX": true,
+	}
+	headers := make(http.Header)
+	httputil.SetPubNodes(headers, inods)
+	require.Len(t, headers["X-Content-Fabric-Published-Nodes"], 1)
+	m, err := httputil.GetPubNodes(headers)
+	require.NoError(t, err)
+	for inod := range inods {
+		require.True(t, m[inod])
+	}
+}
+
+func TestGetSetOriginNode(t *testing.T) {
+	inod, err := id.QNode.FromString("inod42f2YMiWdwmPB8Ts34vKm24Su9LJ")
+	require.NoError(t, err)
+	headers := make(http.Header)
+	httputil.SetOriginNode(headers, inod)
+	require.Len(t, headers["X-Content-Fabric-Origin-Node"], 1)
+	i, err := httputil.GetOriginNode(headers)
+	require.NoError(t, err)
+	require.Equal(t, inod, i)
+}
+
+func TestGetSetLiveHash(t *testing.T) {
+	hql, err := hash.QPartLive.FromString("hql_8r4UFFpJSY3KJwnbLCN29Cuj2D9FqweWC1b388Hy")
+	require.NoError(t, err)
+	headers := make(http.Header)
+	httputil.SetLiveHash(headers, hql)
+	require.Len(t, headers["X-Content-Fabric-Live-Hash"], 1)
+	h, err := httputil.GetLiveHash(headers)
+	require.NoError(t, err)
+	require.Equal(t, hql, h)
+}
+
+func TestGetSetPubConfirms(t *testing.T) {
+	confirms := []string{"hello", "world"}
+	headers := make(http.Header)
+	httputil.SetPubConfirms(headers, confirms)
+	require.Len(t, headers["X-Content-Fabric-Publish-Confirmations"], 1)
+	c, err := httputil.GetPubConfirms(headers)
+	require.NoError(t, err)
+	require.Equal(t, confirms, c)
 }
 
 func TestClientIP(t *testing.T) {
