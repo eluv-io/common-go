@@ -281,6 +281,10 @@ func Unmarshal(reqBody io.ReadCloser, reqHeader http.Header) (interface{}, error
 		// tests...
 		return nil, nil
 	}
+	ct := reqHeader.Get("Content-Type")
+	if ct != "" && !strings.HasPrefix(ct, binding.MIMEJSON) && !strings.HasPrefix(ct, binding.MIMEXML) {
+		return nil, errors.E("unmarshal request", errors.K.Invalid, "reason", "unacceptable content type", "content_type", ct)
+	}
 	body, err := ioutil.ReadAll(reqBody)
 	if err != nil {
 		return nil, errors.E("read request body", errors.K.IO, err)
@@ -288,14 +292,10 @@ func Unmarshal(reqBody io.ReadCloser, reqHeader http.Header) (interface{}, error
 	if len(body) == 0 {
 		return nil, nil
 	}
-	ct := reqHeader.Get("Content-Type")
-	switch {
-	case strings.HasPrefix(ct, binding.MIMEXML):
+	if strings.HasPrefix(ct, binding.MIMEXML) {
 		return defaultUnmarshaler.XML(body)
-	case strings.HasPrefix(ct, binding.MIMEJSON) || ct == "":
+	} else {
 		return defaultUnmarshaler.JSON(body)
-	default:
-		return nil, errors.E("unmarshal request", errors.K.Invalid, "reason", "unacceptable content type", "content_type", ct)
 	}
 }
 
@@ -305,6 +305,10 @@ func Unmarshal(reqBody io.ReadCloser, reqHeader http.Header) (interface{}, error
 //
 // Returns without error if the body is empty and "required" is false.
 func UnmarshalTo(reqBody io.Reader, reqHeader http.Header, target interface{}, required bool) error {
+	ct := reqHeader.Get("Content-Type")
+	if ct != "" && !strings.HasPrefix(ct, "application/json") && !strings.HasPrefix(ct, "application/xml") {
+		return errors.E("unmarshal request", errors.K.Invalid, "reason", "unacceptable content type", "content_type", ct)
+	}
 	var body []byte
 	var err error
 	if reqBody != nil {
@@ -316,9 +320,7 @@ func UnmarshalTo(reqBody io.Reader, reqHeader http.Header, target interface{}, r
 	if len(body) == 0 && !required {
 		return nil
 	}
-	ct := reqHeader.Get("Content-Type")
-	switch {
-	case strings.HasPrefix(ct, "application/xml"):
+	if strings.HasPrefix(ct, "application/xml") {
 		// Convert XML to JSON
 		s, err := defaultUnmarshaler.XML(body)
 		if err == nil {
@@ -329,9 +331,6 @@ func UnmarshalTo(reqBody io.Reader, reqHeader http.Header, target interface{}, r
 		if err != nil {
 			return err
 		}
-	case strings.HasPrefix(ct, "application/json") || ct == "":
-	default:
-		return errors.E("unmarshal request", errors.K.Invalid, "reason", "unacceptable content type", "content_type", ct)
 	}
 	err = json.Unmarshal(body, target)
 	if err != nil {
