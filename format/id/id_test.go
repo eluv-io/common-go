@@ -15,23 +15,27 @@ var tid = ID(append([]byte{1}, []byte{0, 1, 2, 3, 4, 5, 6}...))
 const expIDString = "iacc1W7LcTy7"
 
 func TestGenerate(t *testing.T) {
-	generated := Generate(User)
-	assert.NoError(t, generated.AssertCode(User))
+	for code, prefix := range codeToPrefix {
 
-	idString := generated.String()
-	assert.Equal(t, "iusr", idString[:4])
+		generated := Generate(code)
+		assert.NoError(t, generated.AssertCode(code))
 
-	idFromString, err := FromString(idString)
-	assert.NoError(t, err)
-	assert.NoError(t, idFromString.AssertCode(User))
+		idString := generated.String()
+		assert.Equal(t, prefix, idString[:len(prefix)])
 
-	assert.Equal(t, generated, idFromString)
+		idFromString, err := FromString(idString)
+		assert.NoError(t, err)
+		assert.NoError(t, idFromString.AssertCode(code))
 
-	assert.True(t, generated.Equal(idFromString))
-	assert.False(t, generated.Equal(nil))
-	var nilID ID
-	//noinspection GoNilness
-	assert.False(t, nilID.Equal(generated))
+		assert.Equal(t, generated, idFromString)
+
+		assert.True(t, generated.Equal(idFromString))
+		assert.False(t, generated.Equal(nil))
+		var nilID ID
+		//noinspection GoNilness
+		assert.False(t, nilID.Equal(generated))
+	}
+
 }
 
 func TestStringConversion(t *testing.T) {
