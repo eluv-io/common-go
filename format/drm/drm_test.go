@@ -110,7 +110,7 @@ func TestString(t *testing.T) {
 	}
 }
 
-func ExampleString() {
+func Example_string() {
 	fmt.Println("key", "string", keyString)
 
 	// Convert a drm key string to a drm key object
