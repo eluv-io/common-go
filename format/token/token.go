@@ -116,6 +116,7 @@ func NewLocalFile(nid id.ID, qid id.ID, bts []byte) (*Token, error) {
 	return res, nil
 }
 
+// NewJob creates a new job token. Index is the index of the job in the allocation request.
 func NewJob(nid id.ID, allocationID id.ID, index int) (*Token, error) {
 	e := errors.Template("init job token", errors.K.Invalid)
 	if nid.AssertCode(id.QNode) != nil {
@@ -180,7 +181,7 @@ const (
 	QPartWrite        // 2nd version: scheme, flags, random bytes
 	LRO               // node ID, random bytes
 	LocalFile         // node ID, content ID, bytes = hash(offering + presentation + format + start + end)
-	Job
+	Job               // node ID, allocation ID, bytes = index
 )
 
 const prefixLen = 4

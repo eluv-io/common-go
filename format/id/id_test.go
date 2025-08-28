@@ -16,7 +16,6 @@ const expIDString = "iacc1W7LcTy7"
 
 func TestGenerate(t *testing.T) {
 	for code, prefix := range codeToPrefix {
-
 		generated := Generate(code)
 		assert.NoError(t, generated.AssertCode(code))
 
@@ -36,6 +35,21 @@ func TestGenerate(t *testing.T) {
 		assert.False(t, nilID.Equal(generated))
 	}
 
+}
+func TestInternalMaps(t *testing.T) {
+	require.Equal(t, len(prefixToCode), len(codeToPrefix))
+	require.Equal(t, len(prefixToCode), len(codeToName))
+
+	for prefix, code := range prefixToCode {
+		require.Equal(t, prefixLen, len(prefix))
+
+		back, ok := codeToPrefix[code]
+		require.True(t, ok)
+		require.Equal(t, prefix, back)
+
+		_, ok = codeToName[code]
+		require.True(t, ok)
+	}
 }
 
 func TestStringConversion(t *testing.T) {
