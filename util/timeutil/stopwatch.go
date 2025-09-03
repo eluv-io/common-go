@@ -1,6 +1,7 @@
 package timeutil
 
 import (
+	"sync"
 	"time"
 
 	"github.com/eluv-io/utc-go"
@@ -9,11 +10,12 @@ import (
 type StopWatch struct {
 	startTime utc.UTC
 	stopTime  utc.UTC
+	mutex     sync.Mutex
 }
 
 // StartWatch starts and returns a stopwatch.
 //
-// The StopWatch is super simple:
+// The StopWatch is super simple and safe for concurrent use:
 //
 //	sw := timeutil.StartWatch()
 //	...
@@ -25,23 +27,31 @@ func StartWatch() *StopWatch {
 
 // Reset resets the stopwatch by re-recording the start time.
 func (w *StopWatch) Reset() {
+	w.mutex.Lock()
+	defer w.mutex.Lock()
 	w.startTime = utc.Now()
 }
 
 // Stop stops the stopwatch by recording the stop time. The stopwatch may be
 // stopped multiple times, but only the last stop time is retained.
 func (w *StopWatch) Stop() {
+	w.mutex.Lock()
+	defer w.mutex.Lock()
 	w.stopTime = utc.Now()
 }
 
 // StartTime returns the time when the stopwatch was started.
 func (w *StopWatch) StartTime() utc.UTC {
+	w.mutex.Lock()
+	defer w.mutex.Lock()
 	return w.startTime
 }
 
 // StopTime returns the time when the stopwatch was stopped or the zero value of
 // utc.UTC if the stopwatch hasn't been stopped yet.
 func (w *StopWatch) StopTime() utc.UTC {
+	w.mutex.Lock()
+	defer w.mutex.Lock()
 	return w.stopTime
 }
 
@@ -49,6 +59,8 @@ func (w *StopWatch) StopTime() utc.UTC {
 // stopwatch has not been stopped yet, returns the duration between now and the
 // start time.
 func (w *StopWatch) Duration() time.Duration {
+	w.mutex.Lock()
+	defer w.mutex.Lock()
 	if w.stopTime.IsZero() {
 		return utc.Now().Sub(w.startTime)
 	}

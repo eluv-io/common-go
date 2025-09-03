@@ -35,7 +35,6 @@ func New[T Number](capacity int) *SlidingWindow[T] {
 // time.
 //
 // [Welford's algorithm]: https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Welford%27s_online_algorithm
-//
 type SlidingWindow[T Number] struct {
 	entries           []*entry[T] // the values in the series, stored in a circular buffer
 	capacity          int         // the maximum number of values in the series
