@@ -5,24 +5,43 @@ import (
 	"time"
 
 	"github.com/eluv-io/utc-go"
+
+	"github.com/eluv-io/common-go/util"
 )
 
 type StopWatch struct {
 	startTime utc.UTC
 	stopTime  utc.UTC
-	mutex     sync.Mutex
+	mutex     sync.Locker
 }
 
 // StartWatch starts and returns a stopwatch.
 //
-// The StopWatch is super simple and safe for concurrent use:
+// The StopWatch is super simple and optionally safe for concurrent use:
 //
-//	sw := timeutil.StartWatch()
-//	...
-//	sw.Stop()
-//	sw.Duration() // get the elapsed time between start and stop time
-func StartWatch() *StopWatch {
-	return &StopWatch{startTime: utc.Now()}
+//		sw := timeutil.StartWatch()
+//		...
+//		sw.Stop()
+//		sw.Duration() // get the elapsed time between start and stop time
+//	 ...
+//	 sw2 := timeutil.StartWatch(true)
+//	 go func() {
+//	     ...
+//	     sw2.Stop()
+//	}()
+//
+// ...
+//
+//	for {
+//	    ...
+//	    sw2.Duration()
+//	}
+func StartWatch(concurrent ...bool) *StopWatch {
+	w := &StopWatch{startTime: utc.Now(), mutex: util.NoopLocker{}}
+	if len(concurrent) > 0 && concurrent[0] {
+		w.mutex = &sync.Mutex{}
+	}
+	return w
 }
 
 // Reset resets the stopwatch by re-recording the start time.
