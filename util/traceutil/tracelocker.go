@@ -2,8 +2,6 @@ package traceutil
 
 import (
 	"sync"
-
-	"github.com/eluv-io/common-go/util/traceutil/trace"
 )
 
 // TraceLocker is a sync.Locker that tracks lock/unlock events in a trace span. It is useful to trace lock contention
@@ -26,7 +24,6 @@ import (
 type TraceLocker struct {
 	mu   sync.Mutex
 	name string
-	span trace.Span
 }
 
 // NewTraceLocker creates a new TraceLocker with the given name.
