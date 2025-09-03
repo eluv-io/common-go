@@ -28,7 +28,7 @@ func StartWatch() *StopWatch {
 // Reset resets the stopwatch by re-recording the start time.
 func (w *StopWatch) Reset() {
 	w.mutex.Lock()
-	defer w.mutex.Lock()
+	defer w.mutex.Unlock()
 	w.startTime = utc.Now()
 }
 
@@ -36,14 +36,14 @@ func (w *StopWatch) Reset() {
 // stopped multiple times, but only the last stop time is retained.
 func (w *StopWatch) Stop() {
 	w.mutex.Lock()
-	defer w.mutex.Lock()
+	defer w.mutex.Unlock()
 	w.stopTime = utc.Now()
 }
 
 // StartTime returns the time when the stopwatch was started.
 func (w *StopWatch) StartTime() utc.UTC {
 	w.mutex.Lock()
-	defer w.mutex.Lock()
+	defer w.mutex.Unlock()
 	return w.startTime
 }
 
@@ -51,7 +51,7 @@ func (w *StopWatch) StartTime() utc.UTC {
 // utc.UTC if the stopwatch hasn't been stopped yet.
 func (w *StopWatch) StopTime() utc.UTC {
 	w.mutex.Lock()
-	defer w.mutex.Lock()
+	defer w.mutex.Unlock()
 	return w.stopTime
 }
 
@@ -60,7 +60,7 @@ func (w *StopWatch) StopTime() utc.UTC {
 // start time.
 func (w *StopWatch) Duration() time.Duration {
 	w.mutex.Lock()
-	defer w.mutex.Lock()
+	defer w.mutex.Unlock()
 	if w.stopTime.IsZero() {
 		return utc.Now().Sub(w.startTime)
 	}
