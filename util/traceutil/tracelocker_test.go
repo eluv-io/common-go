@@ -14,7 +14,7 @@ import (
 func TestTraceLocker(t *testing.T) {
 	rootSpan := InitTracing("test", false)
 
-	locker := NewTraceLocker("locktest")
+	locker := BuildTraceLocker("locktest").Build()
 
 	go func() {
 		// trace here is not recorded, since this goroutine is not initialized for tracing
@@ -39,31 +39,21 @@ func TestTraceLocker(t *testing.T) {
 }
 
 func ExampleTraceLocker() {
-	now := utc.UnixMilli(0)
-	defer utc.MockNowFn(func() utc.UTC { return now })()
-
-	rootSpan := InitTracing("test", false)
-
-	locker := NewTraceLocker("example-lock")
-
-	locker.Lock()
-	now = now.Add(5 * time.Second)
-	locker.Unlock()
-
-	now = now.Add(1 * time.Second)
-	rootSpan.End()
-
-	fmt.Println(jsonutil.MustPretty(rootSpan.Json()))
+	locker := BuildTraceLocker("example-lock").Build()
+	useLocker(locker)
 
 	// Output:
 	//
 	// {
-	//   "name": "test",
+	//   "name": "root",
 	//   "time": "6s",
 	//   "subs": [
 	//     {
 	//       "name": "example-lock",
 	//       "time": "5s",
+	//       "attr": {
+	//         "caller": "traceutil.useLocker (tracelocker_test.go:98)"
+	//       },
 	//       "evnt": [
 	//         {
 	//           "name": "locked",
@@ -73,4 +63,44 @@ func ExampleTraceLocker() {
 	//     }
 	//   ]
 	// }
+}
+
+func ExampleTraceLockerBuilder() {
+	locker := BuildTraceLocker("example-lock").WithCaller(false).WithSpanUnlock(false).Build()
+	useLocker(locker)
+
+	// Output:
+	//
+	// {
+	//   "name": "root",
+	//   "time": "6s",
+	//   "subs": [
+	//     {
+	//       "name": "example-lock",
+	//       "time": "0s",
+	//       "evnt": [
+	//         {
+	//           "name": "locked",
+	//           "at": "0s"
+	//         }
+	//       ]
+	//     }
+	//   ]
+	// }
+}
+
+func useLocker(locker *TraceLocker) {
+	now := utc.UnixMilli(0)
+	defer utc.MockNowFn(func() utc.UTC { return now })()
+
+	rootSpan := InitTracing("root", false)
+
+	locker.Lock()
+	now = now.Add(5 * time.Second)
+	locker.Unlock()
+
+	now = now.Add(1 * time.Second)
+	rootSpan.End()
+
+	fmt.Println(jsonutil.MustPretty(rootSpan.Json()))
 }
