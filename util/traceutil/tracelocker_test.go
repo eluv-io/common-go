@@ -33,14 +33,13 @@ func TestTraceLocker(t *testing.T) {
 	require.Equal(t, "locked", span.Events()[0].Name)
 	require.InDelta(t, 50*time.Millisecond, span.Duration(), float64(20*time.Millisecond))
 
-	// wg.Wait()
 	rootSpan.End()
 	fmt.Println(rootSpan.Json())
 }
 
 func ExampleTraceLocker() {
 	locker := BuildTraceLocker("example-lock").Build()
-	useLocker(locker)
+	useLocker(locker, false)
 
 	// Output:
 	//
@@ -52,7 +51,7 @@ func ExampleTraceLocker() {
 	//       "name": "example-lock",
 	//       "time": "5s",
 	//       "attr": {
-	//         "caller": "traceutil.useLocker (tracelocker_test.go:98)"
+	//         "caller": "traceutil.useLocker (tracelocker_test.go:130)"
 	//       },
 	//       "evnt": [
 	//         {
@@ -67,7 +66,7 @@ func ExampleTraceLocker() {
 
 func ExampleTraceLockerBuilder() {
 	locker := BuildTraceLocker("example-lock").WithCaller(false).WithSpanUnlock(false).Build()
-	useLocker(locker)
+	useLocker(locker, false)
 
 	// Output:
 	//
@@ -89,15 +88,48 @@ func ExampleTraceLockerBuilder() {
 	// }
 }
 
-func useLocker(locker *TraceLocker) {
+func ExampleTraceLocker_LockUnlock() {
+	locker := BuildTraceLocker("example-lock").Build()
+	useLocker(locker, true)
+
+	// Output:
+	//
+	// {
+	//   "name": "root",
+	//   "time": "6s",
+	//   "subs": [
+	//     {
+	//       "name": "example-lock",
+	//       "time": "5s",
+	//       "attr": {
+	//         "caller": "traceutil.useLocker (tracelocker_test.go:126)"
+	//       },
+	//       "evnt": [
+	//         {
+	//           "name": "locked",
+	//           "at": "0s"
+	//         }
+	//       ]
+	//     }
+	//   ]
+	// }
+}
+
+func useLocker(locker *TraceLocker, lockUnlock bool) {
 	now := utc.UnixMilli(0)
 	defer utc.MockNowFn(func() utc.UTC { return now })()
 
 	rootSpan := InitTracing("root", false)
 
-	locker.Lock()
-	now = now.Add(5 * time.Second)
-	locker.Unlock()
+	if lockUnlock {
+		unlock := locker.LockUnlock()
+		now = now.Add(5 * time.Second)
+		unlock()
+	} else {
+		locker.Lock()
+		now = now.Add(5 * time.Second)
+		locker.Unlock()
+	}
 
 	now = now.Add(1 * time.Second)
 	rootSpan.End()

@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/eluv-io/common-go/util/stackutil"
+	"github.com/eluv-io/common-go/util/traceutil/trace"
 	"github.com/eluv-io/errors-go"
 )
 
@@ -84,17 +85,22 @@ func BuildTraceLocker(name string) *TraceLockerBuilder {
 // Lock locks the mutex and starts a new trace span. The caller must ensure that it releases the lock (by calling
 // Unlock) from the same goroutine - otherwise the trace spans may get corrupted.
 func (t *TraceLocker) Lock() {
+	t.doLock()
+}
+
+func (t *TraceLocker) doLock() trace.Span {
 	span := StartSpan(t.name)
 	if t.logCallerFullstack {
 		span.Attribute("caller", errors.E("stack"))
 	} else if t.logCaller {
-		span.Attribute("caller", stackutil.Caller(1))
+		span.Attribute("caller", stackutil.Caller(2))
 	}
 	t.mu.Lock()
 	span.Event("locked", nil)
 	if !t.spanUnlock {
 		span.End()
 	}
+	return span
 }
 
 // Unlock unlocks the mutex and ends the trace span. The caller must ensure that the mutex was locked (by calling Lock)
@@ -109,13 +115,13 @@ func (t *TraceLocker) Unlock() {
 // LockUnlock is a convenience method that locks the mutex and returns a function that unlocks it. This is useful for
 // deferring the unlock right after locking:
 //
-//	defer NewTraceLocker("update").LockUnlock()()
+//	defer tl.LockUnlock()()
 func (t *TraceLocker) LockUnlock() (unlock func()) {
-	span := StartSpan(t.name)
-	t.mu.Lock()
-	span.Event("locked", nil)
+	span := t.doLock()
 	return func() {
 		t.mu.Unlock()
-		span.End()
+		if t.spanUnlock {
+			span.End()
+		}
 	}
 }
