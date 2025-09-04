@@ -181,6 +181,9 @@ func makeCborV2Codec() Codec {
 	dec, err := cbor.DecOptions{
 		DefaultMapType:          reflect.TypeOf((map[string]interface{})(nil)),
 		HandleTagForUnmarshaler: true,
+		MaxArrayElements:        1024 * 1024, // github.com/fxamacker/cbor/v2 default is 128 * 1024
+		MaxMapPairs:             1024 * 1024, // github.com/fxamacker/cbor/v2 default is 128 * 1024
+		MaxNestedLevels:         100,         // github.com/fxamacker/cbor/v2 default is 32
 	}.DecModeWithTags(tagSet)
 	if err != nil {
 		log.Fatal("failed to create cbor decoder mode", err)
