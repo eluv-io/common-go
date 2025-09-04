@@ -116,6 +116,11 @@ func TestBasic(t *testing.T) {
 	val, ok = lru.Peek(key3)
 	require.True(t, ok)
 	require.Equal(t, val3, val)
+
+	// test nil
+	lru.Add(key3, nil)
+	val, ok = lru.Get(key3)
+	require.Equal(t, nil, val)
 }
 
 func TestGetOrCreateBasic(t *testing.T) {

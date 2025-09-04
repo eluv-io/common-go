@@ -223,7 +223,7 @@ func (c *TypedCache[K, V]) Get(key K) (V, bool) {
 
 func (c *TypedCache[K, V]) get(key K) (V, bool) {
 	res, found := c.lru.Get(key)
-	if found {
+	if found && res != nil {
 		return res.(V), true
 	}
 	var zero V
