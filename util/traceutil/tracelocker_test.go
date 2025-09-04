@@ -51,7 +51,7 @@ func ExampleTraceLocker() {
 	//       "name": "example-lock",
 	//       "time": "5s",
 	//       "attr": {
-	//         "caller": "traceutil.useLocker (tracelocker_test.go:130)"
+	//         "caller": "traceutil.useLocker (tracelocker_test.go:129)"
 	//       },
 	//       "evnt": [
 	//         {
@@ -102,7 +102,7 @@ func ExampleTraceLocker_LockUnlock() {
 	//       "name": "example-lock",
 	//       "time": "5s",
 	//       "attr": {
-	//         "caller": "traceutil.useLocker (tracelocker_test.go:126)"
+	//         "caller": "traceutil.useLocker (tracelocker_test.go:125)"
 	//       },
 	//       "evnt": [
 	//         {
