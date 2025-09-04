@@ -81,7 +81,7 @@ func testExpiringCache(t *testing.T, assertEntries func(c *lru.ExpiringCache, va
 	})
 
 	cache := lru.NewExpiringCache(10, duration.Spec(5*time.Second))
-	cache.WithEvictHandler(func(key interface{}, entry lru.ExpiringEntry[any]) {
+	cache.WithEvictHandler(func(key any, entry lru.ExpiringEntry[any]) {
 		evictedCount++
 	})
 
