@@ -728,6 +728,27 @@ func TestClientSigned(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
+
+	{
+		_, err := eat.NewClientSigned(sid).
+			WithIssuedAt(now).
+			WithExpires(now.Add(time.Hour)).
+			WithGrant(eat.Grants.Read).
+			WithCtx(map[string]any{
+				"bla": "xyz",
+			}).Sign(clientSK).Token()
+		require.NoError(t, err)
+
+		_, err = eat.NewClientSigned(sid).
+			WithIssuedAt(now).
+			WithExpires(now.Add(time.Hour)).
+			WithGrant(eat.Grants.Read).
+			WithCtx(map[string]any{
+				eat.ElvDelegationId: "xyz",
+			}).Sign(clientSK).Token()
+		require.Error(t, err)
+	}
+
 }
 
 func TestClientConfirmation(t *testing.T) {
@@ -1072,4 +1093,36 @@ func TestXSignedAndConfirm(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestNodeToken(t *testing.T) {
+	now := utc.Now()
+	defer utc.MockNow(now)()
+
+	pk, err := ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
+	require.NoError(t, err)
+
+	tok := eat.NewNodeToken(id.Generate(id.QSpace), nil).
+		WithIssuedAt(now).
+		WithExpires(now.Add(time.Hour * 4)).
+		Sign(pk).MustToken()
+
+	ret, err := tok.Encode()
+	require.NoError(t, err)
+	//fmt.Println("tok", tok.Explain())
+
+	err = tok.Validate()
+	require.NoError(t, err)
+	err = tok.VerifyTimes(-1, time.Minute)
+	require.NoError(t, err)
+
+	tok2, err := eat.Parse(ret)
+	require.NoError(t, err)
+	err = tok2.Validate()
+	require.NoError(t, err)
+	require.True(t, tok.Equal(tok2))
+
+	utc.MockNow(now.Add(time.Hour*4 + time.Minute))
+	err = tok.VerifyTimes(-1, time.Minute)
+	require.Error(t, err)
 }
