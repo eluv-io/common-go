@@ -227,6 +227,16 @@ func NewNodeToken(
 	return &NodeTokenBuilder{newSigner(token)}
 }
 
+func (b *NodeTokenBuilder) WithIssuedAt(issuedAt utc.UTC) *NodeTokenBuilder {
+	b.enc.token.IssuedAt = issuedAt
+	return b
+}
+
+func (b *NodeTokenBuilder) WithExpires(expiresAt utc.UTC) *NodeTokenBuilder {
+	b.enc.token.Expires = expiresAt
+	return b
+}
+
 // -----------------------------------------------------------------------------
 
 type EditorSignedBuilder struct {
