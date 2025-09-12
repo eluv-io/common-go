@@ -1,47 +1,76 @@
 package timeutil
 
 import (
+	"sync"
 	"time"
 
 	"github.com/eluv-io/utc-go"
+
+	"github.com/eluv-io/common-go/util"
 )
 
 type StopWatch struct {
 	startTime utc.UTC
 	stopTime  utc.UTC
+	mutex     sync.Locker
 }
 
 // StartWatch starts and returns a stopwatch.
 //
-// The StopWatch is super simple:
+// The StopWatch is super simple and optionally safe for concurrent use:
 //
-//	sw := timeutil.StartWatch()
-//	...
-//	sw.Stop()
-//	sw.Duration() // get the elapsed time between start and stop time
-func StartWatch() *StopWatch {
-	return &StopWatch{startTime: utc.Now()}
+//		sw := timeutil.StartWatch()
+//		...
+//		sw.Stop()
+//		sw.Duration() // get the elapsed time between start and stop time
+//	 ...
+//	 sw2 := timeutil.StartWatch(true)
+//	 go func() {
+//	     ...
+//	     sw2.Stop()
+//	}()
+//
+// ...
+//
+//	for {
+//	    ...
+//	    sw2.Duration()
+//	}
+func StartWatch(concurrent ...bool) *StopWatch {
+	w := &StopWatch{startTime: utc.Now(), mutex: util.NoopLocker{}}
+	if len(concurrent) > 0 && concurrent[0] {
+		w.mutex = &sync.Mutex{}
+	}
+	return w
 }
 
 // Reset resets the stopwatch by re-recording the start time.
 func (w *StopWatch) Reset() {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	w.startTime = utc.Now()
 }
 
 // Stop stops the stopwatch by recording the stop time. The stopwatch may be
 // stopped multiple times, but only the last stop time is retained.
 func (w *StopWatch) Stop() {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	w.stopTime = utc.Now()
 }
 
 // StartTime returns the time when the stopwatch was started.
 func (w *StopWatch) StartTime() utc.UTC {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	return w.startTime
 }
 
 // StopTime returns the time when the stopwatch was stopped or the zero value of
 // utc.UTC if the stopwatch hasn't been stopped yet.
 func (w *StopWatch) StopTime() utc.UTC {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	return w.stopTime
 }
 
@@ -49,6 +78,8 @@ func (w *StopWatch) StopTime() utc.UTC {
 // stopwatch has not been stopped yet, returns the duration between now and the
 // start time.
 func (w *StopWatch) Duration() time.Duration {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
 	if w.stopTime.IsZero() {
 		return utc.Now().Sub(w.startTime)
 	}

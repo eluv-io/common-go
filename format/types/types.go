@@ -46,6 +46,9 @@ type KmsID = id.ID
 // GroupID is the type of group IDs
 type GroupID = id.ID
 
+// AllocationID is the type of allocation IDs
+type AllocationID = id.ID
+
 // QHash is the type of a content hash
 type QHash = *hash.Hash
 
@@ -62,6 +65,9 @@ type QWriteToken = *token.Token
 
 // QPWriteToken is a token needed for writing to a content part
 type QPWriteToken = *token.Token
+
+// JobToken is a token issued by the allocator for a scheduled job
+type JobToken = *token.Token
 
 // LROHandle is a handle for long running bitcode operations
 type LROHandle = *token.Token

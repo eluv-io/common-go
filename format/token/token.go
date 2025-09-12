@@ -463,9 +463,26 @@ func (t *Token) Describe() string {
 }
 
 func (t *Token) Validate() (err error) {
+
 	e := errors.Template("validate token", errors.K.Invalid)
 	if t == nil {
 		return e("reason", "token is nil")
+	}
+
+	switch t.Code {
+	case Job:
+		if err = t.AllocationID.AssertCode(id.Allocation); err != nil {
+			return e("reason", "invalid allocation id", "err", err)
+		}
+		if err = t.NID.AssertCode(id.QNode); err != nil {
+			return e("reason", "invalid node id", "err", err)
+		}
+		if len(t.Bytes) == 0 {
+			return e("reason", "no bytes")
+		}
+		return nil
+
+	default:
 	}
 	if t.Code == QWrite {
 		err = t.QID.AssertCode(id.Q)
