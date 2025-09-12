@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Example() {
+func ExampleNewRepeatingReader() {
 	r := ioutil.NewRepeatingReader([]byte("1234567890"), 24)
 	res, err := stdioutil.ReadAll(r)
 	fmt.Printf("bytes read: %s\n", string(res))
