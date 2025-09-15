@@ -74,7 +74,7 @@ func Parallel2() {
 	wg.Wait()
 }
 
-func ExampleMultiGoRoutine() {
+func Example() {
 	rootSpan := traceutil.InitTracing("root span", false)
 
 	Sequential()
