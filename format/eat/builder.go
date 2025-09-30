@@ -217,14 +217,23 @@ type NodeTokenBuilder struct {
 	*signer
 }
 
-func NewNodeToken(
-	sid types.QSpaceID,
-	qphash types.QPHash) *NodeTokenBuilder {
+// NewNodeToken returns a builder for a token that can be used in node to node operation.
+// When the optional qphash is not specified an expiration time has to be set.
+// After calling this function (without qphash) one of WithPartHash or WithExpires
+// has to be called to build a valid token.
+func NewNodeToken(sid types.QSpaceID, qphash ...types.QPHash) *NodeTokenBuilder {
 
 	token := New(Types.Node(), defaultFormat)
 	token.SID = sid
-	token.QPHash = qphash
+	if len(qphash) > 0 {
+		token.QPHash = qphash[0]
+	}
 	return &NodeTokenBuilder{newSigner(token)}
+}
+
+func (b *NodeTokenBuilder) WithPartHash(qphash types.QPHash) *NodeTokenBuilder {
+	b.enc.token.QPHash = qphash
+	return b
 }
 
 func (b *NodeTokenBuilder) WithIssuedAt(issuedAt utc.UTC) *NodeTokenBuilder {

@@ -1102,6 +1102,9 @@ func TestNodeToken(t *testing.T) {
 	pk, err := ecdsa.GenerateKey(secp256k1.S256(), rand.Reader)
 	require.NoError(t, err)
 
+	_, err = eat.NewNodeToken(id.Generate(id.QSpace)).Sign(pk).Token()
+	require.Error(t, err) // no qphash and no expiration
+
 	tok := eat.NewNodeToken(id.Generate(id.QSpace), nil).
 		WithIssuedAt(now).
 		WithExpires(now.Add(time.Hour * 4)).

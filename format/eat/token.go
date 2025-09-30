@@ -478,7 +478,9 @@ func (t *Token) Validate() (err error) {
 		validator.refuse("grant", t.Grant)
 		validator.refuse("ctx", t.Ctx)
 		validator.refuse("tx-hash", t.EthTxHash)
-		//validator.require("qp-hash", t.QPHash) - commented since some node 2 node calls may not use a part hash
+		if t.QPHash.IsNil() && t.Expires.IsZero() {
+			validator.errorReason("one of 'qp-hash' or 'expires' is required")
+		}
 		return e.IfNotNil(validator.err)
 	}
 
