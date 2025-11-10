@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
 	"sort"
 	"strconv"
@@ -14,12 +15,10 @@ import (
 	"github.com/fxamacker/cbor/v2"
 	"github.com/mr-tron/base58/base58"
 
-	"github.com/eluv-io/errors-go"
-	"github.com/eluv-io/log-go"
-
 	"github.com/eluv-io/common-go/format/encryption"
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/util/byteutil"
+	"github.com/eluv-io/errors-go"
 )
 
 func NewObject(code Code, qid id.ID, nid id.ID, bytes ...byte) (*Token, error) {
@@ -427,6 +426,7 @@ func (t *Token) Equal(o *Token) bool {
 		bytes.Equal(t.Bytes, o.Bytes) &&
 		t.QID.Equal(o.QID) &&
 		t.NID.Equal(o.NID) &&
+		t.AllocationID.Equal(o.AllocationID) &&
 		t.Scheme == o.Scheme &&
 		t.Flags == o.Flags
 }
