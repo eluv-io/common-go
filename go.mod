@@ -1,6 +1,6 @@
 module github.com/eluv-io/common-go
 
-go 1.21.0
+go 1.23
 
 require (
 	github.com/PaesslerAG/gval v1.1.2
