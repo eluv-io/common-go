@@ -13,7 +13,7 @@ import (
 type Handle int
 
 // Function is the generic callback function.
-type Function[T any] = func(T)
+type Function[T any] func(T)
 
 // Manager manages a collection of callback functions of type T, providing thread-safe registration,
 // unregistration, and dispatching of callbacks. Callbacks are dispatched in a separate goroutine, using a buffered
