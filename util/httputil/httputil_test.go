@@ -283,6 +283,16 @@ func TestGetSetLiveHash(t *testing.T) {
 	require.Equal(t, hql, h)
 }
 
+func TestGetSetMultipath(t *testing.T) {
+	multipath := "inod42f2YMiWdwmPB8Ts34vKm24Su9LJ"
+	headers := make(http.Header)
+	httputil.SetMultipath(headers, multipath)
+	require.Len(t, headers["X-Content-Fabric-Multipath"], 1)
+	mp, err := httputil.GetMultipath(headers)
+	require.NoError(t, err)
+	require.Equal(t, multipath, mp)
+}
+
 func TestGetSetPubConfirms(t *testing.T) {
 	confirms := []string{"hello", "world"}
 	headers := make(http.Header)
