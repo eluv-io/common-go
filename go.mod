@@ -1,17 +1,20 @@
 module github.com/eluv-io/common-go
 
-go 1.23
+go 1.23.0
 
 require (
+	github.com/Comcast/gots/v2 v2.2.1
+	github.com/HdrHistogram/hdrhistogram-go v1.2.0
 	github.com/PaesslerAG/gval v1.1.2
 	github.com/PaesslerAG/jsonpath v0.1.1
 	github.com/beevik/etree v1.1.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/djherbis/times v1.6.0
+	github.com/dustin/go-humanize v1.0.1
 	github.com/eluv-io/apexlog-go v1.9.1-elv4
-	github.com/eluv-io/errors-go v1.0.3
+	github.com/eluv-io/errors-go v1.0.4
 	github.com/eluv-io/inject-go v1.0.2
-	github.com/eluv-io/log-go v1.0.4
+	github.com/eluv-io/log-go v1.0.8
 	github.com/eluv-io/utc-go v1.0.1
 	github.com/ethereum/go-ethereum v1.10.19
 	github.com/fxamacker/cbor/v2 v2.8.0
@@ -25,13 +28,14 @@ require (
 	github.com/modern-go/gls v0.0.0-20220109145502-612d0167dce5
 	github.com/mr-tron/base58 v1.2.0
 	github.com/multiformats/go-varint v0.0.6
+	github.com/pion/rtp v1.8.25
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/ricochet2200/go-disk-usage/du v0.0.0-20210707232629-ac9918953285
 	github.com/satori/go.uuid v1.2.0
 	github.com/smartystreets/goconvey v1.8.1
 	github.com/spf13/afero v1.3.2
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.11.1
 	github.com/ugorji/go/codec v1.1.7
 	go.uber.org/atomic v1.9.0
 	golang.org/x/exp v0.0.0-20220426173459-3bcf042a4bf5
@@ -59,6 +63,7 @@ require (
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
+	github.com/pion/randutil v0.1.0 // indirect
 	github.com/rjeczalik/notify v0.9.3 // indirect
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible // indirect
 	github.com/smarty/assertions v1.15.0 // indirect
