@@ -37,6 +37,8 @@ func (s *udpSink) Open() (io.WriteCloser, error) {
 	// Listen on the UDP address to receive data
 	// conn, err := net.ListenUDP("udp", udpAddr)
 
+	log.Debug("udp connect", "addr", udpAddr)
+
 	// Connect to the UDP address to send data
 	conn, err := net.DialUDP("udp", nil, udpAddr)
 	if err != nil {

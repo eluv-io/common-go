@@ -34,11 +34,20 @@ func (s *udpSource) Open() (io.ReadCloser, error) {
 		return nil, e(err)
 	}
 
-	// Listen on the UDP address to receive data
-	conn, err := net.ListenUDP("udp", udpAddr)
+	log.Debug("udp listen", "addr", udpAddr)
+
+	var conn *net.UDPConn
+	if udpAddr.IP.IsMulticast() {
+		conn, err = net.ListenMulticastUDP("udp", nil, udpAddr)
+	} else {
+		conn, err = net.ListenUDP("udp", udpAddr)
+	}
 	if err != nil {
+		log.Debug("udp listen error", "addr", udpAddr, "err", err)
 		return nil, e(err)
 	}
+
+	log.Debug("new connection", "addr", udpAddr, "remote", conn.RemoteAddr())
 
 	return conn, nil
 }
