@@ -5,7 +5,7 @@ import (
 
 	"github.com/Comcast/gots/v2/packet"
 
-	"github.com/eluv-io/common-go/media/transport/rtp"
+	"github.com/eluv-io/common-go/media/rtp"
 	"github.com/eluv-io/common-go/util/timeutil"
 	"github.com/eluv-io/errors-go"
 )

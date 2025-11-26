@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/eluv-io/common-go/media/transport/rtp"
+	"github.com/eluv-io/common-go/media/rtp"
 )
 
 func TestGapDetector_Detect(t *testing.T) {

@@ -16,8 +16,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/eluv-io/common-go/format/duration"
-	"github.com/eluv-io/common-go/media/transport/rtp"
-	"github.com/eluv-io/common-go/media/transport/tlv"
+	rtp2 "github.com/eluv-io/common-go/media/rtp"
+	"github.com/eluv-io/common-go/media/tlv"
 	"github.com/eluv-io/common-go/util/ioutil"
 	"github.com/eluv-io/common-go/util/timeutil"
 	"github.com/eluv-io/errors-go"
@@ -28,30 +28,30 @@ import (
 const ms = time.Millisecond
 
 var (
-	t1   = rtp.TicksToDuration(1)   // 11.1µs
-	t100 = rtp.TicksToDuration(100) // 1.11ms
+	t1   = rtp2.TicksToDuration(1)   // 11.1µs
+	t100 = rtp2.TicksToDuration(100) // 1.11ms
 )
 
 func TestTicksToDuration(t *testing.T) {
-	assert.Equal(t, time.Duration(11_111), rtp.TicksToDuration(1))
-	assert.Equal(t, int64(1), rtp.DurationToTicks(11_111))
-	assert.Equal(t, time.Duration(11_111), rtp.TicksToDuration(rtp.DurationToTicks(11_111)))
-	assert.Equal(t, int64(1), rtp.DurationToTicks(rtp.TicksToDuration(1)))
+	assert.Equal(t, time.Duration(11_111), rtp2.TicksToDuration(1))
+	assert.Equal(t, int64(1), rtp2.DurationToTicks(11_111))
+	assert.Equal(t, time.Duration(11_111), rtp2.TicksToDuration(rtp2.DurationToTicks(11_111)))
+	assert.Equal(t, int64(1), rtp2.DurationToTicks(rtp2.TicksToDuration(1)))
 
-	assert.Equal(t, time.Second, rtp.TicksToDuration(90000))
-	assert.Equal(t, int64(90000), rtp.DurationToTicks(time.Second))
-	assert.Equal(t, time.Second, rtp.TicksToDuration(rtp.DurationToTicks(time.Second)))
-	assert.Equal(t, int64(90000), rtp.DurationToTicks(rtp.TicksToDuration(int64(90000))))
+	assert.Equal(t, time.Second, rtp2.TicksToDuration(90000))
+	assert.Equal(t, int64(90000), rtp2.DurationToTicks(time.Second))
+	assert.Equal(t, time.Second, rtp2.TicksToDuration(rtp2.DurationToTicks(time.Second)))
+	assert.Equal(t, int64(90000), rtp2.DurationToTicks(rtp2.TicksToDuration(int64(90000))))
 
-	assert.Equal(t, time.Millisecond, rtp.TicksToDuration(90))
-	assert.Equal(t, int64(90), rtp.DurationToTicks(time.Millisecond))
-	assert.Equal(t, time.Millisecond, rtp.TicksToDuration(rtp.DurationToTicks(time.Millisecond)))
-	assert.Equal(t, int64(90), rtp.DurationToTicks(rtp.TicksToDuration(int64(90))))
+	assert.Equal(t, time.Millisecond, rtp2.TicksToDuration(90))
+	assert.Equal(t, int64(90), rtp2.DurationToTicks(time.Millisecond))
+	assert.Equal(t, time.Millisecond, rtp2.TicksToDuration(rtp2.DurationToTicks(time.Millisecond)))
+	assert.Equal(t, int64(90), rtp2.DurationToTicks(rtp2.TicksToDuration(int64(90))))
 }
 
 func TestRtpPacer_constants(t *testing.T) {
 	require.Equal(t, time.Duration(11_111), t1) // 11.111 µs
-	require.Equal(t, duration.MustParse("13h15m21.859s").Duration(), rtp.WrapDuration.Round(ms))
+	require.Equal(t, duration.MustParse("13h15m21.859s").Duration(), rtp2.WrapDuration.Round(ms))
 }
 
 func TestRtpPacer_calculateWait(t *testing.T) {
@@ -67,12 +67,12 @@ func TestRtpPacer_calculateWait(t *testing.T) {
 	}
 	tests := []struct {
 		name    string
-		pacer   *rtp.RtpPacer
+		pacer   *rtp2.RtpPacer
 		packets []packets
 	}{
 		{
 			name:  "basic",
-			pacer: rtp.NewRtpPacer(),
+			pacer: rtp2.NewRtpPacer(),
 			packets: []packets{
 				{seq: 0, ts: 0, wantWait: 0},
 				{seq: 1, ts: 100, wantWait: 0},
@@ -87,7 +87,7 @@ func TestRtpPacer_calculateWait(t *testing.T) {
 		},
 		{
 			name:  "adjust time ref",
-			pacer: rtp.NewRtpPacer().WithAdjustTimeRef(true),
+			pacer: rtp2.NewRtpPacer().WithAdjustTimeRef(true),
 			packets: []packets{
 				{seq: 0, ts: 0, wantWait: 0},
 				{seq: 1, ts: 100, wantWait: 0},
@@ -116,12 +116,12 @@ func TestRtpPacer_calculateWait(t *testing.T) {
 	}
 
 	t.Run("wrap-around", func(t *testing.T) {
-		pacer := rtp.NewRtpPacer()
+		pacer := rtp2.NewRtpPacer()
 
 		seq := uint16(0)
 		increment := int64(90_000)
 		for i := int64(0); i < 2*math.MaxUint32; i += increment {
-			now := utc.Unix(0, rtp.TicksToDuration(i).Nanoseconds())
+			now := utc.Unix(0, rtp2.TicksToDuration(i).Nanoseconds())
 			wait := pacer.CalculateWait(now, seq, uint32(i))
 			require.EqualValues(t, 0, wait, "i=%d", i)
 			seq++
@@ -130,7 +130,7 @@ func TestRtpPacer_calculateWait(t *testing.T) {
 }
 
 func TestRtpPacer_AsyncBasic(t *testing.T) {
-	pacer := rtp.NewRtpPacer()
+	pacer := rtp2.NewRtpPacer()
 
 	collect := collectPackets(pacer)
 
@@ -151,8 +151,8 @@ func ManualTestRtpPacer_AsyncPartDownload(t *testing.T) {
 		t.Skip("manual test - relies on local files")
 	}
 
-	pacerSource := rtp.NewRtpPacer().WithStream("source").WithNoLog()
-	pacer := rtp.NewRtpPacer().WithStream("test").WithDelay(50 * time.Millisecond).WithAdjustTimeRef(true)
+	pacerSource := rtp2.NewRtpPacer().WithStream("source").WithNoLog()
+	pacer := rtp2.NewRtpPacer().WithStream("test").WithDelay(50 * time.Millisecond).WithAdjustTimeRef(true)
 
 	// Remote address (change as needed)
 	remoteAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:9001")
@@ -221,7 +221,7 @@ func ManualTestRtpPacer_AsyncPartDownload(t *testing.T) {
 	log.Info("playout complete", "packets_sent", packetCount, "packets_received", pktCount)
 }
 
-func collectPackets(pacer *rtp.RtpPacer) func() ([]*pionrtp.Packet, error) {
+func collectPackets(pacer *rtp2.RtpPacer) func() ([]*pionrtp.Packet, error) {
 	var wg sync.WaitGroup
 	var received []*pionrtp.Packet
 	var failed error
@@ -241,7 +241,7 @@ func collectPackets(pacer *rtp.RtpPacer) func() ([]*pionrtp.Packet, error) {
 				return
 			}
 			now := utc.Now()
-			pkt, err := rtp.ParsePacket(p)
+			pkt, err := rtp2.ParsePacket(p)
 			if err != nil {
 				failed = err
 				return
@@ -270,7 +270,7 @@ func collectPackets(pacer *rtp.RtpPacer) func() ([]*pionrtp.Packet, error) {
 	}
 }
 
-func writePackets(pacer *rtp.RtpPacer, writer io.Writer, stripRtp bool, initialWait time.Duration) func() (int, error) {
+func writePackets(pacer *rtp2.RtpPacer, writer io.Writer, stripRtp bool, initialWait time.Duration) func() (int, error) {
 	var wg sync.WaitGroup
 	var pktCount int
 	var failed error
@@ -298,7 +298,7 @@ func writePackets(pacer *rtp.RtpPacer, writer io.Writer, stripRtp bool, initialW
 				return
 			}
 			now := utc.Now()
-			pkt, err := rtp.ParsePacket(p)
+			pkt, err := rtp2.ParsePacket(p)
 			if err != nil {
 				failed = err
 				return

@@ -1,7 +1,7 @@
 package tlv
 
 import (
-	"github.com/eluv-io/common-go/media/transport/rtp"
+	"github.com/eluv-io/common-go/media/rtp"
 	"github.com/eluv-io/common-go/util/byteutil"
 	"github.com/eluv-io/common-go/util/sliceutil"
 	"github.com/eluv-io/errors-go"

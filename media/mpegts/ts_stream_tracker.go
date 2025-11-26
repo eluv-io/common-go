@@ -11,7 +11,7 @@ import (
 	"github.com/HdrHistogram/hdrhistogram-go"
 
 	"github.com/eluv-io/common-go/format/duration"
-	"github.com/eluv-io/common-go/media/transport/rtp"
+	"github.com/eluv-io/common-go/media/rtp"
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/common-go/util/maputil"
 	"github.com/eluv-io/common-go/util/timeutil"

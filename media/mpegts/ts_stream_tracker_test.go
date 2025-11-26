@@ -16,7 +16,7 @@ import (
 
 	"github.com/eluv-io/common-go/media"
 	"github.com/eluv-io/common-go/media/mpegts"
-	"github.com/eluv-io/common-go/media/transport/tlv"
+	"github.com/eluv-io/common-go/media/tlv"
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/common-go/util/testutil"
 	"github.com/eluv-io/log-go"

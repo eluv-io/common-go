@@ -13,7 +13,7 @@ import (
 	"github.com/Comcast/gots/v2/packet"
 	"github.com/stretchr/testify/require"
 
-	"github.com/eluv-io/common-go/media/transport/tlv"
+	"github.com/eluv-io/common-go/media/tlv"
 	"github.com/eluv-io/common-go/util/testutil"
 )
 
@@ -24,7 +24,7 @@ const (
 )
 
 func TestTlvPacketizer(t *testing.T) {
-	source, err := os.ReadFile(filepath.Join(testutil.AssetsPathT(t, 3), "media", "mpeg-ts", "tlv-rtp-ts-segment-00001.ts"))
+	source, err := os.ReadFile(filepath.Join(testutil.AssetsPathT(t, 2), "media", "mpeg-ts", "tlv-rtp-ts-segment-00001.ts"))
 	require.NoError(t, err)
 
 	fullPacketCount := 0
