@@ -28,10 +28,10 @@ type Manager[T any] struct {
 	wg        sync.WaitGroup
 }
 
-// NewCallbackRegistry creates a new Manager instance with the given context and optional channel size and
+// NewManager creates a new Manager instance with the given context and optional channel size and
 // starts the dispatcher goroutine. The default channel size is 100. The dispatcher goroutine may be stopped by
 // canceling the provided context by calling the Stop() method.
-func NewCallbackRegistry[T any](ctx context.Context, channelSize ...int) *Manager[T] {
+func NewManager[T any](ctx context.Context, channelSize ...int) *Manager[T] {
 	childCtx, cancel := context.WithCancel(ctx)
 	c := &Manager[T]{
 		callbacks: make(map[Handle]Function[T]),

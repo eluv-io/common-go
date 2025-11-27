@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCallbackRegistry_BasicCallback(t *testing.T) {
+func TestManager_basicCallback(t *testing.T) {
 	ctx := context.Background()
-	registry := NewCallbackRegistry[int](ctx)
+	registry := NewManager[int](ctx)
 	defer registry.Stop()
 
 	var received int
@@ -36,9 +36,9 @@ func TestCallbackRegistry_BasicCallback(t *testing.T) {
 	registry.Unregister(handle)
 }
 
-func TestCallbackRegistry_MultipleCallbacks(t *testing.T) {
+func TestManager_multipleCallbacks(t *testing.T) {
 	ctx := context.Background()
-	registry := NewCallbackRegistry[string](ctx)
+	registry := NewManager[string](ctx)
 	defer registry.Stop()
 
 	var received1, received2, received3 string
@@ -75,9 +75,9 @@ func TestCallbackRegistry_MultipleCallbacks(t *testing.T) {
 	require.Equal(t, "test", received3)
 }
 
-func TestCallbackRegistry_CallbackOrder(t *testing.T) {
+func TestManager_callbackOrder(t *testing.T) {
 	ctx := context.Background()
-	registry := NewCallbackRegistry[int](ctx)
+	registry := NewManager[int](ctx)
 	defer registry.Stop()
 
 	var received []int
@@ -115,7 +115,7 @@ func TestCallbackRegistry_CallbackOrder(t *testing.T) {
 	}
 }
 
-func TestCallbackRegistry_StopViaMethod(t *testing.T) {
+func TestManager_stopViaMethod(t *testing.T) {
 	t.Run("stop via method", func(t *testing.T) {
 		testStop(t, context.Background(), func(r *Manager[int]) {
 			r.Stop()
@@ -131,7 +131,7 @@ func TestCallbackRegistry_StopViaMethod(t *testing.T) {
 }
 
 func testStop(t *testing.T, ctx context.Context, stop func(r *Manager[int])) {
-	registry := NewCallbackRegistry[int](ctx)
+	registry := NewManager[int](ctx)
 	defer stop(registry)
 
 	var count atomic.Int32
@@ -166,9 +166,9 @@ func testStop(t *testing.T, ctx context.Context, stop func(r *Manager[int])) {
 	require.Equal(t, int32(5), count.Load())
 }
 
-func TestCallbackRegistry_LongRunningCallbacks(t *testing.T) {
+func TestManager_longRunningCallbacks(t *testing.T) {
 	ctx := context.Background()
-	registry := NewCallbackRegistry[int](ctx)
+	registry := NewManager[int](ctx)
 	defer registry.Stop()
 
 	var callbacksStarted, callbacksCompleted atomic.Int32
@@ -200,9 +200,9 @@ func TestCallbackRegistry_LongRunningCallbacks(t *testing.T) {
 	require.Equal(t, int32(numValues), callbacksCompleted.Load())
 }
 
-func TestCallbackRegistry_UnregisterDuringProcessing(t *testing.T) {
+func TestManager_unregisterDuringProcessing(t *testing.T) {
 	ctx := context.Background()
-	registry := NewCallbackRegistry[int](ctx)
+	registry := NewManager[int](ctx)
 	defer registry.Stop()
 
 	var count1, count2 atomic.Int32
@@ -247,13 +247,13 @@ func TestCallbackRegistry_UnregisterDuringProcessing(t *testing.T) {
 
 }
 
-func TestCallbackRegistry_ChannelBuffering(t *testing.T) {
+func TestManager_channelBuffering(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping test in short mode")
 	}
 
 	ctx := context.Background()
-	registry := NewCallbackRegistry[int](ctx)
+	registry := NewManager[int](ctx)
 	defer registry.Stop()
 
 	var processed atomic.Int32
@@ -281,9 +281,9 @@ func TestCallbackRegistry_ChannelBuffering(t *testing.T) {
 	require.Equal(t, int32(numCallbacks), processed.Load())
 }
 
-func TestCallbackRegistry_ConcurrentRegistration(t *testing.T) {
+func TestManager_concurrentRegistration(t *testing.T) {
 	ctx := context.Background()
-	registry := NewCallbackRegistry[int](ctx)
+	registry := NewManager[int](ctx)
 	defer registry.Stop()
 
 	var wg sync.WaitGroup
@@ -313,9 +313,9 @@ func TestCallbackRegistry_ConcurrentRegistration(t *testing.T) {
 	require.Equal(t, int32(numGoroutines), totalCallbacks.Load())
 }
 
-func TestCallbackRegistry_EmptyRegistry(t *testing.T) {
+func TestManager_emptyRegistry(t *testing.T) {
 	ctx := context.Background()
-	registry := NewCallbackRegistry[int](ctx)
+	registry := NewManager[int](ctx)
 	defer registry.Stop()
 
 	// send callbacks when no callbacks are registered - should not panic
@@ -328,9 +328,9 @@ func TestCallbackRegistry_EmptyRegistry(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 }
 
-func TestCallbackRegistry_HandleReuse(t *testing.T) {
+func TestManager_handleReuse(t *testing.T) {
 	ctx := context.Background()
-	registry := NewCallbackRegistry[int](ctx)
+	registry := NewManager[int](ctx)
 	defer registry.Stop()
 
 	var count1, count2 atomic.Int32
