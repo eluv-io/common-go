@@ -28,10 +28,15 @@ func (s *srtSink) Name() string {
 }
 
 func (s *srtSink) Open() (io.WriteCloser, error) {
-	connect, err := srtOpen(s.urlStr)
+	connect, modeListen, err := srtOpen(s.urlStr)
 	if err != nil {
 		return nil, err
 	}
+
+	if !modeListen {
+		return connect()
+	}
+
 	dw := &DeferredWriter{}
 	go func() {
 		for {

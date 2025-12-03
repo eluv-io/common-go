@@ -3,9 +3,8 @@ package io
 import (
 	"io"
 	"net/url"
-	"strings"
-
-	srt "github.com/datarhei/gosrt"
+	"sync/atomic"
+	"syscall"
 
 	"github.com/eluv-io/errors-go"
 )
@@ -28,95 +27,70 @@ func (s *srtSource) Name() string {
 }
 
 func (s *srtSource) Open() (reader io.ReadCloser, err error) {
-	connect, err := srtOpen(s.urlStr)
+	connect, modeListen, err := srtOpen(s.urlStr)
 	if err != nil {
 		return nil, err
 	}
-	return connect()
-}
 
-func srtOpen(urlStr string) (connect func() (srt.Conn, error), err error) {
-	e := errors.Template("srtProto.Open", errors.K.IO, "url", urlStr)
-
-	srtConfig := srt.DefaultConfig()
-	hostPort, err := srtConfig.UnmarshalURL(srtSanitizeUrl(urlStr))
-	if err != nil {
-		return nil, e(err)
+	if !modeListen {
+		return connect()
 	}
 
-	// force `message` transmission method: https://github.com/Haivision/srt/blob/master/docs/API/API.md#transmission-method-message
-	// ensures message boundaries of the sender are preserved
-	srtConfig.MessageAPI = true
-
-	if !strings.Contains(urlStr, "listen") {
-		return func() (srt.Conn, error) {
-			log.Debug("srt connect", "url", urlStr)
-
-			// connect mode: connect to SRT server and pull the stream
-			conn, err := srt.Dial("srt", hostPort, srtConfig)
-			if err != nil {
-				return nil, e(err)
-			}
-			return conn, nil
-		}, nil
+	dr := &DeferredReader{
+		waitReader: make(chan struct{}),
 	}
-
-	return func() (conn srt.Conn, err error) {
-		// listen mode: act as SRT server and accept incoming connections
-		listener, err := srt.Listen("srt", hostPort, srtConfig)
+	go func() {
+		var rc io.ReadCloser
+		conn, err := connect()
 		if err != nil {
-			return nil, e(err)
+			// log.Warn("srt connect error", err)
+			rc = io.ReadCloser(&ErrorReader{err: errors.E("srt listen error", errors.K.Invalid.Default(), err)})
+			dr.reader.Store(&rc)
+			return
+		} else {
+			rc = io.ReadCloser(conn)
 		}
+		dr.reader.Store(&rc)
+		close(dr.waitReader)
+	}()
 
-		defer func() {
-			if err != nil {
-				listener.Close()
-			}
-		}()
-
-		log.Debug("srt listen - waiting for connection", "url", urlStr)
-
-		req, err := listener.Accept2()
-		if err != nil {
-			return nil, e(err)
-		}
-
-		streamId := req.StreamId()
-		log.Debug("new connection", "remote", req.RemoteAddr(), "srt_version", req.Version(), "stream_id", streamId)
-
-		if srtConfig.Passphrase != "" {
-			err = req.SetPassphrase(srtConfig.Passphrase)
-			if err != nil {
-				req.Reject(srt.REJX_UNAUTHORIZED)
-				return nil, e(err, "reason", "invalid passphrase")
-			}
-		}
-
-		// accept the connection
-		conn, err = req.Accept()
-		if err != nil {
-			return nil, e(err)
-		}
-
-		log.Debug("new connection accepted", "remote", req.RemoteAddr(), "srt_version", req.Version(), "stream_id", streamId)
-		return &wrappedConn{
-			Conn:     conn,
-			listener: listener,
-		}, nil
-	}, nil
+	return dr, nil
 }
 
-// srtSanitizeUrl strips `+rtp` from the `srt+rtp://` URL prefix if present. gosrt only supports `srt://`.
-func srtSanitizeUrl(str string) string {
-	return strings.Replace(str, "srt+rtp://", "srt://", 1)
+// ---------------------------------------------------------------------------------------------------------------------
+
+type DeferredReader struct {
+	waitReader chan struct{}
+	reader     atomic.Pointer[io.ReadCloser]
 }
 
-type wrappedConn struct {
-	srt.Conn
-	listener srt.Listener
+func (d *DeferredReader) Read(p []byte) (n int, err error) {
+	<-d.waitReader
+	w := d.reader.Load()
+	if w != nil {
+		return (*w).Read(p)
+	}
+	return 0, errors.E("srt source not yet connected", errors.K.IO, syscall.ECONNREFUSED)
 }
 
-func (w *wrappedConn) Close() error {
-	w.listener.Close()
-	return w.Conn.Close()
+func (d *DeferredReader) Close() error {
+	w := d.reader.Load()
+	if w != nil {
+		return (*w).Close()
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+
+type ErrorReader struct {
+	err error
+}
+
+func (e *ErrorReader) Read([]byte) (n int, err error) {
+	return 0, e.err
+}
+
+func (e *ErrorReader) Close() error {
+	return nil
 }
