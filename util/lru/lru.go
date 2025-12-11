@@ -246,12 +246,12 @@ func (c *TypedCache[K, V]) GetOrCreate(
 	constructor func() (V, error),
 	evict ...func(val V) bool) (val V, evicted bool, err error) {
 
-	span := traceutil.StartSpan("lru.Cache.GetOrCreate")
+	span := traceutil.StartSlowSpan("lru.Cache.GetOrCreate")
 	defer span.End()
 	if span.IsRecording() {
 		orgConstructor := constructor
 		constructor = func() (V, error) {
-			span := traceutil.StartSpan("constructor")
+			span := traceutil.StartSlowSpan("constructor")
 			defer span.End()
 			return orgConstructor()
 		}
@@ -290,8 +290,13 @@ func (c *TypedCache[K, V]) getOrCreateBlocking(
 	constructor func() (V, error),
 	evict func(val V) bool) (val V, evicted bool, err error) {
 
+	span := traceutil.StartSlowSpan("lru.Cache.getOrCreateBlocking")
+	defer span.End()
+
+	lspan := traceutil.StartSlowSpan("lru.Cache.getOrCreateBlocking.lock")
 	c.lock.Lock()
 	defer c.lock.Unlock()
+	lspan.End()
 
 	var ok bool
 	val, ok = c.getOrEvict(key, false, evict, nil)
@@ -307,7 +312,9 @@ func (c *TypedCache[K, V]) getOrCreateBlocking(
 		return zero, false, err
 	}
 	c.metrics.Add()
+	aspan := traceutil.StartSlowSpan("lru.Cache.getOrCreateBlocking.add")
 	evicted = c.lru.Add(key, val)
+	aspan.End()
 	return val, evicted, err
 }
 
@@ -315,6 +322,9 @@ func (c *TypedCache[K, V]) getOrCreateDecoupled(
 	key K,
 	constructor func() (V, error),
 	evict func(val V) bool) (val V, evicted bool, err error) {
+
+	span := traceutil.StartSlowSpan("lru.Cache.getOrCreateDecoupled")
+	defer span.End()
 
 	// try to get the value with regular rw lock
 	var ok bool
@@ -324,8 +334,10 @@ func (c *TypedCache[K, V]) getOrCreateDecoupled(
 	}
 
 	// get the creation mutex for this key
+	lspan := traceutil.StartSlowSpan("lru.Cache.getOrCreateDecoupled.lock")
 	keyMutex := c.namedLocks.Lock(key)
 	defer keyMutex.Unlock()
+	lspan.End()
 
 	// try getting the value again - it might have been created in the meantime
 	val, ok = c.getOrEvict(key, true, evict, func() {
@@ -348,7 +360,9 @@ func (c *TypedCache[K, V]) getOrCreateDecoupled(
 	}
 
 	// add it to the cache (using the regular rw lock)
+	aspan := traceutil.StartSlowSpan("lru.Cache.getOrCreateDecoupled.add")
 	evicted = c.Add(key, val)
+	aspan.End()
 	return val, evicted, nil
 }
 
@@ -356,6 +370,9 @@ func (c *TypedCache[K, V]) getOrCreateConcurrent(
 	key K,
 	constructor func() (V, error),
 	evict func(val V) bool) (val V, evicted bool, err error) {
+
+	span := traceutil.StartSlowSpan("lru.Cache.getOrCreateConcurrent")
+	defer span.End()
 
 	// try to get the value with regular rw lock
 	var ok bool
@@ -367,15 +384,19 @@ func (c *TypedCache[K, V]) getOrCreateConcurrent(
 	// create the value - holding no lock at all
 	val, err = constructor()
 	if err != nil {
+		lspan := traceutil.StartSlowSpan("lru.Cache.getOrCreateConcurrent.lock")
 		c.lock.Lock()
 		c.metrics.Error()
 		c.lock.Unlock()
+		lspan.End()
 		var zero V
 		return zero, false, err
 	}
 
 	// add it to the cache
+	aspan := traceutil.StartSlowSpan("lru.Cache.getOrCreateConcurrent.add")
 	evicted = c.Add(key, val)
+	aspan.End()
 	return val, evicted, err
 }
 
@@ -435,10 +456,14 @@ func (c *TypedCache[K, V]) Remove(key K) {
 	if c == nil {
 		return
 	}
+	span := traceutil.StartSlowSpan("lru.Cache.Remove")
+	defer span.End()
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	// no need to update metrics: lru.Remove calls onEvicted()
+	rspan := traceutil.StartSlowSpan("lru.Cache.Remove.remove")
 	c.lru.Remove(key)
+	rspan.End()
 }
 
 // RemoveOldest removes the oldest item from the cache.
@@ -517,6 +542,9 @@ func (c *TypedCache[K, V]) getOrEvict(
 	evict func(val V) bool,
 	optFn func()) (V, bool) {
 
+	span := traceutil.StartSlowSpan("lru.Cache.getOrEvict")
+	defer span.End()
+
 	var zero V
 	if c == nil {
 		return zero, false
@@ -525,8 +553,10 @@ func (c *TypedCache[K, V]) getOrEvict(
 	if lock {
 		// need the write lock, since this updates the recently-used list in
 		// simple.LRU!
+		lspan := traceutil.StartSlowSpan("lru.Cache.getOrEvict.lock")
 		c.lock.Lock()
 		defer c.lock.Unlock()
+		lspan.End()
 	}
 
 	if optFn != nil {
@@ -540,7 +570,9 @@ func (c *TypedCache[K, V]) getOrEvict(
 			return val, true
 		}
 		// item got evicted by custom optional evict function
+		rspan := traceutil.StartSlowSpan("lru.Cache.getOrEvict.remove")
 		c.lru.Remove(key)
+		rspan.End()
 		c.metrics.Remove()
 	}
 	c.metrics.Miss()

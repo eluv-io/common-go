@@ -90,11 +90,15 @@ func (c *TypedExpiringCache[K, V]) GetOrCreate(
 	constructor func() (V, error),
 	evict ...func(val ExpiringEntry[V]) bool) (val V, evicted bool, err error) {
 
+	span := traceutil.StartSlowSpan("TypedExpiringCache.GetOrCreate")
+	defer span.End()
 	now := utc.Now()
 	var entry *expiringEntry[V]
 	entry, evicted, err = c.cache.GetOrCreate(
 		key,
 		func() (*expiringEntry[V], error) {
+			span := traceutil.StartSlowSpan("TypedExpiringCache.constructor")
+			defer span.End()
 			val, err := constructor()
 			if err != nil {
 				return nil, err
@@ -115,6 +119,8 @@ func (c *TypedExpiringCache[K, V]) GetOrCreate(
 
 func (c *TypedExpiringCache[K, V]) checkAge(now utc.UTC, evict ...func(val ExpiringEntry[V]) bool) func(val *expiringEntry[V]) bool {
 	return func(val *expiringEntry[V]) bool {
+		span := traceutil.StartSlowSpan("TypedExpiringCache.checkAge")
+		defer span.End()
 		if c.isExpired(val, now) {
 			return true
 		}
@@ -122,6 +128,8 @@ func (c *TypedExpiringCache[K, V]) checkAge(now utc.UTC, evict ...func(val Expir
 			val.ts = now
 		}
 		if len(evict) > 0 {
+			espan := traceutil.StartSlowSpan("TypedExpiringCache.evict")
+			defer espan.End()
 			return evict[0](val)
 		}
 		return false
@@ -177,6 +185,8 @@ func (c *TypedExpiringCache[K, V]) Update(key K, value V) (new bool, evicted boo
 
 // Remove removes the entry with the given key.
 func (c *TypedExpiringCache[K, V]) Remove(key K) {
+	span := traceutil.StartSlowSpan("TypedExpiringCache.Remove")
+	defer span.End()
 	c.cache.Remove(key)
 }
 
