@@ -2,7 +2,6 @@ package syncutil_test
 
 import (
 	"encoding/json"
-	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -11,6 +10,7 @@ import (
 	"go.uber.org/atomic"
 
 	"github.com/eluv-io/common-go/util/syncutil"
+	"github.com/eluv-io/log-go"
 )
 
 func TestPromise(t *testing.T) {
@@ -24,20 +24,30 @@ func TestPromise(t *testing.T) {
 
 	wg := sync.WaitGroup{}
 
+	log.Info("start")
+
 	get := func() {
 		val, err := p.Get()
-		fmt.Println("got", val, err)
+		log.Info("got", val, err)
 		require.NoError(t, err)
 		require.Equal(t, data, val)
 		wg.Done()
 	}
 
 	wg.Add(3)
+
+	var ok bool
+	ok, _, _ = p.Try()
+	require.False(t, ok)
+
 	go get()
 	go get()
 	get()
 
 	p.Await()
+
+	ok, _, _ = p.Try()
+	require.True(t, ok)
 
 	wg.Wait()
 }

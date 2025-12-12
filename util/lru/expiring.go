@@ -5,6 +5,7 @@ import (
 
 	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/util/jsonutil"
+	"github.com/eluv-io/common-go/util/syncutil"
 	"github.com/eluv-io/common-go/util/traceutil"
 	"github.com/eluv-io/utc-go"
 )
@@ -39,10 +40,11 @@ type ExpiringCache = TypedExpiringCache[any, any]
 //   - requesting an expired entry through Get, GetOrCreate, Remove
 //   - calling Len or Entries
 type TypedExpiringCache[K any, V any] struct {
-	cache                 *TypedCache[K, *expiringEntry[V]]
-	maxAge                time.Duration
-	resetAgeOnAccess      bool // if true, resets the entries age to 0 on access
-	resetAgeAfterCreation bool // if true, resets the entries age to 0 after creation (as opposed to creation start time)
+	cache                   *TypedCache[K, *expiringEntry[V]]
+	maxAge                  time.Duration
+	resetAgeOnAccess        bool // if true, resets the entries age to 0 on access
+	resetAgeAfterCreation   bool // if true, resets the entries age to 0 after creation (as opposed to creation start time)
+	serveStaleDuringRefresh bool // if true, serves stale entries while a refresh is in progress
 }
 
 // WithMode sets the cache's construction mode.
@@ -60,8 +62,26 @@ func (c *TypedExpiringCache[K, V]) WithResetAgeOnAccess(set bool) *TypedExpiring
 // WithResetAgeAfterCreation enables resetting an entry's age after it has been (re-)created. By default, the entry's
 // age is based on the start of the creation process - with this option enabled, the construction time is deducted from
 // the age.
+// PENDING(LUK): this should be the default, shouldn't it?
 func (c *TypedExpiringCache[K, V]) WithResetAgeAfterCreation(set bool) *TypedExpiringCache[K, V] {
 	c.resetAgeAfterCreation = set
+	return c
+}
+
+// WithServeStaleDuringRefresh enables serving stale entries while a refresh is in progress. This changes the behavior
+// of the GetOrCreate method.
+//
+// By default, GetOrCreate checks if an entry exists for a given key and if it hasn't expired. If it has expired, it
+// evicts the entry from the cache and goes on to call the constructor to create a new one. Any other requests for the
+// same key will block until the new entry is created (even in "decoupled" mode). This can lead to severe wait times,
+// especially if entry creation is in the order of entry expiration.
+//
+// Enabling this option changes the behavior in the following way: if a stale entry is detected, a separate go-routine
+// is started to refresh the entry (create a new entry) and the current, stale entry is returned. Subsequent requests
+// for the same key will also receive the stale entry until the refresh completes. Once completed, the stale entry is
+// replaced with the new entry, and later requests will receive the fresh entry.
+func (c *TypedExpiringCache[K, V]) WithServeStaleDuringRefresh(set bool) *TypedExpiringCache[K, V] {
+	c.serveStaleDuringRefresh = set
 	return c
 }
 
@@ -117,13 +137,90 @@ func (c *TypedExpiringCache[K, V]) GetOrCreate(
 				ts:  ts,
 			}, nil
 		},
-		c.checkAge(now, evict...),
+		c.getEvictFn(now, constructor, evict...),
 	)
 	if err != nil {
 		var zero V
 		return zero, evicted, err
 	}
 	return entry.val, evicted, nil
+}
+
+func (c *TypedExpiringCache[K, V]) getEvictFn(
+	now utc.UTC,
+	constructor func() (V, error),
+	evict ...func(val ExpiringEntry[V]) bool,
+) func(val *expiringEntry[V]) bool {
+
+	return c.getEvictFnStub(
+		now,
+		func(e *expiringEntry[V]) bool {
+			// start a new refresh goroutine
+			e.refresh = syncutil.NewPromise()
+			go func() {
+				val, err := constructor()
+				e.refresh.Resolve(val, err)
+			}()
+
+			// and serve stale entry
+			c.cache.metrics.StaleHit()
+			return false
+		},
+		evict...,
+	)
+
+}
+
+func (c *TypedExpiringCache[K, V]) getEvictFnStub(
+	now utc.UTC,
+	refresh func(e *expiringEntry[V]) bool, // refresh function
+	evict ...func(val ExpiringEntry[V]) bool,
+) func(val *expiringEntry[V]) bool {
+
+	if !c.serveStaleDuringRefresh {
+		return c.checkAge(now, evict...)
+	}
+
+	// to server stale entries while a refresh is in progress, we need to track the refresh promises
+	return func(e *expiringEntry[V]) bool {
+		// NOTE: this function is called with the cache's write lock held
+
+		// PENDING(LUK): should we determine "staleness" based on entry age only without custom evict functions? And if
+		//               stale, but the custom evict function says "evict", we would actually evict and not return the
+		//               stale entry?
+		shouldEvict := c.checkAge(now, evict...)(e)
+		if !shouldEvict {
+			// entry is fresh - keep in cache
+			return false
+		}
+
+		// the entry is stale
+		if e.refresh != nil {
+			// a refresh is in progress
+			ok, refreshed, err := e.refresh.Try()
+			if ok {
+				// refresh completed
+				e.refresh = nil
+				if err != nil {
+					// refresh failed: evict and start over
+					return true
+				}
+
+				// refresh successful: updated the entry and keep in cache
+				e.val = refreshed.(V)
+				e.ts = utc.Now()
+				return false
+			}
+
+			// refresh still running: serve the stale entry
+			c.cache.metrics.StaleHit()
+			return false
+		}
+
+		// no refresh running
+		return refresh(e)
+	}
+
 }
 
 func (c *TypedExpiringCache[K, V]) checkAge(now utc.UTC, evict ...func(val ExpiringEntry[V]) bool) func(val *expiringEntry[V]) bool {
@@ -152,10 +249,18 @@ func (c *TypedExpiringCache[K, V]) isExpired(val *expiringEntry[V], now utc.UTC)
 
 // Get returns the value stored for the given key and true if the key exists,
 // nil and false if the key does not exist or has expired.
-func (c *TypedExpiringCache[K, V]) Get(key K) (V, bool) {
-	val, ok := c.cache.getOrEvict(key, true, c.checkAge(utc.Now()), nil)
+func (c *TypedExpiringCache[K, V]) Get(key K) (val V, ok bool) {
+	evict := c.getEvictFnStub(
+		utc.Now(),
+		func(e *expiringEntry[V]) bool {
+			// no refresh running: evict the entry
+			return true
+		},
+	)
+
+	e, ok := c.cache.getOrEvict(key, true, evict, nil)
 	if ok {
-		return val.val, true
+		return e.val, true
 	}
 	var zero V
 	return zero, false
@@ -264,8 +369,9 @@ type ExpiringEntry[V any] interface {
 }
 
 type expiringEntry[V any] struct {
-	val V
-	ts  utc.UTC
+	val     V                // the cached value
+	ts      utc.UTC          // the time the value was updated
+	refresh syncutil.Promise // non-nil if a refresh is in progress (ServeStaleDuringRefresh is enabled)
 }
 
 func (e *expiringEntry[V]) Value() V {
