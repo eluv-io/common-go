@@ -1,15 +1,26 @@
 package lru_test
 
 import (
+	"fmt"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/util/goutil"
 	"github.com/eluv-io/common-go/util/lru"
+	"github.com/eluv-io/common-go/util/timeutil"
+	elog "github.com/eluv-io/log-go"
 	"github.com/eluv-io/utc-go"
 )
+
+var log = func() *elog.Log {
+	c := elog.NewConfig()
+	c.Handler = "text"
+	return elog.New(c)
+}()
 
 func TestExpiringCache(t *testing.T) {
 	testNilCache(t, lru.NewExpiringCache(0, 5))
@@ -197,4 +208,93 @@ func TestExpiringCacheResetOnAccess(t *testing.T) {
 
 	now = now.Add(5 * time.Second)
 	assertGet("k3", nil, false)
+}
+
+func TestExpiringCacheResetAgeAfterCreation(t *testing.T) {
+	t.Parallel()
+
+	cache := lru.NewExpiringCache(10, duration.Spec(1*time.Second)).WithResetAgeAfterCreation(true)
+
+	cstr := func(v interface{}) func() (interface{}, error) {
+		return func() (interface{}, error) {
+			time.Sleep(time.Second)
+			return v, nil
+		}
+	}
+	assertGoC := func(key interface{}, constructor func() (interface{}, error), wantVal interface{}, wantEviction bool) {
+		res, evicted, err := cache.GetOrCreate(key, constructor)
+		require.NoError(t, err)
+		require.Equal(t, wantVal, res)
+		require.Equal(t, wantEviction, evicted)
+	}
+
+	stop := make(chan struct{})
+	wg := &sync.WaitGroup{}
+
+	assertGoC("k1", cstr("v1"), "v1", false)
+
+	clients := make([]*client, 5)
+	for i := 0; i < len(clients); i++ {
+		wg.Add(1)
+		cl := &client{}
+		go func() {
+			cl.run(stop, func() {
+				assertGoC("k1", cstr("v1"), "v1", false)
+			})
+			wg.Done()
+		}()
+
+		clients[i] = cl
+	}
+
+	time.Sleep(5 * time.Second)
+	close(stop)
+	wg.Wait()
+
+	for _, cl := range clients {
+		avgWait := cl.avgWait()
+		log.Info("stats",
+			"client", cl.Name(),
+			"invocations", cl.invocations,
+			"long_waits", cl.longWaits,
+			"avg_wait", avgWait,
+			"total_wait", cl.waitTotal)
+		require.Less(t, avgWait, 10*time.Millisecond)
+		require.InDelta(t, 2*time.Second, cl.waitTotal, float64(50*time.Millisecond))
+	}
+}
+
+type client struct {
+	invocations int
+	longWaits   int
+	waitTotal   time.Duration
+}
+
+func (c *client) run(stop chan struct{}, call func()) {
+	watch := timeutil.StartWatch()
+	for j := 0; ; j++ {
+		select {
+		case <-stop:
+			return
+		default:
+			watch.Reset()
+			call()
+			watch.Stop()
+			if watch.Duration() > 10*time.Millisecond {
+				c.longWaits++
+				log.Info("long wait", "iteration", j, "duration", watch.Duration(), "count", c.longWaits)
+			}
+			c.invocations++
+			c.waitTotal += watch.Duration()
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+}
+
+func (c *client) avgWait() time.Duration {
+	return c.waitTotal / time.Duration(c.invocations)
+}
+
+func (c *client) Name() string {
+	return fmt.Sprintf("client-%d", goutil.GoID())
 }

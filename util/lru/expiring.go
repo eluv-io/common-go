@@ -39,9 +39,10 @@ type ExpiringCache = TypedExpiringCache[any, any]
 //   - requesting an expired entry through Get, GetOrCreate, Remove
 //   - calling Len or Entries
 type TypedExpiringCache[K any, V any] struct {
-	cache            *TypedCache[K, *expiringEntry[V]]
-	maxAge           time.Duration
-	resetAgeOnAccess bool // if true, resets the entries age to 0 on access
+	cache                 *TypedCache[K, *expiringEntry[V]]
+	maxAge                time.Duration
+	resetAgeOnAccess      bool // if true, resets the entries age to 0 on access
+	resetAgeAfterCreation bool // if true, resets the entries age to 0 after creation (as opposed to creation start time)
 }
 
 // WithMode sets the cache's construction mode.
@@ -53,6 +54,14 @@ func (c *TypedExpiringCache[K, V]) WithMode(mode ConstructionMode) *TypedExpirin
 // WithResetAgeOnAccess turns resetting of an entry's age on access on or off.
 func (c *TypedExpiringCache[K, V]) WithResetAgeOnAccess(set bool) *TypedExpiringCache[K, V] {
 	c.resetAgeOnAccess = set
+	return c
+}
+
+// WithResetAgeAfterCreation enables resetting an entry's age after it has been (re-)created. By default, the entry's
+// age is based on the start of the creation process - with this option enabled, the construction time is deducted from
+// the age.
+func (c *TypedExpiringCache[K, V]) WithResetAgeAfterCreation(set bool) *TypedExpiringCache[K, V] {
+	c.resetAgeAfterCreation = set
 	return c
 }
 
@@ -99,9 +108,13 @@ func (c *TypedExpiringCache[K, V]) GetOrCreate(
 			if err != nil {
 				return nil, err
 			}
+			ts := now
+			if c.resetAgeAfterCreation {
+				ts = utc.Now()
+			}
 			return &expiringEntry[V]{
 				val: val,
-				ts:  now,
+				ts:  ts,
 			}, nil
 		},
 		c.checkAge(now, evict...),
