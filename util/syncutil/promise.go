@@ -18,8 +18,8 @@ type Future interface {
 	Await()
 	// Get blocks until the future [value, error] pair is available and returns it.
 	Get() (interface{}, error)
-	// Try tries to get the future [value, error] pair without blocking. Returns [true, value, erro] if successful,
-	// [false, nil, nil] otherwise .
+	// Try tries to get the future [value, error] pair without blocking. Returns [true, value, error] if successful,
+	// [false, nil, nil] otherwise.
 	Try() (bool, interface{}, error)
 }
 
@@ -43,7 +43,7 @@ type Promise interface {
 
 func NewPromise() Promise {
 	return &promise{
-		c: make(chan *result, 1),
+		done: make(chan struct{}),
 	}
 }
 
@@ -58,7 +58,10 @@ func NewMarshaledFuture(f Future) Future {
 // -----------------------------------------------------------------------------
 
 type promise struct {
-	c chan *result
+	once sync.Once
+	done chan struct{}
+
+	res result
 }
 
 func (p *promise) Await() {
@@ -66,23 +69,24 @@ func (p *promise) Await() {
 }
 
 func (p *promise) Get() (interface{}, error) {
-	res := <-p.c // wait for result
-	p.c <- res   // send back into channel for additional Get() calls...
-	return res.data, res.err
+	<-p.done
+	return p.res.data, p.res.err
 }
 
 func (p *promise) Try() (bool, interface{}, error) {
 	select {
-	case res := <-p.c:
-		p.c <- res // send back into channel for additional Get() calls...
-		return true, res.data, res.err
+	case <-p.done:
+		return true, p.res.data, p.res.err
 	default:
 		return false, nil, nil
 	}
 }
 
 func (p *promise) Resolve(data interface{}, err error) {
-	p.c <- &result{data, err}
+	p.once.Do(func() {
+		p.res = result{data: data, err: err}
+		close(p.done)
+	})
 }
 
 type result struct {

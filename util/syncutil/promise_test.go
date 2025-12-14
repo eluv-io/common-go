@@ -52,6 +52,59 @@ func TestPromise(t *testing.T) {
 	wg.Wait()
 }
 
+func TestPromiseConcurrent(t *testing.T) {
+	p := syncutil.NewPromise()
+
+	data := "The Result"
+	go func() {
+		time.Sleep(time.Second)
+		p.Resolve(data, nil)
+	}()
+
+	tries := atomic.Int32{}
+	gets := atomic.Int32{}
+	awaits := atomic.Int32{}
+
+	wg := sync.WaitGroup{}
+
+	log.Info("start")
+
+	for i := 0; i < 10; i++ {
+		wg.Add(3)
+		go func() {
+			val, err := p.Get()
+			log.Info("got", val, err)
+			require.NoError(t, err)
+			require.Equal(t, data, val)
+			tries.Add(1)
+			wg.Done()
+		}()
+		go func() {
+			for true {
+				ok, val, err := p.Try()
+				if ok {
+					require.NoError(t, err)
+					require.Equal(t, data, val)
+					gets.Add(1)
+					wg.Done()
+					return
+				}
+			}
+		}()
+		go func() {
+			p.Await()
+			awaits.Add(1)
+			wg.Done()
+		}()
+	}
+
+	wg.Wait()
+
+	require.Equal(t, int32(10), tries.Load())
+	require.Equal(t, int32(10), gets.Load())
+	require.Equal(t, int32(10), awaits.Load())
+}
+
 func TestMarshaledFuture(t *testing.T) {
 	p := syncutil.NewPromise()
 

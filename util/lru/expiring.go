@@ -181,7 +181,7 @@ func (c *TypedExpiringCache[K, V]) getEvictFnStub(
 		return c.checkAge(now, evict...)
 	}
 
-	// to server stale entries while a refresh is in progress, we need to track the refresh promises
+	// to serve stale entries while a refresh is in progress, we need to track the refresh promises
 	return func(e *expiringEntry[V]) bool {
 		// NOTE: this function is called with the cache's write lock held
 

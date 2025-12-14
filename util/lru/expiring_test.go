@@ -217,7 +217,7 @@ func TestExpiringCacheResetOnAccess(t *testing.T) {
 // and the constructor function takes 1 second to complete. The test runs for 5.5 seconds, during which each client
 // repeatedly accesses the cache every 10 milliseconds. The expected behavior is that each group of clients will trigger
 // a refresh of their shared key every 2 seconds, and during the refresh, they will block.
-// Each client should experience 3 long wait (the initial cache miss) and have a low average wait time overall.
+// Each client should experience 3 long waits (the initial cache miss) and have a low average wait time overall.
 func TestExpiringCacheResetAgeAfterCreation(t *testing.T) {
 	cache := lru.NewTypedExpiringCache[string, int32](10, duration.Spec(1*time.Second)).
 		WithMode(lru.Modes.Decoupled).
@@ -243,9 +243,9 @@ func TestExpiringCacheResetAgeAfterCreation(t *testing.T) {
 
 	metrics := cache.Metrics()
 	log.Info("metrics", "metrics", jsonutil.Stringer(&metrics))
-	require.EqualValues(t, 6, metrics.Misses.Load())    // two misses at the beginning, after 2s and after 4s
+	require.EqualValues(t, 6, metrics.Misses.Load())    // 6 misses total: 2 keys, each missing at 0s, 2s, and 4s
 	require.InDelta(t, 1500, metrics.Hits.Load(), 50)   // seconds 2, 4, and half of 6 => 6 clients * 250 = 1500
-	require.InDelta(t, 0, metrics.StaleHits.Load(), 30) // seconds 3 & 5 => 6*200=1200
+	require.InDelta(t, 0, metrics.StaleHits.Load(), 30) // No stale hits expected in ResetAgeAfterCreation mode
 }
 
 // TestExpiringCacheServeStaleDuringRefresh tests the expiring cache with the ServeStaleDuringRefresh option enabled. It
