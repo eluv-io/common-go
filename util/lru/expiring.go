@@ -206,7 +206,8 @@ func (c *TypedExpiringCache[K, V]) getEvictFnStub(
 					return true
 				}
 
-				// refresh successful: updated the entry and keep in cache
+				// refresh successful: update the entry and keep in cache. Cast the value unconditionally - it can only
+				// be of type V.
 				e.val = refreshed.(V)
 				e.ts = utc.Now()
 				return false

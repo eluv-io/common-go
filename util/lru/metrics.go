@@ -69,10 +69,10 @@ func (c *Metrics) Miss() {
 	c.Misses.Add(1)
 }
 
-// StaleHit increments the StaleHits count.
+// StaleHit marks a hit as stale by incrementing the StaleHits count and decrementing the Hits count.
 func (c *Metrics) StaleHit() {
 	c.StaleHits.Add(1)
-	c.Hits.Add(-1) // hit will be called after stale hit, so adapt
+	c.Hits.Add(-1)
 }
 
 // UnMiss decrements the Misses count.
