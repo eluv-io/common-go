@@ -73,10 +73,10 @@ func TestPromiseConcurrent(t *testing.T) {
 		wg.Add(3)
 		go func() {
 			val, err := p.Get()
-			log.Info("got", val, err)
+			// log.Info("got", val, err)
 			require.NoError(t, err)
 			require.Equal(t, data, val)
-			tries.Add(1)
+			gets.Add(1)
 			wg.Done()
 		}()
 		go func() {
@@ -85,7 +85,7 @@ func TestPromiseConcurrent(t *testing.T) {
 				if ok {
 					require.NoError(t, err)
 					require.Equal(t, data, val)
-					gets.Add(1)
+					tries.Add(1)
 					wg.Done()
 					return
 				}

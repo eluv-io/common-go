@@ -374,7 +374,7 @@ func TestGetOrCreateStress(t *testing.T) {
 
 			fmt.Println("total", totalCount, "evicted", evictedCount)
 			metrics := lru.Metrics()
-			fmt.Println(jsonutil.MarshalString(metrics))
+			fmt.Println(jsonutil.MarshalString(&metrics))
 			require.EqualValues(t, totalCount, metrics.Hits.Load()+metrics.Misses.Load())
 			require.EqualValues(t, 0, metrics.Errors.Load())
 			require.EqualValues(t, cacheSize, metrics.Config.MaxItems)

@@ -159,7 +159,11 @@ func (c *TypedExpiringCache[K, V]) getEvictFn(
 			e.refresh = syncutil.NewPromise()
 			go func() {
 				val, err := constructor()
-				e.refresh.Resolve(val, err)
+				re := &expiringEntry[V]{
+					val: val,
+					ts:  utc.Now(),
+				}
+				e.refresh.Resolve(re, err)
 			}()
 
 			// and serve stale entry
@@ -207,9 +211,10 @@ func (c *TypedExpiringCache[K, V]) getEvictFnStub(
 				}
 
 				// refresh successful: update the entry and keep in cache. Cast the value unconditionally - it can only
-				// be of type V.
-				e.val = refreshed.(V)
-				e.ts = utc.Now()
+				// be of type *expiringEntry[V].
+				re := refreshed.(*expiringEntry[V])
+				e.val = re.val
+				e.ts = re.ts
 				return false
 			}
 
