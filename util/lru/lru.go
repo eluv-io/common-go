@@ -540,8 +540,7 @@ func (c *TypedCache[K, V]) getOrEvict(
 			return val, true
 		}
 		// item got evicted by custom optional evict function
-		c.lru.Remove(key)
-		c.metrics.Remove()
+		c.lru.Remove(key) // calls c.metrics.Remove() through eviction handler
 	}
 	c.metrics.Miss()
 

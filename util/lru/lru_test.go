@@ -185,7 +185,8 @@ func TestGetOrCreateBasic(t *testing.T) {
 			require.False(t, evicted)
 			require.Equal(t, key1, val)
 			require.Equal(t, 3, evictedCount) // evicted count does change, since the entry was recreated
-			assertMetrics(2, 4, 4, 4)         // but the entry was nevertheless removed (and re-added)
+			assertMetrics(2, 4, 4, 3)         // but the entry was nevertheless removed (and re-added)
+			require.Equal(t, 1, lru.Len())
 
 		})
 	}

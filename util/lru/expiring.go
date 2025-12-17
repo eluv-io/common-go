@@ -104,22 +104,22 @@ func (c *TypedExpiringCache[K, V]) WithName(name string) *TypedExpiringCache[K, 
 
 // GetOrCreate looks up a key's value from the cache, creating it if necessary.
 //
-//   - If the key does not exist, the given constructor function is called to
-//     create a new value, store it at the key and return it. If the constructor
-//     fails, no value is added to the cache and the error is returned.
-//     Otherwise, the new value is added to the cache, and a boolean to mark any
-//     evictions from the cache is returned as defined in the Add() method.
-//   - If the key exists but is expired according to the max age, the current
-//     value is discarded and re-created with the constructor function.
-//   - If evict functions are passed and a non-expired cache entry exists, then
-//     the first evict function is invoked with the cached value. If it returns
-//     true, the value is discarded from the cache and the constructor is called.
+//   - If the key does not exist, the given constructor function is called to create a new value, store it at the key
+//     and return it. If the constructor fails, no value is added to the cache and the error is returned. Otherwise, the
+//     new value is added to the cache, and a boolean to mark whether the least recently used value was evicted from the
+//     cache.
+//   - If the key exists but is expired according to the max age, the current value is discarded and re-created
+//     with the constructor function. If the ServeStaleDuringRefresh option is enabled, the stale entry is returned, but
+//     a refresh is initiated in the background. See WithServeStaleDuringRefresh() for more details.
+//   - If evict functions are passed and a non-expired cache entry exists, then the first
+//     evict function is invoked with the cached value. If it returns true, the value is discarded from the cache and
+//     the constructor is called.
 func (c *TypedExpiringCache[K, V]) GetOrCreate(
 	key K,
 	constructor func() (V, error),
 	evict ...func(val ExpiringEntry[V]) bool) (val V, evicted bool, err error) {
 
-	now := utc.Now()
+	start := utc.Now()
 	var entry *expiringEntry[V]
 	entry, evicted, err = c.cache.GetOrCreate(
 		key,
@@ -128,16 +128,18 @@ func (c *TypedExpiringCache[K, V]) GetOrCreate(
 			if err != nil {
 				return nil, err
 			}
-			ts := now
-			if c.resetAgeAfterCreation {
-				ts = utc.Now()
+			end := utc.Now()
+			ee := &expiringEntry[V]{
+				val:             val,
+				ts:              start,
+				constructionDur: end.Sub(start),
 			}
-			return &expiringEntry[V]{
-				val: val,
-				ts:  ts,
-			}, nil
+			if c.resetAgeAfterCreation {
+				ee.ts = end
+			}
+			return ee, nil
 		},
-		c.getEvictFn(now, constructor, evict...),
+		c.getEvictFn(start, constructor, evict...),
 	)
 	if err != nil {
 		var zero V
@@ -154,16 +156,19 @@ func (c *TypedExpiringCache[K, V]) getEvictFn(
 
 	return c.getEvictFnStub(
 		now,
-		func(e *expiringEntry[V]) bool {
+		func(entry *expiringEntry[V]) bool {
 			// start a new refresh goroutine
-			e.refresh = syncutil.NewPromise()
+			entry.refresh = syncutil.NewPromise()
 			go func() {
+				start := utc.Now()
 				val, err := constructor()
+				end := utc.Now()
 				re := &expiringEntry[V]{
-					val: val,
-					ts:  utc.Now(),
+					val:             val,
+					ts:              end,
+					constructionDur: end.Sub(start),
 				}
-				e.refresh.Resolve(re, err)
+				entry.refresh.Resolve(re, err)
 			}()
 
 			// and serve stale entry
@@ -177,8 +182,8 @@ func (c *TypedExpiringCache[K, V]) getEvictFn(
 
 func (c *TypedExpiringCache[K, V]) getEvictFnStub(
 	now utc.UTC,
-	refresh func(e *expiringEntry[V]) bool, // refresh function
-	evict ...func(val ExpiringEntry[V]) bool,
+	refresh func(*expiringEntry[V]) bool, // refresh function
+	evict ...func(ExpiringEntry[V]) bool,
 ) func(val *expiringEntry[V]) bool {
 
 	if !c.serveStaleDuringRefresh {
@@ -186,35 +191,43 @@ func (c *TypedExpiringCache[K, V]) getEvictFnStub(
 	}
 
 	// to serve stale entries while a refresh is in progress, we need to track the refresh promises
-	return func(e *expiringEntry[V]) bool {
+	return func(entry *expiringEntry[V]) bool {
 		// NOTE: this function is called with the cache's write lock held
 
 		// PENDING(LUK): should we determine "staleness" based on entry age only without custom evict functions? And if
 		//               stale, but the custom evict function says "evict", we would actually evict and not return the
 		//               stale entry?
-		shouldEvict := c.checkAge(now, evict...)(e)
+		shouldEvict := c.checkAge(now, evict...)(entry)
 		if !shouldEvict {
 			// entry is fresh - keep in cache
 			return false
 		}
 
 		// the entry is stale
-		if e.refresh != nil {
+		if entry.refresh != nil {
 			// a refresh is in progress
-			ok, refreshed, err := e.refresh.Try()
+			ok, refreshed, err := entry.refresh.Try()
 			if ok {
 				// refresh completed
-				e.refresh = nil
+				entry.refresh = nil
 				if err != nil {
 					// refresh failed: evict and start over
 					return true
 				}
 
-				// refresh successful: update the entry and keep in cache. Cast the value unconditionally - it can only
-				// be of type *expiringEntry[V].
+				// refresh successful. Cast the value unconditionally - it can only be of type *expiringEntry[V].
 				re := refreshed.(*expiringEntry[V])
-				e.val = re.val
-				e.ts = re.ts
+
+				shouldEvict = c.checkAge(utc.Now(), evict...)(re)
+				if shouldEvict {
+					// refreshed entry expired: evict and start over
+					return true
+				}
+
+				// update the entry and keep in cache
+				entry.val = re.val
+				entry.ts = re.ts
+				entry.constructionDur = re.constructionDur
 				return false
 			}
 
@@ -223,29 +236,34 @@ func (c *TypedExpiringCache[K, V]) getEvictFnStub(
 			return false
 		}
 
-		// no refresh running
-		return refresh(e)
+		// no refresh is running
+		if now.Sub(entry.ts) > entry.constructionDur+c.maxAge {
+			// entry is too old to be served as "stale": do not refresh, instead evict and start over
+			return true
+		}
+
+		return refresh(entry)
 	}
 
 }
 
 func (c *TypedExpiringCache[K, V]) checkAge(now utc.UTC, evict ...func(val ExpiringEntry[V]) bool) func(val *expiringEntry[V]) bool {
-	return func(val *expiringEntry[V]) bool {
-		if c.isExpired(val, now) {
+	return func(entry *expiringEntry[V]) bool {
+		if c.isExpired(entry, now) {
 			return true
 		}
 		if c.resetAgeOnAccess {
-			val.ts = now
+			entry.ts = now
 		}
 		if len(evict) > 0 {
-			return evict[0](val)
+			return evict[0](entry)
 		}
 		return false
 	}
 }
 
-func (c *TypedExpiringCache[K, V]) isExpired(val *expiringEntry[V], now utc.UTC) bool {
-	age := now.Sub(val.ts)
+func (c *TypedExpiringCache[K, V]) isExpired(entry *expiringEntry[V], now utc.UTC) bool {
+	age := now.Sub(entry.ts)
 	if age >= c.maxAge {
 		traceutil.Span().Attribute("expired_entry_age", duration.Spec(age).RoundTo(1))
 		return true
@@ -258,7 +276,7 @@ func (c *TypedExpiringCache[K, V]) isExpired(val *expiringEntry[V], now utc.UTC)
 func (c *TypedExpiringCache[K, V]) Get(key K) (val V, ok bool) {
 	evict := c.getEvictFnStub(
 		utc.Now(),
-		func(e *expiringEntry[V]) bool {
+		func(*expiringEntry[V]) bool {
 			// no refresh running: evict the entry
 			return true
 		},
@@ -375,9 +393,10 @@ type ExpiringEntry[V any] interface {
 }
 
 type expiringEntry[V any] struct {
-	val     V                // the cached value
-	ts      utc.UTC          // the time the value was updated
-	refresh syncutil.Promise // non-nil if a refresh is in progress (ServeStaleDuringRefresh is enabled)
+	val             V                // the cached value
+	ts              utc.UTC          // the time the value was updated
+	refresh         syncutil.Promise // non-nil if a refresh is in progress (ServeStaleDuringRefresh is enabled)
+	constructionDur time.Duration    // the time it took to construct/refresh the entry
 }
 
 func (e *expiringEntry[V]) Value() V {
