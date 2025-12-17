@@ -60,8 +60,8 @@ func (c *TypedExpiringCache[K, V]) WithResetAgeOnAccess(set bool) *TypedExpiring
 }
 
 // WithResetAgeAfterCreation enables resetting an entry's age after it has been (re-)created. By default, the entry's
-// age is based on the start of the creation process - with this option enabled, the construction time is deducted from
-// the age.
+// age is based on the start of the creation process. With this option enabled, the entry's age is calculated from the
+// end of construction rather than the start of the creation process.
 // PENDING(LUK): this should be the default, shouldn't it?
 func (c *TypedExpiringCache[K, V]) WithResetAgeAfterCreation(set bool) *TypedExpiringCache[K, V] {
 	c.resetAgeAfterCreation = set
@@ -165,8 +165,11 @@ func (c *TypedExpiringCache[K, V]) getEvictFn(
 				end := utc.Now()
 				re := &expiringEntry[V]{
 					val:             val,
-					ts:              end,
+					ts:              start,
 					constructionDur: end.Sub(start),
+				}
+				if c.resetAgeAfterCreation {
+					re.ts = end
 				}
 				entry.refresh.Resolve(re, err)
 			}()

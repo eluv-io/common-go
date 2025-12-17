@@ -277,11 +277,11 @@ func TestExpiringCacheServeStaleDuringRefresh(t *testing.T) {
 				"long_waits", cl.longWaits,
 				"avg_wait", avgWait,
 				"total_wait", cl.waitTotal)
-			// require.Less(t, avgWait, 10*time.Millisecond)
-			// require.Equal(t, 1, cl.longWaits)
-			// require.InDelta(t, time.Second, cl.waitTotal, float64(20*time.Millisecond))
-			// require.InDelta(t, 450, cl.invocations, float64(50)) // 5.5s - 1s initial wait
-			// require.InDelta(t, 6, cl.previousVal, float64(1))    // shared sequence (so last val has to be 5 or 6
+			require.Less(t, avgWait, 10*time.Millisecond)
+			require.Equal(t, 1, cl.longWaits)
+			require.InDelta(t, time.Second, cl.waitTotal, float64(20*time.Millisecond))
+			require.InDelta(t, 450, cl.invocations, float64(50)) // 5.5s - 1s initial wait
+			require.InDelta(t, 6, cl.previousVal, float64(1))    // shared sequence (so last val has to be 5 or 6
 		}
 
 		metrics := cache.Metrics()

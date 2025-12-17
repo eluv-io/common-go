@@ -80,7 +80,7 @@ func TestPromiseConcurrent(t *testing.T) {
 			wg.Done()
 		}()
 		go func() {
-			for true {
+			for {
 				ok, val, err := p.Try()
 				if ok {
 					require.NoError(t, err)
