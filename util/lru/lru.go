@@ -14,6 +14,7 @@ import (
 	"github.com/eluv-io/common-go/util/stringutil"
 	"github.com/eluv-io/common-go/util/syncutil"
 	"github.com/eluv-io/common-go/util/traceutil"
+	"github.com/eluv-io/common-go/util/traceutil/trace"
 	"github.com/eluv-io/errors-go"
 )
 
@@ -207,6 +208,11 @@ func (c *TypedCache[K, V]) Get(key K) (V, bool) {
 	if c == nil {
 		return zero, false
 	}
+
+	span := traceutil.StartSpan("lru.Cache.Get")
+	defer span.End()
+	c.initTrace(span, key)
+
 	// need the write lock, since this updates the recently-used list in
 	// simple.LRU!
 	c.lock.Lock()
@@ -219,6 +225,13 @@ func (c *TypedCache[K, V]) Get(key K) (V, bool) {
 		c.metrics.Miss()
 	}
 	return res, found
+}
+
+func (c *TypedCache[K, V]) initTrace(span trace.Span, key K) {
+	if c != nil && span.IsRecording() {
+		span.Attribute("cache", c.metrics.Name)
+		span.Attribute("key", stringutil.ToString(key))
+	}
 }
 
 func (c *TypedCache[K, V]) get(key K) (V, bool) {
@@ -249,15 +262,12 @@ func (c *TypedCache[K, V]) GetOrCreate(
 	span := traceutil.StartSpan("lru.Cache.GetOrCreate")
 	defer span.End()
 	if span.IsRecording() {
+		c.initTrace(span, key)
 		orgConstructor := constructor
 		constructor = func() (V, error) {
 			span := traceutil.StartSpan("constructor")
 			defer span.End()
 			return orgConstructor()
-		}
-		if c != nil {
-			span.Attribute("cache", c.metrics.Name)
-			span.Attribute("key", stringutil.ToString(key))
 		}
 	}
 

@@ -158,6 +158,14 @@ func (c *TypedExpiringCache[K, V]) getEvictFn(
 		now,
 		func(entry *expiringEntry[V]) bool {
 			// start a new refresh goroutine
+
+			// we just add to the current span (if any) - no need for `defer span.End()` here
+			span := traceutil.Span()
+			if span.IsRecording() {
+				span.Event("refresh_triggered", nil)
+				span.Attribute("serving_stale", true)
+			}
+
 			entry.refresh = syncutil.NewPromise()
 			go func() {
 				start := utc.Now()
@@ -207,6 +215,10 @@ func (c *TypedExpiringCache[K, V]) getEvictFnStub(
 		}
 
 		// the entry is stale
+
+		// we just add to the current span (if any) - no need for `defer span.End()` here
+		span := traceutil.Span()
+
 		if entry.refresh != nil {
 			// a refresh is in progress
 			ok, refreshed, err := entry.refresh.Try()
@@ -215,15 +227,25 @@ func (c *TypedExpiringCache[K, V]) getEvictFnStub(
 				entry.refresh = nil
 				if err != nil {
 					// refresh failed: evict and start over
+					span.Attribute("refresh_error", err)
 					return true
 				}
 
 				// refresh successful. Cast the value unconditionally - it can only be of type *expiringEntry[V].
 				re := refreshed.(*expiringEntry[V])
 
+				if span.IsRecording() {
+					span.Event("refresh_completed", map[string]any{
+						"refresh_construction": duration.Spec(re.constructionDur).Round(),
+						"refresh_age":          duration.Spec(now.Sub(re.ts)).Round(),
+					})
+
+				}
+
 				shouldEvict = c.checkAge(utc.Now(), evict...)(re)
 				if shouldEvict {
 					// refreshed entry expired: evict and start over
+					span.Attribute("refresh_expired", true)
 					return true
 				}
 
@@ -236,12 +258,14 @@ func (c *TypedExpiringCache[K, V]) getEvictFnStub(
 
 			// refresh still running: serve the stale entry
 			c.cache.metrics.StaleHit()
+			span.Attribute("serving_stale", true)
 			return false
 		}
 
 		// no refresh is running
 		if now.Sub(entry.ts) > entry.constructionDur+c.maxAge {
 			// entry is too old to be served as "stale": do not refresh, instead evict and start over
+			span.Attribute("evicting_stale", true)
 			return true
 		}
 
@@ -268,7 +292,7 @@ func (c *TypedExpiringCache[K, V]) checkAge(now utc.UTC, evict ...func(val Expir
 func (c *TypedExpiringCache[K, V]) isExpired(entry *expiringEntry[V], now utc.UTC) bool {
 	age := now.Sub(entry.ts)
 	if age >= c.maxAge {
-		traceutil.Span().Attribute("expired_entry_age", duration.Spec(age).RoundTo(1))
+		traceutil.Span().Attribute("expired_entry_age", duration.Spec(age).Round())
 		return true
 	}
 	return false
@@ -277,6 +301,10 @@ func (c *TypedExpiringCache[K, V]) isExpired(entry *expiringEntry[V], now utc.UT
 // Get returns the value stored for the given key and true if the key exists,
 // nil and false if the key does not exist or has expired.
 func (c *TypedExpiringCache[K, V]) Get(key K) (val V, ok bool) {
+	span := traceutil.StartSpan("lru.ExpiringCache.Get")
+	defer span.End()
+	c.cache.initTrace(span, key)
+
 	evict := c.getEvictFnStub(
 		utc.Now(),
 		func(*expiringEntry[V]) bool {

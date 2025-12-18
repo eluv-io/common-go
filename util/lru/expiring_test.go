@@ -14,6 +14,7 @@ import (
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/common-go/util/lru"
 	"github.com/eluv-io/common-go/util/timeutil"
+	"github.com/eluv-io/common-go/util/traceutil"
 	elog "github.com/eluv-io/log-go"
 	"github.com/eluv-io/utc-go"
 )
@@ -292,16 +293,23 @@ func TestExpiringCacheServeStaleDuringRefresh(t *testing.T) {
 	})
 
 	t.Run("Get()", func(t *testing.T) {
+		span := traceutil.InitTracing("test", false)
+		defer func() {
+			span.End()
+			log.Info("trace", "span", jsonutil.MarshalString(span))
+		}()
+
 		var seq atomic.Int32
 		cache := lru.NewTypedExpiringCache[string, int32](10, duration.Spec(1*time.Second)).
 			WithMode(lru.Modes.Decoupled).
 			WithResetAgeAfterCreation(true).
-			WithServeStaleDuringRefresh(true)
+			WithServeStaleDuringRefresh(true).
+			WithName("test cache")
 		constructor := func() (int32, error) {
-			log.Info("refreshing")
+			log.Info("construction start")
 			time.Sleep(time.Second)
 			res := seq.Add(1)
-			log.Info("refreshed", "new", res)
+			log.Info("construction end", "new", res)
 			return res, nil
 		}
 
@@ -352,16 +360,24 @@ func TestExpiringCacheServeStaleDuringRefresh(t *testing.T) {
 	})
 
 	t.Run("evict refreshed but stale entry", func(t *testing.T) {
+		span := traceutil.InitTracing("test", false)
+		defer func() {
+			span.End()
+			span.SetMarshalExtended()
+			log.Info("trace", "span", jsonutil.MarshalString(span))
+		}()
+
 		var seq atomic.Int32
 		cache := lru.NewTypedExpiringCache[string, int32](10, duration.Spec(1*time.Second)).
 			WithMode(lru.Modes.Decoupled).
 			WithResetAgeAfterCreation(true).
-			WithServeStaleDuringRefresh(true)
+			WithServeStaleDuringRefresh(true).
+			WithName("test cache")
 		constructor := func() (int32, error) {
-			log.Info("refreshing")
+			log.Info("construction start")
 			time.Sleep(time.Second)
 			res := seq.Add(1)
-			log.Info("refreshed", "new", res)
+			log.Info("construction end", "new", res)
 			return res, nil
 		}
 
@@ -378,8 +394,15 @@ func TestExpiringCacheServeStaleDuringRefresh(t *testing.T) {
 		require.False(t, evicted)
 		require.EqualValues(t, 1, val)
 
+		// entry still expired: trigger no refresh, receive stale value
+		time.Sleep(500 * time.Millisecond)
+		val, evicted, err = cache.GetOrCreate("b", constructor) // => stale
+		require.NoError(t, err)
+		require.False(t, evicted)
+		require.EqualValues(t, 1, val)
+
 		// wait for refresh to complete and refreshed entry to expire
-		time.Sleep(2*time.Second + 50*time.Millisecond)
+		time.Sleep(time.Second + 550*time.Millisecond)
 
 		// expect new value
 		val, evicted, err = cache.GetOrCreate("b", constructor) // => miss
@@ -391,7 +414,7 @@ func TestExpiringCacheServeStaleDuringRefresh(t *testing.T) {
 		log.Info("metrics", "metrics", jsonutil.Stringer(&m))
 		require.EqualValues(t, 0, m.Hits.Load())
 		require.EqualValues(t, 2, m.Misses.Load())
-		require.EqualValues(t, 1, m.StaleHits.Load())
+		require.EqualValues(t, 2, m.StaleHits.Load())
 		require.EqualValues(t, 2, m.Added.Load())
 		require.EqualValues(t, 1, m.Removed.Load())
 		require.EqualValues(t, 1, cache.Len())
