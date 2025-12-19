@@ -14,6 +14,9 @@ import (
 
 var log = elog.Get("/eluvio/media/transport/rtp")
 
+// the log for periodic stats from the StreamTracker
+var statsLog = elog.Get("/eluvio/media/transport/rtp/stats")
+
 // ParsePacket parses the given RTP packet. Returns an error if the packet is invalid.
 func ParsePacket(packet []byte) (*rtp.Packet, error) {
 	pkt := rtp.Packet{}
