@@ -2,6 +2,7 @@ package codecutil_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"testing"
@@ -131,4 +132,170 @@ func TestMapDecodeStructCBOR(t *testing.T) {
 	// force token string update for comparison
 	_ = dst.Token.String()
 	require.Equal(t, &ts, &dst)
+}
+
+type innerColor struct {
+	Color string `json:"color"`
+}
+type innerType struct {
+	Type string `json:"type"`
+}
+type upper struct {
+	innerColor
+	innerType
+	Name string `json:"name"`
+	Size int    `json:"size"`
+}
+
+type upperP struct {
+	*innerColor
+	*innerType
+	Name string `json:"name"`
+	Size int    `json:"size"`
+}
+
+type upperSimple struct {
+	innerColor
+	innerType
+}
+
+func TestMapDecodeSquash(t *testing.T) {
+	{
+		in0 := &upper{
+			innerColor: innerColor{Color: "red"},
+			innerType:  innerType{Type: "car"},
+			Name:       "x",
+			Size:       2,
+		}
+		bb, err := json.Marshal(in0)
+		require.NoError(t, err)
+		var msi interface{}
+		err = json.Unmarshal(bb, &msi)
+		require.NoError(t, err)
+
+		in1 := &upper{}
+		err = codecutil.MapDecode(msi, in1)
+		require.NoError(t, err)
+		//fmt.Println(jsonutil.MarshalCompactString(in1))
+		//{"color":"","type":"","name":"x","size":2}
+		require.Equal(t, "", in1.Color)
+		require.Equal(t, "", in1.Type)
+
+		in1 = &upper{}
+		err = codecutil.MapDecode(msi, in1, true)
+		require.NoError(t, err)
+		//fmt.Println(jsonutil.MarshalCompactString(in1))
+		//{"color":"red","type":"car","name":"x","size":2}
+		require.Equal(t, in0, in1)
+	}
+	{
+		in0 := &upperP{
+			innerColor: &innerColor{Color: "red"},
+			innerType:  &innerType{Type: "car"},
+			Name:       "x",
+			Size:       2,
+		}
+		bb, err := json.Marshal(in0)
+		require.NoError(t, err)
+		//{"color":"red","type":"car","name":"x","size":2}
+		var msi interface{}
+		err = json.Unmarshal(bb, &msi)
+		require.NoError(t, err)
+
+		in1 := &upperP{}
+		err = codecutil.MapDecode(msi, in1)
+		require.NoError(t, err)
+		//fmt.Println(jsonutil.MarshalCompactString(in1))
+		//{"name":"x","size":2}
+		require.Nil(t, in1.innerColor)
+		require.Nil(t, in1.innerType)
+
+		in1 = &upperP{}
+		err = codecutil.MapDecode(msi, in1, true)
+		require.NoError(t, err)
+		//fmt.Println(jsonutil.MarshalCompactString(in1))
+		//{"name":"x","size":2}
+		require.Nil(t, in1.innerColor)
+		require.Nil(t, in1.innerType)
+
+		in1 = &upperP{
+			innerColor: &innerColor{},
+			innerType:  &innerType{},
+		}
+		err = codecutil.MapDecode(msi, in1, true)
+		require.NoError(t, err)
+		//fmt.Println(jsonutil.MarshalCompactString(in1))
+		//{"color":"red","type":"car","name":"x","size":2}
+		require.Equal(t, in0, in1)
+	}
+	{
+		in0 := &upperSimple{
+			innerColor: innerColor{Color: "red"},
+			innerType:  innerType{Type: "car"},
+		}
+		bb, err := json.Marshal(in0)
+		require.NoError(t, err)
+		//fmt.Println(jsonutil.MarshalCompactString(in0))
+		//{"color":"red","type":"car"}
+		var msi interface{}
+		err = json.Unmarshal(bb, &msi)
+		require.NoError(t, err)
+
+		in1 := &upperSimple{}
+		err = codecutil.MapDecode(msi, in1)
+		require.NoError(t, err)
+		//fmt.Println(jsonutil.MarshalCompactString(in1))
+		//{"color":"","type":""}
+		require.Equal(t, "", in1.Color)
+		require.Equal(t, "", in1.Type)
+
+		in1 = &upperSimple{}
+		err = codecutil.MapDecode(msi, in1, true)
+		require.NoError(t, err)
+		//fmt.Println(jsonutil.MarshalCompactString(in1))
+		//{"color":"red","type":"car"}
+		require.Equal(t, "red", in1.Color)
+		require.Equal(t, "car", in1.Type)
+
+		require.Equal(t, in0, in1)
+	}
+}
+
+type idStr string
+
+func (i *idStr) UnmarshalText(text []byte) error {
+	*i = idStr(text)
+	return nil
+}
+
+type simple struct {
+	Id idStr `json:"id"`
+}
+
+// BenchmarkMapDecode
+// using MethodByName in decodeHook and 'old' DecodeHookExec in mapstructure
+// BenchmarkMapDecode-8   	  291985	      3868 ns/op	     576 B/op	      20 allocs/op
+// using MethodByName in decodeHook and 'new' DecodeHookExec in mapstructure
+// BenchmarkMapDecode-8   	  393734	      2745 ns/op	     576 B/op	      20 allocs/op
+// using cast in decodeHook and 'new' DecodeHookExec in mapstructure
+// BenchmarkMapDecode-8   	  670012	      1677 ns/op	     368 B/op	      12 allocs/op
+func BenchmarkMapDecode(b *testing.B) {
+
+	in0 := &simple{
+		Id: "x",
+	}
+	bb, err := json.Marshal(in0)
+	require.NoError(b, err)
+	var msi interface{}
+	err = json.Unmarshal(bb, &msi)
+	require.NoError(b, err)
+
+	target := &simple{}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err = codecutil.MapDecode(msi, target)
+		require.NoError(b, err)
+	}
 }
