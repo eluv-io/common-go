@@ -1,6 +1,7 @@
 package histogram
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -34,4 +35,61 @@ func TestCountToKeep(t *testing.T) {
 		ck := countToKeep(tc.durationPerHistogram, tc.toCover)
 		require.Equal(t, tc.wantCount, ck, "failed case %d at %v / %v - expected %d, got %d", i, tc.toCover, tc.durationPerHistogram, tc.wantCount, ck)
 	}
+}
+
+func TestNewMovingAverageHistogram(t *testing.T) {
+	createHistogram := func() *MovingAverageHistogram[time.Duration] {
+		histogram, err := NewMovingAverageHistogram(func() *Histogram[time.Duration] {
+			return NewDurationHistogram(SegmentLatencyHistogram)
+		}, 10, 10*time.Second)
+		require.NoError(t, err)
+		return histogram
+	}
+	avgFn := func(h *Histogram[time.Duration]) time.Duration {
+		return h.Average()
+	}
+
+	t.Run("identical values per rotation", func(t *testing.T) {
+		histogram := createHistogram()
+		for i := 0; i < 10; i++ {
+			histogram.Observe(100 * time.Millisecond)
+			histogram.Observe(100 * time.Millisecond)
+			histogram.Observe(200 * time.Millisecond)
+			histogram.Observe(200 * time.Millisecond)
+
+			avg := histogram.StatLastMinute(avgFn)
+			require.Equal(t, 150*time.Millisecond, avg)
+
+			histogram.Rotate()
+		}
+	})
+
+	t.Run("increasing values per rotation", func(t *testing.T) {
+		histogram := createHistogram()
+		want := []time.Duration{
+			0 * time.Millisecond,   // 0
+			50 * time.Millisecond,  // 0+100
+			100 * time.Millisecond, // 0+100+200
+			150 * time.Millisecond, // 0+100+200+300
+			200 * time.Millisecond, // 0+100+200+300+400
+			250 * time.Millisecond, // 0+100+200+300+400+500
+			300 * time.Millisecond, // 0+100+200+300+400+500+600
+			400 * time.Millisecond, // 100+200+300+400+500+600+700 | +700
+			500 * time.Millisecond, // 200+300+400+500+600+700+800 | +700
+			600 * time.Millisecond, // 300+400+500+600+700+800+900 | +700
+		}
+		for i := 0; i < 10; i++ {
+			histogram.Observe(time.Duration(i) * 100 * time.Millisecond)
+
+			ck := countToKeep(10*time.Second, time.Minute)
+			require.Equal(t, 7, ck)
+
+			avg := histogram.StatLastMinute(avgFn)
+			fmt.Println(avg)
+			require.Equal(t, want[i], avg)
+
+			histogram.Rotate()
+		}
+	})
+
 }

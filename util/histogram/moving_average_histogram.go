@@ -46,9 +46,7 @@ func (m *MovingAverageHistogram[T]) Rotate() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for i := len(m.h) - 1; i > 0; i-- {
-		m.h[i] = m.h[i-1]
-	}
+	copy(m.h[1:], m.h)
 
 	m.h[0] = m.newHist()
 }

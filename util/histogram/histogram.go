@@ -8,9 +8,10 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/exp/constraints"
+
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/errors-go"
-	"golang.org/x/exp/constraints"
 )
 
 // ----- durationHistogram -----
