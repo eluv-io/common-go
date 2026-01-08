@@ -12,7 +12,7 @@ import (
 )
 
 func TestDurationHistogramBounds(t *testing.T) {
-	h := NewDefaultDurationHistogram()
+	h := NewDefaultHistogram()
 	for i, b := range h.bins {
 		//fmt.Println(b.label)
 		lims := strings.Split(b.Label, "-")
@@ -36,36 +36,36 @@ func TestDurationHistogramBounds(t *testing.T) {
 }
 
 func TestBinsValidation(t *testing.T) {
-	emptyBins := []*DurationBin{}
-	unboundedBeforeEnd := []*DurationBin{
+	emptyBins := []*HistogramBin[time.Duration]{}
+	unboundedBeforeEnd := []*HistogramBin[time.Duration]{
 		{Label: "0-10", Max: 10},
 		{Label: "10-", Max: 0},
 		{Label: "10-20", Max: 20},
 	}
-	duplicateBins := []*DurationBin{
+	duplicateBins := []*HistogramBin[time.Duration]{
 		{Label: "0-10", Max: 10},
 		{Label: "10-20", Max: 20},
 		{Label: "10-20", Max: 20},
 	}
-	decreasingBins := []*DurationBin{
+	decreasingBins := []*HistogramBin[time.Duration]{
 		{Label: "0-10", Max: 10},
 		{Label: "15-20", Max: 20},
 		{Label: "10-15", Max: 15},
 	}
-	notEmptyBin := []*DurationBin{
+	notEmptyBin := []*HistogramBin[time.Duration]{
 		{Label: "0-10", Max: 10},
 		{Label: "10-20", Max: 20, Count: 15},
 	}
 
-	testCases := [][]*DurationBin{emptyBins, unboundedBeforeEnd, duplicateBins, decreasingBins, notEmptyBin}
+	testCases := [][]*HistogramBin[time.Duration]{emptyBins, unboundedBeforeEnd, duplicateBins, decreasingBins, notEmptyBin}
 	for _, testCase := range testCases {
-		_, err := NewDurationHistogramBins(testCase)
+		_, err := NewHistogramBins(testCase)
 		require.Error(t, err)
 	}
 }
 
 func TestDurationHistogram(t *testing.T) {
-	h := NewDefaultDurationHistogram()
+	h := NewDefaultHistogram()
 
 	for i, b := range h.bins {
 		min := time.Duration(0)
@@ -96,43 +96,43 @@ func TestDurationHistogram(t *testing.T) {
 }
 
 func TestDurationMaxBehavior(t *testing.T) {
-	bins := []*DurationBin{
+	bins := []*HistogramBin[time.Duration]{
 		{Label: "0-10", Max: 10},
 		{Label: "10-"},
 	}
 
-	h, err := NewDurationHistogramBins(bins)
+	h, err := NewHistogramBins(bins)
 	require.NoError(t, err)
 
 	h.Observe(10)
 	h.Observe(11)
 	h.Observe(100)
 	require.Equal(t, int64(2), h.bins[1].Count)
-	require.Equal(t, int64(111), h.bins[1].DSum)
+	require.Equal(t, time.Duration(111), h.bins[1].DSum)
 
-	bins2 := []*DurationBin{
+	bins2 := []*HistogramBin[time.Duration]{
 		{Label: "0-10", Max: 10},
 		{Label: "10-20", Max: 20},
 	}
 
-	h2, err := NewDurationHistogramBins(bins2)
+	h2, err := NewHistogramBins(bins2)
 	require.NoError(t, err)
 
 	h2.Observe(10)
 	h2.Observe(11)
 	h2.Observe(100)
 	require.Equal(t, int64(1), h2.bins[1].Count)
-	require.Equal(t, int64(11), h2.bins[1].DSum)
+	require.Equal(t, time.Duration(11), h2.bins[1].DSum)
 }
 
 func TestStandardDeviation(t *testing.T) {
-	bins := []*DurationBin{
+	bins := []*HistogramBin[time.Duration]{
 		{Label: "0-10", Max: 10},
 		{Label: "10-50", Max: 50},
 		{Label: "50-90", Max: 90},
 		{Label: "90-100", Max: 100},
 	}
-	h, err := NewDurationHistogramBins(bins)
+	h, err := NewHistogramBins(bins)
 	require.NoError(t, err)
 
 	data := []time.Duration{
@@ -147,19 +147,19 @@ func TestStandardDeviation(t *testing.T) {
 }
 
 func TestSummaryStatsIgnoreOutliers(t *testing.T) {
-	bins := []*DurationBin{
+	bins := []*HistogramBin[time.Duration]{
 		{Label: "0-10", Max: 10},
 		{Label: "10-20", Max: 20},
 		{Label: "20-30", Max: 30},
 		{Label: "30-40", Max: 40},
 		{Label: "40-50", Max: 50},
 	}
-	bins2 := append([]*DurationBin{}, bins...)
+	bins2 := append([]*HistogramBin[time.Duration]{}, bins...)
 
-	h, err := NewDurationHistogramBins(bins)
+	h, err := NewHistogramBins(bins)
 	require.NoError(t, err)
 
-	hWithOutliers, err := NewDurationHistogramBins(bins2)
+	hWithOutliers, err := NewHistogramBins(bins2)
 	require.NoError(t, err)
 
 	// Uniformly distributed data from 0 to 50
@@ -197,7 +197,7 @@ func TestSummaryStatsIgnoreOutliers(t *testing.T) {
 }
 
 func TestStandardDeviation2(t *testing.T) {
-	values := []*SerializedDurationBin{
+	values := []*SerializedHistogramBin[time.Duration]{
 		{Label: "0-100ms", Count: 11917, DSum: 750548874146},
 		{Label: "100ms-200ms", Count: 11174, DSum: 1632240504452},
 		{Label: "200ms-300ms", Count: 6794, DSum: 1668223282733},
@@ -216,14 +216,14 @@ func TestStandardDeviation2(t *testing.T) {
 	require.Equal(t, int64(196), h.StandardDeviation().Milliseconds())
 }
 func TestQuantileEstimation(t *testing.T) {
-	bins := []*DurationBin{
+	bins := []*HistogramBin[time.Duration]{
 		{Label: "0-10", Max: 10},
 		{Label: "10-20", Max: 20},
 		{Label: "20-30", Max: 30},
 		{Label: "30-40", Max: 40},
 		{Label: "40-50", Max: 50},
 	}
-	h, err := NewDurationHistogramBins(bins)
+	h, err := NewHistogramBins(bins)
 	require.NoError(t, err)
 
 	// Uniformly distributed data from 0 to 50
@@ -249,12 +249,12 @@ func TestQuantileEstimation(t *testing.T) {
 }
 
 func TestUnboundedQuantileEstimation(t *testing.T) {
-	bins := []*DurationBin{
+	bins := []*HistogramBin[time.Duration]{
 		{Label: "0-10", Max: 10},
 		{Label: "10-"},
 	}
 
-	h, err := NewDurationHistogramBins(bins)
+	h, err := NewHistogramBins(bins)
 	require.NoError(t, err)
 	h.Observe(5)
 	// The 10- bin has an average of 30
@@ -290,7 +290,7 @@ func TestMarshalUnmarshal(t *testing.T) {
 	s, err := h.MarshalJSON()
 	require.NoError(t, err)
 
-	var vals []*SerializedDurationBin
+	var vals []*SerializedHistogramBin[time.Duration]
 	err = json.Unmarshal(s, &vals)
 	require.NoError(t, err)
 	h2 := NewDurationHistogram(DefaultDurationHistogram)
@@ -304,14 +304,14 @@ func TestMarshalUnmarshal(t *testing.T) {
 }
 
 func TestHistogramConcurrency(t *testing.T) {
-	bins := []*DurationBin{
+	bins := []*HistogramBin[time.Duration]{
 		{Label: "0-10", Max: 10},
 		{Label: "10-20", Max: 20},
 		{Label: "20-30", Max: 30},
 		{Label: "30-40", Max: 40},
 		{Label: "40-50", Max: 50},
 	}
-	h, err := NewDurationHistogramBins(bins)
+	h, err := NewHistogramBins(bins)
 	require.NoError(t, err)
 
 	// Uniformly distributed data from 0 to 50
@@ -340,7 +340,7 @@ func TestHistogramConcurrency(t *testing.T) {
 
 	// Summary statistics are a simple way to ensure it looks the way it should
 	require.Equal(t, int64(50), h.TotalCount())
-	require.Equal(t, int64(1275), h.TotalDSum())
+	require.Equal(t, time.Duration(1275), h.TotalDSum())
 	require.Equal(t, time.Duration(10), h.Quantile(0.2))
 	require.Equal(t, time.Duration(49), h.Quantile(0.99))
 	require.Equal(t, time.Duration(25), h.Quantile(0.5))
