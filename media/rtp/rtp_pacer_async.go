@@ -77,17 +77,21 @@ func (p *RtpPacer) Pop() (bts []byte, err error) {
 		// 		"target_wait", pkt.targetWait)
 		// }
 		if wait > 0 {
-			select {
-			case <-time.After(wait):
-				// PENDING(LUK): this triggers an error even if the packetCh is not drained...
-				// case <-p.ctx.Done():
-				// 	return nil, p.ctx.Err()
-			}
+			time.Sleep(wait)
+			// below code creates a new timer instance for each packet that we need to wait for...
+			//
+			// select {
+			// case <-time.After(wait):
+			// 	// PENDING(LUK): this triggers an error even if the packetCh is not drained...
+			// 	// case <-p.ctx.Done():
+			// 	// 	return nil, p.ctx.Err()
+			// }
 		} else {
 			p.outStats.DelayedPackets++
 		}
 		if !p.outStats.lastPacket.IsZero() {
 			// we ignore the first wait value with the above if statement, but it is always "initiaDelay" anyway
+
 			newWait := p.outStats.wait.UpdateNow(now, duration.Spec(wait))
 			if newWait {
 				p.outStats.WaitLast = p.outStats.wait.Previous
