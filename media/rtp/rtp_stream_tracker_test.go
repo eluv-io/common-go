@@ -16,10 +16,12 @@ import (
 )
 
 func TestRtpStreamTracker(t *testing.T) {
-	source, err := os.ReadFile(filepath.Join(testutil.AssetsPathT(t, 2), "media", "mpeg-ts", "tlv-rtp-ts-segment-00001.ts"))
+	path, err := testutil.AssetsPath(2)
 	if err != nil {
 		t.Skip("skipping test: ", err)
 	}
+	source, err := os.ReadFile(filepath.Join(path, "media", "mpeg-ts", "tlv-rtp-ts-segment-00001.ts"))
+	require.NoError(t, err)
 
 	t.Run("valid packet", func(t *testing.T) {
 		packetizer := tlv.NewTlvPacketizer(1500)

@@ -17,10 +17,12 @@ import (
 )
 
 func TestPacketizer(t *testing.T) {
-	source, err := os.ReadFile(filepath.Join(testutil.AssetsPathT(t, 2), "media", "mpeg-ts", "ts-segment.ts"))
+	path, err := testutil.AssetsPath(2)
 	if err != nil {
 		t.Skip("skipping test: ", err)
 	}
+	source, err := os.ReadFile(filepath.Join(path, "media", "mpeg-ts", "ts-segment.ts"))
+	require.NoError(t, err)
 
 	fullPacketCount := 0
 	t.Run("start on TS packet boundary", func(t *testing.T) {
