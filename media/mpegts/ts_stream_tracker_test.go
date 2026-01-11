@@ -45,7 +45,9 @@ func TestTsStreamTracker(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(fmt.Sprint("stripRtp", tt.stripRtp), func(t *testing.T) {
 			source, err := os.ReadFile(filepath.Join(testutil.AssetsPathT(t, 2), "media", "mpeg-ts", tt.source))
-			require.NoError(t, err)
+			if err != nil {
+				t.Skip("skipping test: ", err)
+			}
 
 			for _, packetLoss := range []float64{0, .001} {
 				t.Run(fmt.Sprint("packet-loss:", packetLoss), func(t *testing.T) {

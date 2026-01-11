@@ -18,7 +18,9 @@ import (
 
 func TestPacketizer(t *testing.T) {
 	source, err := os.ReadFile(filepath.Join(testutil.AssetsPathT(t, 2), "media", "mpeg-ts", "ts-segment.ts"))
-	require.NoError(t, err)
+	if err != nil {
+		t.Skip("skipping test: ", err)
+	}
 
 	fullPacketCount := 0
 	t.Run("start on TS packet boundary", func(t *testing.T) {
