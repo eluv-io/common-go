@@ -12,6 +12,9 @@ import (
 	"github.com/eluv-io/utc-go"
 )
 
+// MinSleepThreshold is the threshold for sleeps - below this the pacer does not actually sleep to avoid timer overhead
+const MinSleepThreshold = 5 * time.Millisecond
+
 type pacerPacket struct {
 	targetTs utc.UTC // target wall clock time when to send the packet, calculated from RTP ts on reception of packet
 	inTs     utc.UTC // wall clock time when the packet was sent to channel
@@ -61,7 +64,7 @@ func (p *RtpPacer) Pop() (bts []byte, err error) {
 		p.outStats.buffered.Add(-1)
 		now := utc.Now()
 		wait := pkt.targetTs.Sub(now)
-		if wait > 0 {
+		if wait > MinSleepThreshold {
 			time.Sleep(wait)
 			// below code creates a new timer instance for each packet that we need to wait for...
 			//
@@ -72,14 +75,14 @@ func (p *RtpPacer) Pop() (bts []byte, err error) {
 			// 	// 	return nil, p.ctx.Err()
 			// }
 			p.outStats.Sleeps++
-			overslept := utc.Now().Sub(pkt.targetTs)
-			if overslept > 5*time.Millisecond {
+			overslept := duration.Spec(utc.Now().Sub(pkt.targetTs))
+			if overslept > 5*duration.Millisecond {
 				p.outStats.OverSlept++
 				if p.outStats.MaxOverslept < overslept {
 					p.outStats.MaxOverslept = overslept
 				}
 			}
-		} else if wait < time.Millisecond {
+		} else if wait < -time.Millisecond {
 			p.outStats.DelayedPackets++
 		}
 		if !p.outStats.lastPacket.IsZero() {
