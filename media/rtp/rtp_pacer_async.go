@@ -61,21 +61,6 @@ func (p *RtpPacer) Pop() (bts []byte, err error) {
 		p.outStats.buffered.Add(-1)
 		now := utc.Now()
 		wait := pkt.targetTs.Sub(now)
-		// if wait > 0 {
-		// 	log.Trace("rtpPacer: wait",
-		// 		"stream", p.stream,
-		// 		"d", now.Sub(p.start),
-		// 		"timestamp", pkt.rtpTs,
-		// 		"wait", wait,
-		// 		"target_wait", pkt.targetWait)
-		// } else if wait < -20*time.Millisecond {
-		// 	log.Info("rtpPacer: packet delayed",
-		// 		"stream", p.stream,
-		// 		"d", now.Sub(p.start),
-		// 		"timestamp", pkt.rtpTs,
-		// 		"wait", wait,
-		// 		"target_wait", pkt.targetWait)
-		// }
 		if wait > 0 {
 			time.Sleep(wait)
 			// below code creates a new timer instance for each packet that we need to wait for...
@@ -86,7 +71,15 @@ func (p *RtpPacer) Pop() (bts []byte, err error) {
 			// 	// case <-p.ctx.Done():
 			// 	// 	return nil, p.ctx.Err()
 			// }
-		} else {
+			p.outStats.Sleeps++
+			overslept := utc.Now().Sub(pkt.targetTs)
+			if overslept > 5*time.Millisecond {
+				p.outStats.OverSlept++
+				if p.outStats.MaxOverslept < overslept {
+					p.outStats.MaxOverslept = overslept
+				}
+			}
+		} else if wait < time.Millisecond {
 			p.outStats.DelayedPackets++
 		}
 		if !p.outStats.lastPacket.IsZero() {
@@ -108,6 +101,9 @@ func (p *RtpPacer) Pop() (bts []byte, err error) {
 				p.outStats.BufferedPackets = p.outStats.buffered.Load()
 				log.Debug("rtpPacer: out statistics", "stream", p.stream, "ipd", jsonutil.Stringer(&p.outStats))
 				p.outStats.DelayedPackets = 0
+				p.outStats.Sleeps = 0
+				p.outStats.OverSlept = 0
+				p.outStats.MaxOverslept = 0
 			}
 		}
 		p.outStats.lastPacket = now

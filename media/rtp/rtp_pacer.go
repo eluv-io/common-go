@@ -239,11 +239,14 @@ type stats struct {
 }
 
 type outStats struct {
-	WaitLast        statsutil.Statistics[duration.Spec] `json:"wait"`     // wait time statistics for last period
-	IPDLast         statsutil.Statistics[duration.Spec] `json:"ipd"`      // inter-packet delay statistics for last period
-	CHDLast         statsutil.Statistics[duration.Spec] `json:"chd"`      // channel delay statistics for last period
-	BufferedPackets int32                               `json:"buffered"` // number of packets currently in the channel
-	DelayedPackets  int                                 `json:"delayed"`  // number of packets that were popped from the queue after their nominal sending time
+	WaitLast        statsutil.Statistics[duration.Spec] `json:"wait"`          // wait time statistics for last period
+	IPDLast         statsutil.Statistics[duration.Spec] `json:"ipd"`           // inter-packet delay statistics for last period
+	CHDLast         statsutil.Statistics[duration.Spec] `json:"chd"`           // channel delay statistics for last period
+	BufferedPackets int32                               `json:"buffered"`      // number of packets currently in the channel
+	DelayedPackets  int                                 `json:"delayed"`       // number of packets that were popped from the queue after their nominal sending time
+	Sleeps          int                                 `json:"sleeps"`        // number of times the pacer had to wait before sending a packet
+	OverSlept       int                                 `json:"over_slept"`    // number of times sleep was more than 5ms longer than expected
+	MaxOverslept    time.Duration                       `json:"max_overslept"` // the maximum amount of time that a sleep was longer than expected
 
 	wait       statsutil.Periodic[duration.Spec] // collector for wait times
 	ipd        statsutil.Periodic[duration.Spec] // collector for inter-packet delays
