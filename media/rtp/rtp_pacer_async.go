@@ -77,7 +77,7 @@ func (p *RtpPacer) Pop() (bts []byte, err error) {
 			p.outStats.Sleeps++
 			overslept := duration.Spec(utc.Now().Sub(pkt.targetTs))
 			if overslept > 5*duration.Millisecond {
-				p.outStats.OverSlept++
+				p.outStats.Overslept++
 				if p.outStats.MaxOverslept < overslept {
 					p.outStats.MaxOverslept = overslept
 				}
@@ -105,7 +105,7 @@ func (p *RtpPacer) Pop() (bts []byte, err error) {
 				log.Debug("rtpPacer: out statistics", "stream", p.stream, "ipd", jsonutil.Stringer(&p.outStats))
 				p.outStats.DelayedPackets = 0
 				p.outStats.Sleeps = 0
-				p.outStats.OverSlept = 0
+				p.outStats.Overslept = 0
 				p.outStats.MaxOverslept = 0
 			}
 		}

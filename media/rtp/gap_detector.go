@@ -3,6 +3,7 @@ package rtp
 import (
 	"time"
 
+	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/errors-go"
 )
 
@@ -56,6 +57,7 @@ func (r *GapDetector) Detect(seq uint16, ts uint32) (seqUnwrapped, tsUnwrapped i
 					"previous", previous,
 					"current", current,
 					"diff", diff,
+					"dur", duration.Spec(TicksToDuration(diff)).Round(),
 					"threshold", r.TimestampThreshold,
 				),
 			)

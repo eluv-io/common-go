@@ -245,7 +245,7 @@ type outStats struct {
 	BufferedPackets int32                               `json:"buffered"`      // number of packets currently in the channel
 	DelayedPackets  int                                 `json:"delayed"`       // number of packets that were popped from the queue after their nominal sending time
 	Sleeps          int                                 `json:"sleeps"`        // number of times the pacer had to wait before sending a packet
-	OverSlept       int                                 `json:"over_slept"`    // number of times sleep was more than 5ms longer than expected
+	Overslept       int                                 `json:"overslept"`     // number of times sleep was more than 5ms longer than expected
 	MaxOverslept    duration.Spec                       `json:"max_overslept"` // the maximum amount of time that a sleep was longer than expected
 
 	wait       statsutil.Periodic[duration.Spec] // collector for wait times

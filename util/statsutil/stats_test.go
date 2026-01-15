@@ -54,6 +54,32 @@ func TestPeriodic_UpdateNow(t *testing.T) {
 	// Test update in new period
 	result = p.UpdateNow(now.Add(1100*time.Millisecond), 4)
 	assert.True(t, result)
+	assert.Equal(t, duration.Second, p.Previous.Duration)
+	assert.Equal(t, 8, p.Previous.Sum)
+	assert.Equal(t, 4, p.Current.Sum)
+	assert.Equal(t, 12, p.Total.Sum)
+}
+
+func TestPeriodic_UpdateNow_actualDuration(t *testing.T) {
+	p := Periodic[int]{Period: duration.Second, ActualDuration: true}
+	now := utc.Now()
+
+	// Test first update
+	result := p.UpdateNow(now, 1)
+	assert.False(t, result)
+	assert.Equal(t, 1, p.Current.Sum)
+	assert.Equal(t, 1, p.Total.Sum)
+
+	// Test update within same period
+	result = p.UpdateNow(now.Add(500*time.Millisecond), 7)
+	assert.False(t, result)
+	assert.Equal(t, 8, p.Current.Sum)
+	assert.Equal(t, 8, p.Total.Sum)
+
+	// Test update in new period
+	result = p.UpdateNow(now.Add(1100*time.Millisecond), 4)
+	assert.True(t, result)
+	assert.Equal(t, 500*duration.Millisecond, p.Previous.Duration)
 	assert.Equal(t, 8, p.Previous.Sum)
 	assert.Equal(t, 4, p.Current.Sum)
 	assert.Equal(t, 12, p.Total.Sum)
