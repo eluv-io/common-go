@@ -50,8 +50,8 @@ github.com/eluv-io/inject-go v1.0.2 h1:1+t2LqRHk1Ns+2JUBN9dqATxa6Y+7ay7GftfJVXqf
 github.com/eluv-io/inject-go v1.0.2/go.mod h1:03/vIoB3v+J0ASXrdw7nes2Qc2MeY9BKYf2BWJCJf3M=
 github.com/eluv-io/log-go v1.0.4 h1:WQwaoCN4lNfzS6qvhdlzUbKv2ZTDmE/Z855nMLZri10=
 github.com/eluv-io/log-go v1.0.4/go.mod h1:TvBaLIOvcrBpmgMaewgyZQSVY056WIfdCIliuGou+iw=
-github.com/eluv-io/mapstructure v0.0.0-20260119134029-a9f16d0da1e8 h1:rURjdRZiRFL9M5SBhZWL41bakgS08qB/BgQUFPRpYNQ=
-github.com/eluv-io/mapstructure v0.0.0-20260119134029-a9f16d0da1e8/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
+github.com/eluv-io/mapstructure v0.0.0-20260119153313-8cb119f9b42e h1:jdYpNYZWZMUyW8oD6yxeLpA4Z1sNnqBzZCyzWyUDyrk=
+github.com/eluv-io/mapstructure v0.0.0-20260119153313-8cb119f9b42e/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
 github.com/eluv-io/stack v1.8.2 h1:yocCvAcPy9vW5iBdNnig5Tem8LgOTT8JrOLvDcacnEQ=
 github.com/eluv-io/stack v1.8.2/go.mod h1:MIN/UfmiJlJUFpglnJCj+7DR5sDBUuvQRTENHm1F310=
 github.com/eluv-io/utc-go v1.0.1 h1:bFE8CFQT+ln8A8QK5SDBdUKtUfeOFnPF50c+Npz3pv0=
