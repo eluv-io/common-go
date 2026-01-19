@@ -75,7 +75,7 @@ require (
 
 replace (
 	github.com/fxamacker/cbor/v2 v2.8.0 => github.com/eluv-io/cbor/v2 v2.8.1-0.20250506081522-e7b11bfa1dad
-	github.com/mitchellh/mapstructure => github.com/eluv-io/mapstructure v0.0.0-20251222142343-9e696c8d46e0
+	github.com/mitchellh/mapstructure => github.com/eluv-io/mapstructure v0.0.0-20260119134029-a9f16d0da1e8
 	github.com/modern-go/gls => github.com/eluv-io/gls v1.0.0-elv1
 	github.com/spf13/afero => github.com/eluv-io/afero v1.11.1-0.20240924184135-9fbf4dcfd6f0
 )

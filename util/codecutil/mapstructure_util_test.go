@@ -299,3 +299,122 @@ func BenchmarkMapDecode(b *testing.B) {
 		require.NoError(b, err)
 	}
 }
+
+type innerColorUnmarshaler struct {
+	Color string `json:"color"`
+}
+
+func (u *innerColorUnmarshaler) UnmarshalMap(m map[string]interface{}) error {
+	u.Color = m["color"].(string)
+	return nil
+}
+
+// upperUnmarshalerIncorrect has a function UnmarshalMap AND embeds a struct
+// that also has an UnmarshalMap function.
+// In that case, using an alias - as below - to decode is incorrect since the
+// actual UnmarshalMap function that gets called in MapDecode is the one of the
+// embedded struct, resulting in failure to assign correctly all fields.
+// See upperUnmarshalerCorrect for a solution.
+type upperUnmarshalerIncorrect struct {
+	innerColorUnmarshaler
+	innerType
+	Name string `json:"name"`
+	Size int    `json:"size"`
+}
+
+func (u *upperUnmarshalerIncorrect) UnmarshalMap(m map[string]interface{}) error {
+	type alias upperUnmarshalerIncorrect
+	err := codecutil.MapDecode(m, (*alias)(u), true)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func TestMapDecodeSquashUnmarshalerIncorrect(t *testing.T) {
+	{
+		in0 := &upperUnmarshalerIncorrect{
+			innerColorUnmarshaler: innerColorUnmarshaler{Color: "red"},
+			innerType:             innerType{Type: "car"},
+			Name:                  "x",
+			Size:                  2,
+		}
+		bb, err := json.Marshal(in0)
+		require.NoError(t, err)
+		var msi interface{}
+		err = json.Unmarshal(bb, &msi)
+		require.NoError(t, err)
+
+		in1 := &upperUnmarshalerIncorrect{}
+		err = codecutil.MapDecode(msi, in1)
+		require.NoError(t, err)
+		//fmt.Println(jsonutil.MarshalCompactString(in1))
+		// works if we use innerColor
+		//{"color":"red","type":"car","name":"x","size":2}
+		// fails if we use innerColorUnmarshaler
+		//{"color":"red","type":"","name":"","size":0}
+		require.Equal(t, "red", in1.Color)
+		require.Equal(t, "", in1.Type)
+
+		in1 = &upperUnmarshalerIncorrect{}
+		err = codecutil.MapDecode(msi, in1, true)
+		require.NoError(t, err)
+		//fmt.Println(jsonutil.MarshalCompactString(in1))
+		// same as above
+		//{"color":"red","type":"","name":"","size":0}
+		require.NotEqual(t, in0, in1)
+	}
+}
+
+type upperUnmarshalerCorrect struct {
+	innerColorUnmarshaler
+	innerType
+	Name string `json:"name"`
+	Size int    `json:"size"`
+}
+
+func (u *upperUnmarshalerCorrect) UnmarshalMap(m map[string]interface{}) error {
+	type partial struct {
+		innerType
+		Name string `json:"name"`
+		Size int    `json:"size"`
+	}
+	p := &partial{}
+	err := codecutil.MapDecode(m, p, true)
+	if err != nil {
+		return err
+	}
+	err = codecutil.MapDecode(m, &u.innerColorUnmarshaler)
+	if err != nil {
+		return err
+	}
+	u.Name = p.Name
+	u.Type = p.Type
+	u.Size = p.Size
+	return nil
+}
+
+func TestMapDecodeSquashUnmarshalerCorrect(t *testing.T) {
+	{
+		in0 := &upperUnmarshalerCorrect{
+			innerColorUnmarshaler: innerColorUnmarshaler{Color: "red"},
+			innerType:             innerType{Type: "car"},
+			Name:                  "x",
+			Size:                  2,
+		}
+		bb, err := json.Marshal(in0)
+		require.NoError(t, err)
+		var msi interface{}
+		err = json.Unmarshal(bb, &msi)
+		require.NoError(t, err)
+
+		in1 := &upperUnmarshalerCorrect{}
+		err = codecutil.MapDecode(msi, in1)
+		require.NoError(t, err)
+		//fmt.Println(jsonutil.MarshalCompactString(in1))
+		//{"color":"red","type":"car","name":"x","size":2}
+		require.Equal(t, "red", in1.Color)
+		require.Equal(t, "car", in1.Type)
+		require.Equal(t, in0, in1)
+	}
+}
