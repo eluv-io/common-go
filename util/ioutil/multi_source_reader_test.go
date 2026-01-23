@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/eluv-io/errors-go"
 	"github.com/stretchr/testify/require"
 
 	"github.com/eluv-io/common-go/util/byteutil"
 	"github.com/eluv-io/common-go/util/ioutil"
+	"github.com/eluv-io/errors-go"
 )
 
 func TestMultiSourceReader(t *testing.T) {

@@ -13,10 +13,10 @@ var bufPools sync.Map
 
 var _ io.ReadCloser = (*MultiSourceReader)(nil)
 
-// MultiSourceReader returns a io.ReadCloser that reads data from multiple identical source readers. Source readers may
-// provide data at different variable rates, so MultiSourceReader returns data as it is made available from any source.
-// Additional source readers may be added at anytime via Add; Add may be called concurrently with Read or Close (but
-// Read and Close must not be called concurrently). If any of the sources return an error (from reading or closing),
+// NewMultiSourceReader returns an io.ReadCloser that reads data from multiple identical source readers. Source readers
+// may provide data at different variable rates, so MultiSourceReader returns data as it is made available from any
+// source. Additional source readers may be added at anytime via Add; Add may be called concurrently with Read or Close
+// (but Read and Close must not be called concurrently). If any of the sources return an error (from reading/closing),
 // Read will return that error. Each source will be closed immediately once the source is fully read or errors. Close
 // will close any sources that have not yet been closed. If more than one error occurs when reading or closing sources,
 // only the first error encountered will be returned.
@@ -47,7 +47,7 @@ type MultiSourceReader struct {
 	read    *multiSourceRead
 	off     int64
 	err     error
-	errors  []error
+	errors  errors.ErrorList
 	closed  bool
 	bufSize int
 	bufPool *byteutil.Pool
@@ -102,8 +102,8 @@ func (r *MultiSourceReader) Read(p []byte) (int, error) {
 		if err == io.EOF {
 			r.err = io.EOF
 		} else if err != nil {
-			r.errors = append(r.errors, err)
-			if len(r.errors) == int(r.n.Load()) {
+			r.errors.Append(err)
+			if len(r.errors.Errors) == int(r.n.Load()) {
 				r.err = e("errors", r.errors)
 			}
 		}
@@ -124,7 +124,7 @@ func (r *MultiSourceReader) Read(p []byte) (int, error) {
 		if n == len(read.data) {
 			r.read = nil
 			r.releaseBuf(read.buf)
-			if processErr(read.err) {
+			if read.err != nil && processErr(read.err) {
 				return n, r.err
 			}
 		}
@@ -175,7 +175,7 @@ func (r *MultiSourceReader) Read(p []byte) (int, error) {
 		if x == len(read.data) {
 			read.data = nil
 			r.releaseBuf(read.buf)
-			if processErr(read.err) {
+			if read.err != nil && processErr(read.err) {
 				return n, r.err
 			}
 		}
