@@ -21,7 +21,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
 	github.com/maruel/panicparse/v2 v2.3.1
 	github.com/mattn/go-runewidth v0.0.9
-	github.com/mitchellh/mapstructure v1.4.3
+	github.com/mitchellh/mapstructure v1.5.0
 	github.com/modern-go/gls v0.0.0-20220109145502-612d0167dce5
 	github.com/mr-tron/base58 v1.2.0
 	github.com/multiformats/go-varint v0.0.6
@@ -75,6 +75,7 @@ require (
 
 replace (
 	github.com/fxamacker/cbor/v2 v2.8.0 => github.com/eluv-io/cbor/v2 v2.8.1-0.20250506081522-e7b11bfa1dad
+	github.com/mitchellh/mapstructure => github.com/eluv-io/mapstructure v0.0.0-20260119153313-8cb119f9b42e
 	github.com/modern-go/gls => github.com/eluv-io/gls v1.0.0-elv1
 	github.com/spf13/afero => github.com/eluv-io/afero v1.11.1-0.20240924184135-9fbf4dcfd6f0
 )
