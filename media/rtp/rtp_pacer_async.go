@@ -1,6 +1,8 @@
 package rtp
 
 import (
+	"runtime"
+	"runtime/debug"
 	"time"
 
 	"github.com/eluv-io/common-go/format/duration"
@@ -13,6 +15,13 @@ import (
 
 // MinSleepThreshold is the threshold for sleeps - below this the pacer does not actually sleep to avoid timer overhead
 const MinSleepThreshold = 5 * time.Millisecond
+
+func init() {
+	// TEMPORARY FOR TESTING: Disable GC to eliminate GC pauses as a cause of oversleeps
+	// This will cause memory to grow unbounded - only use for short-term testing (< 1 hour)
+	debug.SetGCPercent(-1)
+	log.Info("GC disabled for testing - memory will grow unbounded")
+}
 
 type pacerPacket struct {
 	targetTs  utc.UTC         // target wall clock time when to send the packet, calculated from RTP ts on reception of packet
@@ -83,6 +92,10 @@ func (p *RtpPacer) releasePacerPacket(pp *pacerPacket) {
 }
 
 func (p *RtpPacer) Pop() (bts []byte, err error) {
+	// TEMPORARY FOR TESTING: Lock this goroutine to its OS thread to avoid scheduler moves
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
 	// Release the previous packet buffers
 	if p.lastPoppedPacket != nil {
 		if p.lastPoppedPacket.pooledPkt != nil {
