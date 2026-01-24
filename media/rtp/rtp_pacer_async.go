@@ -99,7 +99,11 @@ func (p *RtpPacer) Pop() (bts []byte, err error) {
 		now := utc.Now()
 		wait := pkt.targetTs.Sub(now)
 		if wait > MinSleepThreshold {
-			time.Sleep(wait)
+			toSleep := wait
+			if toSleep > 2*time.Millisecond {
+				toSleep = 2 * time.Millisecond // Don't sleep more than 2ms at a time
+			}
+			time.Sleep(toSleep)
 			// below code creates a new timer instance for each packet that we need to wait for...
 			//
 			// select {
