@@ -130,20 +130,25 @@ func TestRtpPacer_calculateWait(t *testing.T) {
 }
 
 func TestRtpPacer_AsyncBasic(t *testing.T) {
-	pacer := rtp2.NewRtpPacer()
+	for _, tickerPeriod := range []time.Duration{0, time.Millisecond, 5 * time.Millisecond} {
+		t.Run(fmt.Sprintf("ticker period:%s", tickerPeriod), func(t *testing.T) {
+			pacer := rtp2.NewRtpPacer().WithTicker(tickerPeriod)
 
-	collect := collectPackets(pacer)
+			collect := collectPackets(pacer)
 
-	for i := 0; i < 20; i++ {
-		err := pacer.Push(pack(t, i, i*100))
-		require.NoError(t, err)
+			for i := 0; i < 20; i++ {
+				err := pacer.Push(pack(t, i, i*100))
+				require.NoError(t, err)
+			}
+
+			time.Sleep(100 * time.Millisecond)
+			pacer.Shutdown()
+			received, err := collect()
+			require.NoError(t, err)
+			require.Equal(t, 20, len(received))
+		})
 	}
 
-	time.Sleep(100 * time.Millisecond)
-	pacer.Shutdown()
-	received, err := collect()
-	require.NoError(t, err)
-	require.Equal(t, 20, len(received))
 }
 
 func ManualTestRtpPacer_AsyncPartDownload(t *testing.T) {

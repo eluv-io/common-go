@@ -24,12 +24,13 @@ var WrapDuration = TicksToDuration(1 << 32)
 func NewRtpPacer() *RtpPacer {
 	ctx, cancel := context.WithCancelCause(context.Background())
 	return &RtpPacer{
-		logThrottler: timeutil.NewPeriodic(1 * time.Second),
-		stream:       "n/a",
-		ctx:          ctx,
-		cancel:       cancel,
-		packetCh:     make(chan *pacerPacket, 10_000),
-		gapDetector:  NewRtpGapDetector(1, time.Second),
+		logThrottler:      timeutil.NewPeriodic(1 * time.Second),
+		stream:            "n/a",
+		ctx:               ctx,
+		cancel:            cancel,
+		packetCh:          make(chan *pacerPacket, 10_000),
+		gapDetector:       NewRtpGapDetector(1, time.Second),
+		minSleepThreshold: 5 * time.Millisecond,
 	}
 }
 
@@ -47,10 +48,13 @@ type RtpPacer struct {
 	stats       stats        // statistics
 
 	// async mode
-	packetCh chan *pacerPacket       // channel to send packets to
-	ctx      context.Context         // context for canceling the pacer
-	cancel   context.CancelCauseFunc // to cancel the pacer
-	outStats outStats                // output statistics
+	packetCh          chan *pacerPacket       // channel to send packets to
+	ctx               context.Context         // context for canceling the pacer
+	cancel            context.CancelCauseFunc // to cancel the pacer
+	outStats          outStats                // output statistics
+	minSleepThreshold time.Duration           // shorter sleep times are ignored and packets delivered back-to-back
+	ticker            *time.Ticker            // optional ticker (if using ticker instead of time.Sleep)
+	lastTick          time.Time               // the last time received from the ticker's channel
 }
 
 func (p *RtpPacer) SetDelay(delay time.Duration) {
@@ -62,18 +66,37 @@ func (p *RtpPacer) WithDelay(delay time.Duration) *RtpPacer {
 	return p
 }
 
+// WithAdjustTimeRef enables/disables automatic adjustment of the time reference when RTP packets arrive too early.
 func (p *RtpPacer) WithAdjustTimeRef(adjust bool) *RtpPacer {
 	p.adjustTimeRef = adjust
 	return p
 }
 
+// WithStream sets the stream name for logging purposes.
 func (p *RtpPacer) WithStream(name string) *RtpPacer {
 	p.stream = name
 	return p
 }
 
+// WithNoLog disables logging of errors.
 func (p *RtpPacer) WithNoLog() *RtpPacer {
 	p.logThrottler = NoopPeriodic{}
+	return p
+}
+
+// WithSleepThreshold sets the minimum sleep duration threshold for packet delivery.
+func (p *RtpPacer) WithSleepThreshold(threshold time.Duration) *RtpPacer {
+	p.minSleepThreshold = threshold
+	return p
+}
+
+// WithTicker enables the use of a ticker instead of time.Sleep to schedule the next packet delivery if period > 0.
+func (p *RtpPacer) WithTicker(period time.Duration) *RtpPacer {
+	if period > 0 {
+		p.ticker = time.NewTicker(period)
+	} else {
+		p.ticker = nil
+	}
 	return p
 }
 

@@ -1,6 +1,7 @@
 package rtp
 
 import (
+	"context"
 	"time"
 
 	"github.com/pion/rtp"
@@ -11,9 +12,6 @@ import (
 	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/utc-go"
 )
-
-// MinSleepThreshold is the threshold for sleeps - below this the pacer does not actually sleep to avoid timer overhead
-const MinSleepThreshold = 5 * time.Millisecond
 
 type pacerPacket struct {
 	targetTs utc.UTC // target wall clock time when to send the packet, calculated from RTP ts on reception of packet
@@ -44,7 +42,7 @@ func (p *RtpPacer) Push(bts []byte) error {
 	case p.packetCh <- p.newPacerPacket(bts, now, targetTs, pkt):
 		return nil
 	case <-p.ctx.Done():
-		return p.ctx.Err()
+		return context.Cause(p.ctx)
 	}
 }
 
@@ -59,31 +57,39 @@ func (p *RtpPacer) newPacerPacket(bts []byte, now, targetTs utc.UTC, pkt *rtp.Pa
 }
 
 func (p *RtpPacer) Pop() (bts []byte, err error) {
+	trackOversleep := func(pkt *pacerPacket) {
+		overslept := duration.Spec(utc.Now().Sub(pkt.targetTs))
+		if overslept > 5*duration.Millisecond {
+			p.outStats.Overslept++
+			if p.outStats.MaxOverslept < overslept {
+				p.outStats.MaxOverslept = overslept
+			}
+		}
+	}
+
 	select {
 	case pkt := <-p.packetCh:
 		p.outStats.buffered.Add(-1)
 		now := utc.Now()
 		wait := pkt.targetTs.Sub(now)
-		if wait > MinSleepThreshold {
-			time.Sleep(wait)
-			// below code creates a new timer instance for each packet that we need to wait for...
-			//
-			// select {
-			// case <-time.After(wait):
-			// 	// PENDING(LUK): this triggers an error even if the packetCh is not drained...
-			// 	// case <-p.ctx.Done():
-			// 	// 	return nil, p.ctx.Err()
-			// }
-			p.outStats.Sleeps++
-			overslept := duration.Spec(utc.Now().Sub(pkt.targetTs))
-			if overslept > 5*duration.Millisecond {
-				p.outStats.Overslept++
-				if p.outStats.MaxOverslept < overslept {
-					p.outStats.MaxOverslept = overslept
+		if p.ticker != nil {
+			if wait > 0 {
+				for pkt.targetTs.Time.After(p.lastTick) {
+					p.lastTick = <-p.ticker.C
+					p.outStats.Sleeps++
 				}
+				trackOversleep(pkt)
+			} else if wait < -time.Millisecond {
+				p.outStats.DelayedPackets++
 			}
-		} else if wait < -time.Millisecond {
-			p.outStats.DelayedPackets++
+		} else {
+			if wait > p.minSleepThreshold {
+				time.Sleep(wait)
+				p.outStats.Sleeps++
+				trackOversleep(pkt)
+			} else if wait < -time.Millisecond {
+				p.outStats.DelayedPackets++
+			}
 		}
 		if !p.outStats.lastPacket.IsZero() {
 			// we ignore the first wait value with the above if statement, but it is always "initiaDelay" anyway
@@ -112,14 +118,28 @@ func (p *RtpPacer) Pop() (bts []byte, err error) {
 		p.outStats.lastPacket = now
 		return pkt.pkt, nil
 	case <-p.ctx.Done():
-		return nil, p.ctx.Err()
+		ticker := p.ticker
+		if ticker != nil {
+			ticker.Stop()
+		}
+		return nil, context.Cause(p.ctx)
 	}
 }
 
 func (p *RtpPacer) Shutdown(err ...error) {
-	p.cancel(ifutil.FirstOrDefault[error](err, errors.E("rtpPacer.Shutdown", errors.K.Cancelled, "reason", "pacer shutdown")))
+	p.cancel(
+		ifutil.FirstOrDefault[error](
+			err,
+			errors.NoTrace("rtpPacer.Shutdown", errors.K.Cancelled, "reason", "pacer shutdown"),
+		),
+	)
 }
 
 func (p *RtpPacer) ShutdownAndWait(err ...error) {
-	p.cancel(ifutil.FirstOrDefault[error](err, errors.E("rtpPacer.ShutdownAndWait", errors.K.Cancelled, "reason", "pacer shutdown")))
+	p.cancel(
+		ifutil.FirstOrDefault[error](
+			err,
+			errors.NoTrace("rtpPacer.ShutdownAndWait", errors.K.Cancelled, "reason", "pacer shutdown"),
+		),
+	)
 }
