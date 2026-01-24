@@ -3,10 +3,12 @@ package rtp
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/media/pktpool"
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/common-go/util/statsutil"
 	"github.com/eluv-io/common-go/util/timeutil"
@@ -23,14 +25,22 @@ var WrapDuration = TicksToDuration(1 << 32)
 // NewRtpPacer creates a pacer that can be used to playout RTP packets at the correct rate.
 func NewRtpPacer() *RtpPacer {
 	ctx, cancel := context.WithCancelCause(context.Background())
-	return &RtpPacer{
+	pacer := &RtpPacer{
 		logThrottler: timeutil.NewPeriodic(1 * time.Second),
 		stream:       "n/a",
 		ctx:          ctx,
 		cancel:       cancel,
 		packetCh:     make(chan *pacerPacket, 10_000),
 		gapDetector:  NewRtpGapDetector(1, time.Second),
+		packetPool:   pktpool.NewPacketPool(2048), // default RTP packet size
 	}
+	// Initialize pacerPacket pool
+	pacer.pacerPacketPool = &sync.Pool{
+		New: func() interface{} {
+			return &pacerPacket{}
+		},
+	}
+	return pacer
 }
 
 // RtpPacer is an implementation of srtpub.Pacer that can be used to playout RTP packets at the correct rate.
@@ -47,10 +57,13 @@ type RtpPacer struct {
 	stats       stats        // statistics
 
 	// async mode
-	packetCh chan *pacerPacket       // channel to send packets to
-	ctx      context.Context         // context for canceling the pacer
-	cancel   context.CancelCauseFunc // to cancel the pacer
-	outStats outStats                // output statistics
+	packetCh         chan *pacerPacket       // channel to send packets to
+	packetPool       *pktpool.PacketPool     // packet pool for reusable buffers
+	pacerPacketPool  *sync.Pool              // pool for pacerPacket structs
+	lastPoppedPacket *pacerPacket            // track last packet to release it on next Pop()
+	ctx              context.Context         // context for canceling the pacer
+	cancel           context.CancelCauseFunc // to cancel the pacer
+	outStats         outStats                // output statistics
 }
 
 func (p *RtpPacer) SetDelay(delay time.Duration) {

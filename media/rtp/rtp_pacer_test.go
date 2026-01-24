@@ -343,6 +343,7 @@ func writePackets(pacer *rtp2.RtpPacer, writer io.Writer, stripRtp bool, initial
 func pack(t *testing.T, seq, ts int) []byte {
 	pkt := &pionrtp.Packet{
 		Header: pionrtp.Header{
+			Version:        2,
 			SequenceNumber: uint16(seq),
 			Timestamp:      uint32(ts),
 		},

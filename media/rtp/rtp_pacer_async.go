@@ -3,9 +3,8 @@ package rtp
 import (
 	"time"
 
-	"github.com/pion/rtp"
-
 	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/media/pktpool"
 	"github.com/eluv-io/common-go/util/ifutil"
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/errors-go"
@@ -16,10 +15,11 @@ import (
 const MinSleepThreshold = 5 * time.Millisecond
 
 type pacerPacket struct {
-	targetTs utc.UTC // target wall clock time when to send the packet, calculated from RTP ts on reception of packet
-	inTs     utc.UTC // wall clock time when the packet was sent to channel
-	pkt      []byte  // the actual RTP packet
-	rtpTs    uint32  // the packet's RTP timestamp
+	targetTs  utc.UTC         // target wall clock time when to send the packet, calculated from RTP ts on reception of packet
+	inTs      utc.UTC         // wall clock time when the packet was sent to channel
+	pkt       []byte          // the actual RTP packet data (points to pooledPkt.Data)
+	pooledPkt *pktpool.Packet // pooled packet that holds the data
+	rtpTs     uint32          // the packet's RTP timestamp
 }
 
 func (p *RtpPacer) Push(bts []byte) error {
@@ -27,38 +27,72 @@ func (p *RtpPacer) Push(bts []byte) error {
 		return errors.E("rtpPacer.Push", errors.K.Cancelled, p.ctx.Err())
 	}
 
-	pkt, err := ParsePacket(bts)
+	// Parse minimal header - NO ALLOCATION (stack-allocated struct)
+	hdr, err := parseRtpHeaderMinimal(bts)
 	if err != nil {
 		return errors.E("rtpPacer.Push", errors.K.Invalid, err)
 	}
+
 	now := utc.Now()
-	wait, discard := p.calculateWait(now, pkt.SequenceNumber, pkt.Timestamp)
+	wait, discard := p.calculateWait(now, hdr.sequenceNumber, hdr.timestamp)
 	if discard {
-		log.Info("rtpPacer: time reference changed - discarding packet", "stream", p.stream, "now", now, "ref", p.refTime.wallClock)
+		log.Info("rtpPacer: time reference changed - discarding packet",
+			"stream", p.stream, "now", now, "ref", p.refTime.wallClock)
 		return nil
 	}
 	targetTs := now.Add(wait + p.initialDelay)
 	p.outStats.buffered.Add(1)
 
+	// Get packet buffer from pool
+	pooledPkt := p.packetPool.GetPacket()
+	pooledPkt.Data = pooledPkt.Data[:len(bts)]
+	copy(pooledPkt.Data, bts)
+
+	// Get pacerPacket from pool - NO ALLOCATION
+	pp := p.pacerPacketPool.Get().(*pacerPacket)
+	pp.targetTs = targetTs
+	pp.inTs = now
+	pp.rtpTs = hdr.timestamp
+	pp.pkt = pooledPkt.Data
+	pp.pooledPkt = pooledPkt
+
 	select {
-	case p.packetCh <- p.newPacerPacket(bts, now, targetTs, pkt):
+	case p.packetCh <- pp:
 		return nil
 	case <-p.ctx.Done():
+		// Release both pools on error
+		pooledPkt.Release()
+		p.releasePacerPacket(pp)
 		return p.ctx.Err()
 	}
 }
 
-func (p *RtpPacer) newPacerPacket(bts []byte, now, targetTs utc.UTC, pkt *rtp.Packet) *pacerPacket {
-	pp := &pacerPacket{targetTs: targetTs, inTs: now, rtpTs: pkt.Timestamp}
+// releasePacerPacket resets and returns a pacerPacket to the pool
+func (p *RtpPacer) releasePacerPacket(pp *pacerPacket) {
+	if pp == nil {
+		return
+	}
+	// Reset fields to zero values to avoid retaining references
+	pp.targetTs = utc.UTC{}
+	pp.inTs = utc.UTC{}
+	pp.pkt = nil
+	pp.pooledPkt = nil
+	pp.rtpTs = 0
 
-	// PENDING(LUK): do not copy packets here - instead handle copies outside of the pacer and re-use buffers!
-	pp.pkt = make([]byte, len(bts))
-	copy(pp.pkt, bts)
-
-	return pp
+	p.pacerPacketPool.Put(pp)
 }
 
 func (p *RtpPacer) Pop() (bts []byte, err error) {
+	// Release the previous packet buffers
+	if p.lastPoppedPacket != nil {
+		if p.lastPoppedPacket.pooledPkt != nil {
+			p.lastPoppedPacket.pooledPkt.Release()
+		}
+		// Return pacerPacket struct to pool
+		p.releasePacerPacket(p.lastPoppedPacket)
+		p.lastPoppedPacket = nil
+	}
+
 	select {
 	case pkt := <-p.packetCh:
 		p.outStats.buffered.Add(-1)
@@ -110,6 +144,10 @@ func (p *RtpPacer) Pop() (bts []byte, err error) {
 			}
 		}
 		p.outStats.lastPacket = now
+
+		// Store reference to this packet so we can release it on the next Pop() call
+		p.lastPoppedPacket = pkt
+
 		return pkt.pkt, nil
 	case <-p.ctx.Done():
 		return nil, p.ctx.Err()
@@ -117,9 +155,55 @@ func (p *RtpPacer) Pop() (bts []byte, err error) {
 }
 
 func (p *RtpPacer) Shutdown(err ...error) {
-	p.cancel(ifutil.FirstOrDefault[error](err, errors.E("rtpPacer.Shutdown", errors.K.Cancelled, "reason", "pacer shutdown")))
+	p.cancel(ifutil.FirstOrDefault[error](err,
+		errors.E("rtpPacer.Shutdown", errors.K.Cancelled, "reason", "pacer shutdown")))
+
+	// Release the last popped packet
+	if p.lastPoppedPacket != nil {
+		if p.lastPoppedPacket.pooledPkt != nil {
+			p.lastPoppedPacket.pooledPkt.Release()
+		}
+		p.releasePacerPacket(p.lastPoppedPacket)
+		p.lastPoppedPacket = nil
+	}
+
+	// Drain and release any remaining packets in the channel
+	for {
+		select {
+		case pkt := <-p.packetCh:
+			if pkt.pooledPkt != nil {
+				pkt.pooledPkt.Release()
+			}
+			p.releasePacerPacket(pkt)
+		default:
+			return
+		}
+	}
 }
 
 func (p *RtpPacer) ShutdownAndWait(err ...error) {
-	p.cancel(ifutil.FirstOrDefault[error](err, errors.E("rtpPacer.ShutdownAndWait", errors.K.Cancelled, "reason", "pacer shutdown")))
+	p.cancel(ifutil.FirstOrDefault[error](err,
+		errors.E("rtpPacer.ShutdownAndWait", errors.K.Cancelled, "reason", "pacer shutdown")))
+
+	// Release the last popped packet
+	if p.lastPoppedPacket != nil {
+		if p.lastPoppedPacket.pooledPkt != nil {
+			p.lastPoppedPacket.pooledPkt.Release()
+		}
+		p.releasePacerPacket(p.lastPoppedPacket)
+		p.lastPoppedPacket = nil
+	}
+
+	// Drain and release any remaining packets in the channel
+	for {
+		select {
+		case pkt := <-p.packetCh:
+			if pkt.pooledPkt != nil {
+				pkt.pooledPkt.Release()
+			}
+			p.releasePacerPacket(pkt)
+		default:
+			return
+		}
+	}
 }

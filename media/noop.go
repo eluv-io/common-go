@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/eluv-io/common-go/media/pktpool"
 	"github.com/eluv-io/common-go/util/ifutil"
 	"github.com/eluv-io/errors-go"
 )
@@ -50,34 +51,53 @@ func (n NoopPacer) SetDelay(time.Duration) {}
 
 func NewNoopAsyncPacer(chanSize uint) AsyncPacer {
 	p := &NoopAsyncPacer{
-		packetCh: make(chan []byte, chanSize),
+		packetCh:   make(chan *pktpool.Packet, chanSize),
+		packetPool: pktpool.NewPacketPool(2048), // default packet size, can be adjusted
 	}
 	p.ctx, p.cancel = context.WithCancelCause(context.Background())
 	return p
 }
 
 type NoopAsyncPacer struct {
-	packetCh chan []byte
-	ctx      context.Context         // context for canceling the pacer
-	cancel   context.CancelCauseFunc // to cancel the pacer
+	packetCh        chan *pktpool.Packet
+	packetPool      *pktpool.PacketPool
+	lastPoppedPacket *pktpool.Packet     // track last packet to release it on next Pop()
+	ctx             context.Context         // context for canceling the pacer
+	cancel          context.CancelCauseFunc // to cancel the pacer
 }
 
 func (n *NoopAsyncPacer) Push(bts []byte) error {
-	clone := make([]byte, len(bts))
-	copy(clone, bts)
+	// Get a packet from the pool
+	pkt := n.packetPool.GetPacket()
+
+	// Resize Data slice to accommodate the incoming data
+	pkt.Data = pkt.Data[:len(bts)]
+
+	// Copy the data into the pooled packet
+	copy(pkt.Data, bts)
 
 	select {
-	case n.packetCh <- clone:
+	case n.packetCh <- pkt:
 		return nil
 	case <-n.ctx.Done():
+		// Release the packet since we couldn't send it
+		pkt.Release()
 		return n.ctx.Err()
 	}
 }
 
 func (n *NoopAsyncPacer) Pop() (pkt []byte, err error) {
+	// Release the previous packet (if any) since the caller is done with it
+	if n.lastPoppedPacket != nil {
+		n.lastPoppedPacket.Release()
+		n.lastPoppedPacket = nil
+	}
+
 	select {
-	case pkt = <-n.packetCh:
-		return pkt, nil
+	case pooledPkt := <-n.packetCh:
+		// Store reference to this packet so we can release it on the next Pop() call
+		n.lastPoppedPacket = pooledPkt
+		return pooledPkt.Data, nil
 	case <-n.ctx.Done():
 		return nil, n.ctx.Err()
 	}
@@ -90,6 +110,22 @@ func (n *NoopAsyncPacer) Shutdown(err ...error) {
 			errors.E("noopAsyncPacer.Shutdown", errors.K.Cancelled, "reason", "pacer shutdown"),
 		),
 	)
+
+	// Release the last popped packet if any
+	if n.lastPoppedPacket != nil {
+		n.lastPoppedPacket.Release()
+		n.lastPoppedPacket = nil
+	}
+
+	// Drain and release any remaining packets in the channel
+	for {
+		select {
+		case pkt := <-n.packetCh:
+			pkt.Release()
+		default:
+			return
+		}
+	}
 }
 
 func (n *NoopAsyncPacer) Wait([]byte)            {}

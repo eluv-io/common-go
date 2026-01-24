@@ -29,13 +29,36 @@ func ParsePacket(packet []byte) (*rtp.Packet, error) {
 
 // StripHeader strips the RTP header from the given packet. Returns the payload or an error if the byte slice does not
 // start with an RTP header.
-func StripHeader(packet []byte) ([]byte, error) {
+func StripHeaderFull(packet []byte) ([]byte, error) {
 	pkt := rtp.Packet{}
 	err := pkt.Unmarshal(packet)
 	if err != nil {
 		return nil, errors.NoTrace("StripHeader", errors.K.Invalid, err, "reason", "failed to unmarshal RTP packet")
 	}
 	return pkt.Payload, nil
+}
+
+func StripHeader(bts []byte) ([]byte, error) {
+	if len(bts) < 64 || bts[0]&0xC0 != 0x80 {
+		return nil, errors.NoTrace("Packet is control or not RTP", errors.K.Invalid)
+	}
+
+	var h rtp.Header
+	if _, err := h.Unmarshal(bts); err != nil {
+		return nil, err
+	}
+	hdrLen := h.MarshalSize()
+	if hdrLen > len(bts) {
+		return nil, errors.NoTrace("Packet is too short")
+	}
+	if h.Padding {
+		pad := int(bts[len(bts)-1])
+		if hdrLen+pad > len(bts) {
+			return nil, errors.NoTrace("Packet padding is bd")
+		}
+		return bts[hdrLen : len(bts)-pad], nil
+	}
+	return bts[hdrLen:], nil
 }
 
 // RemoveTsPadding removes the padding payload of TS padding packets within the given RTP packet. The removal is
@@ -91,4 +114,42 @@ func RecoverTsPadding(pkt []byte, size int) ([]byte, error) {
 		}
 	}
 	return pkt[:size], nil
+}
+
+// rtpHeader contains minimal RTP header info needed for pacer timing.
+// This lightweight struct avoids allocating a full rtp.Packet when only
+// sequence number and timestamp are needed.
+type rtpHeader struct {
+	sequenceNumber uint16
+	timestamp      uint32
+}
+
+// parseRtpHeaderMinimal extracts only sequence number and timestamp from RTP packet
+// without allocating a full rtp.Packet struct. Returns error if packet is invalid.
+// This is significantly faster than ParsePacket() and allocates nothing on the heap.
+func parseRtpHeaderMinimal(packet []byte) (rtpHeader, error) {
+	// RTP header minimum size is 12 bytes
+	if len(packet) < 12 {
+		return rtpHeader{}, errors.NoTrace("parseRtpHeaderMinimal", errors.K.Invalid,
+			"reason", "packet too short", "len", len(packet))
+	}
+
+	// Check RTP version (2 bits, should be 2)
+	version := packet[0] >> 6
+	if version != 2 {
+		return rtpHeader{}, errors.NoTrace("parseRtpHeaderMinimal", errors.K.Invalid,
+			"reason", "invalid RTP version", "version", version)
+	}
+
+	// Sequence number: bytes 2-3 (big-endian)
+	seq := uint16(packet[2])<<8 | uint16(packet[3])
+
+	// Timestamp: bytes 4-7 (big-endian)
+	ts := uint32(packet[4])<<24 | uint32(packet[5])<<16 |
+		uint32(packet[6])<<8 | uint32(packet[7])
+
+	return rtpHeader{
+		sequenceNumber: seq,
+		timestamp:      ts,
+	}, nil
 }
