@@ -6,6 +6,7 @@ import (
 
 	"github.com/eluv-io/common-go/util/ifutil"
 	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/utc-go"
 )
 
 func NewNoopPacketizer() Packetizer {
@@ -43,8 +44,9 @@ func NewNoopPacer() Pacer {
 
 type NoopPacer struct{}
 
-func (n NoopPacer) Wait([]byte)            {}
-func (n NoopPacer) SetDelay(time.Duration) {}
+func (n NoopPacer) Wait([]byte)                                         {}
+func (n NoopPacer) CalculateWait(now utc.UTC, bts []byte) time.Duration { return 0 }
+func (n NoopPacer) SetDelay(time.Duration)                              {}
 
 // ---------------------------------------------------------------------------------------------------------------------
 
@@ -92,8 +94,9 @@ func (n *NoopAsyncPacer) Shutdown(err ...error) {
 	)
 }
 
-func (n *NoopAsyncPacer) Wait([]byte)            {}
-func (n *NoopAsyncPacer) SetDelay(time.Duration) {}
+func (n *NoopAsyncPacer) Wait([]byte)                                         {}
+func (n *NoopAsyncPacer) CalculateWait(now utc.UTC, bts []byte) time.Duration { return 0 }
+func (n *NoopAsyncPacer) SetDelay(time.Duration)                              {}
 
 // ---------------------------------------------------------------------------------------------------------------------
 

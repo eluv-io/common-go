@@ -6,15 +6,16 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/eluv-io/common-go/media/tlv/tlv"
 	"github.com/eluv-io/common-go/util/byteutil"
 )
 
 func TestWriteHeaderParseHeader(t *testing.T) {
 	var header [3]byte
-	err := WriteTlvHeader(header[:], 0x01, 7)
+	err := tlv.WriteHeader(header[:], 0x01, 7)
 	require.NoError(t, err)
 
-	typ, length := ParseTlvHeader(header)
+	typ, length := tlv.ParseHeader(header)
 	require.Equal(t, byte(0x01), typ)
 	require.Equal(t, uint16(7), length)
 }

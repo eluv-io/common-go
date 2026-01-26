@@ -8,6 +8,7 @@ import (
 	"github.com/eluv-io/common-go/media/rtp"
 	"github.com/eluv-io/common-go/util/timeutil"
 	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/utc-go"
 )
 
 // NewTsPacer creates a pacer that can be used to playout MPEG TS packets at the correct rate.
@@ -97,6 +98,10 @@ func (p *TsPacer) Wait(bts []byte) {
 
 		bts = bts[packet.PacketSize:]
 	}
+}
+
+func (p *TsPacer) CalculateWait(now utc.UTC, bts []byte) time.Duration {
+	panic(errors.E("CalculateWait", errors.K.NotImplemented))
 }
 
 func (p *TsPacer) waitPcr(pkt *packet.Packet) bool {

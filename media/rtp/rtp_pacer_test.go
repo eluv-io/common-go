@@ -108,7 +108,7 @@ func TestRtpPacer_calculateWait(t *testing.T) {
 			now := utc.UnixMilli(0)
 			for _, packet := range test.packets {
 				t.Run(fmt.Sprint(packet), func(t *testing.T) {
-					assert.EqualValues(t, packet.wantWait, test.pacer.CalculateWait(now, packet.seq, packet.ts))
+					assert.EqualValues(t, packet.wantWait, test.pacer.CalculateWaitFrom(now, packet.seq, packet.ts))
 					now = now.Add(t100)
 				})
 			}
@@ -122,7 +122,7 @@ func TestRtpPacer_calculateWait(t *testing.T) {
 		increment := int64(90_000)
 		for i := int64(0); i < 2*math.MaxUint32; i += increment {
 			now := utc.Unix(0, rtp2.TicksToDuration(i).Nanoseconds())
-			wait := pacer.CalculateWait(now, seq, uint32(i))
+			wait := pacer.CalculateWaitFrom(now, seq, uint32(i))
 			require.EqualValues(t, 0, wait, "i=%d", i)
 			seq++
 		}
