@@ -2,6 +2,7 @@ package tlv
 
 import (
 	"github.com/eluv-io/common-go/media/rtp"
+	"github.com/eluv-io/common-go/media/tlv/tlv"
 	"github.com/eluv-io/common-go/util/byteutil"
 	"github.com/eluv-io/common-go/util/sliceutil"
 	"github.com/eluv-io/errors-go"
@@ -98,7 +99,7 @@ func (p *Packetizer) Next() ([]byte, error) {
 				return nil, nil
 			}
 			_ = p.buf.Read(p.pkt[:3])
-			typ, length = ParseTlvHeader([3]byte(p.pkt[:3]))
+			typ, length = tlv.ParseHeader([3]byte(p.pkt[:3]))
 			if !p.options.valid(typ) {
 				return nil, errors.NoTrace("TlvPacketizer.Next", errors.K.Invalid,
 					"reason", "invalid TLV type",
@@ -155,20 +156,4 @@ func (p *Packetizer) TargetPacketSize() int {
 // returns a non-nil packet.
 func (p *Packetizer) Consumed() int {
 	return p.consumed
-}
-
-func ParseTlvHeader(bts [3]byte) (typ byte, len uint16) {
-	typ = bts[0]
-	len = uint16(bts[1])<<8 | uint16(bts[2])
-	return
-}
-
-func WriteTlvHeader(bts []byte, typ byte, length uint16) error {
-	if len(bts) < 3 {
-		return errors.NoTrace("WriteTlvHeader", errors.K.Invalid, "reason", "buffer too small", "len", len(bts))
-	}
-	bts[0] = typ
-	bts[1] = byte(length >> 8)
-	bts[2] = byte(length)
-	return nil
 }

@@ -1,6 +1,10 @@
 package media
 
-import "time"
+import (
+	"time"
+
+	"github.com/eluv-io/utc-go"
+)
 
 // Transformer is an interface for transforming packets before sending them.
 type Transformer interface {
@@ -40,6 +44,9 @@ type Pacer interface {
 	// Wait blocks until the correct time to send the given packet has elapsed. The wait time is calculated based on
 	// timing references (e.g. RTP timestamps or MPEG-TS Program Clock References).
 	Wait(bts []byte)
+
+	// CalculateWait calculates the wait time for the given packet based on the current time.
+	CalculateWait(now utc.UTC, bts []byte) time.Duration
 
 	// SetDelay configures the pacer to wait for the given delay before sending the first packet. This allows
 	// smoothening jitter on the first packets. The default is 0.

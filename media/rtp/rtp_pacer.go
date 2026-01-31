@@ -119,16 +119,9 @@ func (p *RtpPacer) Wait(bts []byte) {
 		p.initialDelay = 0
 	}
 
-	pkt, err := ParsePacket(bts)
-	if err != nil {
-		p.logThrottler.Do(func() {
-			log.Info("rtpPacer: packet error", errors.ClearStacktrace(err), "stream", p.stream)
-		})
-		return
-	}
-
 	now := utc.Now()
-	wait := p.CalculateWait(now, pkt.SequenceNumber, pkt.Timestamp)
+	wait := p.CalculateWait(now, bts)
+
 	if wait > 0 {
 		// log.Trace("rtpPacer: wait",
 		// 	"stream", p.stream,
@@ -143,9 +136,23 @@ func (p *RtpPacer) Wait(bts []byte) {
 		// 	"timestamp", pkt.Timestamp,
 		// 	"wait", wait)
 	}
+
 }
 
-func (p *RtpPacer) CalculateWait(now utc.UTC, rtpSequence uint16, rtpTimestamp uint32) time.Duration {
+func (p *RtpPacer) CalculateWait(now utc.UTC, bts []byte) time.Duration {
+	pkt, err := ParsePacket(bts)
+	if err != nil {
+		p.logThrottler.Do(func() {
+			log.Info("rtpPacer: packet error", errors.ClearStacktrace(err), "stream", p.stream)
+		})
+		return 0
+	}
+
+	wait, _ := p.calculateWait(now, pkt.SequenceNumber, pkt.Timestamp)
+	return wait
+}
+
+func (p *RtpPacer) CalculateWaitFrom(now utc.UTC, rtpSequence uint16, rtpTimestamp uint32) time.Duration {
 	wait, _ := p.calculateWait(now, rtpSequence, rtpTimestamp)
 	return wait
 }
