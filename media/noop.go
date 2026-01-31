@@ -54,28 +54,24 @@ func (n NoopPacer) SetDelay(time.Duration)                              {}
 func NewNoopAsyncPacer(chanSize uint) AsyncPacer {
 	p := &NoopAsyncPacer{
 		packetCh:   make(chan *pktpool.Packet, chanSize),
-		packetPool: pktpool.NewPacketPool(2048), // default packet size, can be adjusted
+		packetPool: pktpool.NewPacketPool(2048), // PENDING(SS) use proper packet size
 	}
 	p.ctx, p.cancel = context.WithCancelCause(context.Background())
 	return p
 }
 
 type NoopAsyncPacer struct {
-	packetCh        chan *pktpool.Packet
-	packetPool      *pktpool.PacketPool
-	lastPoppedPacket *pktpool.Packet     // track last packet to release it on next Pop()
-	ctx             context.Context         // context for canceling the pacer
-	cancel          context.CancelCauseFunc // to cancel the pacer
+	packetCh         chan *pktpool.Packet
+	packetPool       *pktpool.PacketPool
+	lastPoppedPacket *pktpool.Packet         // track last packet to release it on next Pop()
+	ctx              context.Context         // context for canceling the pacer
+	cancel           context.CancelCauseFunc // to cancel the pacer
 }
 
 func (n *NoopAsyncPacer) Push(bts []byte) error {
-	// Get a packet from the pool
+	// Use pre-allocated pool
 	pkt := n.packetPool.GetPacket()
-
-	// Resize Data slice to accommodate the incoming data
 	pkt.Data = pkt.Data[:len(bts)]
-
-	// Copy the data into the pooled packet
 	copy(pkt.Data, bts)
 
 	select {

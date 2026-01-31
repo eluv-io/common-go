@@ -27,7 +27,7 @@ func ParsePacket(packet []byte) (*rtp.Packet, error) {
 	return &pkt, nil
 }
 
-// StripHeader strips the RTP header from the given packet. Returns the payload or an error if the byte slice does not
+// StripHeaderFull parses the full RTP header and strips the RTP header from the given packet. Returns the payload or an error if the byte slice does not
 // start with an RTP header.
 func StripHeaderFull(packet []byte) ([]byte, error) {
 	pkt := rtp.Packet{}
@@ -38,6 +38,8 @@ func StripHeaderFull(packet []byte) ([]byte, error) {
 	return pkt.Payload, nil
 }
 
+// StripHeader parses minimally and strips the RTP header from the given packet. Returns the payload or an error if the byte slice does not
+// start with an RTP header.
 func StripHeader(bts []byte) ([]byte, error) {
 	if len(bts) < 64 || bts[0]&0xC0 != 0x80 {
 		return nil, errors.NoTrace("Packet is control or not RTP", errors.K.Invalid)
@@ -126,7 +128,7 @@ type rtpHeader struct {
 
 // parseRtpHeaderMinimal extracts only sequence number and timestamp from RTP packet
 // without allocating a full rtp.Packet struct. Returns error if packet is invalid.
-// This is significantly faster than ParsePacket() and allocates nothing on the heap.
+// Faster than ParsePacket() and allocates nothing on the heap.
 func parseRtpHeaderMinimal(packet []byte) (rtpHeader, error) {
 	// RTP header minimum size is 12 bytes
 	if len(packet) < 12 {

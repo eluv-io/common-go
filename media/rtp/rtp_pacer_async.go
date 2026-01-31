@@ -2,8 +2,6 @@ package rtp
 
 import (
 	"context"
-	"runtime"
-	"runtime/debug"
 	"time"
 
 	"github.com/eluv-io/common-go/format/duration"
@@ -13,13 +11,6 @@ import (
 	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/utc-go"
 )
-
-func init() {
-	// TEMPORARY FOR TESTING: Disable GC to eliminate GC pauses as a cause of oversleeps
-	// This will cause memory to grow unbounded - only use for short-term testing (< 1 hour)
-	debug.SetGCPercent(-1)
-	log.Info("GC disabled for testing - memory will grow unbounded")
-}
 
 type pacerPacket struct {
 	targetTs  utc.UTC         // target wall clock time when to send the packet, calculated from RTP ts on reception of packet
@@ -34,7 +25,6 @@ func (p *RtpPacer) Push(bts []byte) error {
 		return errors.E("rtpPacer.Push", errors.K.Cancelled, p.ctx.Err())
 	}
 
-	// Parse minimal header - NO ALLOCATION (stack-allocated struct)
 	hdr, err := parseRtpHeaderMinimal(bts)
 	if err != nil {
 		return errors.E("rtpPacer.Push", errors.K.Invalid, err)
@@ -43,19 +33,18 @@ func (p *RtpPacer) Push(bts []byte) error {
 	now := utc.Now()
 	wait, discard := p.calculateWait(now, hdr.sequenceNumber, hdr.timestamp)
 	if discard {
-		log.Info("rtpPacer: time reference changed - discarding packet",
-			"stream", p.stream, "now", now, "ref", p.refTime.wallClock)
+		log.Info("rtpPacer: time reference changed - discarding packet", "stream", p.stream, "now", now, "ref", p.refTime.wallClock)
 		return nil
 	}
 	targetTs := now.Add(wait + p.initialDelay)
 	p.outStats.buffered.Add(1)
 
-	// Get packet buffer from pool
+	// Use pre-allocated buffer pool
 	pooledPkt := p.packetPool.GetPacket()
 	pooledPkt.Data = pooledPkt.Data[:len(bts)]
 	copy(pooledPkt.Data, bts)
 
-	// Get pacerPacket from pool - NO ALLOCATION
+	// Use pre-allocated packet struct pool
 	pp := p.pacerPacketPool.Get().(*pacerPacket)
 	pp.targetTs = targetTs
 	pp.inTs = now
@@ -99,10 +88,6 @@ func (p *RtpPacer) Pop() (bts []byte, err error) {
 			}
 		}
 	}
-
-	// TEMPORARY FOR TESTING: Lock this goroutine to its OS thread to avoid scheduler moves
-	runtime.LockOSThread()
-	defer runtime.UnlockOSThread()
 
 	// Release the previous packet buffers
 	if p.lastPoppedPacket != nil {
