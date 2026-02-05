@@ -48,7 +48,7 @@ func (c *ContentRange) AsHeader() string {
 	if c.TotalLen >= 0 {
 		blength = fmt.Sprintf("/%d", c.TotalLen)
 	}
-	return brange + blength
+	return "bytes " + brange + blength
 }
 
 func (c *ContentRange) TotalSize() int64 {
