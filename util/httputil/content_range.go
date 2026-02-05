@@ -58,7 +58,9 @@ func (c *ContentRange) TotalSize() int64 {
 // --------------------------------------------------------------------------------------------------------------------
 
 // AdaptRange adapts offset and length of a [Byte Range] received in an HTTP Range header (or query) according to the
-// instructions in [RFC 7233, section 4] given the actual total size of the content.
+// instructions in [RFC 7233, section 4] given the actual total size of the content. A negative value is also allowed
+// for totalLen, in the case that the total length of the content is not known or available, in which case the offset
+// must be non-negative and AdaptedLen may be negative.
 //
 // See httputil.ParseByteRange() for details on offset and len.
 //
