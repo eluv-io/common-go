@@ -6,16 +6,21 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func assertRange(t *testing.T, eOff, eEndOff, eLen int64, ePartial bool, actual *ContentRange, caseid string, header ...string) {
+func assertRange(t *testing.T, eOff, eEndOff, eLen int64, ePartial bool, actual *ContentRange, caseid string, header string) {
 	if assert.NotNil(t, actual) {
 		assert.Equal(t, eOff, actual.GetAdaptedOff(), "%s %s", "adaptedOffset", caseid)
 		assert.Equal(t, eEndOff, actual.GetAdaptedEndOff(), "%s %s", "adaptedEndOffset", caseid)
 		assert.Equal(t, eLen, actual.GetAdaptedLen(), "%s %s", "adaptedLen", caseid)
 		assert.Equal(t, ePartial, actual.IsPartial(), "%s %s", "partial", caseid)
-		if len(header) > 0 {
-			assert.Equal(t, header[0], actual.AsHeader(), "%s %s", "header", caseid)
-		}
+		assert.Equal(t, header, actual.AsHeader(), "%s %s", "header", caseid)
 	}
+}
+
+func assertRangeError(t *testing.T, actual *ContentRange, err error, mustContain, header string) {
+	caseid := mustContain
+	assert.Error(t, err, caseid)
+	assert.Contains(t, err.Error(), mustContain, caseid)
+	assert.Equal(t, header, actual.AsHeader(), caseid)
 }
 
 func TestAdaptRange(t *testing.T) {
@@ -85,22 +90,17 @@ func TestAdaptRange(t *testing.T) {
 
 	// error cases
 	r, err = AdaptRange(-1, -1, 10)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "negative offset and length")
+	assertRangeError(t, r, err, "negative offset and length", "bytes */10")
 
 	r, err = AdaptRange(-1, 0, -1)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "negative offset and total_length")
+	assertRangeError(t, r, err, "negative offset and total_length", "bytes *")
 
 	r, err = AdaptRange(-1, 2, 1)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "length larger than total_length")
+	assertRangeError(t, r, err, "length larger than total_length", "bytes */1")
 
 	r, err = AdaptRange(2, -1, 1)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "offset larger than total_length")
+	assertRangeError(t, r, err, "offset larger than total_length", "bytes */1")
 
 	r, err = AdaptRange(2, 1, 1)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "offset larger than total_length")
+	assertRangeError(t, r, err, "offset larger than total_length", "bytes */1")
 }
