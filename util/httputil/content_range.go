@@ -22,6 +22,8 @@ func (c *ContentRange) GetAdaptedOff() int64 {
 func (c *ContentRange) GetAdaptedEndOff() int64 {
 	if c.AdaptedLen == 0 {
 		return c.AdaptedOff
+	} else if c.AdaptedLen < 0 {
+		return c.AdaptedLen
 	}
 	return c.AdaptedOff + c.AdaptedLen - 1
 }
@@ -31,14 +33,22 @@ func (c *ContentRange) GetAdaptedLen() int64 {
 }
 
 func (c *ContentRange) IsPartial() bool {
-	return c.AdaptedOff > 0 || c.AdaptedLen != c.TotalLen
+	return c.AdaptedOff > 0 || (c.TotalLen >= 0 && c.AdaptedLen != c.TotalLen)
 }
 
 func (c *ContentRange) AsHeader() string {
+	var brange, blength string
 	if c.AdaptedOff < 0 {
-		return fmt.Sprintf("bytes */%d", c.TotalLen)
+		brange = "*"
+	} else if c.AdaptedLen < 0 {
+		brange = fmt.Sprintf("%d-", c.AdaptedOff)
+	} else {
+		brange = fmt.Sprintf("%d-%d", c.AdaptedOff, c.GetAdaptedEndOff())
 	}
-	return fmt.Sprintf("bytes %d-%d/%d", c.AdaptedOff, c.GetAdaptedEndOff(), c.TotalLen)
+	if c.TotalLen >= 0 {
+		blength = fmt.Sprintf("/%d", c.TotalLen)
+	}
+	return brange + blength
 }
 
 func (c *ContentRange) TotalSize() int64 {
@@ -61,23 +71,33 @@ func AdaptRange(off, len, totalLen int64) (*ContentRange, error) {
 	e := errors.Template("adapt-byte-range", KindRangeNotSatisfiable, "offset", off, "length", len, "total_length", totalLen)
 	var err error = nil
 	realOff := off
+	if realOff < -1 {
+		realOff = -1
+	}
 	realLen := len
+	if realLen < -1 {
+		realLen = -1
+	}
 	if off < 0 && len < 0 {
 		err = e("reason", "negative offset and length")
+	} else if off < 0 && totalLen < 0 {
+		err = e("reason", "negative offset and total_length")
 	} else if off < 0 {
 		realOff = totalLen - len
-	} else if len < 0 {
+		if realOff < 0 {
+			err = e("reason", "length larger than total_length")
+		}
+	} else if len < 0 && totalLen >= 0 {
 		realLen = totalLen - off
 		if realLen < 0 {
-			err = e("reason", "offset larger than total length")
+			err = e("reason", "offset larger than total_length")
 		}
 	}
-	if err == nil {
-		if realOff+realLen > totalLen {
+	if err == nil && totalLen >= 0 {
+		if realOff > totalLen {
+			err = e("reason", "offset larger than total_length")
+		} else if realOff+realLen > totalLen {
 			realLen = totalLen - realOff
-		}
-		if realOff < 0 || (realOff > totalLen && realOff > 0) {
-			err = e("reason", "invalid offset result")
 		}
 	}
 	if err != nil {
