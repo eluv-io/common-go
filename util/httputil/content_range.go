@@ -15,10 +15,14 @@ type ContentRange struct {
 	AdaptedOff, AdaptedLen int64
 }
 
+// GetAdaptedOff returns the adapted offset of the content range based on the request byte range and the actual total
+// content length. Returns -1 if the range is invalid.
 func (c *ContentRange) GetAdaptedOff() int64 {
 	return c.AdaptedOff
 }
 
+// GetAdaptedEndOff returns the adapted end offset (adapted offset + adapted len) of the content range based on the
+// request byte range and the actual total content length. Returns -1 if the range is invalid.
 func (c *ContentRange) GetAdaptedEndOff() int64 {
 	if c.AdaptedLen == 0 {
 		return c.AdaptedOff
@@ -28,14 +32,20 @@ func (c *ContentRange) GetAdaptedEndOff() int64 {
 	return c.AdaptedOff + c.AdaptedLen - 1
 }
 
+// GetAdaptedLen returns the adapted length of the content range based on the request byte range and the actual total
+// content length. Returns -1 if the range is invalid.
 func (c *ContentRange) GetAdaptedLen() int64 {
 	return c.AdaptedLen
 }
 
+// IsPartial returns true if the content range represents a partial content range (in contrast to the full content).
+// Returns false if the content range represents the full content, the total length is unknown (<0) or the ContentRange
+// object is invalid.
 func (c *ContentRange) IsPartial() bool {
 	return c.AdaptedOff > 0 || (c.TotalLen >= 0 && c.AdaptedLen != c.TotalLen)
 }
 
+// AsHeader returns the content range as an HTTP header value (RFC 7233).
 func (c *ContentRange) AsHeader() string {
 	var brange, blength string
 	if c.AdaptedOff < 0 {

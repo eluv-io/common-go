@@ -21,6 +21,9 @@ func assertRangeError(t *testing.T, actual *ContentRange, err error, mustContain
 	assert.Error(t, err, caseid)
 	assert.Contains(t, err.Error(), mustContain, caseid)
 	assert.Equal(t, header, actual.AsHeader(), caseid)
+	assert.Less(t, actual.GetAdaptedOff(), int64(0), caseid)
+	assert.Less(t, actual.GetAdaptedEndOff(), int64(0), caseid)
+	assert.Less(t, actual.GetAdaptedLen(), int64(0), caseid)
 }
 
 func TestAdaptRange(t *testing.T) {
