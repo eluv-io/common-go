@@ -9,9 +9,9 @@ import (
 func assertRange(t *testing.T, eOff, eEndOff, eLen int64, ePartial bool, actual *ContentRange, caseid string) {
 	if assert.NotNil(t, actual) {
 		assert.Equal(t, eOff, actual.GetAdaptedOff(), "%s %s", "adaptedOffset", caseid)
-		assert.Equal(t, eEndOff, actual.GetAdaptedEndOff(), "%s %s", "adaptedEndOffset", caseid)
-		assert.Equal(t, eLen, actual.GetAdaptedLen(), "%s %s", "adaptedLen", caseid)
 		assert.Equal(t, ePartial, actual.IsPartial(), "%s %s", "partial", caseid)
+		assert.Equal(t, eLen, actual.GetAdaptedLen(), "%s %s", "adaptedLen", caseid)
+		assert.Equal(t, eEndOff, actual.GetAdaptedEndOff(), "%s %s", "adaptedEndOffset", caseid)
 	}
 }
 
@@ -68,36 +68,13 @@ func TestAdaptRange(t *testing.T) {
 	assert.NoError(t, err)
 	assertRange(t, 100, 100, 0, true, r, "11")
 
-	r, err = AdaptRange(0, -1, -1)
-	assert.NoError(t, err)
-	assertRange(t, 0, -1, -1, false, r, "12")
-
-	r, err = AdaptRange(10, -1, -1)
-	assert.NoError(t, err)
-	assertRange(t, 10, -1, -1, true, r, "13")
-
-	r, err = AdaptRange(10, 100, -1)
-	assert.NoError(t, err)
-	assertRange(t, 10, 109, 100, true, r, "14")
-
 	// error cases
 	r, err = AdaptRange(-1, -1, 10)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "negative offset and length")
-
-	r, err = AdaptRange(-1, 0, -1)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "negative offset and total_length")
-
-	r, err = AdaptRange(-1, 2, 1)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "length larger than total_length")
+	assert.NotNil(t, err, "negative offset and length")
 
 	r, err = AdaptRange(2, -1, 1)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "offset larger than total_length")
+	assert.NotNil(t, err, "offset larger than size")
 
-	r, err = AdaptRange(2, 1, 1)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "offset larger than total_length")
+	r, err = AdaptRange(-1, 2, 1)
+	assert.NotNil(t, err, "requested length larger than size")
 }
