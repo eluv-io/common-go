@@ -15,11 +15,11 @@ import (
 // statistics at a specified interval.
 type StreamTracker interface {
 	// Track feeds RTP packets to the tracker. The packet bytes (bts) should consist of a single RTP packet. The method
-	// will validate the packet and aggregate any errors. The method returns the payload if the header is
+	// will validate the packet and aggregate any errors. The method returns the payload and timestamp if the header is
 	// well-formatted, nil otherwise, and a list of errors if any.
-	Track(bts []byte) (payload []byte, errList error)
+	Track(bts []byte) (payload []byte, timestamp utc.UTC, errList error)
 	// Stats returns RTP statistics
-	Stats() Stats
+	Stats() *Stats
 	// Reset resets the tracker state, clearing all statistics and errors.
 	Reset()
 }
@@ -45,9 +45,10 @@ type rtpStreamTracker struct {
 	logThrottle timeutil.Periodic
 	panics      int
 	detector    *GapDetector
+	wallClockT0 utc.UTC
 }
 
-func (t *rtpStreamTracker) Track(bts []byte) (payload []byte, errList error) {
+func (t *rtpStreamTracker) Track(bts []byte) (payload []byte, timestamp utc.UTC, errList error) {
 
 	defer func() {
 		t.statsLogger.Do(func() {
@@ -65,7 +66,7 @@ func (t *rtpStreamTracker) Track(bts []byte) (payload []byte, errList error) {
 	pkt, err := ParsePacket(bts)
 	if err != nil {
 		appendErr(err)
-		return nil, errList
+		return nil, utc.Zero, errList
 	}
 
 	seq, ts, err := t.detector.Detect(pkt.SequenceNumber, pkt.Timestamp)
@@ -80,39 +81,47 @@ func (t *rtpStreamTracker) Track(bts []byte) (payload []byte, errList error) {
 			TsPrev:    t.detector.Timestamp.Previous(),
 			TsDiff:    ts - t.detector.Timestamp.Previous(),
 		})
-	} else if t.stats.Start.IsZero() {
+	}
+	if t.stats.Start.IsZero() {
 		t.stats.Start = utc.Now()
 		t.stats.StartSeq = seq
 		t.stats.StartTs = ts
-	} else {
-		t.stats.EndSeq = seq
-		t.stats.EndTs = ts
 	}
+	t.stats.EndSeq = seq
+	t.stats.EndTs = ts
 
-	return pkt.Payload, errList
+	return pkt.Payload, t.toWallClockTS(ts), errList
 }
 
-func (t *rtpStreamTracker) Stats() Stats {
+func (t *rtpStreamTracker) Stats() *Stats {
 	res := t.stats
 	res.Duration = duration.Spec(utc.Since(t.stats.Start)).Round()
 	res.RtpDuration = duration.Spec(TicksToDuration(t.stats.EndTs - t.stats.StartTs)).Round()
-	return res
+	return &res
 }
 
 func (t *rtpStreamTracker) Reset() {
 	t.stats = Stats{}
 }
 
+func (t *rtpStreamTracker) toWallClockTS(rtpTS int64) utc.UTC {
+	wallClockT0 := utc.Now().Add(TicksToDuration(rtpTS) * -1)
+	if t.wallClockT0.IsZero() || wallClockT0.Before(t.wallClockT0) {
+		t.wallClockT0 = wallClockT0
+	}
+	return t.wallClockT0.Add(TicksToDuration(rtpTS))
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 
 type NoopTracker struct{}
 
-func (n NoopTracker) Track(bts []byte) ([]byte, error) {
-	return nil, nil
+func (n NoopTracker) Track(bts []byte) ([]byte, utc.UTC, error) {
+	return nil, utc.Zero, nil
 }
 
-func (n NoopTracker) Stats() Stats {
-	return Stats{}
+func (n NoopTracker) Stats() *Stats {
+	return &Stats{}
 }
 
 func (n NoopTracker) Reset() {}

@@ -50,7 +50,7 @@ func TestRtpStreamTracker(t *testing.T) {
 			first := true
 			for pkt, err := packetizer.Next(); len(pkt) > 0; pkt, err = packetizer.Next() {
 				require.NoError(t, err)
-				_, err := tracker.Track(pkt)
+				_, _, err := tracker.Track(pkt)
 				if i > 0 && first {
 					require.Error(t, err)
 				} else {
