@@ -109,7 +109,7 @@ func (s *SlidingWindow[T]) Mean() float64 {
 
 // Variance returns the current variance of the values in the sliding window.
 func (s *SlidingWindow[T]) Variance() float64 {
-	return variance(s.useSampleVariance, s.m2, s.count)
+	return Variance(s.useSampleVariance, s.m2, s.count)
 }
 
 // Stddev returns the standard deviation of the values in the sliding window (square root of the variance).
@@ -163,7 +163,7 @@ func (s *SlidingWindow[T]) Statistics(startingAt ...utc.UTC) *Statistics[T] {
 		mean:     meanSubset,
 		min:      subset[0],
 		max:      subset[count-1],
-		variance: variance(s.useSampleVariance, sum2, count),
+		variance: Variance(s.useSampleVariance, sum2, count),
 	}
 }
 
@@ -250,11 +250,11 @@ func (s *Statistics[T]) Count() int {
 	return len(s.sorted)
 }
 
-// variance calculates the variance from the sum of squares of differences (m2) and the count of values. If
+// Variance calculates the Variance from the sum of squares of differences (m2) and the count of values. If
 // `useSampleVariance` is true, it uses sample variance (N-1) instead of population variance (N).
 //
 // See https://www.geeksforgeeks.org/maths/sample-variance-vs-population-variance/
-func variance(useSampleVariance bool, m2 float64, count int) float64 {
+func Variance(useSampleVariance bool, m2 float64, count int) float64 {
 	if useSampleVariance {
 		count--
 	}
