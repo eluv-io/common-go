@@ -15,8 +15,8 @@ import (
 // statistics at a specified interval.
 type StreamTracker interface {
 	// Track feeds RTP packets to the tracker. The packet bytes (bts) should consist of a single RTP packet. The method
-	// will validate the packet and aggregate any errors. The method returns the payload and timestamp if the header is
-	// well-formatted, nil otherwise, and a list of errors if any.
+	// will validate the packet and aggregate any errors. The method returns the payload and the adjusted wall clock
+	// timestamp if the header is well-formatted, nil otherwise, and a list of errors if any.
 	Track(bts []byte) (payload []byte, timestamp utc.UTC, errList error)
 	// Stats returns RTP statistics
 	Stats() *Stats
