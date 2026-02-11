@@ -3,13 +3,14 @@ package io
 import (
 	"encoding/json"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	srt "github.com/datarhei/gosrt"
 
+	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/util/httputil"
 	"github.com/eluv-io/errors-go"
 )
 
@@ -54,11 +55,7 @@ func srtOpen(urlStr string) (connect func() (srt.Conn, error), modeListen bool, 
 		}, false, nil
 	}
 
-	val := u.Query().Get("stats_period")
-	statsPeriod, err := strconv.Atoi(val)
-	if err != nil {
-		log.Warn("srt init - invalid stats_period", "stats_period", val)
-	}
+	statsPeriod := httputil.DurationQuery(u.Query(), "stats_period", duration.Second, 0)
 
 	return func() (conn srt.Conn, err error) {
 		// listen mode: act as SRT server and accept incoming connections
@@ -109,7 +106,7 @@ func srtOpen(urlStr string) (connect func() (srt.Conn, error), modeListen bool, 
 					res, _ := json.Marshal(stats)
 					log.Debug("srt stats", "remote", remote, "srt_version", version, "stream_id", streamId, "stats", string(res))
 				}
-				ticker := time.NewTicker(time.Second * time.Duration(statsPeriod))
+				ticker := time.NewTicker(statsPeriod.Duration())
 				for {
 					select {
 					case <-ticker.C:
