@@ -1,15 +1,11 @@
 package io
 
 import (
-	"encoding/json"
 	"io"
 	"net/url"
-	"sync"
 	"sync/atomic"
 	"syscall"
-	"time"
 
-	srt "github.com/datarhei/gosrt"
 	"github.com/eluv-io/errors-go"
 )
 
@@ -52,7 +48,7 @@ func (s *srtSource) Open() (reader io.ReadCloser, err error) {
 			dr.reader.Store(&rc)
 			return
 		} else {
-			rc = newSrtReader(conn)
+			rc = io.ReadCloser(conn)
 		}
 		dr.reader.Store(&rc)
 		close(dr.waitReader)
@@ -97,43 +93,4 @@ func (e *ErrorReader) Read([]byte) (n int, err error) {
 
 func (e *ErrorReader) Close() error {
 	return nil
-}
-
-// ---------------------------------------------------------------------------------------------------------------------
-
-type srtReader struct {
-	srt.Conn
-	done chan bool
-	once sync.Once
-}
-
-func newSrtReader(conn srt.Conn) io.ReadCloser {
-	done := make(chan bool, 1)
-	go func() {
-		addr := conn.RemoteAddr().String()
-		stats := &srt.Statistics{}
-		report := func() {
-			conn.Stats(stats)
-			res, _ := json.Marshal(stats)
-			log.Debug("srt stats", "addr", addr, "stats", string(res))
-		}
-		ticker := time.NewTicker(time.Second * 5)
-		for {
-			select {
-			case <-ticker.C:
-				report()
-			case <-done:
-				report()
-				return
-			}
-		}
-	}()
-	return &srtReader{Conn: conn, done: done}
-}
-
-func (r *srtReader) Close() error {
-	r.once.Do(func() {
-		close(r.done)
-	})
-	return r.Conn.Close()
 }
