@@ -28,7 +28,7 @@ func (s *udpSink) Name() string {
 }
 
 func (s *udpSink) Open() (io.WriteCloser, error) {
-	e := errors.Template("udpSource.Open", errors.K.IO, "url", s.url)
+	e := errors.Template("udpSink.Open", errors.K.IO, "url", s.url)
 
 	liveUrl, err := ParseLiveUrl(s.url)
 	if err != nil {
@@ -50,6 +50,12 @@ func (s *udpSink) Open() (io.WriteCloser, error) {
 			return nil, e(err)
 		}
 		p := ipv4.NewPacketConn(conn)
+
+		defer func() {
+			if err != nil {
+				errors.Log(conn.Close, log.Warn)
+			}
+		}()
 
 		if iface != nil {
 			err = p.SetMulticastInterface(iface)

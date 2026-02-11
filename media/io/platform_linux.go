@@ -20,8 +20,5 @@ func setPlatformOptions(conn *net.UDPConn) error {
 	if sockErr != nil {
 		return sockErr // Return the most specific error
 	}
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }

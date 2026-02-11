@@ -44,7 +44,7 @@ func TestParseLiveUrlMulticast(t *testing.T) {
 	assert.True(t, liveURL.LocalAddr.Equal(net.ParseIP("172.16.1.10")))
 }
 
-// This test fails... url.Parse silently swalloqs an @ sign at the start of the hostname...
+// This test fails... url.Parse silently swallows an @ sign at the start of the hostname...
 // func TestParseLiveUrlRejectsAtPrefix(t *testing.T) {
 // 	_, err := ParseLiveUrlString("udp://@232.1.2.3:5000")
 // 	assert.Error(t, err)
