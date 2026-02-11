@@ -41,7 +41,7 @@ func testSourceSink(t *testing.T, host, proto string, connectionLess bool) {
 	require.NoError(t, err)
 
 	// create the source
-	source, err := CreatePacketSource(fmt.Sprintf("%s://%s:%d?mode=listen", proto, host, port))
+	source, err := CreatePacketSource(fmt.Sprintf("%s://%s:%d?mode=listener", proto, host, port))
 	require.NoError(t, err)
 	reader, err := source.Open()
 	require.NoError(t, err)
