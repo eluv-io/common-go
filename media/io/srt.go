@@ -1,10 +1,16 @@
 package io
 
 import (
+	"encoding/json"
+	"net/url"
 	"strings"
+	"sync"
+	"time"
 
 	srt "github.com/datarhei/gosrt"
 
+	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/util/httputil"
 	"github.com/eluv-io/errors-go"
 )
 
@@ -30,7 +36,14 @@ func srtOpen(urlStr string) (connect func() (srt.Conn, error), modeListen bool, 
 		}()
 	}
 
-	if !strings.Contains(urlStr, "listen") {
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return nil, false, e(err)
+	}
+
+	statsPeriod := httputil.DurationQuery(u.Query(), "stats_period", duration.Second, 0)
+
+	if httputil.StringQuery(u.Query(), "mode", "") != "listener" {
 		return func() (srt.Conn, error) {
 			log.Debug("srt connect", "url", urlStr)
 
@@ -39,7 +52,8 @@ func srtOpen(urlStr string) (connect func() (srt.Conn, error), modeListen bool, 
 			if err != nil {
 				return nil, e(err)
 			}
-			return conn, nil
+
+			return newWrappedConn(conn, nil, statsPeriod), nil
 		}, false, nil
 	}
 
@@ -64,8 +78,7 @@ func srtOpen(urlStr string) (connect func() (srt.Conn, error), modeListen bool, 
 			return nil, e(err)
 		}
 
-		streamId := req.StreamId()
-		log.Debug("new connection", "remote", req.RemoteAddr(), "srt_version", req.Version(), "stream_id", streamId)
+		log.Debug("new connection", "remote", req.RemoteAddr(), "srt_version", req.Version(), "stream_id", req.StreamId())
 
 		if srtConfig.Passphrase != "" {
 			err = req.SetPassphrase(srtConfig.Passphrase)
@@ -81,11 +94,8 @@ func srtOpen(urlStr string) (connect func() (srt.Conn, error), modeListen bool, 
 			return nil, e(err)
 		}
 
-		log.Debug("new connection accepted", "remote", req.RemoteAddr(), "srt_version", req.Version(), "stream_id", streamId)
-		return &wrappedConn{
-			Conn:     conn,
-			listener: listener,
-		}, nil
+		log.Debug("new connection accepted", "remote", req.RemoteAddr(), "srt_version", req.Version(), "stream_id", req.StreamId())
+		return newWrappedConn(conn, listener, statsPeriod), nil
 	}, true, nil
 }
 
@@ -97,9 +107,48 @@ func srtSanitizeUrl(str string) string {
 type wrappedConn struct {
 	srt.Conn
 	listener srt.Listener
+	done     chan bool
+	once     sync.Once
+}
+
+func newWrappedConn(conn srt.Conn, listener srt.Listener, statsPeriod duration.Spec) srt.Conn {
+	done := make(chan bool, 1)
+	if statsPeriod > 0 {
+		go func() {
+			remote := conn.RemoteAddr().String()
+			version := conn.Version()
+			streamId := conn.StreamId()
+			stats := &srt.Statistics{}
+			report := func() {
+				conn.Stats(stats)
+				res, _ := json.Marshal(stats)
+				log.Debug("srt stats", "remote", remote, "srt_version", version, "stream_id", streamId, "stats", string(res))
+			}
+			ticker := time.NewTicker(statsPeriod.Duration())
+			for {
+				select {
+				case <-ticker.C:
+					report()
+				case <-done:
+					report()
+					return
+				}
+			}
+		}()
+	}
+	return &wrappedConn{
+		Conn:     conn,
+		listener: listener,
+		done:     done,
+	}
 }
 
 func (w *wrappedConn) Close() error {
-	w.listener.Close()
+	w.once.Do(func() {
+		close(w.done)
+	})
+	if w.listener != nil {
+		w.listener.Close()
+	}
 	return w.Conn.Close()
 }

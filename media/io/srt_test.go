@@ -45,7 +45,7 @@ func TestSourceSinkMulticast(t *testing.T) {
 func testSourceSink(t *testing.T, host, proto string) {
 	port, err := testutil.FreePort()
 	require.NoError(t, err)
-	testSourceSinkUrl(t, fmt.Sprintf("%s://%s:%d?mode=listen", proto, host, port), fmt.Sprintf("%s://%s:%d", proto, host, port))
+	testSourceSinkUrl(t, fmt.Sprintf("%s://%s:%d?mode=listener", proto, host, port), fmt.Sprintf("%s://%s:%d", proto, host, port))
 }
 
 func testSourceSinkUrl(t *testing.T, src, snk string) {
