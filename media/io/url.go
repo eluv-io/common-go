@@ -114,8 +114,8 @@ func ParseLiveUrl(u *url.URL) (*LiveUrl, error) {
 	out.Reuse = httputil.BoolQuery(q, "reuse", false)
 
 	out.TTL = httputil.IntQuery(q, "ttl", 1)
-	if out.TTL < 1 {
-		return nil, fmt.Errorf("invalid ttl: %d", out.TTL)
+	if out.TTL < 1 || out.TTL > 255 {
+		return nil, fmt.Errorf("invalid ttl (must be 1-255): %d", out.TTL)
 	}
 	out.Loopback = httputil.BoolQuery(q, "loopback", false)
 

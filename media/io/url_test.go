@@ -68,7 +68,7 @@ func TestInterfaceByIP(t *testing.T) {
 func TestParseLiveUrlTTL(t *testing.T) {
 	liveURL, err := ParseLiveUrlString("udp://232.1.2.3:5000?ttl=4")
 	assert.NoError(t, err)
-	assert.Equal(t, liveURL.TTL, 4)
+	assert.Equal(t, 4, liveURL.TTL)
 }
 
 func TestParseLiveUrlLoopback(t *testing.T) {
