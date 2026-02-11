@@ -40,6 +40,8 @@ require (
 	github.com/ugorji/go/codec v1.1.7
 	go.uber.org/atomic v1.9.0
 	golang.org/x/exp v0.0.0-20220426173459-3bcf042a4bf5
+	golang.org/x/net v0.21.0
+	golang.org/x/sys v0.30.0
 	golang.org/x/text v0.22.0
 )
 
@@ -73,7 +75,6 @@ require (
 	github.com/tklauser/numcpus v0.2.2 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/crypto v0.33.0 // indirect
-	golang.org/x/sys v0.30.0 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect

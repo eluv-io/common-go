@@ -29,19 +29,28 @@ func TestSourceSink(t *testing.T) {
 				// "localhost",  ==> doesn't work for srt!
 			} {
 				t.Run(host, func(t *testing.T) {
-					testSourceSink(t, host, test.proto, test.connectionLess)
+					testSourceSink(t, host, test.proto)
 				})
 			}
 		})
 	}
 }
 
-func testSourceSink(t *testing.T, host, proto string, connectionLess bool) {
+func TestSourceSinkMulticast(t *testing.T) {
 	port, err := testutil.FreePort()
 	require.NoError(t, err)
+	testSourceSinkUrl(t, fmt.Sprintf("udp://239.255.0.1:%d?localaddr=127.0.0.1", port), fmt.Sprintf("udp://239.255.0.1:%d?localaddr=127.0.0.1&loopback", port))
+}
 
+func testSourceSink(t *testing.T, host, proto string) {
+	port, err := testutil.FreePort()
+	require.NoError(t, err)
+	testSourceSinkUrl(t, fmt.Sprintf("%s://%s:%d?mode=listen", proto, host, port), fmt.Sprintf("%s://%s:%d", proto, host, port))
+}
+
+func testSourceSinkUrl(t *testing.T, src, snk string) {
 	// create the source
-	source, err := CreatePacketSource(fmt.Sprintf("%s://%s:%d?mode=listen", proto, host, port))
+	source, err := CreatePacketSource(src)
 	require.NoError(t, err)
 	reader, err := source.Open()
 	require.NoError(t, err)
@@ -51,7 +60,7 @@ func testSourceSink(t *testing.T, host, proto string, connectionLess bool) {
 	time.Sleep(100 * time.Millisecond)
 
 	// connect the sink
-	sink, err := CreatePacketSink(fmt.Sprintf("%s://%s:%d", proto, host, port))
+	sink, err := CreatePacketSink(snk)
 	require.NoError(t, err)
 	writer, err := sink.Open()
 	require.NoError(t, err)
