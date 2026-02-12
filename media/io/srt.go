@@ -53,7 +53,7 @@ func srtOpen(urlStr string) (connect func() (srt.Conn, error), modeListen bool, 
 				return nil, e(err)
 			}
 
-			return newWrappedConn(conn, nil, statsPeriod), nil
+			return newWrappedConn(conn, nil, hostPort, statsPeriod), nil
 		}, false, nil
 	}
 
@@ -78,7 +78,7 @@ func srtOpen(urlStr string) (connect func() (srt.Conn, error), modeListen bool, 
 			return nil, e(err)
 		}
 
-		log.Debug("new connection", "remote", req.RemoteAddr(), "srt_version", req.Version(), "stream_id", req.StreamId())
+		log.Debug("new connection", "host", hostPort, "remote", req.RemoteAddr(), "srt_version", req.Version(), "stream_id", req.StreamId())
 
 		if srtConfig.Passphrase != "" {
 			err = req.SetPassphrase(srtConfig.Passphrase)
@@ -94,8 +94,8 @@ func srtOpen(urlStr string) (connect func() (srt.Conn, error), modeListen bool, 
 			return nil, e(err)
 		}
 
-		log.Debug("new connection accepted", "remote", req.RemoteAddr(), "srt_version", req.Version(), "stream_id", req.StreamId())
-		return newWrappedConn(conn, listener, statsPeriod), nil
+		log.Debug("new connection accepted", "host", hostPort, "remote", req.RemoteAddr(), "srt_version", req.Version(), "stream_id", req.StreamId())
+		return newWrappedConn(conn, listener, hostPort, statsPeriod), nil
 	}, true, nil
 }
 
@@ -111,7 +111,7 @@ type wrappedConn struct {
 	once     sync.Once
 }
 
-func newWrappedConn(conn srt.Conn, listener srt.Listener, statsPeriod duration.Spec) srt.Conn {
+func newWrappedConn(conn srt.Conn, listener srt.Listener, hostPort string, statsPeriod duration.Spec) srt.Conn {
 	done := make(chan bool, 1)
 	if statsPeriod > 0 {
 		go func() {
@@ -122,7 +122,7 @@ func newWrappedConn(conn srt.Conn, listener srt.Listener, statsPeriod duration.S
 			report := func() {
 				conn.Stats(stats)
 				res, _ := json.Marshal(stats)
-				log.Debug("srt stats", "remote", remote, "srt_version", version, "stream_id", streamId, "stats", string(res))
+				log.Debug("srt stats", "host", hostPort, "remote", remote, "srt_version", version, "stream_id", streamId, "stats", string(res))
 			}
 			ticker := time.NewTicker(statsPeriod.Duration())
 			for {
