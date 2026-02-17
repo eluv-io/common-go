@@ -25,12 +25,13 @@ type Counter interface {
 // that has been re-sliced. Pool is designed to be a drop-in replacement for
 // sync.Pool, without having to cast interface{} as []byte.
 type Pool struct {
-	BufSize  int         // Size of buffers
-	p        *sync.Pool  // Backing pool
-	q        chan []byte // Queue of released buffers
-	created  Counter     // Metric for created buffers
-	released Counter     // Metrics for released buffers
-	locker   sync.Locker // usually a noop locker (a real locker is only used in tests)
+	BufSize   int         // Size of buffers
+	p         *sync.Pool  // Backing pool
+	q         chan []byte // Queue of released buffers
+	created   Counter     // Metric for created buffers
+	retrieved Counter     // Metric for retrieved buffers
+	released  Counter     // Metric for released buffers
+	locker    sync.Locker // usually a noop locker (a real locker is only used in tests)
 }
 
 // NewPool creates a new buffer pool to service buffers of size bufSize
@@ -64,6 +65,9 @@ func NewPool(bufSize int) *Pool {
 func (p *Pool) New(count ...byte) []byte {
 	buf := p.new().([]byte)
 	p.setCounter(buf, count)
+	if p.retrieved != nil {
+		p.retrieved.Add(1)
+	}
 	return buf
 }
 
@@ -74,6 +78,9 @@ func (p *Pool) New(count ...byte) []byte {
 func (p *Pool) Get(count ...byte) []byte {
 	buf := p.p.Get().([]byte)
 	p.setCounter(buf, count)
+	if p.retrieved != nil {
+		p.retrieved.Add(1)
+	}
 	return buf
 }
 
@@ -99,8 +106,9 @@ func (p *Pool) Close() error {
 	return nil
 }
 
-func (p *Pool) SetMetrics(created, released Counter) {
+func (p *Pool) SetMetrics(created, retrieved, released Counter) {
 	p.created = created
+	p.retrieved = retrieved
 	p.released = released
 }
 
