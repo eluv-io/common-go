@@ -15,23 +15,41 @@ var tid = ID(append([]byte{1}, []byte{0, 1, 2, 3, 4, 5, 6}...))
 const expIDString = "iacc1W7LcTy7"
 
 func TestGenerate(t *testing.T) {
-	generated := Generate(User)
-	assert.NoError(t, generated.AssertCode(User))
+	for code, prefix := range codeToPrefix {
+		generated := Generate(code)
+		assert.NoError(t, generated.AssertCode(code))
 
-	idString := generated.String()
-	assert.Equal(t, "iusr", idString[:4])
+		idString := generated.String()
+		assert.Equal(t, prefix, idString[:len(prefix)])
 
-	idFromString, err := FromString(idString)
-	assert.NoError(t, err)
-	assert.NoError(t, idFromString.AssertCode(User))
+		idFromString, err := FromString(idString)
+		assert.NoError(t, err)
+		assert.NoError(t, idFromString.AssertCode(code))
 
-	assert.Equal(t, generated, idFromString)
+		assert.Equal(t, generated, idFromString)
 
-	assert.True(t, generated.Equal(idFromString))
-	assert.False(t, generated.Equal(nil))
-	var nilID ID
-	//noinspection GoNilness
-	assert.False(t, nilID.Equal(generated))
+		assert.True(t, generated.Equal(idFromString))
+		assert.False(t, generated.Equal(nil))
+		var nilID ID
+		//noinspection GoNilness
+		assert.False(t, nilID.Equal(generated))
+	}
+
+}
+func TestInternalMaps(t *testing.T) {
+	require.Equal(t, len(prefixToCode), len(codeToPrefix))
+	require.Equal(t, len(prefixToCode), len(codeToName))
+
+	for prefix, code := range prefixToCode {
+		require.Equal(t, prefixLen, len(prefix))
+
+		back, ok := codeToPrefix[code]
+		require.True(t, ok)
+		require.Equal(t, prefix, back)
+
+		_, ok = codeToName[code]
+		require.True(t, ok)
+	}
 }
 
 func TestStringConversion(t *testing.T) {

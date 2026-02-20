@@ -59,6 +59,7 @@ const (
 	Group
 	Key
 	Ed25519
+	Allocation
 )
 
 const codeLen = 1
@@ -83,6 +84,7 @@ var prefixToCode = map[string]Code{
 	"igrp": Group,
 	"ikey": Key,     // last 20 bytes of the keccak256 of a bls381 ecp
 	"ied2": Ed25519, // 32 byte ed25519 public key
+	"illc": Allocation,
 }
 var codeToName = map[Code]string{
 	UNKNOWN:         "unknown",
@@ -102,6 +104,7 @@ var codeToName = map[Code]string{
 	Group:           "group",
 	Key:             "key",
 	Ed25519:         "ed25519 public key",
+	Allocation:      "allocation",
 }
 
 func init() {
