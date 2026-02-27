@@ -43,15 +43,15 @@ type fileReader struct {
 }
 
 func (f *fileReader) Read(p []byte) (n int, err error) {
-	read, err := f.f.Read(p)
+	n, err = f.f.Read(p)
 	if !f.hasRead {
 		if len(p) < 7 {
 			return 0, errors.E("fileReader.Read", errors.K.IO, "reason", "read buffer too small")
 		}
-		if read >= 7 && bytes.Equal(p[:7], []byte{0x06, 0x05, 0x2f, 0x72, 0x61, 0x77, 0x0a}) {
+		if n >= 7 && bytes.Equal(p[:7], []byte{0x06, 0x05, 0x2f, 0x72, 0x61, 0x77, 0x0a}) {
 			// live part header/preamble (varint, varint, /, r, a, w, \n) ... strip!
-			copy(p, p[7:read])
-			read -= 7
+			copy(p, p[7:n])
+			n -= 7
 		}
 
 		f.hasRead = true
