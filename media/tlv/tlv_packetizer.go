@@ -92,6 +92,7 @@ func (p *Packetizer) Next() ([]byte, error) {
 
 	var typ byte
 	var length uint16
+	p.consumed = 0
 
 	for {
 		if !p.haveTL {

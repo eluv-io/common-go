@@ -34,6 +34,7 @@ func TestTlvPacketizer(t *testing.T) {
 	fullPacketCount := 0
 	t.Run("valid packet", func(t *testing.T) {
 		byteCount := 0
+		consumed := 0
 		packetizer := tlv.NewTlvPacketizer(1500)
 
 		chunkSize := len(source)
@@ -41,6 +42,7 @@ func TestTlvPacketizer(t *testing.T) {
 			packetizer.Write(source[i:min(i+chunkSize, len(source))])
 			for pkt, err := packetizer.Next(); len(pkt) > 0; pkt, err = packetizer.Next() {
 				require.NoError(t, err)
+				consumed += packetizer.Consumed()
 				require.Equal(t, rtpHeaderSize+7*tsPacketSize, len(pkt))
 				byteCount += len(pkt)
 				pkt = pkt[rtpHeaderSize:]
@@ -54,5 +56,6 @@ func TestTlvPacketizer(t *testing.T) {
 		}
 		fmt.Println("packets:", fullPacketCount)
 		require.Equal(t, len(source), byteCount+fullPacketCount*tlvHeaderSize)
+		require.Equal(t, consumed, byteCount+fullPacketCount*tlvHeaderSize)
 	})
 }

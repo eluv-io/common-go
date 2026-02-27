@@ -141,12 +141,13 @@ func TestNewRtpPacketizer_MultipleConcatenatedPackets(t *testing.T) {
 	require.NotNil(t, out2)
 	require.Equal(t, raw2, out2)
 	require.Equal(t, len(raw2), p.TargetPacketSize())
-	require.Equal(t, len(raw1)+len(raw2), p.Consumed())
+	require.Equal(t, len(raw2), p.Consumed())
 
 	// nothing left afterwards
 	out3, err := p.Next()
 	require.NoError(t, err)
 	require.Nil(t, out3)
+	require.Zero(t, p.Consumed())
 }
 
 func TestNewRtpPacketizer_InvalidPaddingHeader(t *testing.T) {

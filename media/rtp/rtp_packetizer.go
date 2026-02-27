@@ -72,6 +72,7 @@ func (p *Packetizer) Write(bts []byte) {
 }
 
 func (p *Packetizer) Next() ([]byte, error) {
+	p.consumed = 0
 	for {
 		p.Write(p.remaining) // no-op if remaining is empty...
 		if p.buf.Len() == 0 {
