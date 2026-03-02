@@ -113,15 +113,15 @@ func TestStatsLogger(t *testing.T) {
 	o := toMap(t, slows[6])
 	assert.Len(t, o, 5)
 	dur = r.writeSleep
-	assertEvent(t, "Write", start.Add(dur), r.writeSleep, 0, int64(len(d)), nil, o[0])
+	assertEvent(t, "write", start.Add(dur), r.writeSleep, 0, int64(len(d)), nil, o[0])
 	dur += r.seekSleep + r.readSleep
-	assertEvent(t, "Read", start.Add(dur), r.readSleep, 0, int64(len(d)/2), nil, o[1])
+	assertEvent(t, "read", start.Add(dur), r.readSleep, 0, int64(len(d)/2), nil, o[1])
 	dur += r.readSleep
-	assertEvent(t, "Read", start.Add(dur), r.readSleep, int64(len(d)/2), int64(len(d)/2), nil, o[2])
+	assertEvent(t, "read", start.Add(dur), r.readSleep, int64(len(d)/2), int64(len(d)/2), nil, o[2])
 	dur += r.writeSleep
-	assertEvent(t, "Write", start.Add(dur), r.writeSleep, int64(len(d)), 0, nil, o[3])
+	assertEvent(t, "write", start.Add(dur), r.writeSleep, int64(len(d)), 0, nil, o[3])
 	dur += r.readSleep
-	assertEvent(t, "Read", start.Add(dur), r.readSleep, int64(len(d)), 0, nil, o[4])
+	assertEvent(t, "read", start.Add(dur), r.readSleep, int64(len(d)), 0, nil, o[4])
 }
 
 type sleeper struct {

@@ -3,6 +3,7 @@ package ioutil
 import (
 	"encoding/json"
 	"io"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,34 +13,13 @@ import (
 	"github.com/eluv-io/utc-go"
 )
 
-// StatsLogger is a wrapper around a Reader/Writer/Seeker/Closer (or any combination thereof) that collects stats for
-// Read/Write/Seek calls and custom events specified by the caller. It will track stats (count, min, max, sum, mean) for
-// call durations and report any call durations slower than the given limit. At the first Close call, the aggregated
-// stats, collected events, and slow operations will be logged using the given loggers.
+// NewStatsLogger returns a wrapper around a Reader/Writer/Seeker/Closer (or any combination thereof) that collects
+// stats for Read/Write/Seek calls and custom events specified by the caller. It will track stats (count, min, max,
+// sum, mean) for call durations and report any call durations slower than the given limit. At the first Close call,
+// the aggregated stats, collected events, and slow operations will be logged using the given loggers.
 //
 // For each custom event specified by the caller, a name and optional data are given by the caller, and StatsLogger
 // collects the event along with the time, offset, and result of the last Read/Write/Seek call before the event.
-type StatsLogger struct {
-	r        io.Reader
-	w        io.Writer
-	s        io.Seeker
-	c        io.Closer
-	statsLog func(msg string, fields ...interface{})
-	slowsLog func(msg string, fields ...interface{})
-	start    utc.UTC
-	limit    time.Duration
-	op       string
-	fields   []interface{}
-	off      int64
-	lastT    utc.UTC
-	lastOff  int64
-	lastN    int64
-	stats    statsutil.Statistics[time.Duration]
-	events   []*statsEvent
-	slows    []*statsEvent
-	once     sync.Once
-}
-
 func NewStatsLogger(
 	rwsc interface{}, // Accepts any Reader, Writer, Seeker, Closer
 	statsLog func(msg string, fields ...interface{}),
@@ -62,24 +42,47 @@ func NewStatsLogger(
 	if c, ok := rwsc.(io.Closer); ok {
 		l.c = c
 	}
+	l.watch = timeutil.StartWatch()
 	return l
+}
+
+type StatsLogger struct {
+	r        io.Reader
+	w        io.Writer
+	s        io.Seeker
+	c        io.Closer
+	statsLog func(msg string, fields ...interface{})
+	slowsLog func(msg string, fields ...interface{})
+	start    utc.UTC
+	limit    time.Duration
+	op       string
+	fields   []interface{}
+	off      int64
+	lastT    utc.UTC
+	lastOff  int64
+	lastN    int64
+	watch    *timeutil.StopWatch
+	stats    statsutil.Statistics[time.Duration]
+	events   []*statsEvent
+	slows    []*statsEvent
+	once     sync.Once
 }
 
 func (l *StatsLogger) Read(p []byte) (int, error) {
 	if l.r == nil {
 		panic(l.op + ": StatsLogger.Read called but missing reader")
 	}
-	watch := timeutil.StartWatch()
+	l.watch.Reset()
 	n, err := l.r.Read(p)
-	watch.Stop()
-	if n > 0 || err != io.EOF || watch.Duration() > l.limit { // Ignore empty reads at EOF, unless slow
-		l.lastT = watch.StopTime()
+	l.watch.Stop()
+	if n > 0 || err != io.EOF || l.watch.Duration() > l.limit { // Ignore empty reads at EOF, unless slow
+		l.lastT = l.watch.StopTime()
 		l.lastN = int64(n)
 		l.lastOff = l.off
 		l.off += l.lastN
-		l.stats.Update(l.lastT, watch.Duration())
-		if watch.Duration() > l.limit {
-			l.record(true, "Read", watch.Duration(), nil)
+		l.stats.Update(l.lastT, l.watch.Duration())
+		if l.watch.Duration() > l.limit {
+			l.record(true, "read", l.watch.Duration(), nil)
 		}
 	}
 	return n, err
@@ -89,17 +92,17 @@ func (l *StatsLogger) Write(p []byte) (int, error) {
 	if l.w == nil {
 		panic(l.op + ": StatsLogger.Write called but missing writer")
 	}
-	watch := timeutil.StartWatch()
+	l.watch.Reset()
 	n, err := l.w.Write(p)
-	watch.Stop()
-	if n > 0 || watch.Duration() > l.limit { // Ignore empty writes, unless slow
-		l.lastT = watch.StopTime()
+	l.watch.Stop()
+	if n > 0 || l.watch.Duration() > l.limit { // Ignore empty writes, unless slow
+		l.lastT = l.watch.StopTime()
 		l.lastN = int64(n)
 		l.lastOff = l.off
 		l.off += l.lastN
-		l.stats.Update(l.lastT, watch.Duration())
-		if watch.Duration() > l.limit {
-			l.record(true, "Write", watch.Duration(), nil)
+		l.stats.Update(l.lastT, l.watch.Duration())
+		if l.watch.Duration() > l.limit {
+			l.record(true, "write", l.watch.Duration(), nil)
 		}
 	}
 	return n, err
@@ -109,16 +112,16 @@ func (l *StatsLogger) Seek(offset int64, whence int) (int64, error) {
 	if l.s == nil {
 		panic(l.op + ": StatsLogger.Seek called but missing seeker")
 	}
-	watch := timeutil.StartWatch()
+	l.watch.Reset()
 	n, err := l.s.Seek(offset, whence)
-	watch.Stop()
-	l.lastT = watch.StopTime()
+	l.watch.Stop()
+	l.lastT = l.watch.StopTime()
 	l.lastN = n
 	l.lastOff = l.off
 	l.off = l.lastN
-	l.stats.Update(l.lastT, watch.Duration())
-	if watch.Duration() > l.limit {
-		l.record(true, "Seek", watch.Duration(), nil)
+	l.stats.Update(l.lastT, l.watch.Duration())
+	if l.watch.Duration() > l.limit {
+		l.record(true, "seek", l.watch.Duration(), nil)
 	}
 	return n, err
 }
@@ -172,6 +175,7 @@ func (e *statsEvent) String() string {
 }
 
 // clean clears all names if all names are the same and returns "OP.NAME"; otherwise, does nothing and returns "OP".
+// Assumes all names are one word each.
 func clean(events []*statsEvent, op string) string {
 	name := ""
 	for _, e := range events {
@@ -184,5 +188,5 @@ func clean(events []*statsEvent, op string) string {
 	for _, e := range events {
 		e.Name = ""
 	}
-	return op + "." + name
+	return op + "." + strings.ToTitle(name[:1]) + strings.ToLower(name[1:])
 }
