@@ -62,16 +62,25 @@ func PartitionPrefixes(level int) ([][]byte, error) {
 	numPartitions := PartitionCount(level)
 	partitions := make([][]byte, numPartitions)
 	for i := 0; i < numPartitions; i++ {
-		partitions[i] = PartitionPrefixForIndex(i, level)
+		partitions[i], _ = PartitionPrefixForIndex(i, level)
 	}
 
 	return partitions, nil
 }
 
 // PartitionPrefixForIndex returns the partition prefix for the given partition index and level.
-func PartitionPrefixForIndex(index, level int) []byte {
+func PartitionPrefixForIndex(index, level int) ([]byte, error) {
+	if err := ValidateLevel(level); err != nil {
+		return nil, err
+	}
+	if index < 0 || index >= PartitionCount(level) {
+		return nil, errors.NoTrace("PartitionPrefixForIndex", errors.K.Invalid,
+			"reason", "index out of range",
+			"index", index,
+			"level", level)
+	}
 	si := index << (16 - level)
-	return []byte{byte(si >> 8), byte(si)}
+	return []byte{byte(si >> 8), byte(si)}, nil
 }
 
 // PartitionCount returns the total number of partitions at the given partition level (2^level).
