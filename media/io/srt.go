@@ -27,15 +27,6 @@ func srtOpen(urlStr string) (connect func() (srt.Conn, error), modeListen bool, 
 	// ensures message boundaries of the sender are preserved
 	srtConfig.MessageAPI = true
 
-	if false {
-		srtConfig.Logger = srt.NewLogger(strings.Split("connection|control|data|dial|handshake|listen|packet", "|"))
-		go func() {
-			for m := range srtConfig.Logger.Listen() {
-				log.Info(m.Topic, "socket_id", m.SocketId, "file", m.File, "line", m.Line, "msg", m.Message)
-			}
-		}()
-	}
-
 	u, err := url.Parse(urlStr)
 	if err != nil {
 		return nil, false, e(err)

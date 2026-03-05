@@ -1,9 +1,12 @@
 package byteutil
 
 import (
-	"bufio"
 	"io"
+
+	"github.com/eluv-io/errors-go"
 )
+
+var ErrNegativeCount = errors.Str("negative count")
 
 // NewRingBuffer creates a new ring buffer with the given capacity.
 func NewRingBuffer(cap int) *RingBuffer {
@@ -89,19 +92,4 @@ func (r *RingBuffer) Len() int {
 // Free returns the number of bytes that can be written to the ring buffer without overwriting any unread bytes.
 func (r *RingBuffer) Free() int {
 	return r.cap - r.len
-}
-
-// Peek returns the next n bytes without advancing the read offset in the ring. The bytes stop being valid at the next
-// read call. If Peek returns fewer than n bytes, it also returns an error explaining why the read is short. The error
-// is [ErrBufferFull] if n is larger than the ring's buffer size.
-func (r *RingBuffer) Peek(n int) ([]byte, error) {
-	if n < 0 {
-		return nil, bufio.ErrNegativeCount
-	}
-
-	if r.len < n {
-		return r.buf[r.off : r.off+r.len], bufio.ErrBufferFull
-	}
-
-	return r.buf[r.off : r.off+n], nil
 }
