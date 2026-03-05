@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/common-go/util/lru"
+	"github.com/eluv-io/common-go/util/testutil"
 	"github.com/eluv-io/common-go/util/timeutil"
 	"github.com/eluv-io/common-go/util/traceutil"
 	elog "github.com/eluv-io/log-go"
@@ -443,7 +443,7 @@ func startAndRunClients(cache *lru.TypedExpiringCache[string, int32], seq *atomi
 			key:     fmt.Sprintf("key-%d", i/3),
 			cache:   cache,
 			cstr:    cstr,
-			collect: new(assert.CollectT),
+			collect: new(testutil.CollectT),
 		}
 		go func() {
 			cl.run(start, stop)
@@ -469,7 +469,7 @@ type client struct {
 	key     string
 	cache   *lru.TypedExpiringCache[string, int32]
 	cstr    func() (int32, error)
-	collect *assert.CollectT
+	collect *testutil.CollectT
 
 	previousVal int32
 	invocations int
