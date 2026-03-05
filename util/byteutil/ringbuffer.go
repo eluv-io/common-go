@@ -7,6 +7,7 @@ import (
 )
 
 var ErrNegativeCount = errors.Str("negative count")
+var ErrInsufficientData = errors.Str("insufficient data in buffer")
 
 // NewRingBuffer creates a new ring buffer with the given capacity.
 func NewRingBuffer(cap int) *RingBuffer {
@@ -92,4 +93,18 @@ func (r *RingBuffer) Len() int {
 // Free returns the number of bytes that can be written to the ring buffer without overwriting any unread bytes.
 func (r *RingBuffer) Free() int {
 	return r.cap - r.len
+}
+
+// Peek returns the next n bytes without advancing the read offset in the ring. The bytes stop being valid at the next
+// read call. If Peek returns fewer than n bytes, it also returns an ErrInsufficientData error.
+func (r *RingBuffer) Peek(n int) ([]byte, error) {
+	if n < 0 {
+		return nil, ErrNegativeCount
+	}
+
+	if r.len < n {
+		return r.buf[r.off : r.off+r.len], ErrInsufficientData
+	}
+
+	return r.buf[r.off : r.off+n], nil
 }
