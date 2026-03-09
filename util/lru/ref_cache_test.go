@@ -121,8 +121,8 @@ func TestConcurrent(t *testing.T) {
 				// idx := i % keyRange
 				res := resources[idx]
 				val, err := cache.GetOrCreate(res.key, res.constructor)
-				//require.NoError(t, err)
-				//require.Same(t, res, val)
+				// require.NoError(t, err)
+				// require.Same(t, res, val)
 				_ = val
 				_ = err
 				count++
@@ -149,7 +149,7 @@ func TestConcurrent(t *testing.T) {
 		"got", cb.get.Load(),
 		"release", cb.release.Load())
 	metrics := cache.Metrics()
-	fmt.Println(jsonutil.MarshalString(metrics))
+	fmt.Println(jsonutil.MarshalString(&metrics))
 	require.EqualValues(t, totalCount, metrics.Hits.Load()+metrics.Misses.Load())
 	require.EqualValues(t, 0, metrics.Errors.Load())
 	require.EqualValues(t, cacheSize, metrics.Config.MaxItems)

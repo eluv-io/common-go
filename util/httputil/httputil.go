@@ -438,6 +438,20 @@ func SetLiveHash(headers http.Header, liveHash types.QPHash) {
 	}
 }
 
+func GetMultipath(headers http.Header) (string, error) {
+	multipath, err := GetCustomHeader(headers, "Multipath")
+	if err != nil {
+		return "", errors.E("invalid multipath", errors.K.Invalid, err)
+	}
+	return multipath, nil
+}
+
+func SetMultipath(headers http.Header, multipath string) {
+	if multipath != "" {
+		SetCustomHeader(headers, "Multipath", multipath)
+	}
+}
+
 func GetPubConfirms(headers http.Header) ([]string, error) {
 	confirmsStr, err := GetCustomHeader(headers, "Publish-Confirmations")
 	if err != nil {

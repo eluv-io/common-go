@@ -1,15 +1,29 @@
 package lru_test
 
 import (
+	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/common-go/util/lru"
+	"github.com/eluv-io/common-go/util/timeutil"
+	"github.com/eluv-io/common-go/util/traceutil"
+	elog "github.com/eluv-io/log-go"
 	"github.com/eluv-io/utc-go"
 )
+
+var log = func() *elog.Log {
+	c := elog.NewConfig()
+	c.Handler = "text"
+	return elog.New(c)
+}()
 
 func TestExpiringCache(t *testing.T) {
 	testNilCache(t, lru.NewExpiringCache(0, 5))
@@ -197,4 +211,307 @@ func TestExpiringCacheResetOnAccess(t *testing.T) {
 
 	now = now.Add(5 * time.Second)
 	assertGet("k3", nil, false)
+}
+
+// TestExpiringCacheResetAgeAfterCreation tests the expiring cache with the ResetAgeAfterCreation option enabled. It
+// launches 2 groups of 3 clients (6 total). Each group accesses the same key. The cache expiration is set to 1 second,
+// and the constructor function takes 1 second to complete. The test runs for 5.5 seconds, during which each client
+// repeatedly accesses the cache every 10 milliseconds. The expected behavior is that each group of clients will trigger
+// a refresh of their shared key every 2 seconds, and during the refresh, they will block.
+// Each client should experience 3 long waits (the initial cache miss) and have a low average wait time overall.
+func TestExpiringCacheResetAgeAfterCreation(t *testing.T) {
+	cache := lru.NewTypedExpiringCache[string, int32](10, duration.Spec(1*time.Second)).
+		WithMode(lru.Modes.Decoupled).
+		WithResetAgeAfterCreation(true)
+
+	var seq atomic.Int32
+
+	clients := startAndRunClients(cache, &seq)
+
+	for _, cl := range clients {
+		cl.assert(t)
+		avgWait := cl.avgWait()
+		log.Info("stats",
+			"client", cl.name,
+			"invocations", cl.invocations,
+			"long_waits", cl.longWaits,
+			"avg_wait", avgWait,
+			"total_wait", cl.waitTotal)
+		require.InDelta(t, 12*time.Millisecond, avgWait, float64(2*time.Millisecond))
+		require.InDelta(t, 3*time.Second, cl.waitTotal, float64(50*time.Millisecond))
+		require.InDelta(t, 250, cl.invocations, float64(50)) // 5.5s - 1s initial wait
+	}
+
+	metrics := cache.Metrics()
+	log.Info("metrics", "metrics", jsonutil.Stringer(&metrics))
+	require.EqualValues(t, 6, metrics.Misses.Load())    // 6 misses total: 2 keys, each missing at 0s, 2s, and 4s
+	require.InDelta(t, 1500, metrics.Hits.Load(), 50)   // seconds 2, 4, and half of 6 => 6 clients * 250 = 1500
+	require.InDelta(t, 0, metrics.StaleHits.Load(), 30) // No stale hits expected in ResetAgeAfterCreation mode
+}
+
+// TestExpiringCacheServeStaleDuringRefresh tests the expiring cache with the ServeStaleDuringRefresh option enabled. It
+// launches 2 groups of 3 clients (6 total). Each group accesses the same key. The cache expiration is set to 1 second,
+// and the constructor function takes 1 second to complete. The test runs for 5.5 seconds, during which each client
+// repeatedly accesses the cache every 10 milliseconds. The expected behavior is that each group of clients will trigger
+// a refresh of their shared key every 2 seconds, and during the refresh, they will receive stale data without blocking.
+// Each client should experience only one long wait (the initial cache miss) and have a low average wait time overall.
+func TestExpiringCacheServeStaleDuringRefresh(t *testing.T) {
+	t.Run("GetOrCreate()", func(t *testing.T) {
+		var seq atomic.Int32
+		cache := lru.NewTypedExpiringCache[string, int32](10, duration.Spec(1*time.Second)).
+			WithMode(lru.Modes.Decoupled).
+			WithResetAgeAfterCreation(true).
+			WithServeStaleDuringRefresh(true)
+
+		clients := startAndRunClients(cache, &seq)
+
+		require.EqualValues(t, 6, seq.Load())
+
+		for _, cl := range clients {
+			cl.assert(t)
+			avgWait := cl.avgWait()
+			log.Info("stats",
+				"client", cl.name,
+				"key", cl.key,
+				"last_val", cl.previousVal,
+				"invocations", cl.invocations,
+				"long_waits", cl.longWaits,
+				"avg_wait", avgWait,
+				"total_wait", cl.waitTotal)
+			require.Less(t, avgWait, 10*time.Millisecond)
+			require.Equal(t, 1, cl.longWaits)
+			require.InDelta(t, time.Second, cl.waitTotal, float64(20*time.Millisecond))
+			require.InDelta(t, 450, cl.invocations, float64(50)) // 5.5s - 1s initial wait
+			require.InDelta(t, 6, cl.previousVal, float64(1))    // shared sequence (so last val has to be 5 or 6
+		}
+
+		metrics := cache.Metrics()
+		log.Info("metrics", "metrics", jsonutil.Stringer(&metrics))
+		require.EqualValues(t, 2, metrics.Misses.Load())       // two misses at the beginning
+		require.InDelta(t, 1500, metrics.Hits.Load(), 50)      // seconds 2, 4, half of 6 => 6 clients * 250 = 1500
+		require.InDelta(t, 1200, metrics.StaleHits.Load(), 30) // seconds 3 & 5 => 6*200=1200
+	})
+
+	t.Run("Get()", func(t *testing.T) {
+		span := traceutil.InitTracing("test", false)
+		defer func() {
+			span.End()
+			log.Info("trace", "span", jsonutil.MarshalString(span))
+		}()
+
+		var seq atomic.Int32
+		cache := lru.NewTypedExpiringCache[string, int32](10, duration.Spec(1*time.Second)).
+			WithMode(lru.Modes.Decoupled).
+			WithResetAgeAfterCreation(true).
+			WithServeStaleDuringRefresh(true).
+			WithName("test cache")
+		constructor := func() (int32, error) {
+			log.Info("construction start")
+			time.Sleep(time.Second)
+			res := seq.Add(1)
+			log.Info("construction end", "new", res)
+			return res, nil
+		}
+
+		val, evicted, err := cache.GetOrCreate("a", constructor) // => miss
+		require.NoError(t, err)
+		require.False(t, evicted)
+		require.EqualValues(t, 1, val)
+
+		val, ok := cache.Get("a") // => hit
+		require.True(t, ok)
+		require.EqualValues(t, 1, val)
+
+		time.Sleep(time.Second + 50*time.Millisecond)
+
+		// entry is now expired: trigger refresh, receive stale value
+		val, evicted, err = cache.GetOrCreate("a", constructor) // => stale
+		require.NoError(t, err)
+		require.False(t, evicted)
+		require.EqualValues(t, 1, val)
+
+		// Get also returns stale value
+		val, ok = cache.Get("a") // => stale
+		require.True(t, ok)
+		require.EqualValues(t, 1, val)
+
+		time.Sleep(time.Second + 50*time.Millisecond)
+
+		// Get now returns fresh value
+		val, ok = cache.Get("a") // => hit
+		require.True(t, ok)
+		require.EqualValues(t, 2, val)
+
+		time.Sleep(time.Second + 50*time.Millisecond)
+
+		// entry is now expired, no refresh going on ==> expect no value
+		val, ok = cache.Get("a") // => miss
+		require.False(t, ok)
+		require.EqualValues(t, 0, val)
+
+		m := cache.Metrics()
+		log.Info("metrics", "metrics", jsonutil.Stringer(&m))
+		require.EqualValues(t, 2, m.Hits.Load())
+		require.EqualValues(t, 2, m.Misses.Load())
+		require.EqualValues(t, 2, m.StaleHits.Load())
+		require.EqualValues(t, 1, m.Added.Load())
+		require.EqualValues(t, 1, m.Removed.Load())
+		require.EqualValues(t, 0, cache.Len())
+	})
+
+	t.Run("evict refreshed but stale entry", func(t *testing.T) {
+		span := traceutil.InitTracing("test", false)
+		defer func() {
+			span.End()
+			span.SetMarshalExtended()
+			log.Info("trace", "span", jsonutil.MarshalString(span))
+		}()
+
+		var seq atomic.Int32
+		cache := lru.NewTypedExpiringCache[string, int32](10, duration.Spec(1*time.Second)).
+			WithMode(lru.Modes.Decoupled).
+			WithResetAgeAfterCreation(true).
+			WithServeStaleDuringRefresh(true).
+			WithName("test cache")
+		constructor := func() (int32, error) {
+			log.Info("construction start")
+			time.Sleep(time.Second)
+			res := seq.Add(1)
+			log.Info("construction end", "new", res)
+			return res, nil
+		}
+
+		val, evicted, err := cache.GetOrCreate("b", constructor) // => miss
+		require.NoError(t, err)
+		require.False(t, evicted)
+		require.EqualValues(t, 1, val)
+
+		time.Sleep(time.Second + 50*time.Millisecond)
+
+		// entry is now expired: trigger refresh, receive stale value
+		val, evicted, err = cache.GetOrCreate("b", constructor) // => stale
+		require.NoError(t, err)
+		require.False(t, evicted)
+		require.EqualValues(t, 1, val)
+
+		// entry still expired: trigger no refresh, receive stale value
+		time.Sleep(500 * time.Millisecond)
+		val, evicted, err = cache.GetOrCreate("b", constructor) // => stale
+		require.NoError(t, err)
+		require.False(t, evicted)
+		require.EqualValues(t, 1, val)
+
+		// wait for refresh to complete and refreshed entry to expire
+		time.Sleep(time.Second + 550*time.Millisecond)
+
+		// expect new value
+		val, evicted, err = cache.GetOrCreate("b", constructor) // => miss
+		require.NoError(t, err)
+		require.False(t, evicted)
+		require.EqualValues(t, 3, val)
+
+		m := cache.Metrics()
+		log.Info("metrics", "metrics", jsonutil.Stringer(&m))
+		require.EqualValues(t, 0, m.Hits.Load())
+		require.EqualValues(t, 2, m.Misses.Load())
+		require.EqualValues(t, 2, m.StaleHits.Load())
+		require.EqualValues(t, 2, m.Added.Load())
+		require.EqualValues(t, 1, m.Removed.Load())
+		require.EqualValues(t, 1, cache.Len())
+	})
+}
+
+func startAndRunClients(cache *lru.TypedExpiringCache[string, int32], seq *atomic.Int32) []*client {
+
+	cstr := func() (int32, error) {
+		log.Info("refreshing")
+		time.Sleep(time.Second)
+		res := seq.Add(1)
+		log.Info("refreshed", "new", res)
+		return res, nil
+	}
+
+	start := make(chan struct{})
+	stop := make(chan struct{})
+	wg := &sync.WaitGroup{}
+
+	clients := make([]*client, 6)
+	for i := 0; i < len(clients); i++ {
+		wg.Add(1)
+		cl := &client{
+			name:    fmt.Sprintf("client-%d", i),
+			key:     fmt.Sprintf("key-%d", i/3),
+			cache:   cache,
+			cstr:    cstr,
+			collect: new(assert.CollectT),
+		}
+		go func() {
+			cl.run(start, stop)
+			wg.Done()
+		}()
+
+		clients[i] = cl
+	}
+
+	log.Info("starting")
+	close(start)
+	time.Sleep(5*time.Second + 500*time.Millisecond)
+	close(stop)
+	log.Info("stopping")
+	wg.Wait()
+	log.Info("stopped")
+
+	return clients
+}
+
+type client struct {
+	name    string
+	key     string
+	cache   *lru.TypedExpiringCache[string, int32]
+	cstr    func() (int32, error)
+	collect *assert.CollectT
+
+	previousVal int32
+	invocations int
+	longWaits   int
+	waitTotal   time.Duration
+}
+
+func (c *client) assert(t *testing.T) {
+	c.collect.Copy(t)
+}
+
+func (c *client) callCache() {
+	res, evicted, err := c.cache.GetOrCreate(c.key, c.cstr)
+	require.NoError(c.collect, err)
+	require.False(c.collect, evicted) // never evicted, always refreshed
+	require.GreaterOrEqual(c.collect, res, c.previousVal)
+	c.previousVal = res
+}
+
+func (c *client) run(start chan struct{}, stop chan struct{}) {
+	<-start
+
+	ticker := time.NewTicker(10 * time.Millisecond)
+	watch := timeutil.StartWatch()
+	for j := 0; ; j++ {
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+			watch.Reset()
+			c.callCache()
+			watch.Stop()
+			if watch.Duration() > 10*time.Millisecond {
+				c.longWaits++
+				log.Info("long wait", "client", c.name, "iteration", j, "duration", watch.Duration(), "count", c.longWaits)
+			}
+			c.invocations++
+			c.waitTotal += watch.Duration()
+		}
+	}
+}
+
+func (c *client) avgWait() time.Duration {
+	return c.waitTotal / time.Duration(c.invocations)
 }
