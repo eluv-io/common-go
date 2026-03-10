@@ -85,7 +85,7 @@ func TestStatsLogger(t *testing.T) {
 	assert.Equal(t, fields[1], stats[2])
 	assert.Equal(t, "stats", stats[3])
 	s := toMap(t, stats[4])
-	assertStats(t, start, stop.Sub(start), 6, r.seekSleep, r.writeSleep, r.readSleep*3+r.writeSleep*2+r.seekSleep, 3, 2, 1, s)
+	assertStats(t, start, stop.Sub(start), 6, r.seekSleep, r.writeSleep, r.readSleep*3+r.writeSleep*2+r.seekSleep, 3, 2, 1, int64(len(d)), int64(len(d)), 0, s)
 	assert.Equal(t, "events", stats[5])
 	e := toMapSlice(t, stats[6])
 	assert.Len(t, e, 5)
@@ -169,7 +169,7 @@ func TestStatsLogger_Same(t *testing.T) {
 	assert.Equal(t, fields[1], stats[2])
 	assert.Equal(t, "stats", stats[3])
 	s := toMap(t, stats[4])
-	assertStats(t, start, stop.Sub(start), 3, r.writeSleep, r.writeSleep, r.writeSleep*3, 0, 3, 0, s)
+	assertStats(t, start, stop.Sub(start), 3, r.writeSleep, r.writeSleep, r.writeSleep*3, 0, 3, 0, 0, int64(len(d)), 0, s)
 	assert.Equal(t, "events", stats[5])
 	e := toMapSlice(t, stats[6])
 	assert.Len(t, e, 2)
@@ -223,7 +223,7 @@ func (s *sleeper) Close() error {
 
 func assertStats(T *testing.T,
 	start utc.UTC, dur time.Duration, count uint64, min time.Duration, max time.Duration, sum time.Duration,
-	reads uint64, writes uint64, seeks uint64,
+	reads int, writes int, seeks int, rbytes int64, wbytes int64, sbytes int64,
 	stats map[string]interface{},
 ) {
 	require.NotNil(T, stats)
@@ -259,6 +259,21 @@ func assertStats(T *testing.T,
 		assert.Equal(T, float64(seeks), stats["seeks"].(float64))
 	} else {
 		assert.Nil(T, stats["seeks"])
+	}
+	if rbytes > 0 {
+		assert.Equal(T, float64(rbytes), stats["rbytes"].(float64))
+	} else {
+		assert.Nil(T, stats["rbytes"])
+	}
+	if wbytes > 0 {
+		assert.Equal(T, float64(wbytes), stats["wbytes"].(float64))
+	} else {
+		assert.Nil(T, stats["wbytes"])
+	}
+	if sbytes > 0 {
+		assert.Equal(T, float64(sbytes), stats["sbytes"].(float64))
+	} else {
+		assert.Nil(T, stats["sbytes"])
 	}
 }
 

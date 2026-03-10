@@ -88,7 +88,7 @@ func (l *StatsLogger) Read(p []byte) (int, error) {
 		l.lastN = int64(n)
 		l.lastOff = l.off
 		l.off += l.lastN
-		l.stats.update(l.lastT, ReadFn, l.watch.Duration())
+		l.stats.update(l.lastT, ReadFn, l.watch.Duration(), int64(n))
 		if l.watch.Duration() > limit {
 			l.record(true, l.watch.StopTime(), "read", limit, l.watch.Duration(), nil)
 		}
@@ -109,7 +109,7 @@ func (l *StatsLogger) Write(p []byte) (int, error) {
 		l.lastN = int64(n)
 		l.lastOff = l.off
 		l.off += l.lastN
-		l.stats.update(l.lastT, WriteFn, l.watch.Duration())
+		l.stats.update(l.lastT, WriteFn, l.watch.Duration(), int64(n))
 		if l.watch.Duration() > limit {
 			l.record(true, l.watch.StopTime(), "write", limit, l.watch.Duration(), nil)
 		}
@@ -129,7 +129,7 @@ func (l *StatsLogger) Seek(offset int64, whence int) (int64, error) {
 	l.lastN = n
 	l.lastOff = l.off
 	l.off = l.lastN
-	l.stats.update(l.lastT, SeekFn, l.watch.Duration())
+	l.stats.update(l.lastT, SeekFn, l.watch.Duration(), n)
 	if l.watch.Duration() > limit {
 		l.record(true, l.watch.StopTime(), "seek", limit, l.watch.Duration(), nil)
 	}
@@ -183,20 +183,30 @@ func (l *StatsLogger) record(slow bool, t utc.UTC, name string, limit time.Durat
 
 type statistics struct {
 	statsutil.Statistics[duration.Spec]
-	Reads  uint64 `json:"reads,omitempty"`
-	Writes uint64 `json:"writes,omitempty"`
-	Seeks  uint64 `json:"seeks,omitempty"`
+	Reads      int   `json:"reads,omitempty"`
+	Writes     int   `json:"writes,omitempty"`
+	Seeks      int   `json:"seeks,omitempty"`
+	ReadBytes  int64 `json:"rbytes,omitempty"`
+	WriteBytes int64 `json:"wbytes,omitempty"`
+	SeekBytes  int64 `json:"sbytes,omitempty"`
 }
 
-func (s *statistics) update(now utc.UTC, fn int, val time.Duration) {
+func (s *statistics) update(now utc.UTC, fn int, val time.Duration, bytes ...int64) {
 	s.Update(now, duration.Spec(val))
+	b := int64(0)
+	if len(bytes) > 0 {
+		b = bytes[0]
+	}
 	switch fn {
 	case ReadFn:
 		s.Reads++
+		s.ReadBytes += b
 	case WriteFn:
 		s.Writes++
+		s.WriteBytes += b
 	case SeekFn:
 		s.Seeks++
+		s.SeekBytes = b
 	}
 }
 
