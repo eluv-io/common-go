@@ -34,7 +34,7 @@ func TestNamedLocksBasic(t *testing.T) {
 	}()
 
 	require.False(t, WaitTimeout(wg, time.Second))
-	require.Empty(t, nl.named)
+	requireEmpty(t, &nl.named) // require.Empty(t, nl.named)
 }
 
 func TestNamedLocksSingle(t *testing.T) {
@@ -59,7 +59,7 @@ func TestNamedLocksSingle(t *testing.T) {
 
 	require.False(t, WaitTimeout(wg, time.Minute))
 	require.Equal(t, 100, counter)
-	require.Empty(t, nl.named)
+	requireEmpty(t, &nl.named) // require.Empty(t, nl.named)
 }
 
 // Creates 10 lock names and corresponding atomic counters and 4 workers. Each
@@ -120,5 +120,12 @@ func TestNamedLocksConcurrent(t *testing.T) {
 	for i := 0; i < numAcquire; i++ {
 		require.Equal(t, int64(4), counters[i].Load())
 	}
-	require.Empty(t, nl.named)
+	requireEmpty(t, &nl.named) // require.Empty(t, nl.named)
+}
+
+func requireEmpty(t *testing.T, m *sync.Map) {
+	m.Range(func(key, value interface{}) bool {
+		t.FailNow()
+		return true
+	})
 }
