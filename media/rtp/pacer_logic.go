@@ -5,39 +5,18 @@ import (
 	"time"
 
 	"github.com/eluv-io/common-go/format/duration"
-	"github.com/eluv-io/common-go/util/statsutil"
 	"github.com/eluv-io/errors-go"
 	elog "github.com/eluv-io/log-go"
 	"github.com/eluv-io/utc-go"
 )
 
-// PacerStats tracks pacer statistics
-type PacerStats struct {
-	// PushAhead is (targetTime - currentTime) when packet is pushed
-	PushAhead statsutil.Statistics[time.Duration]
-
-	// T0 adjustment stats during startup/discard phase
-	StartupT0Adjustment statsutil.Statistics[time.Duration]
-
-	// T0 adjustment stats during active phase
-	T0Adjustment statsutil.Statistics[time.Duration]
-
-	// Minimum T0 seen, zero value means not set
-	MinT0 utc.UTC
-
-	// The number of times the stream has been reset due to an RTP gap
-	StreamResets int
-	// The time of the last stream reset
-	LastStreamReset utc.UTC
-}
-
-func (s *PacerStats) Reset() {
-	*s = PacerStats{}
+func (s *InStats) Reset() {
+	*s = InStats{}
 }
 
 type PacerLogicConfig struct {
 	Stream           string        // for logging
-	Log              *elog.Log     // the log
+	EventLog         elog.ILog     // the log for recording events (rtp gaps, timing baseline adjustments)
 	DiscardPeriod    time.Duration // period for determining T0 during which all packets are discarded
 	MaxDiscardPeriod time.Duration // max period for discarding packets.
 	Delay            time.Duration // the size of the de-jitter buffer
@@ -47,8 +26,8 @@ type PacerLogicConfig struct {
 
 type PacerLogic struct {
 	conf              PacerLogicConfig
-	log               *elog.Log
-	stats             *PacerStats
+	log               elog.ILog
+	stats             *InStats
 	discard           *DiscardContext // Early packet discard logic
 	firstRtpTimestamp int64           // First unwrapped RTP timestamp
 	baseTime          utc.UTC         // Base time for first packet (now + delay)
@@ -57,11 +36,11 @@ type PacerLogic struct {
 
 func NewPacerLogic(
 	conf PacerLogicConfig,
-	stats *PacerStats,
+	stats *InStats,
 ) *PacerLogic {
 	p := &PacerLogic{
 		conf:        conf,
-		log:         conf.Log,
+		log:         conf.EventLog,
 		stats:       stats,
 		gapDetector: NewRtpGapDetector(conf.RtpSeqThreshold, conf.RtpTsThreshold.Duration()),
 		discard:     NewDiscardContext(conf.DiscardPeriod, conf.MaxDiscardPeriod),
@@ -83,9 +62,15 @@ func (p *PacerLogic) reset() {
 // transmission time for the packet, and whether the packet should be discarded (e.g. received during the discard phase
 // at startup or if a gap was detected and we're waiting for the stream to stabilize).
 func (p *PacerLogic) Packet(now utc.UTC, rtpSeq uint16, rtpTimestamp uint32) (target utc.UTC, discard bool, err error) {
-	_, ts, err := p.gapDetector.Detect(rtpSeq, rtpTimestamp)
+	seq, ts, err := p.gapDetector.Detect(rtpSeq, rtpTimestamp)
+	{
+		p.stats.Seq = rtpSeq
+		p.stats.Sequ = seq
+		p.stats.Ts = rtpTimestamp
+		p.stats.Tsu = ts
+	}
 	if err != nil {
-		p.log.Warn("rtp gap detected", "err", err, "stream", p.conf.Stream)
+		p.log.Warn("rtp gap", "stream", p.conf.Stream, err)
 		p.reset()
 		p.stats.StreamResets++
 		p.stats.LastStreamReset = now
@@ -108,7 +93,7 @@ func (p *PacerLogic) Packet(now utc.UTC, rtpSeq uint16, rtpTimestamp uint32) (ta
 		// Capture startup T0 adjustment from discard phase
 		p.stats.StartupT0Adjustment = p.discard.StartupT0Adjustment
 
-		p.log.Info("rtp pacer - timing baseline established",
+		p.log.Info("timing baseline established",
 			"rtp_ts", rtpTimestamp,
 			"rtp_ts_unwrapped", ts,
 			"rtp_seq", rtpSeq,

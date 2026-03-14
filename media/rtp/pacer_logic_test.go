@@ -21,8 +21,8 @@ func ticksMS(ms int) uint32 {
 
 // newTestPacerLogic creates a PacerLogic for testing. discardPeriod=0 means that discarding is disabled; pass a value >
 // 0 to test the timed discard phase.
-func newTestPacerLogic(discardPeriod, delay time.Duration, maxDiscardPeriod ...time.Duration) (*rtp.PacerLogic, *rtp.PacerStats) {
-	stats := &rtp.PacerStats{}
+func newTestPacerLogic(discardPeriod, delay time.Duration, maxDiscardPeriod ...time.Duration) (*rtp.PacerLogic, *rtp.InStats) {
+	stats := &rtp.InStats{}
 	maxDiscard := discardPeriod * 2
 	if len(maxDiscardPeriod) > 0 {
 		maxDiscard = maxDiscardPeriod[0]
@@ -30,7 +30,7 @@ func newTestPacerLogic(discardPeriod, delay time.Duration, maxDiscardPeriod ...t
 
 	conf := rtp.PacerLogicConfig{
 		Stream:           "test-stream",
-		Log:              log.Get("/test/rtp/pacer"),
+		EventLog:         log.Get("/test/rtp/pacer"),
 		DiscardPeriod:    discardPeriod,
 		MaxDiscardPeriod: maxDiscard,
 		Delay:            delay,

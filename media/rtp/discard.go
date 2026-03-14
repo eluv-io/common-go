@@ -8,18 +8,17 @@ import (
 	"github.com/eluv-io/utc-go"
 )
 
-// DiscardContext tracks early packet discard state for RTP streams.
-// This is used during startup to wait for a stable RTP stream before
-// establishing timing baselines.
+// DiscardContext tracks early packet discard state for RTP streams. This is used during startup to wait for a stable
+// RTP stream before establishing timing baselines.
 type DiscardContext struct {
 	DiscardPeriod    time.Duration // How long to wait after baseline update
 	MaxDiscardPeriod time.Duration // Max time to wait after baseline update
 
-	DiscardComplete     bool                                // True once discard phase is over
-	FirstPacketTime     utc.UTC                             // Timestamp of the first received packet
-	T0                  utc.UTC                             // Wall clock time when (unwrapped) RTP timestamp was 0
-	T0UpdatedAt         utc.UTC                             // When the baseline was last updated
-	StartupT0Adjustment statsutil.Statistics[time.Duration] // T0 adjustment stats during startup/discard phase (reset on gap!)
+	DiscardComplete     bool                                   // True once discard phase is over
+	FirstPacketTime     utc.UTC                                // Timestamp of the first received packet
+	T0                  utc.UTC                                // Wall clock time when (unwrapped) RTP timestamp was 0
+	T0UpdatedAt         utc.UTC                                // When the baseline was last updated
+	StartupT0Adjustment statsutil.RawStatistics[time.Duration] // T0 adjustment stats during startup/discard phase (reset on gap!)
 }
 
 // NewDiscardContext creates a new discard context with the specified period.
@@ -32,8 +31,8 @@ func NewDiscardContext(discardPeriod, maxDiscardPeriod time.Duration) *DiscardCo
 
 // ShouldDiscard determines if a packet should be discarded based on the unwrapped RTP timestamp. Returns true if the
 // packet should be discarded, false if it should be processed. Returns an error if the max discard period has been
-// exceeded without establishing a stable baseline. This is needed when reading from buffered RTP and we need to find
-// the edge before proceeding.
+// exceeded without establishing a stable baseline. This is needed when reading from buffered RTP data (e.g. from parts)
+// and we need to find the edge before proceeding.
 //
 //  1. First packet (no baseline): discard and establish T0 baseline
 //  2. If packet's T0 < stored T0: discard and update baseline (stream restart/discontinuity)
@@ -109,5 +108,5 @@ func (d *DiscardContext) ResetOnGap() {
 
 	d.T0 = utc.Zero
 	d.T0UpdatedAt = utc.Zero
-	d.StartupT0Adjustment = statsutil.Statistics[time.Duration]{}
+	d.StartupT0Adjustment = statsutil.RawStatistics[time.Duration]{}
 }

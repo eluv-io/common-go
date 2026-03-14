@@ -1,0 +1,204 @@
+package rtp_test
+
+import (
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/media/rtp"
+	elog "github.com/eluv-io/log-go"
+)
+
+func newTestDisruptorPacer(t testing.TB, discardPeriod, delay time.Duration) *rtp.DisruptorPacer {
+	t.Helper()
+	pacer, err := rtp.NewDisruptorPacer(rtp.DisruptorPacerConfig{
+		Stream:   "test",
+		StatsLog: elog.Get("/test/rtp/disruptor"),
+		EventLog: elog.Get("/test/rtp/disruptor"),
+		Logic: rtp.PacerLogicConfig{
+			DiscardPeriod:    discardPeriod,
+			MaxDiscardPeriod: max(discardPeriod*10, time.Second),
+			Delay:            delay,
+			RtpSeqThreshold:  1,
+			RtpTsThreshold:   duration.Spec(time.Second),
+		},
+	})
+	require.NoError(t, err)
+	return pacer
+}
+
+// startDisruptorConsumer starts the consumer goroutine. The returned function blocks until the consumer exits and
+// returns all received raw packet bytes.
+func startDisruptorConsumer(pacer *rtp.DisruptorPacer) func() [][]byte {
+	ch := make(chan []byte, 10_000)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = pacer.Run(func(pkt []byte, _ time.Time) error {
+			cp := make([]byte, len(pkt))
+			copy(cp, pkt)
+			ch <- cp
+			return nil
+		})
+		close(ch)
+	}()
+	return func() [][]byte {
+		wg.Wait()
+		var packets [][]byte
+		for pkt := range ch {
+			packets = append(packets, pkt)
+		}
+		return packets
+	}
+}
+
+// TestDisruptorPacer_NonPowerOfTwoCapacity verifies that a non-power-of-2 buffer capacity is automatically rounded up
+// to the next power of 2 rather than being rejected.
+func TestDisruptorPacer_NonPowerOfTwoCapacity(t *testing.T) {
+	pacer, err := rtp.NewDisruptorPacer(rtp.DisruptorPacerConfig{
+		Logic: rtp.PacerLogicConfig{
+			EventLog:        elog.Get("/test"),
+			RtpSeqThreshold: 1,
+			RtpTsThreshold:  duration.Spec(time.Second),
+		},
+		BufferCapacity: 1000, // rounds up to 1024
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1024, pacer.BufferCap(), "1000 should round up to 1024")
+	pacer.Shutdown()
+}
+
+// TestDisruptorPacer_BasicDelivery verifies that all pushed packets are delivered exactly once in sequence order.
+// All packets use ts=0 so their T0 is stable (T0 = now, which only increases), ensuring no packets are discarded.
+func TestDisruptorPacer_BasicDelivery(t *testing.T) {
+	pacer := newTestDisruptorPacer(t, 0, 0)
+	collect := startDisruptorConsumer(pacer)
+
+	const n = 20
+	for i := range n {
+		require.NoError(t, pacer.Push(pack(t, i, 0))) // ts=0 keeps T0 stable
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	pacer.Shutdown()
+	received := collect()
+
+	require.Equal(t, n, len(received), "all packets must be delivered")
+	for i, raw := range received {
+		pkt, err := rtp.ParsePacket(raw)
+		require.NoError(t, err)
+		require.Equal(t, uint16(i), pkt.SequenceNumber, "out-of-order delivery at index %d", i)
+	}
+}
+
+// TestDisruptorPacer_Delay verifies that the first packet is delivered approximately Delay after it is pushed.
+func TestDisruptorPacer_Delay(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping timing-sensitive test in short mode")
+	}
+	const delay = 100 * time.Millisecond
+	pacer := newTestDisruptorPacer(t, 0, delay)
+
+	delivered := make(chan time.Time, 1)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = pacer.Run(func(_ []byte, _ time.Time) error {
+			select {
+			case delivered <- time.Now():
+			default:
+			}
+			return nil
+		})
+	}()
+
+	pushTime := time.Now()
+	require.NoError(t, pacer.Push(pack(t, 0, 0)))
+
+	select {
+	case deliveredAt := <-delivered:
+		elapsed := deliveredAt.Sub(pushTime)
+		require.GreaterOrEqual(t, elapsed, delay-20*time.Millisecond, "packet delivered too early")
+		require.Less(t, elapsed, delay+200*time.Millisecond, "packet delivered too late")
+	case <-time.After(delay + 500*time.Millisecond):
+		t.Fatal("packet not delivered within deadline")
+	}
+
+	pacer.Shutdown()
+	wg.Wait()
+}
+
+// TestDisruptorPacer_ShutdownInterruptsSleep verifies that Shutdown returns promptly even when the consumer is
+// sleeping while waiting for a far-future target time.
+func TestDisruptorPacer_ShutdownInterruptsSleep(t *testing.T) {
+	const delay = 30 * time.Second
+	pacer := newTestDisruptorPacer(t, 0, delay)
+	collect := startDisruptorConsumer(pacer)
+
+	require.NoError(t, pacer.Push(pack(t, 0, 0)))
+
+	start := time.Now()
+	pacer.Shutdown()
+	collect() // wait for consumer to exit
+
+	require.Less(t, time.Since(start), time.Second, "Shutdown must interrupt the consumer sleep promptly")
+}
+
+// TestDisruptorPacer_DiscardPhase verifies that packets pushed during the discard window are dropped, and only the
+// first packet that arrives after the window has elapsed is delivered.
+//
+// Using ts=0 for all packets keeps T0 = now (monotonically increasing) so no T0 backward adjustments interfere with
+// the timed discard logic.
+func TestDisruptorPacer_DiscardPhase(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping timing-sensitive test in short mode")
+	}
+	const discardPeriod = 20 * time.Millisecond
+	pacer := newTestDisruptorPacer(t, discardPeriod, 0)
+	collect := startDisruptorConsumer(pacer)
+
+	// Packet 0 starts the discard timer and is itself discarded (first packet is always discarded when
+	// DiscardPeriod > 0).
+	require.NoError(t, pacer.Push(pack(t, 0, 0)))
+
+	// Wait well past the discard period.
+	time.Sleep(discardPeriod * 3)
+
+	// This packet arrives after the discard window; should be delivered.
+	require.NoError(t, pacer.Push(pack(t, 1, 0)))
+
+	time.Sleep(50 * time.Millisecond)
+	pacer.Shutdown()
+	received := collect()
+
+	require.Equal(t, 1, len(received), "only the post-discard packet should be delivered")
+	pkt, err := rtp.ParsePacket(received[0])
+	require.NoError(t, err)
+	require.Equal(t, uint16(1), pkt.SequenceNumber)
+}
+
+// TestDisruptorPacer_PushAfterShutdown verifies that Push returns an error once the pacer has been shut down.
+func TestDisruptorPacer_PushAfterShutdown(t *testing.T) {
+	pacer := newTestDisruptorPacer(t, 0, 0)
+	collect := startDisruptorConsumer(pacer)
+	pacer.Shutdown()
+	collect()
+
+	err := pacer.Push(pack(t, 0, 0))
+	require.Error(t, err, "Push after Shutdown must return an error")
+}
+
+// TestDisruptorPacer_ShutdownIdempotent verifies that calling Shutdown multiple times does not panic.
+func TestDisruptorPacer_ShutdownIdempotent(t *testing.T) {
+	pacer := newTestDisruptorPacer(t, 0, 0)
+	collect := startDisruptorConsumer(pacer)
+	pacer.Shutdown()
+	pacer.Shutdown()
+	pacer.Shutdown()
+	collect()
+}
