@@ -31,9 +31,9 @@ func newTestPacerLogic(discardPeriod, delay time.Duration, maxDiscardPeriod ...t
 	conf := rtp.PacerLogicConfig{
 		Stream:           "test-stream",
 		EventLog:         log.Get("/test/rtp/pacer"),
-		DiscardPeriod:    discardPeriod,
-		MaxDiscardPeriod: maxDiscard,
-		Delay:            delay,
+		DiscardPeriod:    duration.Spec(discardPeriod),
+		MaxDiscardPeriod: duration.Spec(maxDiscard),
+		Delay:            duration.Spec(delay),
 		RtpSeqThreshold:  1,
 		RtpTsThreshold:   duration.Spec(time.Second),
 	}

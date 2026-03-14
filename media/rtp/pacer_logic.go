@@ -17,9 +17,9 @@ func (s *InStats) Reset() {
 type PacerLogicConfig struct {
 	Stream           string        // for logging
 	EventLog         elog.ILog     // the log for recording events (rtp gaps, timing baseline adjustments)
-	DiscardPeriod    time.Duration // period for determining T0 during which all packets are discarded
-	MaxDiscardPeriod time.Duration // max period for discarding packets.
-	Delay            time.Duration // the size of the de-jitter buffer
+	DiscardPeriod    duration.Spec // period for determining T0 during which all packets are discarded
+	MaxDiscardPeriod duration.Spec // max period for discarding packets.
+	Delay            duration.Spec // the size of the de-jitter buffer
 	RtpSeqThreshold  int64         // sequence threshold for RTP gap detection
 	RtpTsThreshold   duration.Spec // timestamp threshold for RTP gap detection
 }
@@ -43,7 +43,7 @@ func NewPacerLogic(
 		log:         conf.EventLog,
 		stats:       stats,
 		gapDetector: NewRtpGapDetector(conf.RtpSeqThreshold, conf.RtpTsThreshold.Duration()),
-		discard:     NewDiscardContext(conf.DiscardPeriod, conf.MaxDiscardPeriod),
+		discard:     NewDiscardContext(conf.DiscardPeriod.Duration(), conf.MaxDiscardPeriod.Duration()),
 	}
 	p.reset()
 	return p
@@ -88,7 +88,7 @@ func (p *PacerLogic) Packet(now utc.UTC, rtpSeq uint16, rtpTimestamp uint32) (ta
 	if p.baseTime.IsZero() {
 		p.firstRtpTimestamp = ts
 		// Base time is now + delay (when first packet should be sent)
-		p.baseTime = now.Add(p.conf.Delay)
+		p.baseTime = now.Add(p.conf.Delay.Duration())
 
 		// Capture startup T0 adjustment from discard phase
 		p.stats.StartupT0Adjustment = p.discard.StartupT0Adjustment

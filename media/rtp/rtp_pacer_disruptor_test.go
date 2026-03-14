@@ -19,9 +19,9 @@ func newTestDisruptorPacer(t testing.TB, discardPeriod, delay time.Duration) *rt
 		StatsLog: elog.Get("/test/rtp/disruptor"),
 		EventLog: elog.Get("/test/rtp/disruptor"),
 		Logic: rtp.PacerLogicConfig{
-			DiscardPeriod:    discardPeriod,
-			MaxDiscardPeriod: max(discardPeriod*10, time.Second),
-			Delay:            delay,
+			DiscardPeriod:    duration.Spec(discardPeriod),
+			MaxDiscardPeriod: duration.Spec(max(discardPeriod*10, time.Second)),
+			Delay:            duration.Spec(delay),
 			RtpSeqThreshold:  1,
 			RtpTsThreshold:   duration.Spec(time.Second),
 		},

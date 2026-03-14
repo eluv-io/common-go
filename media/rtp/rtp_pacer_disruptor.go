@@ -21,14 +21,14 @@ const (
 	DefaultDisruptorCapacity = 1 << 12 // 4096 slots
 
 	// DefaultMinSleepThreshold is the default minimum sleep threshold. Sleep durations shorter than this are skipped.
-	DefaultMinSleepThreshold = 5 * time.Millisecond
+	DefaultMinSleepThreshold = 5 * duration.Millisecond
 
 	// DefaultTickerPeriod is the default ticker period used to schedule packet delivery. A ticker avoids the
 	// per-packet timer allocation of time.After and supports prompt Shutdown interruption.
-	DefaultTickerPeriod = time.Millisecond
+	DefaultTickerPeriod = duration.Millisecond
 
 	// DefaultStatsInterval is the default interval for periodic stats logging.
-	DefaultStatsInterval = 5 * time.Second
+	DefaultStatsInterval = 5 * duration.Second
 )
 
 // disruptorEntry is a pre-allocated ring buffer slot. The entry is populated by the producer and read by the consumer.
@@ -46,20 +46,20 @@ type DisruptorPacerConfig struct {
 
 	Logic             PacerLogicConfig // timing logic configuration
 	BufferCapacity    int              // ring buffer capacity (is rounded up to the next power of 2; 0 → DefaultDisruptorCapacity)
-	MinSleepThreshold time.Duration    // sleep durations shorter than this are skipped (0 → DefaultMinSleepThreshold)
-	TickerPeriod      time.Duration    // ticker period for scheduling delivery (0 → DefaultTickerPeriod)
-	StatsInterval     time.Duration    // interval for periodic stats logging (0 → DefaultStatsInterval, -1 → disabled)
+	MinSleepThreshold duration.Spec    // sleep durations shorter than this are skipped (0 → DefaultMinSleepThreshold)
+	TickerPeriod      duration.Spec    // ticker period for scheduling delivery (0 → DefaultTickerPeriod)
+	StatsInterval     duration.Spec    // interval for periodic stats logging (0 → DefaultStatsInterval, -1 → disabled)
 
 	// QueueAhead is how early the consumer dispatches a packet before its target time. The ticker loop wakes up when
 	// now >= targetTs - QueueAhead, giving the "deliver" callback a lead-time window.
 	// 0 = dispatch at targetTs.
-	QueueAhead time.Duration
+	QueueAhead duration.Spec
 
 	// DeliveryMargin is the minimum lead time guaranteed to the "deliver" callback:
 	//   sendAt = max(targetTs, now + DeliveryMargin)
 	// Packets that cannot satisfy this floor (targetTs already too close to now) are tracked as LateSends.
 	// Should be ≤ QueueAhead so the floor is reliably reachable under normal conditions. 0 = disabled.
-	DeliveryMargin time.Duration
+	DeliveryMargin duration.Spec
 }
 
 // DisruptorPacer is an RTP callback pacer that uses a lock-free disruptor ring buffer as the jitter buffer. It uses
@@ -99,7 +99,7 @@ type DisruptorPacer struct {
 
 // NewDisruptorPacer creates a new DisruptorPacer with the given configuration.
 func NewDisruptorPacer(conf DisruptorPacerConfig) (*DisruptorPacer, error) {
-	if conf.BufferCapacity == 0 {
+	if conf.BufferCapacity <= 0 {
 		conf.BufferCapacity = DefaultDisruptorCapacity
 	}
 	if conf.MinSleepThreshold == 0 {
@@ -137,7 +137,7 @@ func NewDisruptorPacer(conf DisruptorPacerConfig) (*DisruptorPacer, error) {
 	ctx, cancel := context.WithCancelCause(context.Background())
 	p := &DisruptorPacer{
 		conf:       conf,
-		outStats:   newOutStats(conf.StatsInterval),
+		outStats:   newOutStats(conf.StatsInterval.Duration()),
 		ringBuffer: make([]disruptorEntry, conf.BufferCapacity),
 		bufferMask: int64(conf.BufferCapacity - 1),
 		ctx:        ctx,
@@ -208,7 +208,7 @@ func (p *DisruptorPacer) Push(bts []byte) error {
 // delivery time: targetTs + QueueAhead, clamped to at least now + DeliveryMargin.
 func (p *DisruptorPacer) Run(deliver func(bts []byte, at time.Time) error) error {
 	p.handler.deliver = deliver
-	p.handler.ticker = time.NewTicker(p.conf.TickerPeriod)
+	p.handler.ticker = time.NewTicker(p.conf.TickerPeriod.Duration())
 	defer p.handler.ticker.Stop()
 
 	// logStats goroutine: the sole logging goroutine. Runs independently of packet flow.
@@ -263,11 +263,11 @@ func (h *disruptorHandler) Handle(lower, upper int64) {
 		// Sleep until QueueAhead before targetTs, counting ticker ticks consumed. The mutex is NOT held during
 		// the sleep so that logStats() can force a period close while the consumer is waiting.
 		var ticksConsumed int
-		if wait > h.pacer.conf.MinSleepThreshold {
+		if wait > h.pacer.conf.MinSleepThreshold.Duration() {
 			// Wake up QueueAhead before targetTs so the deliver callback has a look-ahead scheduling window.
 			// Using a ticker avoids the per-packet timer allocation of time.After and lets ctx.Done() interrupt
 			// a long wait promptly.
-			wakeTarget := entry.targetTs.Time.Add(-h.pacer.conf.QueueAhead)
+			wakeTarget := entry.targetTs.Time.Add(-h.pacer.conf.QueueAhead.Duration())
 			for wakeTarget.After(h.lastTick) {
 				select {
 				case h.lastTick = <-h.ticker.C:
@@ -293,7 +293,7 @@ func (h *disruptorHandler) Handle(lower, upper int64) {
 		sendAt := entry.targetTs.Time
 		var lateness duration.Spec
 		if h.pacer.conf.DeliveryMargin > 0 {
-			minSendAt := time.Now().Add(h.pacer.conf.DeliveryMargin)
+			minSendAt := time.Now().Add(h.pacer.conf.DeliveryMargin.Duration())
 			if sendAt.Before(minSendAt) {
 				lateness = duration.Spec(minSendAt.Sub(sendAt))
 				sendAt = minSendAt
@@ -344,7 +344,7 @@ func (p *DisruptorPacer) logStats() {
 	if p.conf.StatsInterval <= 0 {
 		return
 	}
-	t := time.NewTicker(p.conf.StatsInterval)
+	t := time.NewTicker(p.conf.StatsInterval.Duration())
 	defer t.Stop()
 	for {
 		select {
