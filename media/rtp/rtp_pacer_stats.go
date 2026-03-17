@@ -24,6 +24,13 @@ type InStats struct {
 	// MaxT0AdjPerPacket is set, this may be less than T0Adjustment (the nominal observed drift).
 	T0AdjApplied statsutil.RawStatistics[time.Duration] `json:"t0_adj_applied,omitempty"`
 
+	// T0SlowDrift records the mean T0 drift for each period in which the mean exceeded SlowDriftThreshold.
+	// Recorded regardless of whether AdjustTimeRef is enabled.
+	T0SlowDrift statsutil.RawStatistics[time.Duration] `json:"t0_slow_drift,omitempty"`
+
+	// T0SlowDriftApplied records each positive baseTime correction applied by the slow-drift compensator.
+	T0SlowDriftApplied statsutil.RawStatistics[time.Duration] `json:"t0_slow_drift_applied,omitempty"`
+
 	// Minimum T0 seen, zero value means not set
 	MinT0 utc.UTC `json:"min_t0"`
 

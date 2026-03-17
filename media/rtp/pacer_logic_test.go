@@ -492,6 +492,153 @@ func TestPacerLogic_AdjustTimeRef_Cap(t *testing.T) {
 	require.Equal(t, wantAdjusted, target2, "target must reflect only the capped 3ms correction")
 }
 
+// TestPacerLogic_SlowDrift_Correction verifies that when the mean positive T0 drift over a period exceeds the
+// threshold, a positive correction is applied to baseTime and recorded in stats.
+//
+// Setup: wall clock advances 10ms per packet, RTP advances ticksMS(8) (8ms) per packet → t0 increases by 2ms/packet.
+// After 7 tracker updates (packets 1–7, drifts 0,2,4,6,8,10,12 ms), packet 8 at +70ms triggers the period
+// transition: Previous.Mean = 42/7 = 6ms > 2ms threshold → 1ms correction applied.
+func TestPacerLogic_SlowDrift_Correction(t *testing.T) {
+	const delay = 500 * time.Millisecond
+	p, stats := newTestPacerLogicFull(rtp.PacerLogicConfig{
+		AdjustTimeRef:       true,
+		SlowDriftPeriod:     duration.Spec(60 * time.Millisecond),
+		SlowDriftThreshold:  duration.Spec(2 * time.Millisecond),
+		SlowDriftCorrection: duration.Spec(time.Millisecond),
+		Delay:               duration.Spec(delay),
+		RtpSeqThreshold:     1,
+		RtpTsThreshold:      duration.Spec(time.Second),
+	})
+
+	T0 := utc.UnixMilli(10_000)
+
+	// Packet 1: establish baseline (DiscardPeriod=0 → DiscardComplete set immediately).
+	now := T0
+	ts := ticksMS(0)
+	seq := uint16(1)
+	_, discarded, err := p.Packet(now, seq, ts)
+	require.NoError(t, err)
+	require.False(t, discarded)
+	baseTime := now.Add(delay)
+
+	// Packets 2–7: t0 drifts up by 2ms per packet (wall +10ms, RTP +8ms each).
+	for i := 2; i <= 7; i++ {
+		now = now.Add(10 * time.Millisecond)
+		ts += ticksMS(8)
+		seq++
+		_, discarded, err = p.Packet(now, seq, ts)
+		require.NoError(t, err)
+		require.False(t, discarded, "packet %d should not be discarded", i)
+	}
+	require.Zero(t, stats.T0SlowDriftApplied.Count, "no correction yet: period not elapsed")
+
+	// Packet 8 at +70ms: period ends (70ms > 60ms), mean=6ms > 2ms → correction applied.
+	now = now.Add(10 * time.Millisecond)
+	ts += ticksMS(8)
+	seq++
+	target8, discarded, err := p.Packet(now, seq, ts)
+	require.NoError(t, err)
+	require.False(t, discarded)
+
+	require.Equal(t, uint64(1), stats.T0SlowDrift.Count, "one period must be recorded")
+	require.Equal(t, 6*time.Millisecond, stats.T0SlowDrift.Sum, "mean drift for the period")
+	require.Equal(t, uint64(1), stats.T0SlowDriftApplied.Count, "one correction must be applied")
+	require.Equal(t, time.Millisecond, stats.T0SlowDriftApplied.Sum)
+
+	// target8 must be 1ms later than the unadjusted value: baseTime + TicksToDuration(ts8 - ts1) + 1ms.
+	rtpDelta8 := rtp.TicksToDuration(int64(ts) - int64(ticksMS(0)))
+	wantUnadjusted := baseTime.Add(rtpDelta8)
+	require.Equal(t, wantUnadjusted.Add(time.Millisecond), target8,
+		"target must be 1ms later due to slow-drift correction")
+}
+
+// TestPacerLogic_SlowDrift_BelowThreshold verifies that no correction is applied when the mean positive drift
+// is below the configured threshold.
+func TestPacerLogic_SlowDrift_BelowThreshold(t *testing.T) {
+	const delay = 500 * time.Millisecond
+	p, stats := newTestPacerLogicFull(rtp.PacerLogicConfig{
+		AdjustTimeRef:       true,
+		SlowDriftPeriod:     duration.Spec(60 * time.Millisecond),
+		SlowDriftThreshold:  duration.Spec(10 * time.Millisecond), // high threshold: 6ms mean won't trigger
+		SlowDriftCorrection: duration.Spec(time.Millisecond),
+		Delay:               duration.Spec(delay),
+		RtpSeqThreshold:     1,
+		RtpTsThreshold:      duration.Spec(time.Second),
+	})
+
+	T0 := utc.UnixMilli(10_000)
+
+	now := T0
+	ts := ticksMS(0)
+	seq := uint16(1)
+	_, discarded, err := p.Packet(now, seq, ts)
+	require.NoError(t, err)
+	require.False(t, discarded)
+
+	for i := 2; i <= 8; i++ {
+		now = now.Add(10 * time.Millisecond)
+		ts += ticksMS(8)
+		seq++
+		_, discarded, err = p.Packet(now, seq, ts)
+		require.NoError(t, err)
+		require.False(t, discarded, "packet %d should not be discarded", i)
+	}
+
+	require.Zero(t, stats.T0SlowDriftApplied.Count, "mean=6ms < threshold=10ms: no correction must be applied")
+}
+
+// TestPacerLogic_SlowDrift_StatsWithoutCorrection verifies that T0SlowDrift is recorded even when AdjustTimeRef is
+// false: drift is observed and logged, but no baseTime correction is applied.
+func TestPacerLogic_SlowDrift_StatsWithoutCorrection(t *testing.T) {
+	const delay = 500 * time.Millisecond
+	p, stats := newTestPacerLogicFull(rtp.PacerLogicConfig{
+		AdjustTimeRef:       false, // corrections disabled
+		SlowDriftPeriod:     duration.Spec(60 * time.Millisecond),
+		SlowDriftThreshold:  duration.Spec(2 * time.Millisecond),
+		SlowDriftCorrection: duration.Spec(time.Millisecond),
+		Delay:               duration.Spec(delay),
+		RtpSeqThreshold:     1,
+		RtpTsThreshold:      duration.Spec(time.Second),
+	})
+
+	T0 := utc.UnixMilli(10_000)
+
+	// Same slow-stream pattern as TestPacerLogic_SlowDrift_Correction (mean=6ms > 2ms threshold).
+	now := T0
+	ts := ticksMS(0)
+	seq := uint16(1)
+	_, discarded, err := p.Packet(now, seq, ts)
+	require.NoError(t, err)
+	require.False(t, discarded)
+	baseTime := now.Add(delay)
+
+	for i := 2; i <= 7; i++ {
+		now = now.Add(10 * time.Millisecond)
+		ts += uint32(ticksMS(8))
+		seq++
+		_, discarded, err = p.Packet(now, seq, ts)
+		require.NoError(t, err)
+		require.False(t, discarded, "packet %d should not be discarded", i)
+	}
+
+	// Packet 8: period ends, mean=6ms > 2ms → drift recorded, but no correction applied.
+	now = now.Add(10 * time.Millisecond)
+	ts += ticksMS(8)
+	seq++
+	target8, discarded, err := p.Packet(now, seq, ts)
+	require.NoError(t, err)
+	require.False(t, discarded)
+
+	require.Equal(t, uint64(1), stats.T0SlowDrift.Count, "drift must be recorded even without AdjustTimeRef")
+	require.Equal(t, 6*time.Millisecond, stats.T0SlowDrift.Sum)
+	require.Zero(t, stats.T0SlowDriftApplied.Count, "no correction must be applied when AdjustTimeRef=false")
+
+	// target8 must be unadjusted.
+	rtpDelta8 := rtp.TicksToDuration(int64(ts) - int64(ticksMS(0)))
+	wantUnadjusted := baseTime.Add(rtpDelta8)
+	require.Equal(t, wantUnadjusted, target8, "target must be unadjusted when AdjustTimeRef=false")
+}
+
 // TestPacerLogic_TimestampWrapAround verifies that a uint32 RTP timestamp
 // wrap-around (MaxUint32 → 0) is handled transparently: no gap is detected
 // and target times continue to be computed correctly.
