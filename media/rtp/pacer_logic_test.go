@@ -129,8 +129,8 @@ func TestPacerLogic_TargetTime(t *testing.T) {
 	}
 }
 
-// TestPacerLogic_GapReset verifies that a detected RTP gap resets all state,
-// restarts the discard phase, and clears statistics.
+// TestPacerLogic_GapReset verifies that a detected RTP gap resets all per-session state, restarts the discard phase,
+// increments StreamResets, and that StreamResets accumulates correctly across multiple gaps.
 func TestPacerLogic_GapReset(t *testing.T) {
 	const delay = 500 * time.Millisecond
 	p, stats := newTestPacerLogic(15*time.Millisecond, delay)
@@ -150,31 +150,38 @@ func TestPacerLogic_GapReset(t *testing.T) {
 	_, discarded, err = p.Packet(T0.Add(20*time.Millisecond), 2, ticksMS(20))
 	require.NoError(t, err)
 	require.False(t, discarded)
-	require.NotZero(t, stats.MinT0, "MinT0 should be set before gap")
-	require.NotZero(t, stats.PushAhead.Min, "PushAhead.Min should be set before gap")
+	require.NotZero(t, stats.MinT0, "MinT0 should be set after baseline")
+	require.NotZero(t, stats.PushAhead.Min, "PushAhead.Min should be set after baseline")
 
-	// Inject a gap: sequence jumps from 2 → 100 (diff=98 > threshold=1).
+	// Inject gap 1: sequence jumps from 2 → 100 (diff=98 > threshold=1).
 	_, discarded, err = p.Packet(T0.Add(30*time.Millisecond), 100, ticksMS(30))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// The gap triggers a reset; the gap packet enters a new discard phase.
 	assert.True(t, discarded, "first packet after gap should be discarded (new discard phase)")
 	assert.Zero(t, stats.MinT0, "MinT0 should be reset after gap")
 	assert.Zero(t, stats.PushAhead.Min, "PushAhead.Min should be reset after gap")
 	assert.Zero(t, stats.PushAhead.Max, "PushAhead.Max should be reset after gap")
+	assert.Equal(t, 1, stats.StreamResets, "StreamResets should be 1 after first gap")
+	assert.Equal(t, T0.Add(30*time.Millisecond), stats.LastStreamReset, "LastStreamReset should record the gap time")
 
-	// The next packet is still in the discard phase
+	// Complete the new discard phase and re-establish a baseline.
 	_, discarded, err = p.Packet(T0.Add(40*time.Millisecond), 101, ticksMS(40))
-	assert.NoError(t, err)
-	assert.True(t, discarded, "packet after post-gap discard should not be discarded")
+	require.NoError(t, err)
+	require.True(t, discarded, "second packet in post-gap discard phase should still be discarded")
 
-	// The next packet completes the new discard phase (discardPeriod=15ms) and
-	// establishes a fresh baseline.
 	_, discarded, err = p.Packet(T0.Add(50*time.Millisecond), 102, ticksMS(50))
-	assert.NoError(t, err)
-	assert.False(t, discarded, "packet after post-gap discard should not be discarded")
-	require.NotZero(t, stats.MinT0, "MinT0 should be set before gap")
-	require.NotZero(t, stats.PushAhead.Min, "PushAhead.Min should be set before gap")
+	require.NoError(t, err)
+	require.False(t, discarded, "packet after post-gap discard period should not be discarded")
+	require.NotZero(t, stats.MinT0, "MinT0 should be set after second baseline")
+	require.NotZero(t, stats.PushAhead.Min, "PushAhead.Min should be set after second baseline")
+
+	// Inject gap 2: sequence jumps from 102 → 200. StreamResets must accumulate to 2, not reset to 1.
+	_, discarded, err = p.Packet(T0.Add(60*time.Millisecond), 200, ticksMS(60))
+	require.NoError(t, err)
+	assert.True(t, discarded, "first packet after second gap should be discarded")
+	assert.Equal(t, 2, stats.StreamResets, "StreamResets must accumulate across gaps, not reset to 1")
+	assert.Equal(t, T0.Add(60*time.Millisecond), stats.LastStreamReset, "LastStreamReset should record the second gap time")
 }
 
 // TestPacerLogic_PushAheadStats verifies that PushAhead.Min and PushAhead.Max

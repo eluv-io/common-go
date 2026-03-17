@@ -45,6 +45,16 @@ type InStats struct {
 	Tsu             int64   `json:"tsu"`  // unwrapped RTP timestamp of the most recent packet
 }
 
+// Reset clears all per-session statistics. Lifetime counters (StreamResets, LastStreamReset) are preserved so that
+// gap-triggered resets do not lose the accumulated reset history.
+func (s *InStats) Reset() {
+	streamResets := s.StreamResets
+	lastReset := s.LastStreamReset
+	*s = InStats{}
+	s.StreamResets = streamResets
+	s.LastStreamReset = lastReset
+}
+
 // OutStatsPeriod holds the per-period output statistics snapshot. It contains only exported Statistics[T] fields
 // and plain counters, so it is safe to copy by value (no atomics or sync values). It is used as the snapshot type
 // for cross-goroutine stats publishing.

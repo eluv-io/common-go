@@ -11,10 +11,6 @@ import (
 	"github.com/eluv-io/utc-go"
 )
 
-func (s *InStats) Reset() {
-	*s = InStats{}
-}
-
 type PacerLogicConfig struct {
 	Stream           string        // for logging
 	EventLog         elog.ILog     // the log for recording events (rtp gaps, timing baseline adjustments)
