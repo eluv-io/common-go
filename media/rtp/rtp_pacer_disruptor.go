@@ -17,6 +17,10 @@ import (
 )
 
 const (
+	// MaxDisruptorCapacity is the max capacity of the ring buffer. The disruptor uses uint32 for sequence numbers and
+	// the capacity must be a power of 2, so the largest power of 2 smaller than MaxUint (1<<32-1) is 1<<31.
+	MaxDisruptorCapacity = 1 << 31
+
 	// DefaultDisruptorCapacity is the default ring buffer capacity. Must be a power of 2.
 	DefaultDisruptorCapacity = 1 << 12 // 4096 slots
 
@@ -101,15 +105,12 @@ type DisruptorPacer struct {
 func NewDisruptorPacer(conf DisruptorPacerConfig) (*DisruptorPacer, error) {
 	if conf.BufferCapacity <= 0 {
 		conf.BufferCapacity = DefaultDisruptorCapacity
-	}
-	if conf.MinSleepThreshold == 0 {
-		conf.MinSleepThreshold = DefaultMinSleepThreshold
-	}
-	if conf.TickerPeriod == 0 {
-		conf.TickerPeriod = DefaultTickerPeriod
-	}
-	if conf.StatsInterval == 0 {
-		conf.StatsInterval = DefaultStatsInterval
+	} else if conf.BufferCapacity > MaxDisruptorCapacity {
+		return nil, errors.E("NewDisruptorPacer",
+			"reason", "buffer capacity too large",
+			"max", MaxDisruptorCapacity,
+			"actual", conf.BufferCapacity,
+		)
 	}
 	if conf.BufferCapacity&(conf.BufferCapacity-1) != 0 {
 		// Round up to the next power of 2.
@@ -120,6 +121,15 @@ func NewDisruptorPacer(conf DisruptorPacerConfig) (*DisruptorPacer, error) {
 		conf.BufferCapacity |= conf.BufferCapacity >> 8
 		conf.BufferCapacity |= conf.BufferCapacity >> 16
 		conf.BufferCapacity++
+	}
+	if conf.MinSleepThreshold <= 0 {
+		conf.MinSleepThreshold = DefaultMinSleepThreshold
+	}
+	if conf.TickerPeriod <= 0 {
+		conf.TickerPeriod = DefaultTickerPeriod
+	}
+	if conf.StatsInterval <= 0 {
+		conf.StatsInterval = DefaultStatsInterval
 	}
 	if conf.StatsLog == nil {
 		conf.StatsLog = elog.Noop
@@ -137,7 +147,7 @@ func NewDisruptorPacer(conf DisruptorPacerConfig) (*DisruptorPacer, error) {
 	ctx, cancel := context.WithCancelCause(context.Background())
 	p := &DisruptorPacer{
 		conf:       conf,
-		outStats:   newOutStats(conf.StatsInterval.Duration()),
+		outStats:   newOutStats(conf.StatsInterval),
 		ringBuffer: make([]disruptorEntry, conf.BufferCapacity),
 		bufferMask: int64(conf.BufferCapacity - 1),
 		ctx:        ctx,

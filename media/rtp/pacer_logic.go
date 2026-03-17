@@ -89,7 +89,6 @@ func NewPacerLogic(
 
 // reset resets all state, so that we start afresh
 func (p *PacerLogic) reset() {
-	// p.discard = NewDiscardContext(p.discardPeriod, p.maxDiscardPeriod)
 	p.discard.ResetOnGap()
 	p.baseTime = utc.Zero
 	p.stats.Reset()

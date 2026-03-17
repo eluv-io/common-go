@@ -95,16 +95,15 @@ type OutStats struct {
 // newOutStats returns an OutStats whose Periodic fields have ManualSwitch: true so that period transitions are
 // driven exclusively by logStats() rather than by packet arrival timing. period should be the configured
 // StatsInterval so that Statistics.Duration in each snapshot reflects the nominal period length.
-func newOutStats(period time.Duration) OutStats {
-	p := duration.Spec(period)
+func newOutStats(period duration.Spec) OutStats {
 	return OutStats{
-		wait:       statsutil.Periodic[duration.Spec]{ManualSwitch: true, Period: p},
-		ipd:        statsutil.Periodic[duration.Spec]{ManualSwitch: true, Period: p},
-		chd:        statsutil.Periodic[duration.Spec]{ManualSwitch: true, Period: p},
-		lateness:   statsutil.Periodic[duration.Spec]{ManualSwitch: true, Period: p},
-		sendAhead:  statsutil.Periodic[duration.Spec]{ManualSwitch: true, Period: p},
-		oversleeps: statsutil.Periodic[duration.Spec]{ManualSwitch: true, Period: p},
-		bufFill:    statsutil.Periodic[int32]{ManualSwitch: true, Period: p},
+		wait:       statsutil.Periodic[duration.Spec]{ManualSwitch: true, Period: period},
+		ipd:        statsutil.Periodic[duration.Spec]{ManualSwitch: true, Period: period},
+		chd:        statsutil.Periodic[duration.Spec]{ManualSwitch: true, Period: period},
+		lateness:   statsutil.Periodic[duration.Spec]{ManualSwitch: true, Period: period},
+		sendAhead:  statsutil.Periodic[duration.Spec]{ManualSwitch: true, Period: period},
+		oversleeps: statsutil.Periodic[duration.Spec]{ManualSwitch: true, Period: period},
+		bufFill:    statsutil.Periodic[int32]{ManualSwitch: true, Period: period},
 	}
 }
 
