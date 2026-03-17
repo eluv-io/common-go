@@ -130,8 +130,16 @@ func (p *PacerLogic) Packet(now utc.UTC, rtpSeq uint16, rtpTimestamp uint32) (ta
 	// on first non-discarded packet, establish timing baseline
 	if p.baseTime.IsZero() {
 		p.firstRtpTimestamp = ts
-		// Base time is now + delay (when first packet should be sent)
-		p.baseTime = now.Add(p.conf.Delay.Duration())
+		// Anchor baseTime to the stable discard T0, not to `now`. The first non-discarded packet may arrive with
+		// positive or negative jitter, which would otherwise offset the entire timeline.
+		// discard.T0 + TicksToDuration(ts) equals now for a jitter-free arrival, and correctly removes any jitter
+		// offset from the baseline.
+		p.baseTime = p.discard.T0.Add(TicksToDuration(ts)).Add(p.conf.Delay.Duration())
+
+		// Initialize MinT0 from the stable discard T0 so that drift tracking starts from the correct reference. Using
+		// t0 if the first packet (= now - TicksToDuration(ts)) would inflate MinT0 by any arrival jitter and trigger
+		// spurious drift corrections on subsequent jitter-free packets.
+		p.stats.MinT0 = p.discard.T0
 
 		// Capture startup negative drift from discard phase
 		p.stats.StartupT0Correction = p.discard.StartupT0Correction
@@ -143,7 +151,7 @@ func (p *PacerLogic) Packet(now utc.UTC, rtpSeq uint16, rtpTimestamp uint32) (ta
 			"stream", p.conf.Stream,
 			"base_time", p.baseTime.Format(time.RFC3339Nano),
 			"delay", p.conf.Delay,
-			"startup_to_correction_ms", fmt.Sprintf("%.1f", float64(p.stats.StartupT0Correction.Sum)/float64(time.Millisecond)))
+			"startup_t0_correction_ms", fmt.Sprintf("%.1f", float64(p.stats.StartupT0Correction.Sum)/float64(time.Millisecond)))
 	}
 
 	// Calculate target transmission time based on unwrapped RTP timestamp delta
@@ -161,10 +169,7 @@ func (p *PacerLogic) Packet(now utc.UTC, rtpSeq uint16, rtpTimestamp uint32) (ta
 	t0 := now.Add(-TicksToDuration(ts))
 
 	// Track T0: if this T0 is earlier than our stored min, it's a negative drift event
-	if p.stats.MinT0.IsZero() {
-		// First T0 after discard completed
-		p.stats.MinT0 = t0
-	} else if t0.Before(p.stats.MinT0) {
+	if t0.Before(p.stats.MinT0) {
 		// T0 decreased (negative drift) — record nominal drift and optionally apply a capped correction to baseTime.
 		negDrift := p.stats.MinT0.Sub(t0)
 		p.stats.NegDrift.Update(now, negDrift)
@@ -191,7 +196,7 @@ func (p *PacerLogic) Packet(now utc.UTC, rtpSeq uint16, rtpTimestamp uint32) (ta
 	// Track T0 drift (stream running slow relative to wall clock) and optionally correct baseTime forward.
 	// Negative drift values (stream momentarily fast) are included so they pull the mean down and prevent
 	// spurious corrections after a fast burst.
-	if !p.stats.MinT0.IsZero() {
+	{
 		drift := t0.Sub(p.stats.MinT0)
 		if periodEnded := p.posDriftTracker.UpdateNow(now, drift); periodEnded {
 			meanDrift := time.Duration(p.posDriftTracker.Previous.Mean)

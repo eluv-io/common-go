@@ -639,6 +639,63 @@ func TestPacerLogic_SlowDrift_StatsWithoutCorrection(t *testing.T) {
 	require.Equal(t, wantUnadjusted, target8, "target must be unadjusted when AdjustTimeDrift=false")
 }
 
+// TestPacerLogic_StartupJitter verifies that positive jitter on the first non-discarded packet does not offset
+// the entire timeline. Because baseTime is anchored to discard.T0 rather than to `now`, a late-arriving first
+// packet does not inflate the effective delay for all subsequent packets. With AdjustTimeDrift=false there is also
+// no reactive correction: subsequent jitter-free packets simply have pushAhead == delay and no NegDrift events.
+func TestPacerLogic_StartupJitter(t *testing.T) {
+	const delay = 500 * time.Millisecond
+	const discardPeriod = 15 * time.Millisecond
+	p, stats := newTestPacerLogicFull(rtp.PacerLogicConfig{
+		AdjustTimeDrift:  false, // corrections disabled; any offset would be permanent
+		DiscardPeriod:    duration.Spec(discardPeriod),
+		MaxDiscardPeriod: duration.Spec(time.Minute),
+		Delay:            duration.Spec(delay),
+		RtpSeqThreshold:  1,
+		RtpTsThreshold:   duration.Spec(time.Second),
+	})
+
+	// T_wall is the wall-clock time when the stream epoch (ts=0) occurred.
+	T_wall := utc.UnixMilli(10_000)
+
+	// Packet 1 (discard): ts=0, now=T_wall → discard.T0 = T_wall.
+	_, d, err := p.Packet(T_wall, 1, 0)
+	require.NoError(t, err)
+	require.True(t, d)
+
+	// Packet 2 (discard): ts=10ms, now=T_wall+10ms → t0=T_wall (stable), elapsed=10ms < 15ms → still discarding.
+	_, d, err = p.Packet(T_wall.Add(10*time.Millisecond), 2, ticksMS(10))
+	require.NoError(t, err)
+	require.True(t, d)
+
+	// Packet 3 (first non-discarded): arrives 5ms late due to jitter.
+	// Expected arrival: T_wall+20ms. Actual arrival: T_wall+25ms.
+	// t0_first = T_wall+25ms - 20ms = T_wall+5ms > discard.T0 = T_wall (5ms of positive jitter).
+	now3 := T_wall.Add(25 * time.Millisecond)
+	ts3 := ticksMS(20)
+	target3, d, err := p.Packet(now3, 3, ts3)
+	require.NoError(t, err)
+	require.False(t, d)
+	// baseTime = discard.T0 + TicksToDuration(ts3) + delay = T_wall + 20ms + delay.
+	// targetTime3 = baseTime + 0 = T_wall + 20ms + delay.
+	wantTarget3 := T_wall.Add(20*time.Millisecond + delay)
+	require.Equal(t, wantTarget3, target3, "first packet target must be anchored to discard.T0, not jitter-affected now")
+
+	// Packet 4 (no jitter): ts=30ms, arrives at expected time T_wall+30ms.
+	// t0 = T_wall = discard.T0 = MinT0 → no NegDrift triggered.
+	now4 := T_wall.Add(30 * time.Millisecond)
+	ts4 := ticksMS(30)
+	target4, d, err := p.Packet(now4, 4, ts4)
+	require.NoError(t, err)
+	require.False(t, d)
+	// targetTime4 = baseTime + TicksToDuration(ts4 - ts3) = T_wall+20ms+delay + 10ms = T_wall+30ms+delay.
+	wantTarget4 := T_wall.Add(30*time.Millisecond + delay)
+	require.Equal(t, wantTarget4, target4, "subsequent packet target must be correct")
+	require.Equal(t, delay, target4.Sub(now4), "pushAhead must equal delay, not delay+jitter")
+
+	require.Zero(t, stats.NegDrift.Count, "no spurious NegDrift correction despite 5ms arrival jitter on first packet")
+}
+
 // TestPacerLogic_TimestampWrapAround verifies that a uint32 RTP timestamp
 // wrap-around (MaxUint32 → 0) is handled transparently: no gap is detected
 // and target times continue to be computed correctly.
