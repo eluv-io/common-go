@@ -22,6 +22,14 @@ type PacerLogicConfig struct {
 	Delay            duration.Spec // the size of the de-jitter buffer
 	RtpSeqThreshold  int64         // sequence threshold for RTP gap detection
 	RtpTsThreshold   duration.Spec // timestamp threshold for RTP gap detection
+
+	// AdjustTimeRef enables continuous time-reference correction: whenever T0 drifts backward (stream running fast
+	// relative to wall clock), baseTime is shifted earlier by the observed drift amount (subject to MaxT0AdjPerPacket).
+	AdjustTimeRef bool
+
+	// MaxT0AdjPerPacket caps the per-packet baseTime correction applied when AdjustTimeRef is true. Zero means no cap:
+	// the full observed drift is applied immediately.
+	MaxT0AdjPerPacket duration.Spec
 }
 
 type PacerLogic struct {
@@ -100,7 +108,7 @@ func (p *PacerLogic) Packet(now utc.UTC, rtpSeq uint16, rtpTimestamp uint32) (ta
 			"stream", p.conf.Stream,
 			"base_time", p.baseTime.Format(time.RFC3339Nano),
 			"delay", p.conf.Delay,
-			"startup_t0_adj_ms", fmt.Sprintf("%.1f", float64(p.stats.StartupT0Adjustment.Sum)/1e6))
+			"startup_t0_adj_ms", fmt.Sprintf("%.1f", float64(p.stats.StartupT0Adjustment.Sum)/float64(time.Millisecond)))
 	}
 
 	// Calculate target transmission time based on unwrapped RTP timestamp delta
@@ -122,10 +130,24 @@ func (p *PacerLogic) Packet(now utc.UTC, rtpSeq uint16, rtpTimestamp uint32) (ta
 		// First T0 after discard completed
 		p.stats.MinT0 = t0
 	} else if t0.Before(p.stats.MinT0) {
-		// T0 decreased - track the adjustment
+		// T0 decreased — record nominal drift and optionally apply a capped correction to baseTime.
 		adjustment := p.stats.MinT0.Sub(t0)
 		p.stats.T0Adjustment.Update(now, adjustment)
 		p.stats.MinT0 = t0
+		if p.conf.AdjustTimeRef {
+			apply := adjustment
+			if maxAdj := p.conf.MaxT0AdjPerPacket.Duration(); maxAdj > 0 && apply > maxAdj {
+				apply = maxAdj
+			}
+			p.stats.T0AdjApplied.Update(now, apply)
+			p.baseTime = p.baseTime.Add(-apply)
+			targetTime = targetTime.Add(-apply)
+			p.log.Info("time ref adjusted",
+				"stream", p.conf.Stream,
+				"t0_adj_ms", fmt.Sprintf("%.3f", float64(adjustment)/float64(time.Millisecond)),
+				"applied_ms", fmt.Sprintf("%.3f", float64(apply)/float64(time.Millisecond)),
+				"new_base_time", p.baseTime.Format(time.RFC3339Nano))
+		}
 	}
 
 	return targetTime, false, nil

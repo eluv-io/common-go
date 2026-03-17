@@ -65,7 +65,13 @@ func (d *DiscardContext) ShouldDiscard(rtpTimestamp int64, now utc.UTC) (bool, e
 		log.Debug("discard: first packet, establishing baseline",
 			"rtp_ts", rtpTimestamp,
 			"t0", t0)
-		return d.DiscardPeriod != 0, nil // discard first packet unless discard is disabled
+		if d.DiscardPeriod == 0 {
+			// Discard is disabled: complete the phase immediately so subsequent packets bypass all discard logic,
+			// including T0-shift discards.
+			d.DiscardComplete = true
+			return false, nil
+		}
+		return true, nil
 	}
 
 	// If this packet's T0 is earlier than stored T0, update baseline

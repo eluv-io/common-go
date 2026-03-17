@@ -20,6 +20,10 @@ type InStats struct {
 	// T0 adjustment stats during active phase
 	T0Adjustment statsutil.RawStatistics[time.Duration] `json:"t0_adjustment"`
 
+	// T0AdjApplied tracks the actually-applied baseTime corrections when AdjustTimeRef is enabled. When
+	// MaxT0AdjPerPacket is set, this may be less than T0Adjustment (the nominal observed drift).
+	T0AdjApplied statsutil.RawStatistics[time.Duration] `json:"t0_adj_applied,omitempty"`
+
 	// Minimum T0 seen, zero value means not set
 	MinT0 utc.UTC `json:"min_t0"`
 

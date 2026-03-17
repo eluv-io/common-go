@@ -397,6 +397,101 @@ func TestPacerLogic_TimestampLargeAccumulation(t *testing.T) {
 	}
 }
 
+// newTestPacerLogicFull creates a PacerLogic from a complete PacerLogicConfig.
+func newTestPacerLogicFull(conf rtp.PacerLogicConfig) (*rtp.PacerLogic, *rtp.InStats) {
+	stats := &rtp.InStats{}
+	if conf.EventLog == nil {
+		conf.EventLog = log.Get("/test/rtp/pacer")
+	}
+	return rtp.NewPacerLogic(conf, stats), stats
+}
+
+// TestPacerLogic_AdjustTimeRef_Applied verifies that when AdjustTimeRef=true (no cap), a T0 backward shift of X ms
+// causes subsequent target times to be pulled X ms earlier compared to the unadjusted case.
+func TestPacerLogic_AdjustTimeRef_Applied(t *testing.T) {
+	const delay = 500 * time.Millisecond
+	p, stats := newTestPacerLogicFull(rtp.PacerLogicConfig{
+		AdjustTimeRef:   true,
+		Delay:           duration.Spec(delay),
+		RtpSeqThreshold: 1,
+		RtpTsThreshold:  duration.Spec(time.Second),
+	})
+
+	T0 := utc.UnixMilli(10_000)
+
+	// Packet 1: establish baseline (DiscardPeriod=0 → not discarded, baseTime = T0 + delay)
+	now1 := T0
+	ts1 := ticksMS(0)
+	_, discarded, err := p.Packet(now1, 1, ts1)
+	require.NoError(t, err)
+	require.False(t, discarded)
+	baseTime := now1.Add(delay) // expected unadjusted baseTime (firstRtpTimestamp=0)
+
+	// Packet 2: wall clock advances 15ms, RTP advances 20ms → T0 shifts 5ms earlier.
+	// t0_2 = (T0+15ms) - 20ms = T0-5ms → adjustment = 5ms.
+	now2 := now1.Add(15 * time.Millisecond)
+	ts2 := ts1 + ticksMS(20)
+	target2, discarded, err := p.Packet(now2, 2, ts2)
+	require.NoError(t, err)
+	require.False(t, discarded)
+	require.Equal(t, uint64(1), stats.T0Adjustment.Count, "nominal adjustment must be recorded")
+	require.Equal(t, 5*time.Millisecond, stats.T0Adjustment.Sum)
+	require.Equal(t, uint64(1), stats.T0AdjApplied.Count, "applied adjustment must be recorded")
+	require.Equal(t, 5*time.Millisecond, stats.T0AdjApplied.Sum, "full drift applied (no cap)")
+
+	// target2 is adjusted immediately: unadjusted = baseTime + 20ms, adjusted = unadjusted - 5ms.
+	rtpDelta2 := rtp.TicksToDuration(int64(ts2) - int64(ts1))
+	wantUnadjusted := baseTime.Add(rtpDelta2)
+	wantAdjusted := wantUnadjusted.Add(-5 * time.Millisecond)
+	require.Equal(t, wantAdjusted, target2, "target must be 5ms earlier due to time-ref adjustment")
+}
+
+// TestPacerLogic_AdjustTimeRef_Cap verifies that MaxT0AdjPerPacket limits how much of the observed T0 drift is
+// applied to baseTime in a single Packet call, while the full nominal drift is still recorded in T0Adjustment.
+func TestPacerLogic_AdjustTimeRef_Cap(t *testing.T) {
+	const delay = 500 * time.Millisecond
+	const capAdj = 3 * time.Millisecond
+	p, stats := newTestPacerLogicFull(rtp.PacerLogicConfig{
+		AdjustTimeRef:     true,
+		MaxT0AdjPerPacket: duration.Spec(capAdj),
+		Delay:             duration.Spec(delay),
+		RtpSeqThreshold:   1,
+		RtpTsThreshold:    duration.Spec(time.Second),
+	})
+
+	T0 := utc.UnixMilli(10_000)
+
+	// Packet 1: establish baseline (DiscardPeriod=0 → not discarded, baseTime = T0 + delay)
+	now1 := T0
+	ts1 := ticksMS(0)
+	_, discarded, err := p.Packet(now1, 1, ts1)
+	require.NoError(t, err)
+	require.False(t, discarded)
+	baseTime := now1.Add(delay)
+
+	// Packet 2: T0 drifts back 10ms (large single-step drift, capped at 3ms).
+	// wall +5ms, RTP +15ms → t0 = (T0+5ms) - 15ms = T0-10ms → nominal adj = 10ms.
+	now2 := now1.Add(5 * time.Millisecond)
+	ts2 := ts1 + ticksMS(15)
+	target2, discarded, err := p.Packet(now2, 2, ts2)
+	require.NoError(t, err)
+	require.False(t, discarded)
+
+	// Full nominal drift recorded.
+	require.Equal(t, uint64(1), stats.T0Adjustment.Count)
+	require.Equal(t, 10*time.Millisecond, stats.T0Adjustment.Sum, "full nominal drift must be recorded")
+
+	// Only capped amount applied.
+	require.Equal(t, uint64(1), stats.T0AdjApplied.Count)
+	require.Equal(t, capAdj, stats.T0AdjApplied.Sum, "only capped amount must be applied")
+
+	// Target time reflects only the 3ms correction (not the full 10ms).
+	rtpDelta2 := rtp.TicksToDuration(int64(ts2) - int64(ts1))
+	wantUnadjusted := baseTime.Add(rtpDelta2)
+	wantAdjusted := wantUnadjusted.Add(-capAdj)
+	require.Equal(t, wantAdjusted, target2, "target must reflect only the capped 3ms correction")
+}
+
 // TestPacerLogic_TimestampWrapAround verifies that a uint32 RTP timestamp
 // wrap-around (MaxUint32 → 0) is handled transparently: no gap is detected
 // and target times continue to be computed correctly.
