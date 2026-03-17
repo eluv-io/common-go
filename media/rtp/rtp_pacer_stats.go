@@ -14,22 +14,22 @@ type InStats struct {
 	// PushAhead is (targetTime - currentTime) when packet is pushed
 	PushAhead statsutil.RawStatistics[time.Duration] `json:"push_ahead"`
 
-	// T0 adjustment stats during startup/discard phase
-	StartupT0Adjustment statsutil.RawStatistics[time.Duration] `json:"startup_t0_adjustment"`
+	// StartupT0Correction tracks negative T0 drift (T0 moving earlier) observed during the startup/discard phase.
+	StartupT0Correction statsutil.RawStatistics[time.Duration] `json:"startup_t0_correction"`
 
-	// T0 adjustment stats during active phase
-	T0Adjustment statsutil.RawStatistics[time.Duration] `json:"t0_adjustment"`
+	// NegDrift tracks negative T0 drift (T0 moving earlier) observed during the active phase.
+	NegDrift statsutil.RawStatistics[time.Duration] `json:"neg_drift"`
 
-	// T0AdjApplied tracks the actually-applied baseTime corrections when AdjustTimeRef is enabled. When
-	// MaxT0AdjPerPacket is set, this may be less than T0Adjustment (the nominal observed drift).
-	T0AdjApplied statsutil.RawStatistics[time.Duration] `json:"t0_adj_applied,omitempty"`
+	// NegDriftApplied tracks the actually-applied baseTime corrections for negative drift when AdjustTimeDrift is
+	// enabled. When MaxNegDriftCorrection is set, this may be less than NegDrift (the nominal observed drift).
+	NegDriftApplied statsutil.RawStatistics[time.Duration] `json:"neg_drift_applied,omitempty"`
 
-	// T0SlowDrift records the mean T0 drift for each period in which the mean exceeded SlowDriftThreshold.
-	// Recorded regardless of whether AdjustTimeRef is enabled.
-	T0SlowDrift statsutil.RawStatistics[time.Duration] `json:"t0_slow_drift,omitempty"`
+	// PosDrift records the mean T0 drift for each period in which the mean exceeded PosDriftThreshold.
+	// Recorded regardless of whether AdjustTimeDrift is enabled.
+	PosDrift statsutil.RawStatistics[time.Duration] `json:"pos_drift,omitempty"`
 
-	// T0SlowDriftApplied records each positive baseTime correction applied by the slow-drift compensator.
-	T0SlowDriftApplied statsutil.RawStatistics[time.Duration] `json:"t0_slow_drift_applied,omitempty"`
+	// PosDriftApplied records each positive baseTime correction applied by the positive-drift compensator.
+	PosDriftApplied statsutil.RawStatistics[time.Duration] `json:"pos_drift_applied,omitempty"`
 
 	// Minimum T0 seen, zero value means not set
 	MinT0 utc.UTC `json:"min_t0"`

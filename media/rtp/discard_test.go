@@ -18,13 +18,13 @@ func TestDiscardContext_Disabled(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, discard)
 	require.Equal(t, now, dc.T0)                            // T0 should be set even though discarding is disabled
-	require.EqualValues(t, 0, dc.StartupT0Adjustment.Count) // no adjustments, however
+	require.EqualValues(t, 0, dc.StartupT0Correction.Count) // no adjustments, however
 
 	discard, err = dc.ShouldDiscard(1, now.Add(time.Millisecond))
 	require.NoError(t, err)
 	require.False(t, discard)
 	require.Equal(t, now, dc.T0)                            // T0 should be set even though discarding is disabled
-	require.EqualValues(t, 0, dc.StartupT0Adjustment.Count) // no adjustments, however
+	require.EqualValues(t, 0, dc.StartupT0Correction.Count) // no adjustments, however
 }
 
 func TestDiscardContext_ShouldDiscard(t *testing.T) {
@@ -47,8 +47,8 @@ func TestDiscardContext_ShouldDiscard(t *testing.T) {
 		seq += 90000               // advance seq by 90k ticks = 1 second ==> no T0 adjustment
 	}
 	require.Equal(t, t0, dc.T0)
-	require.EqualValues(t, 0, dc.StartupT0Adjustment.Count)
-	require.EqualValues(t, 0, dc.StartupT0Adjustment.Sum)
+	require.EqualValues(t, 0, dc.StartupT0Correction.Count)
+	require.EqualValues(t, 0, dc.StartupT0Correction.Sum)
 }
 
 func TestDiscardContext_ShouldDiscardWithAdjustment(t *testing.T) {
@@ -77,8 +77,8 @@ func TestDiscardContext_ShouldDiscardWithAdjustment(t *testing.T) {
 		seq += 90000               // advance seq by 90k ticks = 1 second ==> no T0 adjustment
 	}
 	require.Equal(t, t0.Add(-5*time.Millisecond), dc.T0)
-	require.EqualValues(t, 1, dc.StartupT0Adjustment.Count)
-	require.EqualValues(t, 5*time.Millisecond, dc.StartupT0Adjustment.Sum)
+	require.EqualValues(t, 1, dc.StartupT0Correction.Count)
+	require.EqualValues(t, 5*time.Millisecond, dc.StartupT0Correction.Sum)
 }
 
 func TestDiscardContext_ResetOnGapDuringDiscardPhase(t *testing.T) {
@@ -116,7 +116,7 @@ func TestDiscardContext_ResetOnGapDuringNormalOperation(t *testing.T) {
 		// discard phase over
 		assertDiscard(t, dc, now.Sub(t0), now, false, false)
 		require.Equal(t, t0, dc.T0)
-		require.EqualValues(t, 0, dc.StartupT0Adjustment.Count)
+		require.EqualValues(t, 0, dc.StartupT0Correction.Count)
 		// signal an RTP gap outside of discard period --> resets everything, starting a new discard phase
 		dc.ResetOnGap()
 	}

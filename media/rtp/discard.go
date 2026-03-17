@@ -18,7 +18,7 @@ type DiscardContext struct {
 	FirstPacketTime     utc.UTC                                // Timestamp of the first received packet
 	T0                  utc.UTC                                // Wall clock time when (unwrapped) RTP timestamp was 0
 	T0UpdatedAt         utc.UTC                                // When the baseline was last updated
-	StartupT0Adjustment statsutil.RawStatistics[time.Duration] // T0 adjustment stats during startup/discard phase (reset on gap!)
+	StartupT0Correction statsutil.RawStatistics[time.Duration] // T0 adjustment stats during startup/discard phase (reset on gap!)
 }
 
 // NewDiscardContext creates a new discard context with the specified period.
@@ -77,13 +77,13 @@ func (d *DiscardContext) ShouldDiscard(rtpTimestamp int64, now utc.UTC) (bool, e
 	// If this packet's T0 is earlier than stored T0, update baseline
 	if t0.Before(d.T0) {
 		adjustment := d.T0.Sub(t0)
-		d.StartupT0Adjustment.Update(now, adjustment)
+		d.StartupT0Correction.Update(now, adjustment)
 		log.Debug("discard: T0 adjusted, updating baseline",
 			"rtp_ts", rtpTimestamp,
 			"old_t0", d.T0,
 			"new_t0", t0,
 			"delta", adjustment,
-			"total_adj_ms", float64(d.StartupT0Adjustment.Sum)/1e6)
+			"total_adj_ms", float64(d.StartupT0Correction.Sum)/1e6)
 		d.T0 = t0
 		d.T0UpdatedAt = now
 		return true, nil // discard - baseline was just updated
@@ -114,5 +114,5 @@ func (d *DiscardContext) ResetOnGap() {
 
 	d.T0 = utc.Zero
 	d.T0UpdatedAt = utc.Zero
-	d.StartupT0Adjustment = statsutil.RawStatistics[time.Duration]{}
+	d.StartupT0Correction = statsutil.RawStatistics[time.Duration]{}
 }
