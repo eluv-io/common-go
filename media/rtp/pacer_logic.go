@@ -155,10 +155,6 @@ func (p *PacerLogic) Packet(now utc.UTC, rtpSeq uint16, rtpTimestamp uint32) (ta
 	// Target time = base time + time delta from first packet
 	targetTime := p.baseTime.Add(TicksToDuration(rtpDelta))
 
-	// Track push freshness: how far ahead is target time from now when pushed
-	pushAhead := targetTime.Sub(now)
-	p.stats.PushAhead.Update(now, pushAhead)
-
 	// Calculate T0 for this packet (wall clock time when RTP timestamp was 0)
 	// T0 = now - (rtpTimestamp / 90000) seconds
 	t0 := now.Add(-TicksToDuration(ts))
@@ -211,6 +207,10 @@ func (p *PacerLogic) Packet(now utc.UTC, rtpSeq uint16, rtpTimestamp uint32) (ta
 			}
 		}
 	}
+
+	// Track push freshness: how far ahead is target time from now when pushed
+	pushAhead := targetTime.Sub(now)
+	p.stats.PushAhead.Update(now, duration.Millis(pushAhead))
 
 	return targetTime, false, nil
 }

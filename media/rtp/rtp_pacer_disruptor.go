@@ -215,7 +215,7 @@ func (p *DisruptorPacer) Push(bts []byte) error {
 
 // Run starts the consumer loop and calls deliver for each packet at its scheduled time. It blocks until the pacer is
 // shut down via Shutdown. deliver is called sequentially from a single goroutine. The at parameter is the scheduled
-// delivery time: targetTs + QueueAhead, clamped to at least now + DeliveryMargin.
+// delivery time, but no less than now + DeliveryMargin.
 func (p *DisruptorPacer) Run(deliver func(bts []byte, at time.Time) error) error {
 	p.handler.deliver = deliver
 	p.handler.ticker = time.NewTicker(p.conf.TickerPeriod.Duration())
@@ -245,11 +245,6 @@ func (p *DisruptorPacer) BufferCap() int {
 	return len(p.ringBuffer)
 }
 
-// Stats returns the current pacer statistics.
-func (p *DisruptorPacer) Stats() InStats {
-	return p.stats
-}
-
 // disruptorHandler implements disruptor.MessageHandler and is the consumer side of the ring buffer. For each batch
 // [lower, upper] it waits until each packet's scheduled time, then calls deliver.
 type disruptorHandler struct {
@@ -268,17 +263,15 @@ func (h *disruptorHandler) Handle(lower, upper int64) {
 		// Decrement the buffered counter atomically; the value feeds into bufFill stats under the lock below.
 		bufFill := os.buffered.Add(-1)
 
-		wait := entry.targetTs.Sub(now)
-
-		// Sleep until QueueAhead before targetTs, counting ticker ticks consumed. The mutex is NOT held during
-		// the sleep so that logStats() can force a period close while the consumer is waiting.
+		// Sleep until QueueAhead before targetTs, counting ticker ticks consumed.
+		wakeTarget := entry.targetTs.Time.Add(-h.pacer.conf.QueueAhead.Duration())
+		wait := wakeTarget.Sub(now.Time)
 		var ticksConsumed int
 		var overslept duration.Millis
 		if wait > h.pacer.conf.MinSleepThreshold.Duration() {
 			// Wake up QueueAhead before targetTs so the deliver callback has a look-ahead scheduling window.
 			// Using a ticker avoids the per-packet timer allocation of time.After and lets ctx.Done() interrupt
 			// a long wait promptly.
-			wakeTarget := entry.targetTs.Time.Add(-h.pacer.conf.QueueAhead.Duration())
 			for wakeTarget.After(h.lastTick) {
 				select {
 				case h.lastTick = <-h.ticker.C:
@@ -287,16 +280,16 @@ func (h *disruptorHandler) Handle(lower, upper int64) {
 					return
 				}
 			}
+			// Measure whether we overslept
+			if ticksConsumed > 0 {
+				now = utc.Now()
+				overslept = duration.Millis(now.Time.Sub(wakeTarget))
+			}
+
 		}
 
 		if h.pacer.ctx.Err() != nil {
 			return
-		}
-
-		// Measure overslept outside the lock (calls utc.Now(); must happen after the sleep loop).
-		var overslept duration.Spec
-		if ticksConsumed > 0 {
-			overslept = duration.Spec(utc.Now().Sub(entry.targetTs))
 		}
 
 		// Compute the actual send time: sendAt = max(targetTs, now+DeliveryMargin). When DeliveryMargin=0 this
@@ -304,7 +297,7 @@ func (h *disruptorHandler) Handle(lower, upper int64) {
 		sendAt := entry.targetTs.Time
 		var lateness duration.Millis
 		if h.pacer.conf.DeliveryMargin > 0 {
-			minSendAt := time.Now().Add(h.pacer.conf.DeliveryMargin.Duration())
+			minSendAt := now.Time.Add(h.pacer.conf.DeliveryMargin.Duration())
 			if sendAt.Before(minSendAt) {
 				lateness = duration.Millis(minSendAt.Sub(sendAt))
 				sendAt = minSendAt

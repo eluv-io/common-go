@@ -9,12 +9,17 @@ import (
 
 	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/media/rtp"
+	"github.com/eluv-io/common-go/util/timeutil"
 	elog "github.com/eluv-io/log-go"
 )
 
-func newTestDisruptorPacer(t testing.TB, discardPeriod, delay time.Duration) *rtp.DisruptorPacer {
+func newTestDisruptorPacer(
+	t testing.TB,
+	discardPeriod, delay time.Duration,
+	adapt ...func(rtp.DisruptorPacerConfig) rtp.DisruptorPacerConfig,
+) *rtp.DisruptorPacer {
 	t.Helper()
-	pacer, err := rtp.NewDisruptorPacer(rtp.DisruptorPacerConfig{
+	cfg := rtp.DisruptorPacerConfig{
 		Stream:   "test",
 		StatsLog: elog.Get("/test/rtp/disruptor"),
 		EventLog: elog.Get("/test/rtp/disruptor"),
@@ -25,7 +30,11 @@ func newTestDisruptorPacer(t testing.TB, discardPeriod, delay time.Duration) *rt
 			RtpSeqThreshold:  1,
 			RtpTsThreshold:   duration.Spec(time.Second),
 		},
-	})
+	}
+	if len(adapt) > 0 {
+		cfg = adapt[0](cfg)
+	}
+	pacer, err := rtp.NewDisruptorPacer(cfg)
 	require.NoError(t, err)
 	return pacer
 }
@@ -93,6 +102,87 @@ func TestDisruptorPacer_BasicDelivery(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, uint16(i), pkt.SequenceNumber, "out-of-order delivery at index %d", i)
 	}
+}
+
+// TestDisruptorPacer_PacedDelivery verifies that all pushed packets are delivered according to their RTP timestamp.
+// Packets are pushed one after another, but with timestamps increasing by 10ms each. The test ensures that they are
+// delivered in the correct order and with the expected delay between each packet.
+func TestDisruptorPacer_PacedDelivery(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping timing-sensitive test in short mode")
+	}
+
+	const n = 500
+	const ipd = 10 * time.Millisecond
+	const delay = 200 * time.Millisecond
+
+	pacer := newTestDisruptorPacer(t, 0, delay, func(config rtp.DisruptorPacerConfig) rtp.DisruptorPacerConfig {
+		config.MinSleepThreshold = duration.Millisecond
+		return config
+	})
+
+	type delivery struct {
+		seq uint16
+		at  time.Time
+	}
+	ch := make(chan delivery, n)
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	remaining := n
+	go func() {
+		defer wg.Done()
+		_ = pacer.Run(func(raw []byte, _ time.Time) error {
+			pkt, err := rtp.ParsePacket(raw)
+			if err != nil {
+				return err
+			}
+			ch <- delivery{seq: pkt.SequenceNumber, at: time.Now()}
+			remaining--
+			if remaining == 0 {
+				pacer.Shutdown()
+			}
+			return nil
+		})
+		close(ch)
+	}()
+
+	watch := timeutil.StartWatch()
+
+	// Push all packets immediately; timestamps spaced 10ms apart so the pacer delivers them ~10ms apart.
+	for i := range n {
+		ts := int(rtp.DurationToTicks(time.Duration(i) * ipd))
+		require.NoError(t, pacer.Push(pack(t, i, ts)))
+	}
+
+	wg.Wait()
+	watch.Stop()
+
+	var received []delivery
+	for d := range ch {
+		received = append(received, d)
+	}
+
+	require.Equal(t, n, len(received), "all packets must be delivered")
+	require.LessOrEqual(t, ipd*(n-1)+delay, watch.Duration()+5*time.Millisecond, "packets must be paced according to their timestamps")
+	require.GreaterOrEqual(t, ipd*(n-1)+delay, watch.Duration()-5*time.Millisecond, "packets must be paced according to their timestamps")
+
+	offCount := 0
+	for i, d := range received {
+		require.Equal(t, uint16(i), d.seq, "wrong sequence at index %d", i)
+		if i > 0 {
+			gap := d.at.Sub(received[i-1].at)
+			if gap < ipd/2 || gap > ipd*3/2 {
+				t.Logf("gap between packets %d and %d: %v (expected ~%v)", i-1, i, gap, ipd)
+				offCount++
+			}
+			// require.GreaterOrEqual(t, gap, ipd-5*time.Millisecond, "gap between packets %d and %d too small", i-1, i)
+			// require.Less(t, gap, ipd+50*time.Millisecond, "gap between packets %d and %d too large", i-1, i)
+		}
+	}
+
+	require.LessOrEqual(t, offCount, 2, "too many irregular ipd gaps: %d", offCount)
+
 }
 
 // TestDisruptorPacer_Delay verifies that the first packet is delivered approximately Delay after it is pushed.
