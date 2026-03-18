@@ -1,8 +1,7 @@
 package rtp
 
 import (
-	"time"
-
+	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/util/statsutil"
 	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/utc-go"
@@ -11,18 +10,18 @@ import (
 // DiscardContext tracks early packet discard state for RTP streams. This is used during startup to wait for a stable
 // RTP stream before establishing timing baselines.
 type DiscardContext struct {
-	DiscardPeriod    time.Duration // How long to wait after baseline update
-	MaxDiscardPeriod time.Duration // Max time to wait after baseline update
+	DiscardPeriod    duration.Spec // How long to wait after baseline update
+	MaxDiscardPeriod duration.Spec // Max time to wait after baseline update
 
-	DiscardComplete     bool                                   // True once discard phase is over
-	FirstPacketTime     utc.UTC                                // Timestamp of the first received packet
-	T0                  utc.UTC                                // Wall clock time when (unwrapped) RTP timestamp was 0
-	T0UpdatedAt         utc.UTC                                // When the baseline was last updated
-	StartupT0Correction statsutil.RawStatistics[time.Duration] // T0 adjustment stats during startup/discard phase (reset on gap!)
+	DiscardComplete     bool                                     // True once discard phase is over
+	FirstPacketTime     utc.UTC                                  // Timestamp of the first received packet
+	T0                  utc.UTC                                  // Wall clock time when (unwrapped) RTP timestamp was 0
+	T0UpdatedAt         utc.UTC                                  // When the baseline was last updated
+	StartupT0Correction statsutil.RawStatistics[duration.Millis] // T0 adjustment stats during startup/discard phase (reset on gap!)
 }
 
 // NewDiscardContext creates a new discard context with the specified period.
-func NewDiscardContext(discardPeriod, maxDiscardPeriod time.Duration) *DiscardContext {
+func NewDiscardContext(discardPeriod, maxDiscardPeriod duration.Spec) *DiscardContext {
 	return &DiscardContext{
 		DiscardPeriod:    discardPeriod,
 		MaxDiscardPeriod: max(discardPeriod, maxDiscardPeriod),
@@ -50,7 +49,7 @@ func (d *DiscardContext) ShouldDiscard(rtpTimestamp int64, now utc.UTC) (bool, e
 	if d.FirstPacketTime.IsZero() {
 		// first packet
 		d.FirstPacketTime = now
-	} else if d.MaxDiscardPeriod != 0 && now.Sub(d.FirstPacketTime) > d.MaxDiscardPeriod {
+	} else if d.MaxDiscardPeriod != 0 && now.Sub(d.FirstPacketTime) > d.MaxDiscardPeriod.Duration() {
 		return true, errors.NoTrace("discard",
 			errors.K.Timeout,
 			"reason", "max discard period exceeded",
@@ -77,7 +76,7 @@ func (d *DiscardContext) ShouldDiscard(rtpTimestamp int64, now utc.UTC) (bool, e
 	// If this packet's T0 is earlier than stored T0, update baseline
 	if t0.Before(d.T0) {
 		adjustment := d.T0.Sub(t0)
-		d.StartupT0Correction.Update(now, adjustment)
+		d.StartupT0Correction.Update(now, duration.Millis(adjustment))
 		log.Debug("discard: T0 adjusted, updating baseline",
 			"rtp_ts", rtpTimestamp,
 			"old_t0", d.T0,
@@ -91,7 +90,7 @@ func (d *DiscardContext) ShouldDiscard(rtpTimestamp int64, now utc.UTC) (bool, e
 
 	// T0 is not earlier - check if discard period has elapsed
 	elapsed := now.Sub(d.T0UpdatedAt)
-	if elapsed < d.DiscardPeriod {
+	if elapsed < d.DiscardPeriod.Duration() {
 		return true, nil // still in discard period
 	}
 
@@ -114,5 +113,5 @@ func (d *DiscardContext) ResetOnGap() {
 
 	d.T0 = utc.Zero
 	d.T0UpdatedAt = utc.Zero
-	d.StartupT0Correction = statsutil.RawStatistics[time.Duration]{}
+	d.StartupT0Correction = statsutil.RawStatistics[duration.Millis]{}
 }

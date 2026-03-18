@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/media/rtp"
 	"github.com/eluv-io/utc-go"
 )
@@ -29,7 +30,7 @@ func TestDiscardContext_Disabled(t *testing.T) {
 
 func TestDiscardContext_ShouldDiscard(t *testing.T) {
 	now := utc.MustParse("2000-01-01T12:00:00Z")
-	dc := rtp.NewDiscardContext(5*time.Second, 10*time.Second)
+	dc := rtp.NewDiscardContext(5*duration.Second, 10*duration.Second)
 
 	seq := int64(rand.Int32())
 	t0 := now.Add(-rtp.TicksToDuration(seq))
@@ -53,7 +54,7 @@ func TestDiscardContext_ShouldDiscard(t *testing.T) {
 
 func TestDiscardContext_ShouldDiscardWithAdjustment(t *testing.T) {
 	now := utc.MustParse("2000-01-01T12:00:00Z")
-	dc := rtp.NewDiscardContext(5*time.Second, 10*time.Second)
+	dc := rtp.NewDiscardContext(5*duration.Second, 10*duration.Second)
 
 	seq := int64(rand.Int32())
 	t0 := now.Add(-rtp.TicksToDuration(seq))
@@ -84,7 +85,7 @@ func TestDiscardContext_ShouldDiscardWithAdjustment(t *testing.T) {
 func TestDiscardContext_ResetOnGapDuringDiscardPhase(t *testing.T) {
 	now := utc.MustParse("2000-01-01T12:00:00Z")
 	t0 := now
-	dc := rtp.NewDiscardContext(5*time.Second, 9*time.Second)
+	dc := rtp.NewDiscardContext(5*duration.Second, 9*duration.Second)
 
 	for j := 0; j < 3; j++ {
 		for i := 0; i < 3; i++ {
@@ -106,7 +107,7 @@ func TestDiscardContext_ResetOnGapDuringDiscardPhase(t *testing.T) {
 func TestDiscardContext_ResetOnGapDuringNormalOperation(t *testing.T) {
 	now := utc.MustParse("2000-01-01T12:00:00Z")
 	t0 := now
-	dc := rtp.NewDiscardContext(5*time.Second, 9*time.Second)
+	dc := rtp.NewDiscardContext(5*duration.Second, 9*duration.Second)
 
 	for j := 0; j < 3; j++ {
 		for i := 0; i < 5; i++ {

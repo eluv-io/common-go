@@ -204,24 +204,24 @@ func TestPacerLogic_PushAheadStats(t *testing.T) {
 
 	// Baseline packet: target = now1+delay, pushAhead = delay.
 	assert.Equal(t, delay, target1.Sub(now1))
-	assert.Equal(t, delay, stats.PushAhead.Min)
-	assert.Equal(t, delay, stats.PushAhead.Max)
+	assert.EqualValues(t, delay, stats.PushAhead.Min)
+	assert.EqualValues(t, delay, stats.PushAhead.Max)
 
 	// Late arrival: wall clock advances 20ms, RTP only 10ms.
 	// target2 = baseTime+10ms = T0+520ms; now2 = T0+30ms → pushAhead2 = 490ms.
 	now2 := now1.Add(20 * time.Millisecond)
 	ts2 := ts1 + ticksMS(10)
 	p.Packet(now2, 2, ts2)
-	assert.Equal(t, delay-10*time.Millisecond, stats.PushAhead.Min, "late arrival shrinks PushAhead.Min")
-	assert.Equal(t, delay, stats.PushAhead.Max, "PushAhead.Max unchanged")
+	assert.EqualValues(t, delay-10*time.Millisecond, stats.PushAhead.Min, "late arrival shrinks PushAhead.Min")
+	assert.EqualValues(t, delay, stats.PushAhead.Max, "PushAhead.Max unchanged")
 
 	// Early arrival: wall clock advances 5ms, RTP advances 20ms.
 	// target3 = baseTime+30ms = T0+540ms; now3 = T0+35ms → pushAhead3 = 505ms.
 	now3 := now2.Add(5 * time.Millisecond)
 	ts3 := ts2 + ticksMS(20)
 	p.Packet(now3, 3, ts3)
-	assert.Equal(t, delay-10*time.Millisecond, stats.PushAhead.Min, "PushAhead.Min unchanged")
-	assert.Equal(t, delay+5*time.Millisecond, stats.PushAhead.Max, "early arrival grows PushAhead.Max")
+	assert.EqualValues(t, delay-10*time.Millisecond, stats.PushAhead.Min, "PushAhead.Min unchanged")
+	assert.EqualValues(t, delay+5*time.Millisecond, stats.PushAhead.Max, "early arrival grows PushAhead.Max")
 }
 
 // TestPacerLogic_T0Adjustments verifies that T0 decreases in the active phase
@@ -257,7 +257,7 @@ func TestPacerLogic_T0Adjustments(t *testing.T) {
 	ts2 := ts1 + ticksMS(20)
 	p.Packet(now2, 2, ts2)
 	assert.Equal(t, uint64(1), stats.NegDrift.Count)
-	assert.Equal(t, 5*time.Millisecond, stats.NegDrift.Sum)
+	assert.EqualValues(t, 5*time.Millisecond, stats.NegDrift.Sum)
 	assert.Equal(t, wallEpoch.Add(-5*time.Millisecond), stats.MinT0)
 
 	// Packet 3: wall advances 10ms, RTP advances 15ms → another early arrival.
@@ -266,16 +266,16 @@ func TestPacerLogic_T0Adjustments(t *testing.T) {
 	ts3 := ts2 + ticksMS(15)
 	p.Packet(now3, 3, ts3)
 	assert.Equal(t, uint64(2), stats.NegDrift.Count)
-	assert.Equal(t, 10*time.Millisecond, stats.NegDrift.Sum)
-	assert.Equal(t, wallEpoch.Add(-10*time.Millisecond), stats.MinT0)
+	assert.EqualValues(t, 10*time.Millisecond, stats.NegDrift.Sum)
+	assert.EqualValues(t, wallEpoch.Add(-10*time.Millisecond), stats.MinT0)
 
 	// Packet 4: wall and RTP advance in sync → T0 stable, no adjustment.
 	// t0 = (wallEpoch+45ms) - 55ms = wallEpoch-10ms (same as MinT0).
 	now4 := now3.Add(10 * time.Millisecond)
 	ts4 := ts3 + ticksMS(10)
 	p.Packet(now4, 4, ts4)
-	assert.Equal(t, uint64(2), stats.NegDrift.Count, "no adjustment when T0 is stable")
-	assert.Equal(t, 10*time.Millisecond, stats.NegDrift.Sum)
+	assert.EqualValues(t, uint64(2), stats.NegDrift.Count, "no adjustment when T0 is stable")
+	assert.EqualValues(t, 10*time.Millisecond, stats.NegDrift.Sum)
 }
 
 // TestPacerLogic_StartupT0Adjustment verifies that T0 drift accumulated during
@@ -306,7 +306,7 @@ func TestPacerLogic_StartupT0Adjustment(t *testing.T) {
 	require.False(t, d2, "T0 stable and discardPeriod elapsed → baseline established")
 
 	// The 10ms T0 shift from the discard phase must be captured.
-	assert.Equal(t, 10*time.Millisecond, stats.StartupT0Correction.Sum)
+	assert.EqualValues(t, 10*time.Millisecond, stats.StartupT0Correction.Sum)
 }
 
 // TestPacerLogic_SequenceWrapAround verifies that a uint16 sequence number
@@ -442,9 +442,9 @@ func TestPacerLogic_AdjustTimeDrift_Applied(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, discarded)
 	require.Equal(t, uint64(1), stats.NegDrift.Count, "nominal adjustment must be recorded")
-	require.Equal(t, 5*time.Millisecond, stats.NegDrift.Sum)
-	require.Equal(t, uint64(1), stats.NegDriftApplied.Count, "applied adjustment must be recorded")
-	require.Equal(t, 5*time.Millisecond, stats.NegDriftApplied.Sum, "full drift applied (no cap)")
+	require.EqualValues(t, 5*time.Millisecond, stats.NegDrift.Sum)
+	require.EqualValues(t, uint64(1), stats.NegDriftApplied.Count, "applied adjustment must be recorded")
+	require.EqualValues(t, 5*time.Millisecond, stats.NegDriftApplied.Sum, "full drift applied (no cap)")
 
 	// target2 is adjusted immediately: unadjusted = baseTime + 20ms, adjusted = unadjusted - 5ms.
 	rtpDelta2 := rtp.TicksToDuration(int64(ts2) - int64(ts1))
@@ -486,11 +486,11 @@ func TestPacerLogic_AdjustTimeDrift_Cap(t *testing.T) {
 
 	// Full nominal drift recorded.
 	require.Equal(t, uint64(1), stats.NegDrift.Count)
-	require.Equal(t, 10*time.Millisecond, stats.NegDrift.Sum, "full nominal drift must be recorded")
+	require.EqualValues(t, 10*time.Millisecond, stats.NegDrift.Sum, "full nominal drift must be recorded")
 
 	// Only capped amount applied.
 	require.Equal(t, uint64(1), stats.NegDriftApplied.Count)
-	require.Equal(t, capAdj, stats.NegDriftApplied.Sum, "only capped amount must be applied")
+	require.EqualValues(t, capAdj, stats.NegDriftApplied.Sum, "only capped amount must be applied")
 
 	// Target time reflects only the 3ms correction (not the full 10ms).
 	rtpDelta2 := rtp.TicksToDuration(int64(ts2) - int64(ts1))
@@ -548,9 +548,9 @@ func TestPacerLogic_SlowDrift_Correction(t *testing.T) {
 	require.False(t, discarded)
 
 	require.Equal(t, uint64(1), stats.PosDrift.Count, "one period must be recorded")
-	require.Equal(t, 6*time.Millisecond, stats.PosDrift.Sum, "mean drift for the period")
+	require.EqualValues(t, 6*time.Millisecond, stats.PosDrift.Sum, "mean drift for the period")
 	require.Equal(t, uint64(1), stats.PosDriftApplied.Count, "one correction must be applied")
-	require.Equal(t, time.Millisecond, stats.PosDriftApplied.Sum)
+	require.EqualValues(t, time.Millisecond, stats.PosDriftApplied.Sum)
 
 	// target8 must be 1ms later than the unadjusted value: baseTime + TicksToDuration(ts8 - ts1) + 1ms.
 	rtpDelta8 := rtp.TicksToDuration(int64(ts) - int64(ticksMS(0)))
@@ -637,7 +637,7 @@ func TestPacerLogic_SlowDrift_StatsWithoutCorrection(t *testing.T) {
 	require.False(t, discarded)
 
 	require.Equal(t, uint64(1), stats.PosDrift.Count, "drift must be recorded even without AdjustTimeDrift")
-	require.Equal(t, 6*time.Millisecond, stats.PosDrift.Sum)
+	require.EqualValues(t, 6*time.Millisecond, stats.PosDrift.Sum)
 	require.Zero(t, stats.PosDriftApplied.Count, "no correction must be applied when AdjustTimeDrift=false")
 
 	// target8 must be unadjusted.

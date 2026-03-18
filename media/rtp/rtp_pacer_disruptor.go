@@ -128,7 +128,7 @@ func NewDisruptorPacer(conf DisruptorPacerConfig) (*DisruptorPacer, error) {
 	if conf.TickerPeriod <= 0 {
 		conf.TickerPeriod = DefaultTickerPeriod
 	}
-	if conf.StatsInterval <= 0 {
+	if conf.StatsInterval == 0 {
 		conf.StatsInterval = DefaultStatsInterval
 	}
 	if conf.StatsLog == nil {
@@ -273,6 +273,7 @@ func (h *disruptorHandler) Handle(lower, upper int64) {
 		// Sleep until QueueAhead before targetTs, counting ticker ticks consumed. The mutex is NOT held during
 		// the sleep so that logStats() can force a period close while the consumer is waiting.
 		var ticksConsumed int
+		var overslept duration.Millis
 		if wait > h.pacer.conf.MinSleepThreshold.Duration() {
 			// Wake up QueueAhead before targetTs so the deliver callback has a look-ahead scheduling window.
 			// Using a ticker avoids the per-packet timer allocation of time.After and lets ctx.Done() interrupt
@@ -301,41 +302,43 @@ func (h *disruptorHandler) Handle(lower, upper int64) {
 		// Compute the actual send time: sendAt = max(targetTs, now+DeliveryMargin). When DeliveryMargin=0 this
 		// reduces to targetTs with no extra Now() call, preserving 0 allocs/op in the benchmark.
 		sendAt := entry.targetTs.Time
-		var lateness duration.Spec
+		var lateness duration.Millis
 		if h.pacer.conf.DeliveryMargin > 0 {
 			minSendAt := time.Now().Add(h.pacer.conf.DeliveryMargin.Duration())
 			if sendAt.Before(minSendAt) {
-				lateness = duration.Spec(minSendAt.Sub(sendAt))
+				lateness = duration.Millis(minSendAt.Sub(sendAt))
 				sendAt = minSendAt
 			}
 		}
 
-		sendAhead := duration.Spec(sendAt.Sub(now.Time))
+		sendAhead := duration.Millis(sendAt.Sub(now.Time))
 
 		// Update all outStats under the mutex so that logStats() always observes a consistent view when it
 		// forces a period close. The lock is held only for the fast UpdateNow calls — never during sleeps.
 		h.pacer.outStatsMu.Lock()
-		os.bufFill.UpdateNow(now, bufFill)
-		if overslept > 5*duration.Millisecond {
-			os.oversleeps.UpdateNow(now, overslept)
-		}
-		if lateness > 0 {
-			os.lateness.UpdateNow(now, lateness)
-		}
-		os.sendAhead.UpdateNow(now, sendAhead)
-		if os.lastPacket.IsZero() {
-			// Artificial update to initialise ipd with the same timestamp as all other stats. Results in
-			// min IPD of 0, but only for the very first period.
-			os.ipd.UpdateNow(now, 0)
-		} else {
-			_ = os.ipd.UpdateNow(now, duration.Spec(now.Sub(os.lastPacket)))
-		}
-		os.lastPacket = now
-		_ = os.chd.UpdateNow(now, duration.Spec(now.Sub(entry.inTs)))
-		_ = os.wait.UpdateNow(now, duration.Spec(wait))
-		os.sleeps += ticksConsumed
-		if wait < -time.Millisecond {
-			os.delayedPackets++
+		{
+			os.bufFill.UpdateNow(now, bufFill)
+			if overslept.Duration() > 5*time.Millisecond {
+				os.oversleeps.UpdateNow(now, overslept)
+			}
+			if lateness > 0 {
+				os.lateness.UpdateNow(now, lateness)
+			}
+			os.sendAhead.UpdateNow(now, sendAhead)
+			if os.lastPacket.IsZero() {
+				// Artificial update to initialise ipd with the same timestamp as all other stats. Results in
+				// min IPD of 0, but only for the very first period.
+				os.ipd.UpdateNow(now, 0)
+			} else {
+				_ = os.ipd.UpdateNow(now, duration.Millis(now.Sub(os.lastPacket)))
+			}
+			os.lastPacket = now
+			_ = os.chd.UpdateNow(now, duration.Millis(now.Sub(entry.inTs)))
+			_ = os.wait.UpdateNow(now, duration.Millis(wait))
+			os.sleeps += ticksConsumed
+			if wait < -time.Millisecond {
+				os.delayedPackets++
+			}
 		}
 		h.pacer.outStatsMu.Unlock()
 

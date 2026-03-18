@@ -78,7 +78,7 @@ func NewPacerLogic(
 		log:                conf.EventLog,
 		stats:              stats,
 		gapDetector:        NewRtpGapDetector(conf.RtpSeqThreshold, conf.RtpTsThreshold.Duration()),
-		discard:            NewDiscardContext(conf.DiscardPeriod.Duration(), conf.MaxDiscardPeriod.Duration()),
+		discard:            NewDiscardContext(conf.DiscardPeriod, conf.MaxDiscardPeriod),
 		posDriftThreshold:  posDriftThreshold,
 		posDriftCorrection: posDriftCorrection,
 		posDriftTracker:    statsutil.Periodic[time.Duration]{Period: duration.Spec(posDriftPeriod)},
@@ -167,7 +167,7 @@ func (p *PacerLogic) Packet(now utc.UTC, rtpSeq uint16, rtpTimestamp uint32) (ta
 	if t0.Before(p.stats.MinT0) {
 		// T0 decreased (negative drift) — record nominal drift and optionally apply a capped correction to baseTime.
 		negDrift := p.stats.MinT0.Sub(t0)
-		p.stats.NegDrift.Update(now, negDrift)
+		p.stats.NegDrift.Update(now, duration.Millis(negDrift))
 		p.stats.MinT0 = t0
 		// Reset the pos-drift tracker: prior samples were relative to the old (higher) MinT0 and would
 		// inflate the next period's mean if kept.
@@ -177,7 +177,7 @@ func (p *PacerLogic) Packet(now utc.UTC, rtpSeq uint16, rtpTimestamp uint32) (ta
 			if maxCorr := p.conf.MaxNegDriftCorrection.Duration(); maxCorr > 0 && apply > maxCorr {
 				apply = maxCorr
 			}
-			p.stats.NegDriftApplied.Update(now, apply)
+			p.stats.NegDriftApplied.Update(now, duration.Millis(apply))
 			p.baseTime = p.baseTime.Add(-apply)
 			targetTime = targetTime.Add(-apply)
 			p.log.Info("negative drift corrected",
@@ -196,9 +196,9 @@ func (p *PacerLogic) Packet(now utc.UTC, rtpSeq uint16, rtpTimestamp uint32) (ta
 		if periodEnded := p.posDriftTracker.UpdateNow(now, drift); periodEnded {
 			meanDrift := time.Duration(p.posDriftTracker.Previous.Mean)
 			if meanDrift > p.posDriftThreshold {
-				p.stats.PosDrift.Update(now, meanDrift)
+				p.stats.PosDrift.Update(now, duration.Millis(meanDrift))
 				if p.conf.AdjustTimeDrift {
-					p.stats.PosDriftApplied.Update(now, p.posDriftCorrection)
+					p.stats.PosDriftApplied.Update(now, duration.Millis(p.posDriftCorrection))
 					p.baseTime = p.baseTime.Add(p.posDriftCorrection)
 					targetTime = targetTime.Add(p.posDriftCorrection)
 					p.stats.MinT0 = p.stats.MinT0.Add(p.posDriftCorrection)
