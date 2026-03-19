@@ -104,7 +104,7 @@ func (r *MultiSourceReader) Read(p []byte) (int, error) {
 		} else if err != nil {
 			r.errors.Append(err)
 			if len(r.errors.Errors) == int(r.n.Load()) {
-				r.err = e("errors", r.errors)
+				r.err = e(&r.errors)
 			}
 		}
 		return r.err != nil
