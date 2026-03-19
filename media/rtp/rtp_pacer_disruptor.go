@@ -240,6 +240,7 @@ func (p *DisruptorPacer) Push(bts []byte) error {
 func (p *DisruptorPacer) Run(deliver func(bts []byte, at time.Time) error) error {
 	p.handler.deliver = deliver
 	p.handler.ticker = time.NewTicker(p.conf.TickerPeriod.Duration())
+	p.handler.lastTick = time.Now() // simulated first tick
 	defer p.handler.ticker.Stop()
 
 	// logStats goroutine: the sole logging goroutine. Runs independently of packet flow.
