@@ -24,6 +24,10 @@ const (
 	// DefaultDisruptorCapacity is the default ring buffer capacity. Must be a power of 2.
 	DefaultDisruptorCapacity = 1 << 12 // 4096 slots
 
+	// DefaultDeliveryMargin is the default delivery margin. 0 = disabled, which means that packets may be sent with a
+	// targetTs in the past.
+	DefaultDeliveryMargin = 0
+
 	// DefaultMinSleepThreshold is the default minimum sleep threshold. Sleep durations shorter than this are skipped.
 	DefaultMinSleepThreshold = 5 * duration.Millisecond
 
@@ -33,6 +37,10 @@ const (
 
 	// DefaultStatsInterval is the default interval for periodic stats logging.
 	DefaultStatsInterval = 5 * duration.Second
+
+	// DefaultOversleepThreshold is the minimum oversleep duration that is recorded in the oversleeps stat. Oversleeps
+	// shorter than this are considered normal scheduler jitter and are not tracked.
+	DefaultOversleepThreshold = 5 * duration.Millisecond
 )
 
 // disruptorEntry is a pre-allocated ring buffer slot. The entry is populated by the producer and read by the consumer.
@@ -113,13 +121,15 @@ func NewDisruptorPacer(conf DisruptorPacerConfig) (*DisruptorPacer, error) {
 		)
 	}
 	if conf.BufferCapacity&(conf.BufferCapacity-1) != 0 {
-		// Round up to the next power of 2.
+		// Round up to the next power of 2. Shifts go up to >>32 to cover the full int64 range even though
+		// MaxDisruptorCapacity (1<<31) currently bounds the input; the extra shift is a no-op in practice.
 		conf.BufferCapacity--
 		conf.BufferCapacity |= conf.BufferCapacity >> 1
 		conf.BufferCapacity |= conf.BufferCapacity >> 2
 		conf.BufferCapacity |= conf.BufferCapacity >> 4
 		conf.BufferCapacity |= conf.BufferCapacity >> 8
 		conf.BufferCapacity |= conf.BufferCapacity >> 16
+		conf.BufferCapacity |= conf.BufferCapacity >> 32
 		conf.BufferCapacity++
 	}
 	if conf.MinSleepThreshold <= 0 {
@@ -130,6 +140,9 @@ func NewDisruptorPacer(conf DisruptorPacerConfig) (*DisruptorPacer, error) {
 	}
 	if conf.StatsInterval == 0 {
 		conf.StatsInterval = DefaultStatsInterval
+	}
+	if conf.DeliveryMargin < 0 {
+		conf.DeliveryMargin = DefaultDeliveryMargin
 	}
 	if conf.StatsLog == nil {
 		conf.StatsLog = elog.Noop
@@ -222,7 +235,9 @@ func (p *DisruptorPacer) Run(deliver func(bts []byte, at time.Time) error) error
 	defer p.handler.ticker.Stop()
 
 	// logStats goroutine: the sole logging goroutine. Runs independently of packet flow.
-	go p.logStats()
+	if p.conf.StatsInterval > 0 {
+		go p.logStats()
+	}
 
 	p.dis.Listen() // blocks until dis.Close() is called
 	return context.Cause(p.ctx)
@@ -292,14 +307,20 @@ func (h *disruptorHandler) Handle(lower, upper int64) {
 			return
 		}
 
-		// Compute the actual send time: sendAt = max(targetTs, now+DeliveryMargin). When DeliveryMargin=0 this
-		// reduces to targetTs with no extra Now() call, preserving 0 allocs/op in the benchmark.
-		sendAt := entry.targetTs.Time
+		// lateness is how much the actual send time (sendAt) falls short of the ideal target time. If a packet is "on
+		// time", lateness is 0.
 		var lateness duration.Millis
-		if h.pacer.conf.DeliveryMargin > 0 {
-			minSendAt := now.Time.Add(h.pacer.conf.DeliveryMargin.Duration())
-			if sendAt.Before(minSendAt) {
-				lateness = duration.Millis(minSendAt.Sub(sendAt))
+
+		// Compute the actual send time:
+		// * When DeliveryMargin=0: sendAt = targetTs (packets may be sent with a target ts in the past).
+		// * Otherwise:             sendAt = max(targetTs, now+DeliveryMargin)
+		sendAt := entry.targetTs.Time
+		minSendAt := now.Time.Add(h.pacer.conf.DeliveryMargin.Duration())
+		if sendAt.Before(minSendAt) {
+			lateness = duration.Millis(minSendAt.Sub(sendAt))
+			if h.pacer.conf.DeliveryMargin > 0 {
+				// correct targetTs to the minimum send time only if a delivery margin is configured. Otherwise, we send
+				// the packet with a taget ts in the past (and let the "deliver" callback deal with it).
 				sendAt = minSendAt
 			}
 		}
@@ -311,7 +332,7 @@ func (h *disruptorHandler) Handle(lower, upper int64) {
 		h.pacer.outStatsMu.Lock()
 		{
 			os.bufFill.UpdateNow(now, bufFill)
-			if overslept.Duration() > 5*time.Millisecond {
+			if duration.Spec(overslept) > DefaultOversleepThreshold {
 				os.oversleeps.UpdateNow(now, overslept)
 			}
 			if lateness > 0 {
@@ -326,12 +347,11 @@ func (h *disruptorHandler) Handle(lower, upper int64) {
 				_ = os.ipd.UpdateNow(now, duration.Millis(now.Sub(os.lastPacket)))
 			}
 			os.lastPacket = now
-			_ = os.chd.UpdateNow(now, duration.Millis(now.Sub(entry.inTs)))
-			_ = os.wait.UpdateNow(now, duration.Millis(wait))
-			os.sleeps += ticksConsumed
-			if wait < -time.Millisecond {
-				os.delayedPackets++
+			os.chd.UpdateNow(now, duration.Millis(now.Sub(entry.inTs)))
+			if wait > 0 {
+				os.wait.UpdateNow(now, duration.Millis(wait))
 			}
+			os.sleeps += ticksConsumed
 		}
 		h.pacer.outStatsMu.Unlock()
 
@@ -347,9 +367,6 @@ func (h *disruptorHandler) Handle(lower, upper int64) {
 // and stats (InStats) under their respective mutexes, and logs a full snapshot — even during silence (where the
 // snapshot has Count=0 for all Statistics fields, indicating no traffic in that period).
 func (p *DisruptorPacer) logStats() {
-	if p.conf.StatsInterval <= 0 {
-		return
-	}
 	t := time.NewTicker(p.conf.StatsInterval.Duration())
 	defer t.Stop()
 	for {

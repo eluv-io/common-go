@@ -54,6 +54,26 @@ func TestMillis_FromString(t *testing.T) {
 	}
 }
 
+func TestMillis_String(t *testing.T) {
+	tests := []struct {
+		have Millis
+		want string
+	}{
+		{0, "0.000"},
+		{Millis(time.Millisecond), "1.000"},
+		{Millis(-time.Millisecond), "-1.000"},
+		{Millis(1234 * time.Microsecond), "1.234"},
+		{Millis(time.Second), "1000.000"},
+		{Millis(-time.Second), "-1000.000"},
+		{Millis(23*time.Second + 159*time.Millisecond + 563*time.Microsecond), "23159.563"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			require.Equal(t, tt.want, tt.have.String())
+		})
+	}
+}
+
 func TestMillis_UnmarshalJSON(t *testing.T) {
 	want := Millis(23*time.Second + 159*time.Millisecond + 563*time.Microsecond)
 	var got struct {

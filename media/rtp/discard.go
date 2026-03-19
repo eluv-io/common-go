@@ -110,6 +110,9 @@ func (d *DiscardContext) ResetOnGap() {
 		d.DiscardComplete = false
 		d.FirstPacketTime = utc.Zero // start a new discard period
 	}
+	// When still in the discard phase (DiscardComplete=false), FirstPacketTime is intentionally preserved.
+	// MaxDiscardPeriod is measured from the very first packet the stream ever produced, not reset on each gap, so that
+	// repeated gaps cannot extend the discard window indefinitely.
 
 	d.T0 = utc.Zero
 	d.T0UpdatedAt = utc.Zero

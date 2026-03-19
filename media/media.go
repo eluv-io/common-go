@@ -73,8 +73,9 @@ type AsyncPacer interface {
 // CallbackPacer is an asynchronous pacer using Push and a callback function to notify when a packet is ready to be
 // sent.
 type CallbackPacer interface {
-	// Push pushes the given packet to the pacer. Use pop to retrieve the packet at the correct send time. Returns an
-	// error if the packet is invalid or the pacer was shutdown.
+	// Push pushes the given packet to the pacer so that it can be delivered at the correct send time via the
+	// callback	 provided to Run. Returns an error if the packet is invalid, there was an error in the (asynchronous)
+	// packet delivery, or the pacer was shutdown.
 	Push(bts []byte) error
 
 	// Run starts the consumer loop and calls the "deliver" function for each packet at its scheduled target time less
@@ -82,7 +83,7 @@ type CallbackPacer interface {
 	// shut down via Shutdown. "deliver" is called sequentially from a single goroutine.
 	Run(deliver func(bts []byte, at time.Time) error) error
 
-	// Shutdown terminates the pacer and unblocks any pending Pop calls. If an error is provided, it is returned to all
-	// pending or future Push/Pop calls.
+	// Shutdown terminates the pacer and stops any future packet delivery. If an error is provided, it is returned to
+	// by any pending/future Push/Run call.
 	Shutdown(err ...error)
 }

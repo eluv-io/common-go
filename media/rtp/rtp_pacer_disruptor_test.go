@@ -176,8 +176,6 @@ func TestDisruptorPacer_PacedDelivery(t *testing.T) {
 				t.Logf("gap between packets %d and %d: %v (expected ~%v)", i-1, i, gap, ipd)
 				offCount++
 			}
-			// require.GreaterOrEqual(t, gap, ipd-5*time.Millisecond, "gap between packets %d and %d too small", i-1, i)
-			// require.Less(t, gap, ipd+50*time.Millisecond, "gap between packets %d and %d too large", i-1, i)
 		}
 	}
 

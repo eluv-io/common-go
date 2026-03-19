@@ -68,7 +68,6 @@ func TestOutStats_switchPeriod(t *testing.T) {
 	s.bufFill.UpdateNow(now, int32(8))
 
 	// Set per-period counters
-	s.delayedPackets = 5
 	s.sleeps = 7
 	s.buffered.Store(12)
 
@@ -97,12 +96,10 @@ func TestOutStats_switchPeriod(t *testing.T) {
 	require.Equal(t, int32(8), p.BufFill.Min)
 
 	// Plain counters and buffered snapshot
-	require.Equal(t, 5, p.DelayedPackets)
 	require.Equal(t, 7, p.Sleeps)
 	require.Equal(t, int32(12), p.BufferedPackets)
 
 	// Per-period counters must be reset after switchPeriod
-	require.Equal(t, 0, s.delayedPackets)
 	require.Equal(t, 0, s.sleeps)
 
 	// A second switchPeriod with no new observations must return an empty snapshot

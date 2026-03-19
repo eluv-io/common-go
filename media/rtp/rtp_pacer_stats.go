@@ -67,7 +67,6 @@ type OutStatsPeriod struct {
 	BufFill    statsutil.RawStatistics[int32]           `json:"buf"`        // buffer occupancy stats for last period
 
 	BufferedPackets int32 `json:"buffered"` // snapshot of packets in the buffer at last period boundary
-	DelayedPackets  int   `json:"delayed"`  // packets popped from the queue after their nominal sending time
 	Sleeps          int   `json:"sleeps"`   // number of ticker ticks consumed while waiting
 }
 
@@ -84,8 +83,7 @@ type OutStats struct {
 	bufFill    statsutil.Periodic[int32]           // collector for buffer occupancy
 
 	// per-period counters; reset by switchPeriod
-	delayedPackets int
-	sleeps         int
+	sleeps int
 
 	buffered   atomic.Int32 // current count of packets in channel
 	lastPacket utc.UTC      // wall clock time when the last packet was popped
@@ -127,10 +125,8 @@ func (s *OutStats) switchPeriod(now utc.UTC) *OutStatsPeriod {
 		OverSleeps:      s.oversleeps.Previous.Raw(),
 		BufFill:         s.bufFill.Previous.Raw(),
 		BufferedPackets: s.buffered.Load(),
-		DelayedPackets:  s.delayedPackets,
 		Sleeps:          s.sleeps,
 	}
-	s.delayedPackets = 0
 	s.sleeps = 0
 	return p
 }

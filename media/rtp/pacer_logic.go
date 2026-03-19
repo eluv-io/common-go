@@ -101,18 +101,16 @@ func (p *PacerLogic) reset() {
 // at startup or if a gap was detected and we're waiting for the stream to stabilize).
 func (p *PacerLogic) Packet(now utc.UTC, rtpSeq uint16, rtpTimestamp uint32) (target utc.UTC, discard bool, err error) {
 	seq, ts, err := p.gapDetector.Detect(rtpSeq, rtpTimestamp)
-	{
-		p.stats.Seq = rtpSeq
-		p.stats.Sequ = seq
-		p.stats.Ts = rtpTimestamp
-		p.stats.Tsu = ts
-	}
 	if err != nil {
 		p.log.Warn("rtp gap", "stream", p.conf.Stream, err)
 		p.reset()
 		p.stats.StreamResets++
 		p.stats.LastStreamReset = now
 	}
+	p.stats.Seq = rtpSeq
+	p.stats.Sequ = seq
+	p.stats.Ts = rtpTimestamp
+	p.stats.Tsu = ts
 
 	// discard early packets until stream stabilizes
 	discard, err = p.discard.ShouldDiscard(ts, now)
