@@ -54,7 +54,7 @@ func TestTicksToDuration(t *testing.T) {
 	assert.Equal(t, 29*time.Hour, rtp2.TicksToDuration(9396000000))
 	assert.Equal(t, int64(9396000000), rtp2.DurationToTicks(29*time.Hour))
 
-	// 41K years...
+	// 11.4K years...
 	assert.Equal(t, 100000*time.Hour, rtp2.TicksToDuration(32400000000000))
 	assert.Equal(t, int64(32400000000000), rtp2.DurationToTicks(100000*time.Hour))
 }
