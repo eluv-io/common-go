@@ -97,14 +97,14 @@ func (r *MultiSourceReader) Add(reader io.ReadCloser) {
 }
 
 func (r *MultiSourceReader) Read(p []byte) (int, error) {
-	e := errors.T("multi-source read", errors.K.Invalid.Default())
+	e := errors.T("multi-source read", errors.K.IO.Default())
 	processErr := func(err error) bool {
 		if err == io.EOF {
 			r.err = io.EOF
 		} else if err != nil {
 			r.errors.Append(err)
 			if len(r.errors.Errors) == int(r.n.Load()) {
-				r.err = e(&r.errors)
+				r.err = e(errKind(&r.errors), &r.errors)
 			}
 		}
 		return r.err != nil
@@ -218,4 +218,16 @@ func (r *MultiSourceReader) acquireBuf() []byte {
 
 func (r *MultiSourceReader) releaseBuf(buf []byte) {
 	r.bufPool.Put(buf[:r.bufSize+1])
+}
+
+func errKind(errs *errors.ErrorList) errors.Kind {
+	kind := errors.K.IO
+	if len(errs.Errors) > 0 {
+		// Just check the last (most recent) error in the list
+		switch e := errs.Errors[len(errs.Errors)-1].(type) {
+		case *errors.Error:
+			kind = e.Kind()
+		}
+	}
+	return kind
 }
