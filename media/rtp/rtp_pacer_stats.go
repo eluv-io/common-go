@@ -130,3 +130,18 @@ func (s *OutStats) switchPeriod(now utc.UTC) *OutStatsPeriod {
 	s.sleeps = 0
 	return p
 }
+
+// total returns a snapshot of the total statistics since startup. It must be called under outStatsMu. BufferedPackets
+// and Sleeps will be uninitialized.
+func (s *OutStats) total() *OutStatsPeriod {
+	p := &OutStatsPeriod{
+		Wait:       s.wait.Total.Raw(),
+		IPD:        s.ipd.Total.Raw(),
+		CHD:        s.chd.Total.Raw(),
+		Lateness:   s.lateness.Total.Raw(),
+		SendAhead:  s.sendAhead.Total.Raw(),
+		OverSleeps: s.oversleeps.Total.Raw(),
+		BufFill:    s.bufFill.Total.Raw(),
+	}
+	return p
+}

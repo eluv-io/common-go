@@ -46,16 +46,13 @@ func (p *Periodic[T]) UpdateNow(now utc.UTC, val T) bool {
 	}
 	p.Total.Update(now, val)
 
-	if !p.Current.Start.IsZero() && now.Sub(p.Current.Start) > p.Period.Duration() {
-		if !p.ManualSwitch {
-			p.Switch(now)
-		}
-		p.Current.Update(now, val)
-		return true
+	periodElapsed := !p.Current.Start.IsZero() && now.Sub(p.Current.Start) > p.Period.Duration()
+	if periodElapsed && !p.ManualSwitch {
+		p.Switch(now)
 	}
 
 	p.Current.Update(now, val)
-	return false
+	return periodElapsed
 }
 
 // Switch switches to a new period by finalizing the previous period and starting a new one.
@@ -82,12 +79,16 @@ type Statistics[T Number] struct {
 	Mean     float64       `json:"mean"`
 	Variance float64       `json:"variance,omitempty"`
 	m2       float64       // used for variance calculation
+	updated  bool          // set to true on first Update to initialize Min and Max correctly
 }
 
 // Update updates the statistics with a new value.
 func (p *Statistics[T]) Update(now utc.UTC, val T) {
-	if p.Start.IsZero() {
-		p.Start = now
+	if !p.updated {
+		p.updated = true
+		if p.Start.IsZero() {
+			p.Start = now
+		}
 		p.Min = val
 		p.Max = val
 	}

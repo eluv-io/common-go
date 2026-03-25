@@ -9,8 +9,9 @@ import (
 
 	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/media/rtp"
+	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/common-go/util/timeutil"
-	elog "github.com/eluv-io/log-go"
+	"github.com/eluv-io/log-go"
 )
 
 func newTestDisruptorPacer(
@@ -21,8 +22,8 @@ func newTestDisruptorPacer(
 	t.Helper()
 	cfg := rtp.DisruptorPacerConfig{
 		Stream:   "test",
-		StatsLog: elog.Get("/test/rtp/disruptor"),
-		EventLog: elog.Get("/test/rtp/disruptor"),
+		StatsLog: log.Get("/test/rtp/disruptor"),
+		EventLog: log.Get("/test/rtp/disruptor"),
 		Logic: rtp.PacerLogicConfig{
 			DiscardPeriod:    duration.Spec(discardPeriod),
 			MaxDiscardPeriod: duration.Spec(max(discardPeriod*10, time.Second)),
@@ -70,7 +71,7 @@ func startDisruptorConsumer(pacer *rtp.DisruptorPacer) func() [][]byte {
 func TestDisruptorPacer_NonPowerOfTwoCapacity(t *testing.T) {
 	pacer, err := rtp.NewDisruptorPacer(rtp.DisruptorPacerConfig{
 		Logic: rtp.PacerLogicConfig{
-			EventLog:        elog.Get("/test"),
+			EventLog:        log.Get("/test"),
 			RtpSeqThreshold: 1,
 			RtpTsThreshold:  duration.Spec(time.Second),
 		},
@@ -289,4 +290,66 @@ func TestDisruptorPacer_ShutdownIdempotent(t *testing.T) {
 	pacer.Shutdown()
 	pacer.Shutdown()
 	collect()
+}
+
+// TestDisruptorPacer_Delay verifies that the first packet is delivered approximately Delay after it is pushed.
+func TestDisruptorPacer_DelayContinuous(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping timing-sensitive test in short mode")
+	}
+	const (
+		delay      = time.Second
+		queueAhead = 120 * duration.Millisecond
+		ipd        = 10 * time.Millisecond
+		packets    = 300
+	)
+
+	pacer := newTestDisruptorPacer(t, 0, delay, func(config rtp.DisruptorPacerConfig) rtp.DisruptorPacerConfig {
+		config.StatsInterval = duration.Second
+		config.QueueAhead = queueAhead
+		return config
+	})
+
+	delivered := 0
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_ = pacer.Run(func(_ []byte, _ time.Time) error {
+			delivered++
+			return nil
+		})
+	}()
+
+	ticker := time.NewTicker(ipd)
+	for i := 1; i <= packets; i++ {
+		require.NoError(t, pacer.Push(pack(t, i, i*(int)(rtp.DurationToTicks(ipd)))))
+		<-ticker.C
+	}
+
+	time.Sleep(delay + 10*time.Millisecond)
+
+	pacer.Shutdown()
+	wg.Wait()
+
+	require.Equal(t, packets, delivered)
+
+	in, out := pacer.Stats()
+
+	log.Info("total stats", "in", jsonutil.MarshalString(in), "out", jsonutil.MarshalString(out))
+
+	require.EqualValues(t, packets, in.PushAhead.Count)
+	require.InDelta(t, time.Second, in.PushAhead.Mean, float64(time.Millisecond))
+	require.EqualValues(t, packets, in.Sequ)
+	require.EqualValues(t, packets*(int)(rtp.DurationToTicks(ipd)), in.Tsu)
+
+	require.EqualValues(t, packets, out.CHD.Count)
+	require.InDelta(t, 880*time.Millisecond, out.CHD.Mean, float64(time.Millisecond))
+	require.EqualValues(t, packets, out.IPD.Count)
+	require.InDelta(t, ipd, out.IPD.Mean, float64(time.Millisecond))
+	require.EqualValues(t, 0, out.Lateness.Count)
+	require.EqualValues(t, 0, out.OverSleeps.Count)
+	require.EqualValues(t, packets, out.SendAhead.Count)
+	require.InDelta(t, float64(queueAhead), out.SendAhead.Mean, float64(time.Millisecond))
 }

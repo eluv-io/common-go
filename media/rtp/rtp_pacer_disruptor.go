@@ -221,8 +221,8 @@ func (p *DisruptorPacer) Push(bts []byte) error {
 		entry.pkt = make([]byte, len(bts))
 	}
 	copy(entry.pkt, bts)
-	p.dis.Commit(seq, seq)
 	p.outStats.buffered.Add(1)
+	p.dis.Commit(seq, seq)
 	return nil
 }
 
@@ -284,9 +284,6 @@ func (h *disruptorHandler) Handle(lower, upper int64) {
 		entry := &h.pacer.ringBuffer[seq&h.pacer.bufferMask]
 		os := &h.pacer.outStats
 
-		// Decrement the buffered counter atomically; the value feeds into bufFill stats under the lock below.
-		bufFill := os.buffered.Add(-1)
-
 		// Sleep until QueueAhead before targetTs, counting ticker ticks consumed.
 		wakeTarget := entry.targetTs.Time.Add(-h.pacer.conf.QueueAhead.Duration())
 		wait := wakeTarget.Sub(now.Time)
@@ -315,6 +312,10 @@ func (h *disruptorHandler) Handle(lower, upper int64) {
 		if h.pacer.ctx.Err() != nil {
 			return
 		}
+
+		// Decrement the buffered counter atomically; the value feeds into bufFill stats under the lock below.
+		// Note: technically, the packet is still buffered until after it's wakeTarget is reached.
+		bufFill := os.buffered.Add(-1)
 
 		// lateness is how much the actual send time (sendAt) falls short of the ideal target time. If a packet is "on
 		// time", lateness is 0.
@@ -383,13 +384,13 @@ func (p *DisruptorPacer) logStats() {
 		case <-t.C:
 			now := utc.Now()
 
-			p.outStatsMu.Lock()
-			outSnap := p.outStats.switchPeriod(now)
-			p.outStatsMu.Unlock()
-
 			p.inStatsMu.Lock()
 			inSnap := p.stats // plain value copy; InStats has no atomics or sync values
 			p.inStatsMu.Unlock()
+
+			p.outStatsMu.Lock()
+			outSnap := p.outStats.switchPeriod(now)
+			p.outStatsMu.Unlock()
 
 			p.conf.StatsLog.Info("stats",
 				"stream", p.conf.Stream,
@@ -399,4 +400,16 @@ func (p *DisruptorPacer) logStats() {
 			return
 		}
 	}
+}
+
+func (p *DisruptorPacer) Stats() (InStats, OutStatsPeriod) {
+	p.inStatsMu.Lock()
+	inSnap := p.stats // plain value copy; InStats has no atomics or sync values
+	p.inStatsMu.Unlock()
+
+	p.outStatsMu.Lock()
+	outSnap := p.outStats.total()
+	p.outStatsMu.Unlock()
+
+	return inSnap, *outSnap
 }
