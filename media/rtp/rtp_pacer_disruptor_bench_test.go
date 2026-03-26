@@ -3,10 +3,11 @@ package rtp_test
 import (
 	"sync"
 	"testing"
-	"time"
 
 	pionrtp "github.com/pion/rtp"
 	"github.com/stretchr/testify/require"
+
+	"github.com/eluv-io/utc-go"
 )
 
 // BenchmarkDisruptorPacer_PushRun measures the steady-state cost of Push through the ring buffer. With Delay=0 the
@@ -38,7 +39,7 @@ func BenchmarkDisruptorPacer_PushRun(b *testing.B) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		_ = pacer.Run(func([]byte, time.Time) error { return nil })
+		_ = pacer.Run(func([]byte, utc.UTC) error { return nil })
 	}()
 
 	raw := makeBenchPacket(b)

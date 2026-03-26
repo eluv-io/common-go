@@ -12,6 +12,7 @@ import (
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/common-go/util/timeutil"
 	"github.com/eluv-io/log-go"
+	"github.com/eluv-io/utc-go"
 )
 
 func newTestDisruptorPacer(
@@ -48,7 +49,7 @@ func startDisruptorConsumer(pacer *rtp.DisruptorPacer) func() [][]byte {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		_ = pacer.Run(func(pkt []byte, _ time.Time) error {
+		_ = pacer.Run(func(pkt []byte, _ utc.UTC) error {
 			cp := make([]byte, len(pkt))
 			copy(cp, pkt)
 			ch <- cp
@@ -133,7 +134,7 @@ func TestDisruptorPacer_PacedDelivery(t *testing.T) {
 	remaining := n
 	go func() {
 		defer wg.Done()
-		_ = pacer.Run(func(raw []byte, _ time.Time) error {
+		_ = pacer.Run(func(raw []byte, _ utc.UTC) error {
 			pkt, err := rtp.ParsePacket(raw)
 			if err != nil {
 				return err
@@ -197,7 +198,7 @@ func TestDisruptorPacer_Delay(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		_ = pacer.Run(func(_ []byte, _ time.Time) error {
+		_ = pacer.Run(func(_ []byte, _ utc.UTC) error {
 			select {
 			case delivered <- time.Now():
 			default:
@@ -316,7 +317,7 @@ func TestDisruptorPacer_DelayContinuous(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		_ = pacer.Run(func(_ []byte, _ time.Time) error {
+		_ = pacer.Run(func(_ []byte, _ utc.UTC) error {
 			delivered++
 			return nil
 		})

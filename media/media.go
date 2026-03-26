@@ -89,7 +89,7 @@ type CallbackPacer interface {
 	// The deliver function is called sequentially from a single goroutine. The []byte is the packet paylod and will be
 	// re-used after the deliver call returns - make a copy if needed to avoid data races. The target time is passed as
 	// the second parameter.
-	Run(deliver func(bts []byte, at time.Time) error) error
+	Run(deliver func(bts []byte, at utc.UTC) error) error
 
 	// Shutdown terminates the pacer and stops any future packet delivery. If an error is provided, it is returned to
 	// by any pending/future Push/Run call.
