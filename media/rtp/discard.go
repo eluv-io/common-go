@@ -1,6 +1,8 @@
 package rtp
 
 import (
+	"time"
+
 	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/util/statsutil"
 	"github.com/eluv-io/errors-go"
@@ -18,13 +20,21 @@ type DiscardContext struct {
 	T0                  utc.UTC                                  // Wall clock time when (unwrapped) RTP timestamp was 0
 	T0UpdatedAt         utc.UTC                                  // When the baseline was last updated
 	StartupT0Correction statsutil.RawStatistics[duration.Millis] // T0 adjustment stats during startup/discard phase (reset on gap!)
+
+	toDuration func(int64) time.Duration // converts a timestamp (clock units) to a duration; defaults to TicksToDuration
 }
 
-// NewDiscardContext creates a new discard context with the specified period.
-func NewDiscardContext(discardPeriod, maxDiscardPeriod duration.Spec) *DiscardContext {
+// NewDiscardContext creates a new discard context with the specified period. The optional toDuration parameter converts
+// unwrapped timestamps to time.Duration; if omitted or nil, TicksToDuration (90 kHz RTP clock) is used.
+func NewDiscardContext(discardPeriod, maxDiscardPeriod duration.Spec, toDuration ...func(int64) time.Duration) *DiscardContext {
+	td := TicksToDuration
+	if len(toDuration) > 0 && toDuration[0] != nil {
+		td = toDuration[0]
+	}
 	return &DiscardContext{
 		DiscardPeriod:    discardPeriod,
 		MaxDiscardPeriod: max(discardPeriod, maxDiscardPeriod),
+		toDuration:       td,
 	}
 }
 
@@ -43,8 +53,8 @@ func (d *DiscardContext) ShouldDiscard(rtpTimestamp int64, now utc.UTC) (bool, e
 		return false, nil
 	}
 
-	// Calculate T0 for this packet (wall clock time when RTP ts was 0)
-	t0 := now.Add(-TicksToDuration(rtpTimestamp))
+	// Calculate T0 for this packet (wall clock time when the timestamp was 0)
+	t0 := now.Add(-d.toDuration(rtpTimestamp))
 
 	if d.FirstPacketTime.IsZero() {
 		// first packet

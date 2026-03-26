@@ -89,9 +89,13 @@ type OutStats struct {
 	lastPacket utc.UTC      // wall clock time when the last packet was popped
 }
 
-// newOutStats returns an OutStats whose Periodic fields have ManualSwitch: true so that period transitions are
+// NewOutStats returns an OutStats whose Periodic fields have ManualSwitch: true so that period transitions are
 // driven exclusively by logStats() rather than by packet arrival timing. period should be the configured
 // StatsInterval so that Statistics.Duration in each snapshot reflects the nominal period length.
+func NewOutStats(period duration.Spec) OutStats {
+	return newOutStats(period)
+}
+
 func newOutStats(period duration.Spec) OutStats {
 	return OutStats{
 		wait:       statsutil.Periodic[duration.Millis]{ManualSwitch: true, Period: period},
@@ -103,6 +107,53 @@ func newOutStats(period duration.Spec) OutStats {
 		bufFill:    statsutil.Periodic[int32]{ManualSwitch: true, Period: period},
 	}
 }
+
+// SwitchPeriod closes the current period, resets per-period counters, and returns the completed period's snapshot.
+// Must be called under outStatsMu.
+func (s *OutStats) SwitchPeriod(now utc.UTC) *OutStatsPeriod { return s.switchPeriod(now) }
+
+// Total returns a snapshot of cumulative statistics since startup. Must be called under outStatsMu.
+func (s *OutStats) Total() *OutStatsPeriod { return s.total() }
+
+// IncrBuffered atomically increments the in-flight packet counter.
+func (s *OutStats) IncrBuffered() { s.buffered.Add(1) }
+
+// DecrBuffered atomically decrements the in-flight packet counter and returns the new value.
+func (s *OutStats) DecrBuffered() int32 { return s.buffered.Add(-1) }
+
+// UpdateBufFill records the current buffer fill level. Must be called under outStatsMu.
+func (s *OutStats) UpdateBufFill(now utc.UTC, fill int32) { s.bufFill.UpdateNow(now, fill) }
+
+// UpdateOversleeps records an oversleep sample. Must be called under outStatsMu.
+func (s *OutStats) UpdateOversleeps(now utc.UTC, v duration.Millis) { s.oversleeps.UpdateNow(now, v) }
+
+// UpdateLateness records a lateness sample. Must be called under outStatsMu.
+func (s *OutStats) UpdateLateness(now utc.UTC, v duration.Millis) { s.lateness.UpdateNow(now, v) }
+
+// UpdateSendAhead records a send-ahead sample. Must be called under outStatsMu.
+func (s *OutStats) UpdateSendAhead(now utc.UTC, v duration.Millis) { s.sendAhead.UpdateNow(now, v) }
+
+// UpdateIPD records an inter-packet delay sample, using the internally tracked lastPacket timestamp.
+// Must be called under outStatsMu.
+func (s *OutStats) UpdateIPD(now utc.UTC) {
+	if s.lastPacket.IsZero() {
+		s.ipd.UpdateNow(now, 0)
+	} else {
+		s.ipd.UpdateNow(now, duration.Millis(now.Sub(s.lastPacket)))
+	}
+	s.lastPacket = now
+}
+
+// UpdateCHD records a channel delay (time from packet arrival to delivery) sample. Must be called under outStatsMu.
+func (s *OutStats) UpdateCHD(now utc.UTC, inTs utc.UTC) {
+	s.chd.UpdateNow(now, duration.Millis(now.Sub(inTs)))
+}
+
+// UpdateWait records a wait-time sample. Must be called under outStatsMu.
+func (s *OutStats) UpdateWait(now utc.UTC, v duration.Millis) { s.wait.UpdateNow(now, v) }
+
+// AddSleeps increments the per-period sleep counter. Must be called under outStatsMu.
+func (s *OutStats) AddSleeps(n int) { s.sleeps += n }
 
 // switchPeriod closes the current period, resets per-period counters, and returns the completed period's snapshot.
 // It must be called under outStatsMu. With ManualSwitch: true on all Periodic fields, every Switch call here is
