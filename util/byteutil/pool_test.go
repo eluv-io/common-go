@@ -24,20 +24,21 @@ func init() {
 }
 
 type testCtx struct {
-	created  counter
-	released counter
+	created   counter
+	retrieved counter
+	released  counter
 }
 
 func TestPool(t *testing.T) {
 	bufSize := 8
 	refCount := byte(4)
 	zeroBuf := make([]byte, bufSize)
-	var openCount, closeCount int
+	var createCount, openCount, closeCount int
 
 	ctx := &testCtx{}
 
 	p := byteutil.NewPool(bufSize)
-	p.SetMetrics(&ctx.created, &ctx.released)
+	p.SetMetrics(&ctx.created, &ctx.retrieved, &ctx.released)
 
 	buf := p.New()
 	// New (zero-ed) buffer of size 8 with refCount 1 should be created
@@ -45,6 +46,7 @@ func TestPool(t *testing.T) {
 	require.Equal(t, bufSize, len(buf))
 	require.Equal(t, zeroBuf, buf)
 	require.Equal(t, byte(1), buf[:bufSize+1][bufSize])
+	createCount++
 	openCount++
 
 	buf = p.New(refCount)
@@ -53,6 +55,7 @@ func TestPool(t *testing.T) {
 	require.Equal(t, bufSize, len(buf))
 	require.Equal(t, zeroBuf, buf)
 	require.Equal(t, refCount, buf[:bufSize+1][bufSize])
+	createCount++
 	openCount++
 
 	buf = p.Get()
@@ -61,6 +64,7 @@ func TestPool(t *testing.T) {
 	require.Equal(t, bufSize, len(buf))
 	require.Equal(t, zeroBuf, buf)
 	require.Equal(t, byte(1), buf[:bufSize+1][bufSize])
+	createCount++
 	openCount++
 
 	buf = p.Get(refCount)
@@ -69,6 +73,7 @@ func TestPool(t *testing.T) {
 	require.Equal(t, bufSize, len(buf))
 	require.Equal(t, zeroBuf, buf)
 	require.Equal(t, refCount, buf[:bufSize+1][bufSize])
+	createCount++
 	openCount++
 
 	// Populate existing buffer with 1s, for identification purposes
@@ -92,8 +97,9 @@ func TestPool(t *testing.T) {
 		// RefCount of existing buffer should reduce by 1; buffer should not be re-added to pool yet
 		for i := 0; i < 100; i++ {
 			buf2 := p.Get()
-			require.Equal(t, make([]byte, bufSize), buf2)
 			openCount++
+			require.Equal(t, make([]byte, bufSize), buf2)
+			createCount++
 			time.Sleep(time.Millisecond)
 		}
 		r1 := ctx.released.val.Load()
@@ -122,12 +128,14 @@ func TestPool(t *testing.T) {
 	var buf2 []byte
 	for i := 0; i < max; i++ {
 		buf2 = p.Get(0)
+		openCount++
 		if buf2[0] == 1 {
 			// Existing buffer was re-added to pool and successfully retrieved with new refCount 0
 			fmt.Println(fmt.Sprintf("found buffer at %d", i))
 			break
 		}
-		openCount++
+		createCount++
+
 		time.Sleep(time.Millisecond)
 	}
 
@@ -145,12 +153,14 @@ func TestPool(t *testing.T) {
 	// Attempt to retrieve existing buffer from pool; buffer should not be found
 	for i := 0; i < 100; i++ {
 		buf3 := p.Get()
-		require.Equal(t, make([]byte, bufSize), buf3)
 		openCount++
+		require.Equal(t, make([]byte, bufSize), buf3)
+		createCount++
 		time.Sleep(time.Millisecond)
 	}
 
-	require.Equal(t, float64(openCount), ctx.created.val.Load())
+	require.Equal(t, float64(createCount), ctx.created.val.Load())
+	require.Equal(t, float64(openCount), ctx.retrieved.val.Load())
 	require.Equal(t, float64(closeCount), ctx.released.val.Load())
 }
 

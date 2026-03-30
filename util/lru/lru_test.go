@@ -185,7 +185,8 @@ func TestGetOrCreateBasic(t *testing.T) {
 			require.False(t, evicted)
 			require.Equal(t, key1, val)
 			require.Equal(t, 3, evictedCount) // evicted count does change, since the entry was recreated
-			assertMetrics(2, 4, 4, 4)         // but the entry was nevertheless removed (and re-added)
+			assertMetrics(2, 4, 4, 3)         // but the entry was nevertheless removed (and re-added)
+			require.Equal(t, 1, lru.Len())
 
 		})
 	}
@@ -374,7 +375,7 @@ func TestGetOrCreateStress(t *testing.T) {
 
 			fmt.Println("total", totalCount, "evicted", evictedCount)
 			metrics := lru.Metrics()
-			fmt.Println(jsonutil.MarshalString(metrics))
+			fmt.Println(jsonutil.MarshalString(&metrics))
 			require.EqualValues(t, totalCount, metrics.Hits.Load()+metrics.Misses.Load())
 			require.EqualValues(t, 0, metrics.Errors.Load())
 			require.EqualValues(t, cacheSize, metrics.Config.MaxItems)
