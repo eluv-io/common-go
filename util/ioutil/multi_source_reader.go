@@ -24,6 +24,7 @@ func NewMultiSourceReader(readers []io.ReadCloser, bufSize ...int) *MultiSourceR
 	r := &MultiSourceReader{}
 	r.reads = make(chan *multiSourceRead, 32)
 	r.done = make(chan bool)
+	r.errors = &errors.ErrorList{}
 
 	r.bufSize = 1024
 	if len(bufSize) > 0 && bufSize[0] > 0 {
@@ -47,7 +48,7 @@ type MultiSourceReader struct {
 	read    *multiSourceRead
 	off     int64
 	err     error
-	errors  errors.ErrorList
+	errors  *errors.ErrorList
 	closed  bool
 	bufSize int
 	bufPool *byteutil.Pool
@@ -97,14 +98,14 @@ func (r *MultiSourceReader) Add(reader io.ReadCloser) {
 }
 
 func (r *MultiSourceReader) Read(p []byte) (int, error) {
-	e := errors.T("multi-source read", errors.K.Invalid.Default())
+	e := errors.T("multi-source read", errors.K.IO.Default())
 	processErr := func(err error) bool {
 		if err == io.EOF {
 			r.err = io.EOF
 		} else if err != nil {
 			r.errors.Append(err)
 			if len(r.errors.Errors) == int(r.n.Load()) {
-				r.err = e("errors", r.errors)
+				r.err = e(r.errors)
 			}
 		}
 		return r.err != nil
