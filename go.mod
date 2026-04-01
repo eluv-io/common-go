@@ -13,7 +13,7 @@ require (
 	github.com/djherbis/times v1.6.0
 	github.com/dustin/go-humanize v1.0.1
 	github.com/eluv-io/apexlog-go v1.9.1-elv4
-	github.com/eluv-io/errors-go v1.0.5-0.20260326145630-91cbf1fd5a13
+	github.com/eluv-io/errors-go v1.0.5
 	github.com/eluv-io/inject-go v1.0.2
 	github.com/eluv-io/log-go v1.0.8
 	github.com/eluv-io/utc-go v1.0.1
