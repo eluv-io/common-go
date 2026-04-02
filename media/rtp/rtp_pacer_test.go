@@ -47,6 +47,16 @@ func TestTicksToDuration(t *testing.T) {
 	assert.Equal(t, int64(90), rtp2.DurationToTicks(time.Millisecond))
 	assert.Equal(t, time.Millisecond, rtp2.TicksToDuration(rtp2.DurationToTicks(time.Millisecond)))
 	assert.Equal(t, int64(90), rtp2.DurationToTicks(rtp2.TicksToDuration(int64(90))))
+
+	// large numbers that would cause int64 overflows if calculated as ticks * time.Second / 90000
+	assert.Equal(t, 28*time.Hour, rtp2.TicksToDuration(9072000000))
+	assert.Equal(t, int64(9072000000), rtp2.DurationToTicks(28*time.Hour))
+	assert.Equal(t, 29*time.Hour, rtp2.TicksToDuration(9396000000))
+	assert.Equal(t, int64(9396000000), rtp2.DurationToTicks(29*time.Hour))
+
+	// 11.4K years...
+	assert.Equal(t, 100000*time.Hour, rtp2.TicksToDuration(32400000000000))
+	assert.Equal(t, int64(32400000000000), rtp2.DurationToTicks(100000*time.Hour))
 }
 
 func TestRtpPacer_constants(t *testing.T) {

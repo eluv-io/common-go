@@ -5,8 +5,10 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/eluv-io/errors-go"
 	. "github.com/smartystreets/goconvey/convey"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/eluv-io/errors-go"
 
 	"github.com/eluv-io/common-go/format/bytesize"
 )
@@ -129,6 +131,25 @@ func TestUnmarshalJson(t *testing.T) {
 		}
 	})
 
+}
+
+func TestSpec_HumanReadable(t *testing.T) {
+	tests := []struct {
+		spec bytesize.Spec
+		want string
+	}{
+		{0, "0 B"},
+		{735, "735 B"},
+		{1024, "1.0KB"},
+		{73542, "71.8KB"},
+		{1024 * 1024, "1.0MB"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.spec.String(), func(t *testing.T) {
+			assert.Equal(t, test.want, test.spec.HumanReadable())
+		})
+	}
 }
 
 func formatUnmarshalMsg(

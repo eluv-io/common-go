@@ -81,7 +81,7 @@ func (s Spec) Duration() time.Duration {
 	return time.Duration(s)
 }
 
-// Round rounds the duration to a value that produces a sensitive and human
+// Round rounds the duration to a value that produces a sensible and human
 // readable form that removes insignificant information with theses rules:
 //   - nanos  are capped if d > 1 millisecond: 1.123444ms -> 1.123ms
 //   - micros are capped if d > 1 second:      1.123555s  -> 1.124s
@@ -95,6 +95,8 @@ func (s Spec) Round() Spec {
 //   - 766.123µs, 2 decimals: 766.12µs
 //   - 1.123444ms, 1 decimal:   1.1ms
 //   - 1.123444s, 0 decimals:   1s
+//
+// For durations greater than one minute, decimals is ignored and the result is always rounded to the nearest second.
 func (s Spec) RoundTo(decimals int) Spec {
 	if decimals > 3 {
 		decimals = 3
