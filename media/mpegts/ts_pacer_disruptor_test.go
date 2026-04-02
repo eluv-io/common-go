@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/eluv-io/common-go/format/duration"
-	"github.com/eluv-io/common-go/media/rtp"
+	"github.com/eluv-io/common-go/media/pacer"
 	elog "github.com/eluv-io/log-go"
 	"github.com/eluv-io/utc-go"
 )
@@ -74,7 +74,7 @@ func defaultTestConfig(discardPeriod time.Duration) TsDisruptorPacerConfig {
 		BufferCapacity:    64,
 		MinSleepThreshold: duration.Spec(time.Millisecond),
 		TickerPeriod:      duration.Spec(time.Millisecond),
-		Logic: rtp.PacerLogicConfig{
+		Logic: pacer.PacerLogicConfig{
 			DiscardPeriod:    duration.Spec(discardPeriod),
 			MaxDiscardPeriod: duration.Spec(discardPeriod * 10),
 		},
@@ -177,7 +177,7 @@ func TestTsDisruptorPacer_PacedDelivery(t *testing.T) {
 	var pcr uint64
 	for i := 0; i < numBatches; i++ {
 		require.NoError(t, pacer.Push(makeTsBatch(pid, pcr, 7)))
-		pcr += uint64(pcrPerBatch)
+		pcr += pcrPerBatch
 	}
 
 	// Wait for numBatches-1 deliveries (first discarded).
@@ -405,57 +405,3 @@ func TestTsDisruptorPacer_NonPowerOfTwoCapacity(t *testing.T) {
 	pacer.Shutdown()
 }
 
-// TestTsDisruptorPacer_PcrUnwrapper verifies PCR wraparound is handled correctly.
-func TestTsDisruptorPacer_PcrUnwrapper(t *testing.T) {
-	var u tsPcrUnwrapper
-
-	// First call: baseline established near MaxPCR so that wraparound can be exercised.
-	nearMax := uint64(MaxPCR - 100)
-	prev, curr := u.unwrap(nearMax)
-	require.Equal(t, int64(nearMax)-1, prev) // fabricated previous
-	require.Equal(t, int64(nearMax), curr)
-
-	// Normal forward step (small increment within same range).
-	prev, curr = u.unwrap(nearMax + 50)
-	require.Equal(t, int64(nearMax), prev)
-	require.Equal(t, int64(nearMax)+50, curr)
-
-	// Wraparound: PCR wraps from near MaxPCR to near 0.
-	prev, curr = u.unwrap(50)
-	require.Equal(t, int64(nearMax)+50, prev)
-	// diff = 50 - (nearMax+50) = -nearMax = -(MaxPCR-100) which is < -halfRange → forward wraparound
-	// adjusted diff = 50 - (nearMax+50) + (MaxPCR+1) = MaxPCR+1 - MaxPCR + 100 - 50 + 50 = 151
-	// Wait: diff = int64(50) - int64(nearMax+50) = -int64(nearMax) = -(MaxPCR-100)
-	// diff += MaxPCR+1 = -(MaxPCR-100) + MaxPCR + 1 = 101
-	require.Equal(t, int64(nearMax)+50+101, curr)
-
-	// Next normal forward step (no wraparound).
-	prev, curr = u.unwrap(151)
-	require.Equal(t, int64(nearMax)+50+101, prev)
-	require.Equal(t, int64(nearMax)+50+101+101, curr) // diff = 151 - 50 = 101
-}
-
-// TestTsDisruptorPacer_GapDetector verifies gap detection triggers correctly.
-func TestTsDisruptorPacer_GapDetector(t *testing.T) {
-	threshold := DurationToPcr(time.Second) // 1 second
-	gd := tsPcrGapDetector{threshold: threshold}
-
-	// First call: never a gap.
-	prev, curr, gap := gd.detect(1000)
-	require.False(t, gap)
-	_ = prev
-	_ = curr
-
-	// Normal step: no gap.
-	_, _, gap = gd.detect(2000)
-	require.False(t, gap)
-
-	// Large jump: gap detected.
-	bigJump := uint64(2000) + uint64(threshold) + 1
-	_, _, gap = gd.detect(bigJump)
-	require.True(t, gap)
-
-	// After gap, normal step: no gap.
-	_, _, gap = gd.detect(bigJump + 1000)
-	require.False(t, gap)
-}

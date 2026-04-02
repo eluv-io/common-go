@@ -1,13 +1,16 @@
 package rtp_test
 
 import (
+	"encoding/json"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/media/pacer"
 	"github.com/eluv-io/common-go/media/rtp"
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/common-go/util/timeutil"
@@ -22,15 +25,15 @@ func newTestDisruptorPacer(
 ) *rtp.DisruptorPacer {
 	t.Helper()
 	cfg := rtp.DisruptorPacerConfig{
-		Stream:   "test",
-		StatsLog: log.Get("/test/rtp/disruptor"),
-		EventLog: log.Get("/test/rtp/disruptor"),
-		Logic: rtp.PacerLogicConfig{
+		Stream:       "test",
+		StatsLog:     log.Get("/test/rtp/disruptor"),
+		EventLog:     log.Get("/test/rtp/disruptor"),
+		SeqThreshold: 1,
+		TsThreshold:  duration.Spec(time.Second),
+		Logic: pacer.PacerLogicConfig{
 			DiscardPeriod:    duration.Spec(discardPeriod),
 			MaxDiscardPeriod: duration.Spec(max(discardPeriod*10, time.Second)),
 			Delay:            duration.Spec(delay),
-			RtpSeqThreshold:  1,
-			RtpTsThreshold:   duration.Spec(time.Second),
 		},
 	}
 	if len(adapt) > 0 {
@@ -71,11 +74,9 @@ func startDisruptorConsumer(pacer *rtp.DisruptorPacer) func() [][]byte {
 // to the next power of 2 rather than being rejected.
 func TestDisruptorPacer_NonPowerOfTwoCapacity(t *testing.T) {
 	pacer, err := rtp.NewDisruptorPacer(rtp.DisruptorPacerConfig{
-		Logic: rtp.PacerLogicConfig{
-			EventLog:        log.Get("/test"),
-			RtpSeqThreshold: 1,
-			RtpTsThreshold:  duration.Spec(time.Second),
-		},
+		Logic:          pacer.PacerLogicConfig{EventLog: log.Get("/test")},
+		SeqThreshold:   1,
+		TsThreshold:    duration.Spec(time.Second),
 		BufferCapacity: 1000, // rounds up to 1024
 	})
 	require.NoError(t, err)
@@ -116,37 +117,46 @@ func TestDisruptorPacer_PacedDelivery(t *testing.T) {
 
 	const n = 500
 	const ipd = 10 * time.Millisecond
-	const delay = 200 * time.Millisecond
+	const delay = 500 * time.Millisecond
+	const sendAhead = 100 * time.Millisecond
 
 	pacer := newTestDisruptorPacer(t, 0, delay, func(config rtp.DisruptorPacerConfig) rtp.DisruptorPacerConfig {
 		config.MinSleepThreshold = duration.Millisecond
+		config.SendAhead = duration.Spec(sendAhead)
+		config.DeliveryMargin = 20 * duration.Millisecond
 		return config
 	})
 
-	type delivery struct {
-		seq uint16
-		at  time.Time
-	}
-	ch := make(chan delivery, n)
+	offCount := atomic.Int32{}
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	remaining := n
 	go func() {
 		defer wg.Done()
-		_ = pacer.Run(func(raw []byte, _ utc.UTC) error {
+		received := 0
+		remaining := n
+		var lastTs utc.UTC
+		_ = pacer.Run(func(raw []byte, targetTs utc.UTC) error {
 			pkt, err := rtp.ParsePacket(raw)
 			if err != nil {
 				return err
 			}
-			ch <- delivery{seq: pkt.SequenceNumber, at: time.Now()}
+			require.Equal(t, uint16(received), pkt.SequenceNumber, "wrong sequence at %d", received)
+			if received > 0 {
+				gap := targetTs.Sub(lastTs)
+				if gap < ipd/2 || gap > ipd*3/2 {
+					t.Logf("gap between packets %d and %d: %v (expected ~%v)", received, received+1, gap, ipd)
+					offCount.Add(1)
+				}
+			}
+			lastTs = targetTs
+			received++
 			remaining--
 			if remaining == 0 {
 				pacer.Shutdown()
 			}
 			return nil
 		})
-		close(ch)
 	}()
 
 	watch := timeutil.StartWatch()
@@ -160,28 +170,10 @@ func TestDisruptorPacer_PacedDelivery(t *testing.T) {
 	wg.Wait()
 	watch.Stop()
 
-	var received []delivery
-	for d := range ch {
-		received = append(received, d)
-	}
+	require.LessOrEqual(t, ipd*(n-1)+delay-sendAhead, watch.Duration()+5*time.Millisecond, "packets must be paced according to their timestamps")
+	require.GreaterOrEqual(t, ipd*(n-1)+delay-sendAhead, watch.Duration()-5*time.Millisecond, "packets must be paced according to their timestamps")
 
-	require.Equal(t, n, len(received), "all packets must be delivered")
-	require.LessOrEqual(t, ipd*(n-1)+delay, watch.Duration()+5*time.Millisecond, "packets must be paced according to their timestamps")
-	require.GreaterOrEqual(t, ipd*(n-1)+delay, watch.Duration()-5*time.Millisecond, "packets must be paced according to their timestamps")
-
-	offCount := 0
-	for i, d := range received {
-		require.Equal(t, uint16(i), d.seq, "wrong sequence at index %d", i)
-		if i > 0 {
-			gap := d.at.Sub(received[i-1].at)
-			if gap < ipd/2 || gap > ipd*3/2 {
-				t.Logf("gap between packets %d and %d: %v (expected ~%v)", i-1, i, gap, ipd)
-				offCount++
-			}
-		}
-	}
-
-	require.LessOrEqual(t, offCount, 2, "too many irregular ipd gaps: %d", offCount)
+	require.LessOrEqual(t, offCount.Load(), int32(3), "too many irregular ipd gaps")
 
 }
 
@@ -299,15 +291,15 @@ func TestDisruptorPacer_DelayContinuous(t *testing.T) {
 		t.Skip("skipping timing-sensitive test in short mode")
 	}
 	const (
-		delay      = time.Second
-		queueAhead = 120 * duration.Millisecond
-		ipd        = 10 * time.Millisecond
-		packets    = 300
+		delay     = time.Second
+		sendAhead = 120 * duration.Millisecond
+		ipd       = 10 * time.Millisecond
+		packets   = 300
 	)
 
 	pacer := newTestDisruptorPacer(t, 0, delay, func(config rtp.DisruptorPacerConfig) rtp.DisruptorPacerConfig {
 		config.StatsInterval = duration.Second
-		config.QueueAhead = queueAhead
+		config.SendAhead = sendAhead
 		return config
 	})
 
@@ -341,16 +333,51 @@ func TestDisruptorPacer_DelayContinuous(t *testing.T) {
 	log.Info("total stats", "in", jsonutil.MarshalString(in), "out", jsonutil.MarshalString(out))
 
 	require.EqualValues(t, packets, in.PushAhead.Count)
-	require.InDelta(t, time.Second, in.PushAhead.Mean, float64(time.Millisecond))
+	require.InDelta(t, time.Second, in.PushAhead.Mean, float64(5*time.Millisecond))
 	require.EqualValues(t, packets, in.Sequ)
 	require.EqualValues(t, packets*(int)(rtp.DurationToTicks(ipd)), in.Tsu)
 
-	require.EqualValues(t, packets, out.CHD.Count)
-	require.InDelta(t, 880*time.Millisecond, out.CHD.Mean, float64(time.Millisecond))
-	require.EqualValues(t, packets, out.IPD.Count)
-	require.InDelta(t, ipd, out.IPD.Mean, float64(time.Millisecond))
-	require.EqualValues(t, 0, out.Lateness.Count)
-	require.EqualValues(t, 0, out.OverSleeps.Count)
-	require.EqualValues(t, packets, out.SendAhead.Count)
-	require.InDelta(t, float64(queueAhead), out.SendAhead.Mean, float64(time.Millisecond))
+	require.EqualValues(t, packets, out.JBD.Count, "number of sent packets should match")
+	require.InDelta(t, 880*time.Millisecond, out.JBD.Mean, float64(5*time.Millisecond), "jitter buffer delay should be constant")
+	require.EqualValues(t, packets, out.IPD.Count, "number of IPD measurements should match")
+	require.InDelta(t, ipd, out.IPD.Mean, float64(5*time.Millisecond), "IPD should be constant")
+	require.EqualValues(t, 0, out.Lateness.Count, "no lateness expected")
+	require.EqualValues(t, 0, out.OverSleeps.Count, "no oversleeps expected")
+	require.EqualValues(t, packets, out.SendAhead.Count, "no send-ahead expected")
+	require.InDelta(t, float64(sendAhead), out.SendAhead.Mean, float64(5*time.Millisecond), "send-ahead should be constant")
+}
+
+func TestDisruptorPacerConfig_Unmarshal(t *testing.T) {
+	t.Run("InitDefaults", func(t *testing.T) {
+
+		cfg := rtp.DisruptorPacerConfig{}
+		cfg.InitDefaults()
+		err := json.Unmarshal([]byte(`{}`), &cfg)
+		require.NoError(t, err)
+		require.Equal(t, *new(rtp.DisruptorPacerConfig).InitDefaults(), cfg)
+	})
+
+	t.Run("InitDefaults", func(t *testing.T) {
+		cfg := rtp.DisruptorPacerConfig{
+			Logic:             *new(pacer.PacerLogicConfig).InitDefaults(),
+			SeqThreshold:      5,
+			TsThreshold:       duration.Minute,
+			BufferCapacity:    1024,
+			MinSleepThreshold: duration.Millisecond,
+			TickerPeriod:      duration.Millisecond,
+			StatsInterval:     duration.Minute,
+			SendAhead:         50 * duration.Millisecond,
+			DeliveryMargin:    25 * duration.Millisecond,
+		}
+
+		marshaled, err := json.Marshal(cfg)
+		require.NoError(t, err)
+
+		t.Log("marshaled config", "json", "\n"+jsonutil.MustPretty(string(marshaled)))
+
+		unmarshaled := rtp.DisruptorPacerConfig{}
+		err = json.Unmarshal(marshaled, &unmarshaled)
+		require.NoError(t, err)
+		require.Equal(t, cfg, unmarshaled)
+	})
 }

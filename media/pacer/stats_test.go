@@ -1,4 +1,4 @@
-package rtp
+package pacer
 
 import (
 	"testing"
@@ -61,7 +61,7 @@ func TestOutStats_switchPeriod(t *testing.T) {
 	// Add one observation to each collector
 	s.wait.UpdateNow(now, duration.Millis(10*time.Millisecond))
 	s.ipd.UpdateNow(now, duration.Millis(20*time.Millisecond))
-	s.chd.UpdateNow(now, duration.Millis(30*time.Millisecond))
+	s.jbd.UpdateNow(now, duration.Millis(30*time.Millisecond))
 	s.lateness.UpdateNow(now, duration.Millis(40*time.Millisecond))
 	s.sendAhead.UpdateNow(now, duration.Millis(50*time.Millisecond))
 	s.oversleeps.UpdateNow(now, duration.Millis(60*time.Millisecond))
@@ -80,8 +80,8 @@ func TestOutStats_switchPeriod(t *testing.T) {
 	require.Equal(t, uint64(1), p.IPD.Count)
 	require.Equal(t, duration.Millis(20*time.Millisecond), p.IPD.Min)
 
-	require.Equal(t, uint64(1), p.CHD.Count)
-	require.Equal(t, duration.Millis(30*time.Millisecond), p.CHD.Min)
+	require.Equal(t, uint64(1), p.JBD.Count)
+	require.Equal(t, duration.Millis(30*time.Millisecond), p.JBD.Min)
 
 	require.Equal(t, uint64(1), p.Lateness.Count)
 	require.Equal(t, duration.Millis(40*time.Millisecond), p.Lateness.Min)
@@ -106,7 +106,7 @@ func TestOutStats_switchPeriod(t *testing.T) {
 	p2 := s.switchPeriod(now.Add(2 * time.Second))
 	require.Equal(t, uint64(0), p2.Wait.Count)
 	require.Equal(t, uint64(0), p2.IPD.Count)
-	require.Equal(t, uint64(0), p2.CHD.Count)
+	require.Equal(t, uint64(0), p2.JBD.Count)
 	require.Equal(t, uint64(0), p2.Lateness.Count)
 	require.Equal(t, uint64(0), p2.SendAhead.Count)
 	require.Equal(t, uint64(0), p2.OverSleeps.Count)

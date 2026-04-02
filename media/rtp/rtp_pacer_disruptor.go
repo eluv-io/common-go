@@ -9,6 +9,7 @@ import (
 	"github.com/smarty/go-disruptor"
 
 	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/media/pacer"
 	"github.com/eluv-io/common-go/util/ifutil"
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/errors-go"
@@ -33,7 +34,7 @@ const (
 
 	// DefaultTickerPeriod is the default ticker period used to schedule packet delivery. A ticker avoids the
 	// per-packet timer allocation of time.After and supports prompt Shutdown interruption.
-	DefaultTickerPeriod = duration.Millisecond
+	DefaultTickerPeriod = 5 * duration.Millisecond
 
 	// DefaultStatsInterval is the default interval for periodic stats logging.
 	DefaultStatsInterval = 5 * duration.Second
@@ -52,26 +53,41 @@ type disruptorEntry struct {
 
 // DisruptorPacerConfig holds configuration for a DisruptorPacer.
 type DisruptorPacerConfig struct {
-	Stream   string    // Stream is the stream name for logging.
-	StatsLog elog.ILog // StatsLog is the logger to use for stats logging. If nil, stats are not logged.
-	EventLog elog.ILog // EventLog is the logger to use for event logging. If nil, events are not logged.
+	Stream   string    `json:"-"` // Stream is the stream name for logging.
+	StatsLog elog.ILog `json:"-"` // StatsLog is the logger to use for stats logging. If nil, stats are not logged.
+	EventLog elog.ILog `json:"-"` // EventLog is the logger to use for event logging. If nil, events are not logged.
 
-	Logic             PacerLogicConfig // timing logic configuration
-	BufferCapacity    int              // ring buffer capacity (is rounded up to the next power of 2; 0 → DefaultDisruptorCapacity)
-	MinSleepThreshold duration.Spec    // sleep durations shorter than this are skipped (0 → DefaultMinSleepThreshold)
-	TickerPeriod      duration.Spec    // ticker period for scheduling delivery (0 → DefaultTickerPeriod)
-	StatsInterval     duration.Spec    // interval for periodic stats logging (0 → DefaultStatsInterval, -1 → disabled)
+	Logic             pacer.PacerLogicConfig `json:"logic"`               // timing logic configuration
+	SeqThreshold      int64                  `json:"seq_threshold"`       // sequence number gap threshold (0 → 1)
+	TsThreshold       duration.Spec          `json:"ts_threshold"`        // RTP timestamp gap threshold (0 → 1 second)
+	BufferCapacity    int                    `json:"buffer_capacity"`     // ring buffer capacity (is rounded up to the next power of 2; 0 → DefaultDisruptorCapacity)
+	MinSleepThreshold duration.Spec          `json:"min_sleep_threshold"` // sleep durations shorter than this are skipped (0 → DefaultMinSleepThreshold)
+	TickerPeriod      duration.Spec          `json:"ticker_period"`       // ticker period for scheduling delivery (0 → DefaultTickerPeriod)
+	StatsInterval     duration.Spec          `json:"stats_interval"`      // interval for periodic stats logging (0 → DefaultStatsInterval, -1 → disabled)
 
-	// QueueAhead is how early the consumer dispatches a packet before its target time. The ticker loop wakes up when
-	// now >= targetTs - QueueAhead, giving the "deliver" callback a lead-time window.
+	// SendAhead is how early the consumer dispatches a packet before its target time. The ticker loop wakes up when
+	// now >= targetTs - SendAhead, giving the "deliver" callback a lead-time window.
 	// 0 = dispatch at targetTs.
-	QueueAhead duration.Spec
+	SendAhead duration.Spec `json:"send_ahead"`
 
 	// DeliveryMargin is the minimum lead time guaranteed to the "deliver" callback:
 	//   sendAt = max(targetTs, now + DeliveryMargin)
 	// Packets that cannot satisfy this floor (targetTs already too close to now) are tracked as LateSends.
-	// Should be ≤ QueueAhead so the floor is reliably reachable under normal conditions. 0 = disabled.
-	DeliveryMargin duration.Spec
+	// Should be ≤ SendAhead so the floor is reliably reachable under normal conditions. 0 = disabled.
+	DeliveryMargin duration.Spec `json:"delivery_margin"`
+}
+
+func (c *DisruptorPacerConfig) InitDefaults() *DisruptorPacerConfig {
+	c.Logic.InitDefaults()
+	c.SeqThreshold = 1
+	c.TsThreshold = duration.Second
+	c.BufferCapacity = DefaultDisruptorCapacity
+	c.MinSleepThreshold = DefaultMinSleepThreshold
+	c.TickerPeriod = DefaultTickerPeriod
+	c.StatsInterval = DefaultStatsInterval
+	c.SendAhead = 0
+	c.DeliveryMargin = DefaultDeliveryMargin
+	return c
 }
 
 // DisruptorPacer is an RTP callback pacer that uses a lock-free disruptor ring buffer as the jitter buffer. It uses
@@ -89,10 +105,11 @@ type DisruptorPacerConfig struct {
 //	}
 //	pacer.Shutdown()
 type DisruptorPacer struct {
-	conf     DisruptorPacerConfig
-	logic    *PacerLogic
-	stats    InStats
-	outStats OutStats
+	conf        DisruptorPacerConfig
+	logic       *pacer.PacerLogic
+	gapDetector *GapDetector
+	stats       pacer.InStats
+	outStats    pacer.OutStats
 
 	// outStatsMu guards outStats between Handle() (per-packet UpdateNow calls) and logStats() (forced period close).
 	// inStatsMu guards p.stats (InStats) between Push() (updated via p.logic.Packet()) and logStats() (snapshot read).
@@ -156,17 +173,29 @@ func NewDisruptorPacer(conf DisruptorPacerConfig) (*DisruptorPacer, error) {
 	if conf.Logic.Stream == "" {
 		conf.Logic.Stream = conf.Stream
 	}
+	if conf.Logic.ToDuration == nil {
+		conf.Logic.ToDuration = TicksToDuration
+	}
+	seqThreshold := conf.SeqThreshold
+	if seqThreshold == 0 {
+		seqThreshold = 1
+	}
+	tsThreshold := conf.TsThreshold.Duration()
+	if tsThreshold == 0 {
+		tsThreshold = time.Second
+	}
 
 	ctx, cancel := context.WithCancelCause(context.Background())
 	p := &DisruptorPacer{
-		conf:       conf,
-		outStats:   newOutStats(conf.StatsInterval),
-		ringBuffer: make([]disruptorEntry, conf.BufferCapacity),
-		bufferMask: int64(conf.BufferCapacity - 1),
-		ctx:        ctx,
-		cancel:     cancel,
+		conf:        conf,
+		gapDetector: NewGapDetector(seqThreshold, tsThreshold),
+		outStats:    pacer.NewOutStats(conf.StatsInterval),
+		ringBuffer:  make([]disruptorEntry, conf.BufferCapacity),
+		bufferMask:  int64(conf.BufferCapacity - 1),
+		ctx:         ctx,
+		cancel:      cancel,
 	}
-	p.logic = NewPacerLogic(conf.Logic, &p.stats)
+	p.logic = pacer.NewPacerLogic(conf.Logic, &p.stats)
 
 	handler := &disruptorHandler{pacer: p}
 	dis, err := disruptor.New(
@@ -198,9 +227,18 @@ func (p *DisruptorPacer) Push(bts []byte) error {
 	}
 
 	now := utc.Now()
-	// Hold inStatsMu around Packet() so that logStats() can take a consistent snapshot of p.stats.
+	// Hold inStatsMu around the gap detection + PacketTs so that logStats() can take a consistent snapshot of p.stats.
 	p.inStatsMu.Lock()
-	target, discard, err := p.logic.Packet(now, pkt.SequenceNumber, pkt.Timestamp)
+	seq, ts, gapErr := p.gapDetector.Detect(pkt.SequenceNumber, pkt.Timestamp)
+	if gapErr != nil {
+		p.conf.EventLog.Warn("gap", "stream", p.conf.Stream, gapErr)
+	}
+	target, discard, err := p.logic.PacketTs(now, ts, gapErr != nil)
+	// Update RTP-specific stats after PacketTs (which may have reset p.stats via reset()).
+	p.stats.Seq = pkt.SequenceNumber
+	p.stats.Sequ = seq
+	p.stats.Ts = pkt.Timestamp
+	p.stats.Tsu = ts
 	p.inStatsMu.Unlock()
 	if err != nil {
 		return errors.E("DisruptorPacer.Push", err)
@@ -210,8 +248,8 @@ func (p *DisruptorPacer) Push(bts []byte) error {
 	}
 
 	// Reserve one slot; blocks (spin-waits) if the ring buffer is full.
-	seq := p.dis.Reserve(1)
-	entry := &p.ringBuffer[seq&p.bufferMask]
+	slot := p.dis.Reserve(1)
+	entry := &p.ringBuffer[slot&p.bufferMask]
 	entry.targetTs = target
 	entry.inTs = now
 	// Copy packet bytes; the caller's buffer may be reused after Push returns.
@@ -221,8 +259,8 @@ func (p *DisruptorPacer) Push(bts []byte) error {
 		entry.pkt = make([]byte, len(bts))
 	}
 	copy(entry.pkt, bts)
-	p.outStats.buffered.Add(1)
-	p.dis.Commit(seq, seq)
+	p.outStats.IncrBuffered()
+	p.dis.Commit(slot, slot)
 	return nil
 }
 
@@ -232,7 +270,7 @@ func (p *DisruptorPacer) Push(bts []byte) error {
 // returns - make a copy if needed to avoid data races.
 //
 // Run starts the consumer loop and calls the deliver function for each pushed packet at its scheduled target time less
-// the "queue ahead period". Run blocks until the pacer is shut down via Shutdown().
+// the "send ahead period". Run blocks until the pacer is shut down via Shutdown().
 //
 // The deliver function is called sequentially from a single goroutine. The []byte is the packet paylod and will be
 // re-used after the deliver call returns - make a copy if needed to avoid data races. The target time is passed as the
@@ -284,13 +322,13 @@ func (h *disruptorHandler) Handle(lower, upper int64) {
 		entry := &h.pacer.ringBuffer[seq&h.pacer.bufferMask]
 		os := &h.pacer.outStats
 
-		// Sleep until QueueAhead before targetTs, counting ticker ticks consumed.
-		wakeTarget := entry.targetTs.Add(-h.pacer.conf.QueueAhead.Duration())
+		// Sleep until SendAhead before targetTs, counting ticker ticks consumed.
+		wakeTarget := entry.targetTs.Add(-h.pacer.conf.SendAhead.Duration())
 		wait := wakeTarget.Sub(now)
 		var ticksConsumed int
 		var overslept duration.Millis
 		if wait > h.pacer.conf.MinSleepThreshold.Duration() {
-			// Wake up QueueAhead before targetTs so the deliver callback has a look-ahead scheduling window.
+			// Wake up SendAhead before targetTs so the deliver callback has a look-ahead scheduling window.
 			// Using a ticker avoids the per-packet timer allocation of time.After and lets ctx.Done() interrupt
 			// a long wait promptly.
 			for wakeTarget.Mono().After(h.lastTick) {
@@ -315,7 +353,7 @@ func (h *disruptorHandler) Handle(lower, upper int64) {
 
 		// Decrement the buffered counter atomically; the value feeds into bufFill stats under the lock below.
 		// Note: technically, the packet is still buffered until after it's wakeTarget is reached.
-		bufFill := os.buffered.Add(-1)
+		bufFill := os.DecrBuffered()
 
 		// lateness is how much the actual send time (sendAt) falls short of the ideal target time. If a packet is "on
 		// time", lateness is 0.
@@ -341,27 +379,20 @@ func (h *disruptorHandler) Handle(lower, upper int64) {
 		// forces a period close. The lock is held only for the fast UpdateNow calls — never during sleeps.
 		h.pacer.outStatsMu.Lock()
 		{
-			os.bufFill.UpdateNow(now, bufFill)
+			os.UpdateBufFill(now, bufFill)
 			if duration.Spec(overslept) > DefaultOversleepThreshold {
-				os.oversleeps.UpdateNow(now, overslept)
+				os.UpdateOversleeps(now, overslept)
 			}
 			if lateness > 0 {
-				os.lateness.UpdateNow(now, lateness)
+				os.UpdateLateness(now, lateness)
 			}
-			os.sendAhead.UpdateNow(now, sendAhead)
-			if os.lastPacket.IsZero() {
-				// Artificial update to initialise ipd with the same timestamp as all other stats. Results in
-				// min IPD of 0, but only for the very first period.
-				os.ipd.UpdateNow(now, 0)
-			} else {
-				_ = os.ipd.UpdateNow(now, duration.Millis(now.Sub(os.lastPacket)))
-			}
-			os.lastPacket = now
-			os.chd.UpdateNow(now, duration.Millis(now.Sub(entry.inTs)))
+			os.UpdateSendAhead(now, sendAhead)
+			os.UpdateIPD(now)
+			os.UpdateJBD(now, entry.inTs)
 			if wait > 0 {
-				os.wait.UpdateNow(now, duration.Millis(wait))
+				os.UpdateWait(now, duration.Millis(wait))
 			}
-			os.sleeps += ticksConsumed
+			os.AddSleeps(ticksConsumed)
 		}
 		h.pacer.outStatsMu.Unlock()
 
@@ -389,7 +420,7 @@ func (p *DisruptorPacer) logStats() {
 			p.inStatsMu.Unlock()
 
 			p.outStatsMu.Lock()
-			outSnap := p.outStats.switchPeriod(now)
+			outSnap := p.outStats.SwitchPeriod(now)
 			p.outStatsMu.Unlock()
 
 			p.conf.StatsLog.Info("stats",
@@ -402,13 +433,13 @@ func (p *DisruptorPacer) logStats() {
 	}
 }
 
-func (p *DisruptorPacer) Stats() (InStats, OutStatsPeriod) {
+func (p *DisruptorPacer) Stats() (pacer.InStats, pacer.OutStatsPeriod) {
 	p.inStatsMu.Lock()
 	inSnap := p.stats // plain value copy; InStats has no atomics or sync values
 	p.inStatsMu.Unlock()
 
 	p.outStatsMu.Lock()
-	outSnap := p.outStats.total()
+	outSnap := p.outStats.Total()
 	p.outStatsMu.Unlock()
 
 	return inSnap, *outSnap

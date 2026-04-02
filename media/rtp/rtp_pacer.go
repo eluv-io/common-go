@@ -29,7 +29,7 @@ func NewRtpPacer() *RtpPacer {
 		ctx:               ctx,
 		cancel:            cancel,
 		packetCh:          make(chan *pacerPacket, 10_000),
-		gapDetector:       NewRtpGapDetector(1, time.Second),
+		gapDetector:       NewGapDetector(1, time.Second),
 		minSleepThreshold: 5 * time.Millisecond,
 	}
 }
@@ -235,16 +235,6 @@ func (p *RtpPacer) calculateWait(now utc.UTC, rtpSequence uint16, rtpTimestamp u
 	return wait, false
 }
 
-func TicksToDuration(ts int64) time.Duration {
-	// RTP with video uses a 90kHz clock, i.e. 1 tick = 1/90000 s or 1s = 90000 ticks
-	return time.Duration(ts) * 100 * time.Microsecond / 9
-}
-
-func DurationToTicks(ts time.Duration) int64 {
-	// RTP with video uses a 90kHz clock, i.e. 1 tick = 1/90000 s or 1s = 90000 ticks
-	return int64((ts*9 + 1) / 100 / time.Microsecond)
-}
-
 type timeref struct {
 	wallClock    utc.UTC // the wall clock time clock time corresponding to the rtpTimestamp
 	rtpTimestamp int64   // the reference RTP timestamp. Initially the first timestamp received, then adapted dynamically
@@ -273,7 +263,7 @@ type outStats struct {
 	IPDLast         statsutil.Statistics[duration.Spec] `json:"ipd"`           // inter-packet delay statistics for last period
 	CHDLast         statsutil.Statistics[duration.Spec] `json:"chd"`           // channel delay statistics for last period
 	BufferedPackets int32                               `json:"buffered"`      // number of packets currently in the channel
-	DelayedPackets  int                                 `json:"delayed"`       // number of packets that were popped from the queue after their nominal sending time
+	DelayedPackets  int                                 `json:"delayed"`       // number of packets that were popped from the channel after their nominal sending time
 	Sleeps          int                                 `json:"sleeps"`        // number of times the pacer had to wait before sending a packet
 	Overslept       int                                 `json:"overslept"`     // number of times sleep was more than 5ms longer than expected
 	MaxOverslept    duration.Spec                       `json:"max_overslept"` // the maximum amount of time that a sleep was longer than expected

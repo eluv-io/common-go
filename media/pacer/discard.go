@@ -1,4 +1,4 @@
-package rtp
+package pacer
 
 import (
 	"time"
@@ -26,11 +26,13 @@ type DiscardContext struct {
 
 // NewDiscardContext creates a new discard context with the specified period. The optional toDuration parameter converts
 // unwrapped timestamps to time.Duration; if omitted or nil, TicksToDuration (90 kHz RTP clock) is used.
-func NewDiscardContext(discardPeriod, maxDiscardPeriod duration.Spec, toDuration ...func(int64) time.Duration) *DiscardContext {
-	td := TicksToDuration
-	if len(toDuration) > 0 && toDuration[0] != nil {
-		td = toDuration[0]
+// NewDiscardContext creates a new discard context with the specified period. toDuration converts unwrapped timestamps to
+// time.Duration and must not be nil.
+func NewDiscardContext(discardPeriod, maxDiscardPeriod duration.Spec, toDuration func(int64) time.Duration) *DiscardContext {
+	if toDuration == nil {
+		panic("pacer: toDuration must not be nil")
 	}
+	td := toDuration
 	return &DiscardContext{
 		DiscardPeriod:    discardPeriod,
 		MaxDiscardPeriod: max(discardPeriod, maxDiscardPeriod),
@@ -113,8 +115,9 @@ func (d *DiscardContext) ShouldDiscard(rtpTimestamp int64, now utc.UTC) (bool, e
 	return false, nil
 }
 
+// ResetOnGap resets the discard context after a gap is detected in the stream.
 func (d *DiscardContext) ResetOnGap() {
-	log.Debug("discard: resetting discard context after RTP gap", "discard_complete", d.DiscardComplete)
+	log.Debug("discard: resetting discard context after gap", "discard_complete", d.DiscardComplete)
 
 	if d.DiscardComplete {
 		d.DiscardComplete = false

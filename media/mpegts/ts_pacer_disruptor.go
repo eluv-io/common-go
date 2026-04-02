@@ -10,6 +10,7 @@ import (
 	"github.com/smarty/go-disruptor"
 
 	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/media/pacer"
 	"github.com/eluv-io/common-go/media/rtp"
 	"github.com/eluv-io/common-go/util/ifutil"
 	"github.com/eluv-io/common-go/util/jsonutil"
@@ -18,15 +19,17 @@ import (
 	"github.com/eluv-io/utc-go"
 )
 
+const DefaultPcrGapThreshold = duration.Second
+
 // TsDisruptorPacerConfig holds configuration for a TsDisruptorPacer.
 type TsDisruptorPacerConfig struct {
 	Stream   string    // Stream is the stream name for logging.
 	StatsLog elog.ILog // StatsLog is the logger to use for stats logging. If nil, stats are not logged.
 	EventLog elog.ILog // EventLog is the logger to use for event logging. If nil, events are not logged.
 
-	// Logic holds timing logic configuration. ToDuration will be overridden to PcrToDuration; RtpSeqThreshold and
-	// RtpTsThreshold are unused for MPEG-TS pacing (PCR gap detection is handled separately via PcrGapThreshold).
-	Logic rtp.PacerLogicConfig
+	// Logic holds timing logic configuration. ToDuration will be overridden to PcrToDuration; SeqThreshold and
+	// TsThreshold are unused for MPEG-TS pacing (PCR gap detection is handled separately via PcrGapThreshold).
+	Logic pacer.PacerLogicConfig
 
 	// PcrGapThreshold is the maximum PCR jump between consecutive PCR-bearing packets before a stream reset is
 	// triggered. Defaults to 1 second when zero.
@@ -37,16 +40,29 @@ type TsDisruptorPacerConfig struct {
 	TickerPeriod      duration.Spec // ticker period for scheduling delivery (0 → rtp.DefaultTickerPeriod)
 	StatsInterval     duration.Spec // interval for periodic stats logging (0 → rtp.DefaultStatsInterval, -1 → disabled)
 
-	// QueueAhead is how early the consumer dispatches a packet before its target time. 0 = dispatch at targetTs.
-	QueueAhead duration.Spec
+	// SendAhead is how early the consumer dispatches a packet before its target time. 0 = dispatch at targetTs.
+	SendAhead duration.Spec
 
 	// DeliveryMargin is the minimum lead time guaranteed to the "deliver" callback:
 	//   sendAt = max(targetTs, now + DeliveryMargin)
-	// Should be ≤ QueueAhead so the floor is reliably reachable under normal conditions. 0 = disabled.
+	// Should be ≤ SendAhead so the floor is reliably reachable under normal conditions. 0 = disabled.
 	DeliveryMargin duration.Spec
 
 	// StripRtp, when true, strips the RTP header from each incoming byte slice before extracting PCR.
 	StripRtp bool
+}
+
+func (c *TsDisruptorPacerConfig) InitDefaults() *TsDisruptorPacerConfig {
+	c.Logic.InitDefaults()
+	c.PcrGapThreshold = DefaultPcrGapThreshold
+	c.BufferCapacity = rtp.DefaultDisruptorCapacity
+	c.MinSleepThreshold = rtp.DefaultMinSleepThreshold
+	c.TickerPeriod = rtp.DefaultTickerPeriod
+	c.StatsInterval = rtp.DefaultStatsInterval
+	c.SendAhead = 0
+	c.DeliveryMargin = 0
+	c.StripRtp = true
+	return c
 }
 
 // TsInStats holds PCR-specific input statistics for a single PCR PID.
@@ -58,9 +74,9 @@ type TsInStats struct {
 
 // pidState holds per-PCR-PID timing state.
 type pidState struct {
-	logic   *rtp.PacerLogic
-	inStats rtp.InStats
-	gapDet  tsPcrGapDetector
+	logic   *pacer.PacerLogic
+	inStats pacer.InStats
+	gapDet  PcrGapDetector
 	tsStats TsInStats
 }
 
@@ -89,7 +105,7 @@ type TsDisruptorPacer struct {
 	conf       TsDisruptorPacerConfig
 	pidStates  map[int]*pidState // keyed by PCR PID; accessed only from Push goroutine (under inStatsMu for logStats)
 	lastTarget utc.UTC           // most recent target from any PID (for no-PCR batches)
-	outStats   rtp.OutStats
+	outStats   pacer.OutStats
 
 	// outStatsMu guards outStats between the consumer goroutine and logStats.
 	// inStatsMu guards pidStates (updated by Push via PacketTs, read by logStats for snapshots).
@@ -154,14 +170,14 @@ func NewTsDisruptorPacer(conf TsDisruptorPacerConfig) (*TsDisruptorPacer, error)
 	// Override ToDuration to PCR 27 MHz clock; callers cannot change this.
 	conf.Logic.ToDuration = func(ts int64) time.Duration { return PcrToDuration(uint64(ts)) }
 	if conf.PcrGapThreshold == 0 {
-		conf.PcrGapThreshold = duration.Spec(time.Second)
+		conf.PcrGapThreshold = DefaultPcrGapThreshold
 	}
 
 	ctx, cancel := context.WithCancelCause(context.Background())
 	p := &TsDisruptorPacer{
 		conf:       conf,
 		pidStates:  make(map[int]*pidState),
-		outStats:   rtp.NewOutStats(conf.StatsInterval),
+		outStats:   pacer.NewOutStats(conf.StatsInterval),
 		ringBuffer: make([]tsDisruptorEntry, conf.BufferCapacity),
 		bufferMask: int64(conf.BufferCapacity - 1),
 		ctx:        ctx,
@@ -218,7 +234,7 @@ func (p *TsDisruptorPacer) Push(bts []byte) error {
 	if pcrFound {
 		state := p.pidStateFor(pcrPid, now)
 
-		prev, curr, gap := state.gapDet.detect(pcrValue)
+		prev, curr, gap := state.gapDet.Detect(pcrValue)
 		if gap {
 			p.conf.EventLog.Warn("pcr gap",
 				"stream", p.conf.Stream,
@@ -278,12 +294,12 @@ func (p *TsDisruptorPacer) pidStateFor(pid int, now utc.UTC) *pidState {
 		return state
 	}
 	state := &pidState{
-		gapDet: tsPcrGapDetector{
-			threshold: DurationToPcr(p.conf.PcrGapThreshold.Duration()),
+		gapDet: PcrGapDetector{
+			Threshold: DurationToPcr(p.conf.PcrGapThreshold.Duration()),
 		},
 		tsStats: TsInStats{PID: pid},
 	}
-	state.logic = rtp.NewPacerLogic(p.conf.Logic, &state.inStats)
+	state.logic = pacer.NewPacerLogic(p.conf.Logic, &state.inStats)
 	p.conf.EventLog.Info("new PCR PID", "stream", p.conf.Stream, "pid", pid)
 	p.pidStates[pid] = state
 	_ = now
@@ -325,9 +341,9 @@ func (p *TsDisruptorPacer) BufferCap() int {
 
 // Stats returns a snapshot of the current input and output statistics. The InStats returned is for the first PCR PID
 // seen; use StatsForPID for per-PID stats.
-func (p *TsDisruptorPacer) Stats() (rtp.InStats, rtp.OutStatsPeriod) {
+func (p *TsDisruptorPacer) Stats() (pacer.InStats, pacer.OutStatsPeriod) {
 	p.inStatsMu.Lock()
-	var inSnap rtp.InStats
+	var inSnap pacer.InStats
 	for _, state := range p.pidStates {
 		inSnap = state.inStats
 		break
@@ -353,8 +369,8 @@ func (p *TsDisruptorPacer) logStats() {
 			// Snapshot per-PID input stats under inStatsMu.
 			p.inStatsMu.Lock()
 			type pidSnap struct {
-				In rtp.InStats `json:"in"`
-				TS TsInStats   `json:"ts"`
+				In pacer.InStats `json:"in"`
+				TS TsInStats     `json:"ts"`
 			}
 			snaps := make(map[string]pidSnap, len(p.pidStates))
 			for pid, state := range p.pidStates {
@@ -393,8 +409,8 @@ func (h *tsDisruptorHandler) Handle(lower, upper int64) {
 		entry := &h.pacer.ringBuffer[seq&h.pacer.bufferMask]
 		os := &h.pacer.outStats
 
-		// Sleep until QueueAhead before targetTs, counting ticker ticks consumed.
-		wakeTarget := entry.targetTs.Time.Add(-h.pacer.conf.QueueAhead.Duration())
+		// Sleep until SendAhead before targetTs, counting ticker ticks consumed.
+		wakeTarget := entry.targetTs.Time.Add(-h.pacer.conf.SendAhead.Duration())
 		wait := wakeTarget.Sub(now.Time)
 		var ticksConsumed int
 		var overslept duration.Millis
@@ -442,7 +458,7 @@ func (h *tsDisruptorHandler) Handle(lower, upper int64) {
 			}
 			os.UpdateSendAhead(now, sendAhead)
 			os.UpdateIPD(now)
-			os.UpdateCHD(now, entry.inTs)
+			os.UpdateJBD(now, entry.inTs)
 			if wait > 0 {
 				os.UpdateWait(now, duration.Millis(wait))
 			}
@@ -456,58 +472,4 @@ func (h *tsDisruptorHandler) Handle(lower, upper int64) {
 				"err", err)
 		}
 	}
-}
-
-// tsPcrUnwrapper converts 42-bit PCR values to a monotonic int64 sequence, handling wraparound at MaxPCR.
-type tsPcrUnwrapper struct {
-	hasLast  bool
-	last     uint64
-	current  int64
-	previous int64
-}
-
-func (u *tsPcrUnwrapper) unwrap(pcr uint64) (previous, current int64) {
-	if !u.hasLast {
-		u.hasLast = true
-		u.last = pcr
-		u.current = int64(pcr)
-		u.previous = u.current - 1
-		return u.previous, u.current
-	}
-
-	// PCR is a 42-bit counter. Detect wraparound by checking whether the signed difference exceeds half the range.
-	const halfRange = int64(MaxPCR / 2)
-	diff := int64(pcr) - int64(u.last)
-	if diff < -halfRange {
-		diff += int64(MaxPCR) + 1 // wrapped forward
-	} else if diff > halfRange {
-		diff -= int64(MaxPCR) + 1 // wrapped backward
-	}
-
-	u.previous = u.current
-	u.current += diff
-	u.last = pcr
-	return u.previous, u.current
-}
-
-// tsPcrGapDetector detects PCR jumps larger than a configured threshold.
-type tsPcrGapDetector struct {
-	unwrapper tsPcrUnwrapper
-	threshold int64 // max allowed delta in PCR ticks; 0 = no gap detection
-}
-
-// detect unwraps the PCR and returns whether a gap (delta > threshold) was detected.
-func (d *tsPcrGapDetector) detect(pcr uint64) (previous, current int64, gap bool) {
-	previous, current = d.unwrapper.unwrap(pcr)
-	if !d.unwrapper.hasLast {
-		return // first ever call — not a gap
-	}
-	if d.threshold > 0 {
-		delta := current - previous
-		if delta < 0 {
-			delta = -delta
-		}
-		gap = delta > d.threshold
-	}
-	return
 }

@@ -84,7 +84,7 @@ type CallbackPacer interface {
 	// call to deliver returns - make a copy if needed to avoid data races.
 
 	// Run starts the consumer loop and calls the deliver function for each pushed packet at its scheduled target time
-	// less the "queue ahead period". Run blocks until the pacer is shut down via Shutdown().
+	// less the "send ahead period". Run blocks until the pacer is shut down via Shutdown().
 	//
 	// The deliver function is called sequentially from a single goroutine. The []byte is the packet paylod and will be
 	// re-used after the deliver call returns - make a copy if needed to avoid data races. The target time is passed as

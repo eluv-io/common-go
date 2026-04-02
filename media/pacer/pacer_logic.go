@@ -1,4 +1,4 @@
-package rtp
+package pacer
 
 import (
 	"fmt"
@@ -11,41 +11,69 @@ import (
 	"github.com/eluv-io/utc-go"
 )
 
+const (
+	DefaultPosDriftThreshold  = 2 * time.Millisecond
+	DefaultPosDriftCorrection = time.Millisecond
+	DefaultPosDriftPeriod     = time.Minute
+)
+
+// PacerLogicConfig holds the configuration for PacerLogic.
 type PacerLogicConfig struct {
-	Stream           string        // for logging
-	EventLog         elog.ILog     // the log for recording events (rtp gaps, timing baseline adjustments)
-	DiscardPeriod    duration.Spec // period for determining T0 during which all packets are discarded
-	MaxDiscardPeriod duration.Spec // max period for discarding packets.
-	Delay            duration.Spec // the size of the de-jitter buffer
-	RtpSeqThreshold  int64         // sequence threshold for RTP gap detection
-	RtpTsThreshold   duration.Spec // timestamp threshold for RTP gap detection
+	// Stream is the id used for logging
+	Stream string `json:"-"`
+
+	// EventLog is the log for recording events (gaps, timing baseline adjustments)
+	EventLog elog.ILog `json:"-"`
+
+	// DiscardPeriod is the period for determining T0 during which all packets are discarded
+	DiscardPeriod duration.Spec `json:"discard_period"`
+
+	// MaxDiscardPeriod is the maximum period for discarding packets.
+	MaxDiscardPeriod duration.Spec `json:"max_discard_period"`
+
+	// Delay is the size of the de-jitter buffer
+	Delay duration.Spec `json:"delay"`
 
 	// AdjustTimeDrift enables continuous drift correction: negative drift (T0 drifts backward, stream running fast)
 	// shifts baseTime earlier; positive drift (T0 drifts forward, stream running slow) shifts baseTime later.
-	AdjustTimeDrift bool
+	AdjustTimeDrift bool `json:"adjust_time_drift"`
 
 	// MaxNegDriftCorrection caps the per-packet baseTime correction applied for negative drift when AdjustTimeDrift is
 	// true. Zero means no cap: the full observed drift is applied immediately.
-	MaxNegDriftCorrection duration.Spec
+	MaxNegDriftCorrection duration.Spec `json:"max_neg_drift_correction"`
 
 	// PosDriftPeriod is the window over which T0 drift is averaged for positive-drift detection.
 	// Default: 1 minute when zero.
-	PosDriftPeriod duration.Spec
+	PosDriftPeriod duration.Spec `json:"pos_drift_period"`
 
 	// PosDriftThreshold is the mean positive drift over PosDriftPeriod that triggers a correction.
 	// Only meaningful when AdjustTimeDrift is true. Default: 2ms when zero.
-	PosDriftThreshold duration.Spec
+	PosDriftThreshold duration.Spec `json:"pos_drift_threshold"`
 
 	// PosDriftCorrection is the fixed baseTime advance applied when the mean positive drift exceeds
 	// PosDriftThreshold. Only meaningful when AdjustTimeDrift is true. Default: 1ms when zero.
-	PosDriftCorrection duration.Spec
+	PosDriftCorrection duration.Spec `json:"pos_drift_correction"`
 
-	// ToDuration converts an unwrapped timestamp (in clock units) to a time.Duration. If nil, TicksToDuration is used
-	// (appropriate for the standard 90 kHz RTP clock). Set this to use a different clock, e.g. mpegts.PcrToDuration
-	// for MPEG-TS PCR-based pacing (27 MHz clock).
-	ToDuration func(int64) time.Duration
+	// ToDuration converts an unwrapped timestamp (in clock units) to a time.Duration. Must not be nil. Set this to the
+	// appropriate clock conversion, e.g. rtp.TicksToDuration for 90 kHz RTP clocks, or mpegts.PcrToDuration for MPEG-TS
+	// PCR-based pacing (27 MHz clock).
+	ToDuration func(int64) time.Duration `json:"-"`
 }
 
+func (c *PacerLogicConfig) InitDefaults() *PacerLogicConfig {
+	c.DiscardPeriod = 0
+	c.MaxDiscardPeriod = 0
+	c.Delay = duration.Second
+	c.AdjustTimeDrift = true
+	c.MaxNegDriftCorrection = 0
+	c.PosDriftPeriod = duration.Spec(DefaultPosDriftPeriod)
+	c.PosDriftThreshold = duration.Spec(DefaultPosDriftThreshold)
+	c.PosDriftCorrection = duration.Spec(DefaultPosDriftCorrection)
+	return c
+}
+
+// PacerLogic computes target delivery times for packetized streams. It handles early-packet discarding, timing
+// baseline establishment, and optional drift correction.
 type PacerLogic struct {
 	conf               PacerLogicConfig
 	log                elog.ILog
@@ -53,42 +81,41 @@ type PacerLogic struct {
 	discard            *DiscardContext                   // Early packet discard logic
 	firstTimestamp     int64                             // First unwrapped timestamp
 	baseTime           utc.UTC                           // Base time for first packet (now + delay)
-	gapDetector        *GapDetector                      // gap detector & seq/ts unwrapper
 	posDriftTracker    statsutil.Periodic[time.Duration] // rolling mean of T0 drift per packet
 	posDriftThreshold  time.Duration                     // effective threshold (conf or default 2ms)
 	posDriftCorrection time.Duration                     // effective correction (conf or default 1ms)
 	toDuration         func(int64) time.Duration         // effective clock conversion function
 }
 
+// NewPacerLogic creates a new PacerLogic with the given configuration and stats collector.
 func NewPacerLogic(
 	conf PacerLogicConfig,
 	stats *InStats,
 ) *PacerLogic {
 	posDriftThreshold := conf.PosDriftThreshold.Duration()
 	if posDriftThreshold == 0 {
-		posDriftThreshold = 2 * time.Millisecond
+		posDriftThreshold = DefaultPosDriftThreshold
 	}
 	posDriftCorrection := conf.PosDriftCorrection.Duration()
 	if posDriftCorrection == 0 {
-		posDriftCorrection = time.Millisecond
+		posDriftCorrection = DefaultPosDriftCorrection
 	}
 	if posDriftCorrection > posDriftThreshold {
 		posDriftCorrection = posDriftThreshold // cap correction amount to threshold
 	}
 	posDriftPeriod := conf.PosDriftPeriod.Duration()
 	if posDriftPeriod == 0 {
-		posDriftPeriod = time.Minute
+		posDriftPeriod = DefaultPosDriftPeriod
 	}
 	toDuration := conf.ToDuration
 	if toDuration == nil {
-		toDuration = TicksToDuration
+		panic("pacer: PacerLogicConfig.ToDuration must not be nil")
 	}
 	p := &PacerLogic{
 		conf:               conf,
 		log:                conf.EventLog,
 		stats:              stats,
 		toDuration:         toDuration,
-		gapDetector:        NewRtpGapDetector(conf.RtpSeqThreshold, conf.RtpTsThreshold.Duration()),
 		discard:            NewDiscardContext(conf.DiscardPeriod, conf.MaxDiscardPeriod, toDuration),
 		posDriftThreshold:  posDriftThreshold,
 		posDriftCorrection: posDriftCorrection,
@@ -216,21 +243,4 @@ func (p *PacerLogic) PacketTs(now utc.UTC, tsUnwrapped int64, gap bool) (target 
 	p.stats.PushAhead.Update(now, duration.Millis(pushAhead))
 
 	return targetTime, false, nil
-}
-
-// Packet signals reception of a new RTP packet with the given sequence number and timestamp. It returns the target
-// transmission time for the packet, and whether the packet should be discarded (e.g. received during the discard phase
-// at startup or if a gap was detected and we're waiting for the stream to stabilize).
-func (p *PacerLogic) Packet(now utc.UTC, rtpSeq uint16, rtpTimestamp uint32) (target utc.UTC, discard bool, err error) {
-	seq, ts, gapErr := p.gapDetector.Detect(rtpSeq, rtpTimestamp)
-	if gapErr != nil {
-		p.log.Warn("rtp gap", "stream", p.conf.Stream, gapErr)
-	}
-	target, discard, err = p.PacketTs(now, ts, gapErr != nil)
-	// Update RTP-specific stats after PacketTs (which may have reset them via reset()).
-	p.stats.Seq = rtpSeq
-	p.stats.Sequ = seq
-	p.stats.Ts = rtpTimestamp
-	p.stats.Tsu = ts
-	return
 }

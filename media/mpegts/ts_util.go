@@ -93,8 +93,8 @@ func PcrToDuration(diff uint64) time.Duration {
 
 // DurationToPcr converts a time.Duration to PCR ticks (27 MHz clock).
 // Inverse of PcrToDuration: t = d * 27 / µs.
-func DurationToPcr(d time.Duration) int64 {
-	return int64(d) * 27 / int64(time.Microsecond)
+func DurationToPcr(d time.Duration) uint64 {
+	return uint64(int64(d) * 27 / int64(time.Microsecond))
 }
 
 func PtsToDuration(diff uint64) time.Duration {
