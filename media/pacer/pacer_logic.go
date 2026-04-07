@@ -135,10 +135,10 @@ func (p *PacerLogic) reset() {
 	// gap detector is already updated by the last Detect() call, so no need to reset
 }
 
-// PacketTs computes the target delivery time for a pre-unwrapped timestamp. If gap is true, the pacer resets its
-// internal state (discard phase restart, baseline re-establishment) before computing the target time. This is the
-// clock-agnostic core; Packet() calls it after RTP-specific gap detection and unwrapping.
-func (p *PacerLogic) PacketTs(now utc.UTC, tsUnwrapped int64, gap bool) (target utc.UTC, discard bool, err error) {
+// Packet computes the target delivery time for a pre-unwrapped timestamp. If gap is true, the pacer resets its internal
+// state (discard phase restart, baseline re-establishment) before computing the target time. This is the clock-agnostic
+// core; Packet() calls it after RTP-specific gap detection and unwrapping.
+func (p *PacerLogic) Packet(now utc.UTC, tsUnwrapped int64, gap bool) (target utc.UTC, discard bool, err error) {
 	if gap {
 		p.reset()
 		p.stats.StreamResets++

@@ -253,7 +253,7 @@ func (p *TsDisruptorPacer) Push(bts []byte) error {
 		state.tsStats.PID = pcrPid
 		var discard bool
 		var err error
-		target, discard, err = state.logic.PacketTs(now, curr, gap)
+		target, discard, err = state.logic.Packet(now, curr, gap)
 		p.inStatsMu.Unlock()
 
 		if err != nil {

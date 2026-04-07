@@ -233,7 +233,7 @@ func (p *DisruptorPacer) Push(bts []byte) error {
 	if gapErr != nil {
 		p.conf.EventLog.Warn("gap", "stream", p.conf.Stream, gapErr)
 	}
-	target, discard, err := p.logic.PacketTs(now, ts, gapErr != nil)
+	target, discard, err := p.logic.Packet(now, ts, gapErr != nil)
 	// Update RTP-specific stats after PacketTs (which may have reset p.stats via reset()).
 	p.stats.Seq = pkt.SequenceNumber
 	p.stats.Sequ = seq

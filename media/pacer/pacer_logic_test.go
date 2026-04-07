@@ -52,21 +52,21 @@ func TestPacerLogic_DiscardPhase(t *testing.T) {
 	T0 := utc.UnixMilli(10_000)
 
 	// Packet 0: first packet is always discarded (establishes discard baseline).
-	_, discarded, _ := p.PacketTs(T0, 0, false)
+	_, discarded, _ := p.Packet(T0, 0, false)
 	require.True(t, discarded, "first packet must always be discarded")
 
 	// Packets 1–9 arrive at 10ms intervals; elapsed < 100ms, still discarding.
 	for i := 1; i <= 9; i++ {
 		ts := ticksMS(i * 10)
 		now := T0.Add(time.Duration(i) * 10 * time.Millisecond)
-		_, discarded, _ = p.PacketTs(now, ts, false)
+		_, discarded, _ = p.Packet(now, ts, false)
 		require.True(t, discarded,
 			"packet %d: elapsed=%s < %s, should still be discarded",
 			i, now.Sub(T0), discardPeriod)
 	}
 
 	// Packet 10 at exactly 100ms: elapsed >= discardPeriod → discard phase ends.
-	_, discarded, _ = p.PacketTs(T0.Add(100*time.Millisecond), ticksMS(100), false)
+	_, discarded, _ = p.Packet(T0.Add(100*time.Millisecond), ticksMS(100), false)
 	require.False(t, discarded, "packet at 100ms: elapsed >= discardPeriod, should not be discarded")
 }
 
@@ -81,7 +81,7 @@ func TestPacerLogic_TimingBaseline(t *testing.T) {
 	// Packet 1: discard period (0ms) has elapsed → baseline established.
 	now1 := T0.Add(10 * time.Millisecond)
 	ts1 := ticksMS(10)
-	target, discarded, err := p.PacketTs(now1, ts1, false)
+	target, discarded, err := p.Packet(now1, ts1, false)
 	require.NoError(t, err)
 	require.False(t, discarded)
 
@@ -98,7 +98,7 @@ func TestPacerLogic_TargetTime(t *testing.T) {
 	T0 := utc.UnixMilli(10_000)
 
 	ts1 := ticksMS(10_000_000)
-	target, discarded, err := p.PacketTs(T0, ts1, false)
+	target, discarded, err := p.Packet(T0, ts1, false)
 	require.NoError(t, err)
 	require.False(t, discarded)
 	require.Equal(t, T0.Add(delay), target)
@@ -117,7 +117,7 @@ func TestPacerLogic_TargetTime(t *testing.T) {
 
 	for _, tt := range tests {
 		now := T0.Add(tt.nowOff)
-		target, discarded, err = p.PacketTs(now, tt.ts, false)
+		target, discarded, err = p.Packet(now, tt.ts, false)
 		require.NoError(t, err)
 		require.False(t, discarded, "ts=%d should not be discarded", tt.ts)
 
@@ -136,23 +136,23 @@ func TestPacerLogic_GapReset(t *testing.T) {
 	T0 := utc.UnixMilli(10_000)
 
 	// Establish baseline and accumulate some stats.
-	_, discarded, err := p.PacketTs(T0, 0, false)
+	_, discarded, err := p.Packet(T0, 0, false)
 	require.NoError(t, err)
 	require.True(t, discarded)
 
-	_, discarded, err = p.PacketTs(T0.Add(10*time.Millisecond), ticksMS(10), false)
+	_, discarded, err = p.Packet(T0.Add(10*time.Millisecond), ticksMS(10), false)
 	require.NoError(t, err)
 	require.True(t, discarded)
 
 	// discard period (15ms) has elapsed, so baseline established.
-	_, discarded, err = p.PacketTs(T0.Add(20*time.Millisecond), ticksMS(20), false)
+	_, discarded, err = p.Packet(T0.Add(20*time.Millisecond), ticksMS(20), false)
 	require.NoError(t, err)
 	require.False(t, discarded)
 	require.NotZero(t, stats.MinT0, "MinT0 should be set after baseline")
 	require.NotZero(t, stats.PushAhead.Min, "PushAhead.Min should be set after baseline")
 
 	// Signal gap 1 via gap=true.
-	_, discarded, err = p.PacketTs(T0.Add(30*time.Millisecond), ticksMS(30), true)
+	_, discarded, err = p.Packet(T0.Add(30*time.Millisecond), ticksMS(30), true)
 	require.NoError(t, err)
 
 	// The gap triggers a reset; the gap packet enters a new discard phase.
@@ -164,18 +164,18 @@ func TestPacerLogic_GapReset(t *testing.T) {
 	assert.Equal(t, T0.Add(30*time.Millisecond), stats.LastStreamReset, "LastStreamReset should record the gap time")
 
 	// Complete the new discard phase and re-establish a baseline.
-	_, discarded, err = p.PacketTs(T0.Add(40*time.Millisecond), ticksMS(40), false)
+	_, discarded, err = p.Packet(T0.Add(40*time.Millisecond), ticksMS(40), false)
 	require.NoError(t, err)
 	require.True(t, discarded, "second packet in post-gap discard phase should still be discarded")
 
-	_, discarded, err = p.PacketTs(T0.Add(50*time.Millisecond), ticksMS(50), false)
+	_, discarded, err = p.Packet(T0.Add(50*time.Millisecond), ticksMS(50), false)
 	require.NoError(t, err)
 	require.False(t, discarded, "packet after post-gap discard period should not be discarded")
 	require.NotZero(t, stats.MinT0, "MinT0 should be set after second baseline")
 	require.NotZero(t, stats.PushAhead.Min, "PushAhead.Min should be set after second baseline")
 
 	// Signal gap 2. StreamResets must accumulate to 2, not reset to 1.
-	_, discarded, err = p.PacketTs(T0.Add(60*time.Millisecond), ticksMS(60), true)
+	_, discarded, err = p.Packet(T0.Add(60*time.Millisecond), ticksMS(60), true)
 	require.NoError(t, err)
 	assert.True(t, discarded, "first packet after second gap should be discarded")
 	assert.Equal(t, 2, stats.StreamResets, "StreamResets must accumulate across gaps, not reset to 1")
@@ -191,10 +191,10 @@ func TestPacerLogic_PushAheadStats(t *testing.T) {
 	T0 := utc.UnixMilli(10_000)
 
 	// Establish baseline.
-	p.PacketTs(T0, 0, false)
+	p.Packet(T0, 0, false)
 	now1 := T0.Add(10 * time.Millisecond)
 	ts1 := ticksMS(10)
-	target1, _, _ := p.PacketTs(now1, ts1, false)
+	target1, _, _ := p.Packet(now1, ts1, false)
 
 	// Baseline packet: target = now1+delay, pushAhead = delay.
 	assert.Equal(t, delay, target1.Sub(now1))
@@ -204,14 +204,14 @@ func TestPacerLogic_PushAheadStats(t *testing.T) {
 	// Late arrival: wall clock advances 20ms, RTP only 10ms.
 	now2 := now1.Add(20 * time.Millisecond)
 	ts2 := ts1 + ticksMS(10)
-	p.PacketTs(now2, ts2, false)
+	p.Packet(now2, ts2, false)
 	assert.EqualValues(t, delay-10*time.Millisecond, stats.PushAhead.Min, "late arrival shrinks PushAhead.Min")
 	assert.EqualValues(t, delay, stats.PushAhead.Max, "PushAhead.Max unchanged")
 
 	// Early arrival: wall clock advances 5ms, RTP advances 20ms.
 	now3 := now2.Add(5 * time.Millisecond)
 	ts3 := ts2 + ticksMS(20)
-	p.PacketTs(now3, ts3, false)
+	p.Packet(now3, ts3, false)
 	assert.EqualValues(t, delay-10*time.Millisecond, stats.PushAhead.Min, "PushAhead.Min unchanged")
 	assert.EqualValues(t, delay+5*time.Millisecond, stats.PushAhead.Max, "early arrival grows PushAhead.Max")
 }
@@ -225,10 +225,10 @@ func TestPacerLogic_T0Adjustments(t *testing.T) {
 	wallEpoch := utc.UnixMilli(10_000)
 
 	// Establish baseline: packet 0 discarded, packet 1 sets baseline.
-	p.PacketTs(wallEpoch, 0, false)
+	p.Packet(wallEpoch, 0, false)
 	now1 := wallEpoch.Add(10 * time.Millisecond)
 	ts1 := ticksMS(10)
-	p.PacketTs(now1, ts1, false)
+	p.Packet(now1, ts1, false)
 
 	assert.Equal(t, wallEpoch, stats.MinT0)
 	assert.Zero(t, stats.NegDrift.Count)
@@ -236,7 +236,7 @@ func TestPacerLogic_T0Adjustments(t *testing.T) {
 	// Packet 2: wall advances 15ms, RTP advances 20ms → packet arrives early.
 	now2 := now1.Add(15 * time.Millisecond)
 	ts2 := ts1 + ticksMS(20)
-	p.PacketTs(now2, ts2, false)
+	p.Packet(now2, ts2, false)
 	assert.Equal(t, uint64(1), stats.NegDrift.Count)
 	assert.EqualValues(t, 5*time.Millisecond, stats.NegDrift.Sum)
 	assert.Equal(t, wallEpoch.Add(-5*time.Millisecond), stats.MinT0)
@@ -244,7 +244,7 @@ func TestPacerLogic_T0Adjustments(t *testing.T) {
 	// Packet 3: wall advances 10ms, RTP advances 15ms → another early arrival.
 	now3 := now2.Add(10 * time.Millisecond)
 	ts3 := ts2 + ticksMS(15)
-	p.PacketTs(now3, ts3, false)
+	p.Packet(now3, ts3, false)
 	assert.Equal(t, uint64(2), stats.NegDrift.Count)
 	assert.EqualValues(t, 10*time.Millisecond, stats.NegDrift.Sum)
 	assert.EqualValues(t, wallEpoch.Add(-10*time.Millisecond), stats.MinT0)
@@ -252,7 +252,7 @@ func TestPacerLogic_T0Adjustments(t *testing.T) {
 	// Packet 4: wall and RTP advance in sync → T0 stable, no adjustment.
 	now4 := now3.Add(10 * time.Millisecond)
 	ts4 := ts3 + ticksMS(10)
-	p.PacketTs(now4, ts4, false)
+	p.Packet(now4, ts4, false)
 	assert.EqualValues(t, uint64(2), stats.NegDrift.Count, "no adjustment when T0 is stable")
 	assert.EqualValues(t, 10*time.Millisecond, stats.NegDrift.Sum)
 }
@@ -267,17 +267,17 @@ func TestPacerLogic_StartupT0Adjustment(t *testing.T) {
 	T0 := utc.UnixMilli(10_000)
 
 	// Packet 0: ts=0, now=T0 → discard.T0 = T0.
-	_, d0, err := p.PacketTs(T0, 0, false)
+	_, d0, err := p.Packet(T0, 0, false)
 	require.NoError(t, err)
 	require.True(t, d0)
 
 	// Packet 1: RTP advances 20ms while wall clock only advances 10ms.
-	_, d1, err := p.PacketTs(T0.Add(10*time.Millisecond), ticksMS(20), false)
+	_, d1, err := p.Packet(T0.Add(10*time.Millisecond), ticksMS(20), false)
 	require.NoError(t, err)
 	require.True(t, d1, "T0 moved backward so discard timer resets, still discarding")
 
 	// Packet 2: T0 stable; discardPeriod elapsed → discard ends.
-	_, d2, err := p.PacketTs(T0.Add(20*time.Millisecond), ticksMS(30), false)
+	_, d2, err := p.Packet(T0.Add(20*time.Millisecond), ticksMS(30), false)
 	require.NoError(t, err)
 	require.False(t, d2, "T0 stable and discardPeriod elapsed → baseline established")
 
@@ -310,7 +310,7 @@ func TestPacerLogic_AdjustTimeDrift_Applied(t *testing.T) {
 
 	now1 := T0
 	ts1 := ticksMS(0)
-	_, discarded, err := p.PacketTs(now1, ts1, false)
+	_, discarded, err := p.Packet(now1, ts1, false)
 	require.NoError(t, err)
 	require.False(t, discarded)
 	baseTime := now1.Add(delay)
@@ -318,7 +318,7 @@ func TestPacerLogic_AdjustTimeDrift_Applied(t *testing.T) {
 	// Packet 2: wall clock advances 15ms, RTP advances 20ms → T0 shifts 5ms earlier.
 	now2 := now1.Add(15 * time.Millisecond)
 	ts2 := ts1 + ticksMS(20)
-	target2, discarded, err := p.PacketTs(now2, ts2, false)
+	target2, discarded, err := p.Packet(now2, ts2, false)
 	require.NoError(t, err)
 	require.False(t, discarded)
 	require.Equal(t, uint64(1), stats.NegDrift.Count, "nominal adjustment must be recorded")
@@ -348,7 +348,7 @@ func TestPacerLogic_AdjustTimeDrift_Cap(t *testing.T) {
 
 	now1 := T0
 	ts1 := ticksMS(0)
-	_, discarded, err := p.PacketTs(now1, ts1, false)
+	_, discarded, err := p.Packet(now1, ts1, false)
 	require.NoError(t, err)
 	require.False(t, discarded)
 	baseTime := now1.Add(delay)
@@ -356,7 +356,7 @@ func TestPacerLogic_AdjustTimeDrift_Cap(t *testing.T) {
 	// Packet 2: T0 drifts back 10ms (large single-step drift, capped at 3ms).
 	now2 := now1.Add(5 * time.Millisecond)
 	ts2 := ts1 + ticksMS(15)
-	target2, discarded, err := p.PacketTs(now2, ts2, false)
+	target2, discarded, err := p.Packet(now2, ts2, false)
 	require.NoError(t, err)
 	require.False(t, discarded)
 
@@ -388,7 +388,7 @@ func TestPacerLogic_SlowDrift_Correction(t *testing.T) {
 
 	now := T0
 	ts := ticksMS(0)
-	_, discarded, err := p.PacketTs(now, ts, false)
+	_, discarded, err := p.Packet(now, ts, false)
 	require.NoError(t, err)
 	require.False(t, discarded)
 	baseTime := now.Add(delay)
@@ -396,7 +396,7 @@ func TestPacerLogic_SlowDrift_Correction(t *testing.T) {
 	for i := 2; i <= 7; i++ {
 		now = now.Add(10 * time.Millisecond)
 		ts += ticksMS(8)
-		_, discarded, err = p.PacketTs(now, ts, false)
+		_, discarded, err = p.Packet(now, ts, false)
 		require.NoError(t, err)
 		require.False(t, discarded, "packet %d should not be discarded", i)
 	}
@@ -405,7 +405,7 @@ func TestPacerLogic_SlowDrift_Correction(t *testing.T) {
 	// Packet 8 at +70ms: period ends (70ms > 60ms), mean=6ms > 2ms → correction applied.
 	now = now.Add(10 * time.Millisecond)
 	ts += ticksMS(8)
-	target8, discarded, err := p.PacketTs(now, ts, false)
+	target8, discarded, err := p.Packet(now, ts, false)
 	require.NoError(t, err)
 	require.False(t, discarded)
 
@@ -437,14 +437,14 @@ func TestPacerLogic_SlowDrift_BelowThreshold(t *testing.T) {
 
 	now := T0
 	ts := ticksMS(0)
-	_, discarded, err := p.PacketTs(now, ts, false)
+	_, discarded, err := p.Packet(now, ts, false)
 	require.NoError(t, err)
 	require.False(t, discarded)
 
 	for i := 2; i <= 8; i++ {
 		now = now.Add(10 * time.Millisecond)
 		ts += ticksMS(8)
-		_, discarded, err = p.PacketTs(now, ts, false)
+		_, discarded, err = p.Packet(now, ts, false)
 		require.NoError(t, err)
 		require.False(t, discarded, "packet %d should not be discarded", i)
 	}
@@ -469,7 +469,7 @@ func TestPacerLogic_SlowDrift_StatsWithoutCorrection(t *testing.T) {
 
 	now := T0
 	ts := ticksMS(0)
-	_, discarded, err := p.PacketTs(now, ts, false)
+	_, discarded, err := p.Packet(now, ts, false)
 	require.NoError(t, err)
 	require.False(t, discarded)
 	baseTime := now.Add(delay)
@@ -477,14 +477,14 @@ func TestPacerLogic_SlowDrift_StatsWithoutCorrection(t *testing.T) {
 	for i := 2; i <= 7; i++ {
 		now = now.Add(10 * time.Millisecond)
 		ts += ticksMS(8)
-		_, discarded, err = p.PacketTs(now, ts, false)
+		_, discarded, err = p.Packet(now, ts, false)
 		require.NoError(t, err)
 		require.False(t, discarded, "packet %d should not be discarded", i)
 	}
 
 	now = now.Add(10 * time.Millisecond)
 	ts += ticksMS(8)
-	target8, discarded, err := p.PacketTs(now, ts, false)
+	target8, discarded, err := p.Packet(now, ts, false)
 	require.NoError(t, err)
 	require.False(t, discarded)
 
@@ -512,18 +512,18 @@ func TestPacerLogic_StartupJitter(t *testing.T) {
 
 	T_wall := utc.UnixMilli(10_000)
 
-	_, d, err := p.PacketTs(T_wall, 0, false)
+	_, d, err := p.Packet(T_wall, 0, false)
 	require.NoError(t, err)
 	require.True(t, d)
 
-	_, d, err = p.PacketTs(T_wall.Add(10*time.Millisecond), ticksMS(10), false)
+	_, d, err = p.Packet(T_wall.Add(10*time.Millisecond), ticksMS(10), false)
 	require.NoError(t, err)
 	require.True(t, d)
 
 	// Packet 3 arrives 5ms late.
 	now3 := T_wall.Add(25 * time.Millisecond)
 	ts3 := ticksMS(20)
-	target3, d, err := p.PacketTs(now3, ts3, false)
+	target3, d, err := p.Packet(now3, ts3, false)
 	require.NoError(t, err)
 	require.False(t, d)
 	wantTarget3 := T_wall.Add(20*time.Millisecond + delay)
@@ -531,7 +531,7 @@ func TestPacerLogic_StartupJitter(t *testing.T) {
 
 	now4 := T_wall.Add(30 * time.Millisecond)
 	ts4 := ticksMS(30)
-	target4, d, err := p.PacketTs(now4, ts4, false)
+	target4, d, err := p.Packet(now4, ts4, false)
 	require.NoError(t, err)
 	require.False(t, d)
 	wantTarget4 := T_wall.Add(30*time.Millisecond + delay)
