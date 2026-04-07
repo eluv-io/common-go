@@ -221,8 +221,10 @@ func (p *TsDisruptorPacer) Push(bts []byte) error {
 	var pcrValue uint64
 	var pcrPid int
 	for scan := bts; len(scan) >= packet.PacketSize; scan = scan[packet.PacketSize:] {
-		pkt := packet.Packet(scan)
-		if pcr, ok := ExtractPCR(&pkt); ok {
+		// Cast slice to pointer directly to avoid copying 188 bytes into a local value that would escape to the heap
+		// because its address is taken when calling ExtractPCR.
+		pkt := (*packet.Packet)(scan[:packet.PacketSize])
+		if pcr, ok := ExtractPCR(pkt); ok {
 			pcrFound = true
 			pcrValue = pcr
 			pcrPid = pkt.PID()

@@ -41,7 +41,7 @@ func (p *tsValidator) Validate(bts []byte) (errList error) {
 			return errList
 		}
 		packetCount++
-		pkt := packet.Packet(bts)
+		pkt := (*packet.Packet)(bts[:packet.PacketSize])
 
 		err := pkt.CheckErrors()
 		if err != nil {

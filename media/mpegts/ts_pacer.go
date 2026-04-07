@@ -82,7 +82,9 @@ func (p *TsPacer) Wait(bts []byte) {
 		p.initialDelay = 0
 	}
 	for len(bts) > packet.PacketSize && !done {
-		pkt := packet.Packet(bts)
+		// Cast slice to pointer directly to avoid copying 188 bytes into a local value that would escape to the heap
+		// because its address is taken below when calling waitPcr/waitPts.
+		pkt := (*packet.Packet)(bts[:packet.PacketSize])
 		err := pkt.CheckErrors()
 		if err != nil {
 			p.logThrottler.Do(func() {
@@ -91,9 +93,9 @@ func (p *TsPacer) Wait(bts []byte) {
 			return
 		}
 		if p.usePCR {
-			done = p.waitPcr(&pkt)
+			done = p.waitPcr(pkt)
 		} else {
-			done = p.waitPts(&pkt)
+			done = p.waitPts(pkt)
 		}
 
 		bts = bts[packet.PacketSize:]
