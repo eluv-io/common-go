@@ -30,8 +30,10 @@ func NewMultiSourceReader(readers []io.ReadCloser, bufSize ...int) *MultiSourceR
 	if len(bufSize) > 0 && bufSize[0] > 0 {
 		r.bufSize = bufSize[0]
 	}
-	bufPool, _ := bufPools.LoadOrStore(r.bufSize, byteutil.NewPool(r.bufSize+1))
-	r.bufPool = bufPool.(*byteutil.Pool)
+	bufPool, _ := bufPools.LoadOrStore(r.bufSize, sync.OnceValue(func() *byteutil.Pool {
+		return byteutil.NewPool(r.bufSize + 1)
+	}))
+	r.bufPool = bufPool.(func() *byteutil.Pool)()
 
 	for _, reader := range readers {
 		r.Add(reader)
