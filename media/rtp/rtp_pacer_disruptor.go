@@ -235,10 +235,10 @@ func (p *DisruptorPacer) Push(bts []byte) error {
 	}
 	target, discard, err := p.logic.Packet(now, ts, gapErr != nil)
 	// Update RTP-specific stats after PacketTs (which may have reset p.stats via reset()).
-	p.stats.Seq = pkt.SequenceNumber
-	p.stats.Sequ = seq
-	p.stats.Ts = pkt.Timestamp
-	p.stats.Tsu = ts
+	p.stats.Rtp.Seq = pkt.SequenceNumber
+	p.stats.Rtp.Sequ = seq
+	p.stats.Rtp.Ts = pkt.Timestamp
+	p.stats.Rtp.Tsu = ts
 	p.inStatsMu.Unlock()
 	if err != nil {
 		return errors.E("DisruptorPacer.Push", err)
@@ -264,17 +264,11 @@ func (p *DisruptorPacer) Push(bts []byte) error {
 	return nil
 }
 
-// Run starts the consumer loop and calls deliver for each packet at its scheduled time. It blocks until the pacer is
-// shut down via Shutdown. deliver is called sequentially from a single goroutine. The at parameter is the scheduled
-// delivery time, but no less than now + DeliveryMargin. The provided []byte will be re-used after the call to deliver
-// returns - make a copy if needed to avoid data races.
-//
-// Run starts the consumer loop and calls the deliver function for each pushed packet at its scheduled target time less
-// the "send ahead period". Run blocks until the pacer is shut down via Shutdown().
-//
-// The deliver function is called sequentially from a single goroutine. The []byte is the packet paylod and will be
-// re-used after the deliver call returns - make a copy if needed to avoid data races. The target time is passed as the
-// second parameter.
+// Run starts the consumer loop and calls deliver for each packet at its scheduled time. It blocks until the pacer
+// is shut down via Shutdown. deliver is called sequentially from a single goroutine. The at parameter is the
+// scheduled delivery time (max(targetTs, now+DeliveryMargin)); SendAhead shortens the consumer's sleep but does not
+// affect the value of at. The provided []byte will be re-used after the call to deliver returns — make a copy if
+// needed to avoid data races.
 func (p *DisruptorPacer) Run(deliver func(bts []byte, at utc.UTC) error) error {
 	p.handler.deliver = deliver
 	p.handler.ticker = time.NewTicker(p.conf.TickerPeriod.Duration())
@@ -352,7 +346,7 @@ func (h *disruptorHandler) Handle(lower, upper int64) {
 		}
 
 		// Decrement the buffered counter atomically; the value feeds into bufFill stats under the lock below.
-		// Note: technically, the packet is still buffered until after it's wakeTarget is reached.
+		// Note: technically, the packet is still buffered until after its wakeTarget is reached.
 		bufFill := os.DecrBuffered()
 
 		// lateness is how much the actual send time (sendAt) falls short of the ideal target time. If a packet is "on

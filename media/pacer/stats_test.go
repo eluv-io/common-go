@@ -1,6 +1,7 @@
 package pacer
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -26,10 +27,10 @@ func TestInStats_Reset(t *testing.T) {
 	s.MinT0 = now
 	s.StreamResets = 3
 	s.LastStreamReset = now.Add(-time.Minute)
-	s.Seq = 42
-	s.Sequ = 1042
-	s.Ts = 90000
-	s.Tsu = 190000
+	s.Rtp.Seq = 42
+	s.Rtp.Sequ = 1042
+	s.Rtp.Ts = 90000
+	s.Rtp.Tsu = 190000
 
 	lastReset := s.LastStreamReset
 	s.Reset()
@@ -48,10 +49,72 @@ func TestInStats_Reset(t *testing.T) {
 
 	// Scalar fields must be cleared
 	require.True(t, s.MinT0.IsZero())
-	require.Equal(t, uint16(0), s.Seq)
-	require.Equal(t, int64(0), s.Sequ)
-	require.Equal(t, uint32(0), s.Ts)
-	require.Equal(t, int64(0), s.Tsu)
+	require.Equal(t, RtpInStats{}, s.Rtp)
+}
+
+// TestInStats_Marshal verifies that InStats marshals and unmarshals correctly, and that RtpInStats and TsInStats
+// fields are correctly included in/excluded from the JSON output depending on which pacer type populated them.
+func TestInStats_Marshal(t *testing.T) {
+	t.Run("RtpOnly", func(t *testing.T) {
+		var s InStats
+		s.Rtp.Seq = 1234
+		s.Rtp.Sequ = 56789
+		s.Rtp.Ts = 90000
+		s.Rtp.Tsu = 190000
+
+		b, err := json.Marshal(s)
+		require.NoError(t, err)
+		require.Contains(t, string(b), `"rtp":{`)
+		require.NotContains(t, string(b), `"ts":{`)
+
+		var got InStats
+		require.NoError(t, json.Unmarshal(b, &got))
+		require.Equal(t, s.Rtp, got.Rtp)
+		require.Equal(t, TsInStats{}, got.Ts)
+	})
+
+	t.Run("TsOnly", func(t *testing.T) {
+		var s InStats
+		s.Ts.PCR = 27_000_000
+		s.Ts.PCRu = 54_000_000
+		s.Ts.PID = 256
+
+		b, err := json.Marshal(s)
+		require.NoError(t, err)
+		require.NotContains(t, string(b), `"rtp":{`)
+		require.Contains(t, string(b), `"ts":{`)
+
+		var got InStats
+		require.NoError(t, json.Unmarshal(b, &got))
+		require.Equal(t, RtpInStats{}, got.Rtp)
+		require.Equal(t, s.Ts, got.Ts)
+	})
+
+	t.Run("CommonFields", func(t *testing.T) {
+		now := utc.MustParse("2000-01-01T12:00:00Z")
+		var s InStats
+		s.PushAhead.Update(now, duration.Millis(50*time.Millisecond))
+		s.NegDrift.Update(now, duration.Millis(3*time.Millisecond))
+		s.StreamResets = 2
+		s.LastStreamReset = now
+		s.MinT0 = now.Add(-time.Second)
+
+		b, err := json.Marshal(s)
+		require.NoError(t, err)
+
+		var got InStats
+		require.NoError(t, json.Unmarshal(b, &got))
+		// RawStatistics has unexported fields that don't survive JSON — compare the serialized values only.
+		require.Equal(t, uint64(1), got.PushAhead.Count)
+		require.Equal(t, duration.Millis(50*time.Millisecond), got.PushAhead.Min)
+		require.Equal(t, uint64(1), got.NegDrift.Count)
+		require.Equal(t, duration.Millis(3*time.Millisecond), got.NegDrift.Min)
+		require.Equal(t, s.StreamResets, got.StreamResets)
+		require.Equal(t, s.LastStreamReset, got.LastStreamReset)
+		require.Equal(t, s.MinT0, got.MinT0)
+		require.Equal(t, RtpInStats{}, got.Rtp)
+		require.Equal(t, TsInStats{}, got.Ts)
+	})
 }
 
 func TestOutStats_switchPeriod(t *testing.T) {

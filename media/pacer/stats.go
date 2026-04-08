@@ -8,6 +8,21 @@ import (
 	"github.com/eluv-io/utc-go"
 )
 
+// RtpInStats holds RTP-specific input statistics, updated by the RTP disruptor pacer.
+type RtpInStats struct {
+	Seq  uint16 `json:"seq"`  // RTP sequence number of the most recent packet
+	Sequ int64  `json:"sequ"` // unwrapped RTP sequence number of the most recent packet
+	Ts   uint32 `json:"ts"`   // RTP timestamp of the most recent packet
+	Tsu  int64  `json:"tsu"`  // unwrapped RTP timestamp of the most recent packet
+}
+
+// TsInStats holds MPEG-TS-specific input statistics, updated by the TS disruptor pacer.
+type TsInStats struct {
+	PCR  uint64 `json:"pcr"`  // most recent raw PCR value
+	PCRu int64  `json:"pcru"` // most recent unwrapped PCR value
+	PID  int    `json:"pid"`  // PCR PID
+}
+
 // InStats tracks pacer input statistics.
 type InStats struct {
 	// PushAhead is (targetTime - currentTime) when packet is pushed
@@ -30,18 +45,17 @@ type InStats struct {
 	// PosDriftApplied records each positive baseTime correction applied by the positive-drift compensator.
 	PosDriftApplied statsutil.RawStatistics[duration.Millis] `json:"pos_drift_applied,omitempty"`
 
-	// Minimum T0 seen, zero value means not set
+	// MinT0 is the minimum T0 seen; zero value means not set.
 	MinT0 utc.UTC `json:"min_t0"`
 
-	// The number of times the stream has been reset due to a gap
+	// StreamResets is the number of times the stream has been reset due to a gap.
 	StreamResets int `json:"stream_resets,omitempty"`
 
-	// The time of the last stream reset
+	// LastStreamReset is the time of the last stream reset.
 	LastStreamReset utc.UTC `json:"last_stream_reset"`
-	Seq             uint16  `json:"seq"`  // RTP sequence number of the most recent packet
-	Sequ            int64   `json:"sequ"` // unwrapped RTP sequence number of the most recent packet
-	Ts              uint32  `json:"ts"`   // RTP timestamp of the most recent packet
-	Tsu             int64   `json:"tsu"`  // unwrapped RTP timestamp of the most recent packet
+
+	Rtp RtpInStats `json:"rtp,omitzero"` // zero for non-RTP pacers
+	Ts  TsInStats  `json:"ts,omitzero"`  // zero for non-TS pacers
 }
 
 // Reset clears all per-session statistics. Lifetime counters (StreamResets, LastStreamReset) are preserved so that

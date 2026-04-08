@@ -334,8 +334,8 @@ func TestDisruptorPacer_DelayContinuous(t *testing.T) {
 
 	require.EqualValues(t, packets, in.PushAhead.Count)
 	require.InDelta(t, time.Second, in.PushAhead.Mean, float64(5*time.Millisecond))
-	require.EqualValues(t, packets, in.Sequ)
-	require.EqualValues(t, packets*(int)(rtp.DurationToTicks(ipd)), in.Tsu)
+	require.EqualValues(t, packets, in.Rtp.Sequ)
+	require.EqualValues(t, packets*(int)(rtp.DurationToTicks(ipd)), in.Rtp.Tsu)
 
 	require.EqualValues(t, packets, out.JBD.Count, "number of sent packets should match")
 	require.InDelta(t, 880*time.Millisecond, out.JBD.Mean, float64(5*time.Millisecond), "jitter buffer delay should be constant")

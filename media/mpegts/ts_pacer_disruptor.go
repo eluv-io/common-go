@@ -65,19 +65,12 @@ func (c *TsDisruptorPacerConfig) InitDefaults() *TsDisruptorPacerConfig {
 	return c
 }
 
-// TsInStats holds PCR-specific input statistics for a single PCR PID.
-type TsInStats struct {
-	PCR  uint64 `json:"pcr"`  // most recent raw PCR value
-	PCRu int64  `json:"pcru"` // most recent unwrapped PCR value
-	PID  int    `json:"pid"`  // PCR PID
-}
-
 // pidState holds per-PCR-PID timing state.
 type pidState struct {
 	logic   *pacer.PacerLogic
 	inStats pacer.InStats
 	gapDet  PcrGapDetector
-	tsStats TsInStats
+	tsStats pacer.TsInStats
 }
 
 // tsDisruptorEntry is a pre-allocated ring buffer slot.
@@ -299,7 +292,7 @@ func (p *TsDisruptorPacer) pidStateFor(pid int, now utc.UTC) *pidState {
 		gapDet: PcrGapDetector{
 			Threshold: DurationToPcr(p.conf.PcrGapThreshold.Duration()),
 		},
-		tsStats: TsInStats{PID: pid},
+		tsStats: pacer.TsInStats{PID: pid},
 	}
 	state.logic = pacer.NewPacerLogic(p.conf.Logic, &state.inStats)
 	p.conf.EventLog.Info("new PCR PID", "stream", p.conf.Stream, "pid", pid)
@@ -371,8 +364,8 @@ func (p *TsDisruptorPacer) logStats() {
 			// Snapshot per-PID input stats under inStatsMu.
 			p.inStatsMu.Lock()
 			type pidSnap struct {
-				In pacer.InStats `json:"in"`
-				TS TsInStats     `json:"ts"`
+				In pacer.InStats    `json:"in"`
+				TS pacer.TsInStats  `json:"ts"`
 			}
 			snaps := make(map[string]pidSnap, len(p.pidStates))
 			for pid, state := range p.pidStates {
