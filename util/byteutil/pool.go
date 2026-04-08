@@ -87,11 +87,6 @@ func (p *Pool) Put(buf []byte) {
 	}
 }
 
-// Close closes the pool. No longer does anything but return nil.
-func (p *Pool) Close() error {
-	return nil
-}
-
 func (p *Pool) SetMetrics(created, retrieved, released Counter) {
 	p.created = created
 	p.retrieved = retrieved
