@@ -27,7 +27,6 @@ type Counter interface {
 type Pool struct {
 	BufSize   int         // Size of buffers
 	p         *sync.Pool  // Backing pool
-	q         chan []byte // Queue of released buffers
 	created   Counter     // Metric for created buffers
 	retrieved Counter     // Metric for retrieved buffers
 	released  Counter     // Metric for released buffers
@@ -39,23 +38,7 @@ func NewPool(bufSize int) *Pool {
 	p := &Pool{}
 	p.BufSize = bufSize
 	p.p = &sync.Pool{New: p.new}
-	p.q = make(chan []byte)
 	p.locker = util.NoopLocker{}
-
-	// Process buffers to be released sequentially in background
-	go func() {
-		for buf := range p.q {
-			// Decrement buffer's reference counter
-			if p.decrCounter(buf) {
-				// Release buffer back into pool
-				p.p.Put(buf)
-				if p.released != nil {
-					p.released.Add(1)
-				}
-			}
-		}
-	}()
-
 	return p
 }
 
@@ -89,20 +72,23 @@ func (p *Pool) Get(count ...byte) []byte {
 // into the pool. The caller should no longer use the buffer after calling.
 // Buffers that have been re-sliced will be ignored.
 func (p *Pool) Put(buf []byte) {
-	if p.q != nil && cap(buf) == p.BufSize+1 {
-		// Add buffer to queue, to be released sequentially in background
-		p.q <- buf[:p.BufSize]
+	if cap(buf) == p.BufSize+1 {
+		buf = buf[:p.BufSize]
+		// Decrement buffer's reference counter
+		if p.decrCounter(buf) {
+			// Release buffer back into pool
+			p.p.Put(buf)
+			if p.released != nil {
+				p.released.Add(1)
+			}
+		}
 	} else if buf != nil {
 		log.Debug("buffer not released back into pool", "expected_size", p.BufSize+1, "actual_size", cap(buf))
 	}
 }
 
-// Close closes the pool. A closed pool will still service buffers, but buffers
-// will not be re-added to the pool for re-use.
-// Caveat: Close currently must not be executed concurrently with any Put calls
+// Close closes the pool. No longer does anything but return nil.
 func (p *Pool) Close() error {
-	close(p.q)
-	p.q = nil
 	return nil
 }
 

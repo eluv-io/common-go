@@ -164,15 +164,19 @@ func TestPool(t *testing.T) {
 	require.Equal(t, float64(closeCount), ctx.released.val.Load())
 }
 
-// go test -tags "avpipe LLVM byollvm" -count=1 -v -bench=Benchmark* -run=Benchmark ./util/byteutil
+// % go test -count=1 -v -bench="Benchmark*" ./util/byteutil
 // goos: darwin
-// goarch: amd64
+// goarch: arm64
 // pkg: github.com/eluv-io/common-go/util/byteutil
-// BenchmarkPool-8       	  421527	      2413 ns/op	      33 B/op	       1 allocs/op
-// BenchmarkSyncPool-8   	 1000000	      1971 ns/op	      32 B/op	       1 allocs/op
-// BenchmarkNoPool-8     	  156228	      7671 ns/op	   65536 B/op	       1 allocs/op
+// cpu: Apple M4 Max
+// BenchmarkPool
+// BenchmarkPool-16        	 3519895	       340.4 ns/op	      24 B/op	       1 allocs/op
+// BenchmarkSyncPool
+// BenchmarkSyncPool-16    	 3502863	       342.9 ns/op	      24 B/op	       1 allocs/op
+// BenchmarkNoPool
+// BenchmarkNoPool-16      	  658054	      1783 ns/op	   65536 B/op	       1 allocs/op
 // PASS
-// ok  	github.com/eluv-io/common-go/util/byteutil	5.404s
+// ok  	github.com/eluv-io/common-go/util/byteutil	5.471s
 
 func BenchmarkPool(b *testing.B) {
 	p := byteutil.NewPool(bufSize)
