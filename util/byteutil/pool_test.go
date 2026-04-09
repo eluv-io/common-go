@@ -127,7 +127,7 @@ func TestPool(t *testing.T) {
 	max := 5000
 	var buf2 []byte
 	for i := 0; i < max; i++ {
-		buf2 = p.Get()
+		buf2 = p.GetN(0)
 		openCount++
 		if buf2[0] == 1 {
 			// Existing buffer was re-added to pool and successfully retrieved with new refCount 0

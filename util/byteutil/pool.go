@@ -46,7 +46,7 @@ func NewPool(bufSize int) *Pool {
 // buffer defaults to 1.
 func (p *Pool) New() []byte {
 	buf := p.new().([]byte)
-	p.setCounter(buf, 0)
+	p.setCounter(buf, 1)
 	if p.retrieved != nil {
 		p.retrieved.Add(1)
 	}
@@ -54,7 +54,7 @@ func (p *Pool) New() []byte {
 }
 
 // NewN force creates a new buffer. count specifies the reference counter to be
-// set for the buffer; if zero, count defaults to 1.
+// set for the buffer.
 func (p *Pool) NewN(count byte) []byte {
 	buf := p.new().([]byte)
 	p.setCounter(buf, count)
@@ -69,7 +69,7 @@ func (p *Pool) NewN(count byte) []byte {
 // the buffer defaults to 1.
 func (p *Pool) Get() []byte {
 	buf := p.p.Get().([]byte)
-	p.setCounter(buf, 0)
+	p.setCounter(buf, 1)
 	if p.retrieved != nil {
 		p.retrieved.Add(1)
 	}
@@ -78,7 +78,7 @@ func (p *Pool) Get() []byte {
 
 // GetN retrieves a buffer from the pool; if no previous buffers are available,
 // a new buffer is automatically created. count specifies the reference counter
-// to be set for the buffer; if zero, count defaults to 1.
+// to be set for the buffer.
 func (p *Pool) GetN(count byte) []byte {
 	buf := p.p.Get().([]byte)
 	p.setCounter(buf, count)
@@ -125,9 +125,6 @@ func (p *Pool) new() interface{} {
 // Sets the buffer's reference counter. Only the first count is used, if
 // specified. Count is by default 1.
 func (p *Pool) setCounter(buf []byte, count byte) {
-	if count == 0 {
-		count = 1
-	}
 	buf[:p.BufSize+1][p.BufSize] = count
 }
 
