@@ -42,10 +42,20 @@ func NewPool(bufSize int) *Pool {
 	return p
 }
 
-// New force creates a new buffer. Optionally, count specifies the reference
-// counter to be set for the buffer; if ommitted, count defaults to 1. Only the
-// first specified count is used.
-func (p *Pool) New(count ...byte) []byte {
+// New force creates a new buffer. The reference counter to be set for the
+// buffer defaults to 1.
+func (p *Pool) New() []byte {
+	buf := p.new().([]byte)
+	p.setCounter(buf, 0)
+	if p.retrieved != nil {
+		p.retrieved.Add(1)
+	}
+	return buf
+}
+
+// NewN force creates a new buffer. count specifies the reference counter to be
+// set for the buffer; if zero, count defaults to 1.
+func (p *Pool) NewN(count byte) []byte {
 	buf := p.new().([]byte)
 	p.setCounter(buf, count)
 	if p.retrieved != nil {
@@ -55,10 +65,21 @@ func (p *Pool) New(count ...byte) []byte {
 }
 
 // Get retrieves a buffer from the pool; if no previous buffers are available,
-// a new buffer is automatically created. Optionally, count specifies the
-// reference counter to be set for the buffer; if ommitted, count defaults to 1.
-// Only the first specified count is used.
-func (p *Pool) Get(count ...byte) []byte {
+// a new buffer is automatically created. The reference counter to be set for
+// the buffer defaults to 1.
+func (p *Pool) Get() []byte {
+	buf := p.p.Get().([]byte)
+	p.setCounter(buf, 0)
+	if p.retrieved != nil {
+		p.retrieved.Add(1)
+	}
+	return buf
+}
+
+// GetN retrieves a buffer from the pool; if no previous buffers are available,
+// a new buffer is automatically created. count specifies the reference counter
+// to be set for the buffer; if zero, count defaults to 1.
+func (p *Pool) GetN(count byte) []byte {
 	buf := p.p.Get().([]byte)
 	p.setCounter(buf, count)
 	if p.retrieved != nil {
@@ -95,21 +116,19 @@ func (p *Pool) SetMetrics(created, retrieved, released Counter) {
 
 // Creates a byte buffer of configured size.
 func (p *Pool) new() interface{} {
-	buf := make([]byte, p.BufSize+1)[:p.BufSize]
 	if p.created != nil {
 		p.created.Add(1)
 	}
-	return buf
+	return make([]byte, p.BufSize+1)[:p.BufSize]
 }
 
 // Sets the buffer's reference counter. Only the first count is used, if
 // specified. Count is by default 1.
-func (p *Pool) setCounter(buf []byte, count []byte) {
-	n := byte(1)
-	if len(count) > 0 {
-		n = count[0]
+func (p *Pool) setCounter(buf []byte, count byte) {
+	if count == 0 {
+		count = 1
 	}
-	buf[:p.BufSize+1][p.BufSize] = n
+	buf[:p.BufSize+1][p.BufSize] = count
 }
 
 // decrCounter decrements the buffer's reference counter by 1; returns true if

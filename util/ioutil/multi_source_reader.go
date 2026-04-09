@@ -9,7 +9,8 @@ import (
 	"github.com/eluv-io/errors-go"
 )
 
-var bufPools sync.Map
+var bufPools = make(map[int]*byteutil.Pool)
+var bufPoolsMu = sync.RWMutex{}
 
 var _ io.ReadCloser = (*MultiSourceReader)(nil)
 
@@ -30,10 +31,20 @@ func NewMultiSourceReader(readers []io.ReadCloser, bufferSize ...int) *MultiSour
 	if len(bufferSize) > 0 && bufferSize[0] > 0 {
 		bufSize = bufferSize[0]
 	}
-	bufPool, _ := bufPools.LoadOrStore(bufSize, sync.OnceValue(func() *byteutil.Pool {
-		return byteutil.NewPool(bufSize)
-	}))
-	r.bufPool = bufPool.(func() *byteutil.Pool)()
+
+	var ok bool
+	bufPoolsMu.RLock()
+	r.bufPool, ok = bufPools[bufSize]
+	bufPoolsMu.RUnlock()
+	if !ok {
+		bufPoolsMu.Lock()
+		r.bufPool, ok = bufPools[bufSize] // Double check in case another reader already made the pool just before
+		if !ok {
+			r.bufPool = byteutil.NewPool(bufSize)
+			bufPools[bufSize] = r.bufPool
+		}
+		bufPoolsMu.Unlock()
+	}
 
 	for _, reader := range readers {
 		r.Add(reader)

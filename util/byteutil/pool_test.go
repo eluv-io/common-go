@@ -16,11 +16,11 @@ import (
 
 var bufSize = 64 * 1024
 var data []byte
-var r io.Reader
+var r *bytes.Reader
 
 func init() {
 	data = byteutil.RandomBytes(100 * 1024 * 1024) // 100MB
-	r = bytes.NewBuffer(data)
+	r = bytes.NewReader(data)
 }
 
 type testCtx struct {
@@ -49,7 +49,7 @@ func TestPool(t *testing.T) {
 	createCount++
 	openCount++
 
-	buf = p.New(refCount)
+	buf = p.NewN(refCount)
 	// New (zero-ed) buffer of size 8 with refCount 4 should be created
 	require.Equal(t, bufSize+1, cap(buf))
 	require.Equal(t, bufSize, len(buf))
@@ -67,7 +67,7 @@ func TestPool(t *testing.T) {
 	createCount++
 	openCount++
 
-	buf = p.Get(refCount)
+	buf = p.GetN(refCount)
 	// New (zero-ed) buffer of size 8 with refCount 1 should be created
 	require.Equal(t, bufSize+1, cap(buf))
 	require.Equal(t, bufSize, len(buf))
@@ -127,7 +127,7 @@ func TestPool(t *testing.T) {
 	max := 5000
 	var buf2 []byte
 	for i := 0; i < max; i++ {
-		buf2 = p.Get(0)
+		buf2 = p.Get()
 		openCount++
 		if buf2[0] == 1 {
 			// Existing buffer was re-added to pool and successfully retrieved with new refCount 0
@@ -170,13 +170,15 @@ func TestPool(t *testing.T) {
 // pkg: github.com/eluv-io/common-go/util/byteutil
 // cpu: Apple M4 Max
 // BenchmarkPool
-// BenchmarkPool-16        	 3519895	       340.4 ns/op	      24 B/op	       1 allocs/op
+// BenchmarkPool-16        	 3431257	       346.1 ns/op	      24 B/op	       1 allocs/op
+// BenchmarkPoolN
+// BenchmarkPoolN-16       	 3473690	       345.8 ns/op	      24 B/op	       1 allocs/op
 // BenchmarkSyncPool
-// BenchmarkSyncPool-16    	 3502863	       342.9 ns/op	      24 B/op	       1 allocs/op
+// BenchmarkSyncPool-16    	 3450381	       349.4 ns/op	      24 B/op	       1 allocs/op
 // BenchmarkNoPool
-// BenchmarkNoPool-16      	  658054	      1783 ns/op	   65536 B/op	       1 allocs/op
+// BenchmarkNoPool-16      	  660004	      1788 ns/op	   65536 B/op	       1 allocs/op
 // PASS
-// ok  	github.com/eluv-io/common-go/util/byteutil	5.471s
+// ok  	github.com/eluv-io/common-go/util/byteutil	7.003s
 
 func BenchmarkPool(b *testing.B) {
 	p := byteutil.NewPool(bufSize)
@@ -186,6 +188,23 @@ func BenchmarkPool(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			buf := p.Get()
+			err := task(b, buf)
+			if err != nil {
+				return
+			}
+			p.Put(buf)
+		}
+	})
+}
+
+func BenchmarkPoolN(b *testing.B) {
+	p := byteutil.NewPool(bufSize)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			buf := p.GetN(1)
 			err := task(b, buf)
 			if err != nil {
 				return
@@ -230,9 +249,10 @@ func BenchmarkNoPool(b *testing.B) {
 
 func task(b *testing.B, buf []byte) error {
 	_, err := r.Read(buf)
-	if err == io.EOF {
-		r = bytes.NewBuffer(data)
-	} else if err != nil {
+	if err == io.EOF || (err == nil && r.Len() < len(buf)) {
+		_, err = r.Seek(io.SeekStart, 0)
+	}
+	if err != nil {
 		b.Error("Unexpected error reading data", err)
 		return err
 	}
