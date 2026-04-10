@@ -9,7 +9,8 @@ import (
 	"github.com/eluv-io/errors-go"
 )
 
-var bufPools sync.Map
+var bufPools = make(map[int]*byteutil.Pool)
+var bufPoolsMu = sync.RWMutex{}
 
 var _ io.ReadCloser = (*MultiSourceReader)(nil)
 
@@ -20,18 +21,30 @@ var _ io.ReadCloser = (*MultiSourceReader)(nil)
 // Read will return that error. Each source will be closed immediately once the source is fully read or errors. Close
 // will close any sources that have not yet been closed. If more than one error occurs when reading or closing sources,
 // only the first error encountered will be returned.
-func NewMultiSourceReader(readers []io.ReadCloser, bufSize ...int) *MultiSourceReader {
+func NewMultiSourceReader(readers []io.ReadCloser, bufferSize ...int) *MultiSourceReader {
 	r := &MultiSourceReader{}
 	r.reads = make(chan *multiSourceRead, 32)
 	r.done = make(chan bool)
 	r.errors = &errors.ErrorList{}
 
-	r.bufSize = 1024
-	if len(bufSize) > 0 && bufSize[0] > 0 {
-		r.bufSize = bufSize[0]
+	bufSize := 1024
+	if len(bufferSize) > 0 && bufferSize[0] > 0 {
+		bufSize = bufferSize[0]
 	}
-	bufPool, _ := bufPools.LoadOrStore(r.bufSize, byteutil.NewPool(r.bufSize+1))
-	r.bufPool = bufPool.(*byteutil.Pool)
+
+	var ok bool
+	bufPoolsMu.RLock()
+	r.bufPool, ok = bufPools[bufSize]
+	bufPoolsMu.RUnlock()
+	if !ok {
+		bufPoolsMu.Lock()
+		r.bufPool, ok = bufPools[bufSize] // Double check in case another reader already made the pool just before
+		if !ok {
+			r.bufPool = byteutil.NewPool(bufSize)
+			bufPools[bufSize] = r.bufPool
+		}
+		bufPoolsMu.Unlock()
+	}
 
 	for _, reader := range readers {
 		r.Add(reader)
@@ -50,7 +63,6 @@ type MultiSourceReader struct {
 	err     error
 	errors  *errors.ErrorList
 	closed  bool
-	bufSize int
 	bufPool *byteutil.Pool
 }
 
@@ -58,7 +70,7 @@ type multiSourceRead struct {
 	data []byte
 	off  int64
 	err  error
-	buf  []byte
+	buf  *[]byte
 }
 
 func (r *MultiSourceReader) Add(reader io.ReadCloser) {
@@ -71,12 +83,12 @@ func (r *MultiSourceReader) Add(reader io.ReadCloser) {
 		errored := false
 		for {
 			buf := r.acquireBuf()
-			n, err := reader.Read(buf)
+			n, err := reader.Read(*buf)
 			select {
 			case _ = <-r.done:
 				r.releaseBuf(buf)
 				err = io.ErrUnexpectedEOF // Used only to break from loop
-			case r.reads <- &multiSourceRead{data: buf[:n], off: off, err: err, buf: buf}:
+			case r.reads <- &multiSourceRead{data: (*buf)[:n], off: off, err: err, buf: buf}:
 				off += int64(n)
 				if err != nil {
 					errored = true
@@ -213,10 +225,10 @@ func (r *MultiSourceReader) Close() error {
 	return err
 }
 
-func (r *MultiSourceReader) acquireBuf() []byte {
-	return r.bufPool.Get()[:r.bufSize]
+func (r *MultiSourceReader) acquireBuf() *[]byte {
+	return r.bufPool.Get()
 }
 
-func (r *MultiSourceReader) releaseBuf(buf []byte) {
-	r.bufPool.Put(buf[:r.bufSize+1])
+func (r *MultiSourceReader) releaseBuf(buf *[]byte) {
+	r.bufPool.Put(buf)
 }
