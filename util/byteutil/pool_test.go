@@ -216,15 +216,16 @@ func BenchmarkPoolN(b *testing.B) {
 
 func BenchmarkSyncPool(b *testing.B) {
 	p := &sync.Pool{New: func() interface{} {
-		return make([]byte, bufSize)
+		b := make([]byte, bufSize)
+		return &b
 	}}
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			buf := p.Get().([]byte)
-			err := task(b, buf)
+			buf := p.Get().(*[]byte)
+			err := task(b, *buf)
 			if err != nil {
 				return
 			}
