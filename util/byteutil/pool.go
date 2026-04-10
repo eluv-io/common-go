@@ -95,23 +95,23 @@ func (p *Pool) GetN(count byte) *[]byte {
 // into the pool. The caller should no longer use the buffer after calling.
 // Buffers that have been re-sliced will be ignored.
 func (p *Pool) Put(buf *[]byte) {
-	if buf != nil {
-		if cap(*buf) == p.BufSize+1 {
-			if len(*buf) != p.BufSize {
-				log.Debug("buffer resized and released back into pool", "expected_size", p.BufSize, "actual_size", len(*buf))
-				b := (*buf)[:p.BufSize]
-				buf = &b // Causes an extra allocation
-			}
-			// Decrement buffer's reference counter
-			if p.decrCounter(*buf) {
-				// Release buffer back into pool
-				p.p.Put(buf)
-				if p.released != nil {
-					p.released.Add(1)
-				}
-			}
-		} else if *buf != nil {
-			log.Debug("buffer not released back into pool", "expected_size", p.BufSize+1, "actual_size", cap(*buf))
+	if buf == nil {
+		log.Warn("buffer not released back into pool", "reason", "nil buffer")
+		return
+	} else if cap(*buf) != p.BufSize+1 {
+		log.Warn("buffer not released back into pool", "expected_size", p.BufSize+1, "actual_size", cap(*buf))
+		return
+	} else if len(*buf) != p.BufSize {
+		log.Warn("buffer resized and released back into pool", "expected_size", p.BufSize, "actual_size", len(*buf))
+		b := (*buf)[:p.BufSize]
+		buf = &b // Causes an extra allocation
+	}
+	// Decrement buffer's reference counter
+	if p.decrCounter(*buf) {
+		// Release buffer back into pool
+		p.p.Put(buf)
+		if p.released != nil {
+			p.released.Add(1)
 		}
 	}
 }
