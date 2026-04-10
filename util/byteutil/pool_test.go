@@ -170,15 +170,15 @@ func TestPool(t *testing.T) {
 // pkg: github.com/eluv-io/common-go/util/byteutil
 // cpu: Apple M4 Max
 // BenchmarkPool
-// BenchmarkPool-16        	 3431257	       346.1 ns/op	      24 B/op	       1 allocs/op
+// BenchmarkPool-16        	 3504525	       343.5 ns/op	      24 B/op	       1 allocs/op
 // BenchmarkPoolN
-// BenchmarkPoolN-16       	 3473690	       345.8 ns/op	      24 B/op	       1 allocs/op
+// BenchmarkPoolN-16       	 3513205	       341.8 ns/op	      24 B/op	       1 allocs/op
 // BenchmarkSyncPool
-// BenchmarkSyncPool-16    	 3450381	       349.4 ns/op	      24 B/op	       1 allocs/op
+// BenchmarkSyncPool-16    	 3461325	       348.1 ns/op	       0 B/op	       0 allocs/op
 // BenchmarkNoPool
-// BenchmarkNoPool-16      	  660004	      1788 ns/op	   65536 B/op	       1 allocs/op
+// BenchmarkNoPool-16      	  661698	      1780 ns/op	   65536 B/op	       1 allocs/op
 // PASS
-// ok  	github.com/eluv-io/common-go/util/byteutil	7.003s
+// ok  	github.com/eluv-io/common-go/util/byteutil	7.043s
 
 func BenchmarkPool(b *testing.B) {
 	p := byteutil.NewPool(bufSize)
