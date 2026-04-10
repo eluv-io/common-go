@@ -23,7 +23,9 @@ type Counter interface {
 // additional, last element of each buffer. Callers of Pool are expected not to
 // alter this reference counter in any way or to attempt to release a buffer
 // that has been re-sliced. Pool is designed to be a drop-in replacement for
-// sync.Pool, without having to cast interface{} as []byte.
+// sync.Pool, without having to cast interface{} as *[]byte.
+// Note: Pool methods act on *[]byte mainly to avoid unnecessary allocations;
+// see https://github.com/golang/go/blob/9c8bf0e7/src/sync/example_pool_test.go#L17-L19
 type Pool struct {
 	BufSize   int         // Size of buffers
 	p         *sync.Pool  // Backing pool
@@ -44,67 +46,72 @@ func NewPool(bufSize int) *Pool {
 
 // New force creates a new buffer. The reference counter to be set for the
 // buffer defaults to 1.
-func (p *Pool) New() []byte {
+func (p *Pool) New() *[]byte {
 	buf := p.new().(*[]byte)
 	p.setCounter(*buf, 1)
 	if p.retrieved != nil {
 		p.retrieved.Add(1)
 	}
-	return *buf
+	return buf
 }
 
 // NewN force creates a new buffer. count specifies the reference counter to be
 // set for the buffer.
-func (p *Pool) NewN(count byte) []byte {
+func (p *Pool) NewN(count byte) *[]byte {
 	buf := p.new().(*[]byte)
 	p.setCounter(*buf, count)
 	if p.retrieved != nil {
 		p.retrieved.Add(1)
 	}
-	return *buf
+	return buf
 }
 
 // Get retrieves a buffer from the pool; if no previous buffers are available,
 // a new buffer is automatically created. The reference counter to be set for
 // the buffer defaults to 1.
-func (p *Pool) Get() []byte {
+func (p *Pool) Get() *[]byte {
 	buf := p.p.Get().(*[]byte)
 	p.setCounter(*buf, 1)
 	if p.retrieved != nil {
 		p.retrieved.Add(1)
 	}
-	return *buf
+	return buf
 }
 
 // GetN retrieves a buffer from the pool; if no previous buffers are available,
 // a new buffer is automatically created. count specifies the reference counter
 // to be set for the buffer.
-func (p *Pool) GetN(count byte) []byte {
+func (p *Pool) GetN(count byte) *[]byte {
 	buf := p.p.Get().(*[]byte)
 	p.setCounter(*buf, count)
 	if p.retrieved != nil {
 		p.retrieved.Add(1)
 	}
-	return *buf
+	return buf
 }
 
 // Put releases a reference to the given buffer, by decrementing the buffer's
 // reference counter. If the counter reaches 0, the buffer is released back
 // into the pool. The caller should no longer use the buffer after calling.
 // Buffers that have been re-sliced will be ignored.
-func (p *Pool) Put(buf []byte) {
-	if cap(buf) == p.BufSize+1 {
-		buf = buf[:p.BufSize]
-		// Decrement buffer's reference counter
-		if p.decrCounter(buf) {
-			// Release buffer back into pool
-			p.p.Put(&buf)
-			if p.released != nil {
-				p.released.Add(1)
+func (p *Pool) Put(buf *[]byte) {
+	if buf != nil {
+		if cap(*buf) == p.BufSize+1 {
+			if len(*buf) != p.BufSize {
+				b := (*buf)[:p.BufSize]
+				buf = &b // Causes an extra allocation
 			}
+			// Decrement buffer's reference counter
+			if p.decrCounter(*buf) {
+				// Release buffer back into pool
+				p.p.Put(buf)
+				if p.released != nil {
+					p.released.Add(1)
+				}
+			}
+		} else if *buf != nil {
+			log.Debug("buffer not released back into pool", "expected_size", p.BufSize+1, "actual_size", cap(*buf))
 		}
-	} else if buf != nil {
-		log.Debug("buffer not released back into pool", "expected_size", p.BufSize+1, "actual_size", cap(buf))
 	}
 }
 

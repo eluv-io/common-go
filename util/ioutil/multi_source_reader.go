@@ -70,7 +70,7 @@ type multiSourceRead struct {
 	data []byte
 	off  int64
 	err  error
-	buf  []byte
+	buf  *[]byte
 }
 
 func (r *MultiSourceReader) Add(reader io.ReadCloser) {
@@ -83,12 +83,12 @@ func (r *MultiSourceReader) Add(reader io.ReadCloser) {
 		errored := false
 		for {
 			buf := r.acquireBuf()
-			n, err := reader.Read(buf)
+			n, err := reader.Read(*buf)
 			select {
 			case _ = <-r.done:
 				r.releaseBuf(buf)
 				err = io.ErrUnexpectedEOF // Used only to break from loop
-			case r.reads <- &multiSourceRead{data: buf[:n], off: off, err: err, buf: buf}:
+			case r.reads <- &multiSourceRead{data: (*buf)[:n], off: off, err: err, buf: buf}:
 				off += int64(n)
 				if err != nil {
 					errored = true
@@ -225,10 +225,10 @@ func (r *MultiSourceReader) Close() error {
 	return err
 }
 
-func (r *MultiSourceReader) acquireBuf() []byte {
+func (r *MultiSourceReader) acquireBuf() *[]byte {
 	return r.bufPool.Get()
 }
 
-func (r *MultiSourceReader) releaseBuf(buf []byte) {
+func (r *MultiSourceReader) releaseBuf(buf *[]byte) {
 	r.bufPool.Put(buf)
 }

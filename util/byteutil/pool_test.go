@@ -42,43 +42,43 @@ func TestPool(t *testing.T) {
 
 	buf := p.New()
 	// New (zero-ed) buffer of size 8 with refCount 1 should be created
-	require.Equal(t, bufSize+1, cap(buf))
-	require.Equal(t, bufSize, len(buf))
-	require.Equal(t, zeroBuf, buf)
-	require.Equal(t, byte(1), buf[:bufSize+1][bufSize])
+	require.Equal(t, bufSize+1, cap(*buf))
+	require.Equal(t, bufSize, len(*buf))
+	require.Equal(t, zeroBuf, *buf)
+	require.Equal(t, byte(1), (*buf)[:bufSize+1][bufSize])
 	createCount++
 	openCount++
 
 	buf = p.NewN(refCount)
 	// New (zero-ed) buffer of size 8 with refCount 4 should be created
-	require.Equal(t, bufSize+1, cap(buf))
-	require.Equal(t, bufSize, len(buf))
-	require.Equal(t, zeroBuf, buf)
-	require.Equal(t, refCount, buf[:bufSize+1][bufSize])
+	require.Equal(t, bufSize+1, cap(*buf))
+	require.Equal(t, bufSize, len(*buf))
+	require.Equal(t, zeroBuf, *buf)
+	require.Equal(t, refCount, (*buf)[:bufSize+1][bufSize])
 	createCount++
 	openCount++
 
 	buf = p.Get()
 	// New (zero-ed) buffer of size 8 with refCount 1 should be created
-	require.Equal(t, bufSize+1, cap(buf))
-	require.Equal(t, bufSize, len(buf))
-	require.Equal(t, zeroBuf, buf)
-	require.Equal(t, byte(1), buf[:bufSize+1][bufSize])
+	require.Equal(t, bufSize+1, cap(*buf))
+	require.Equal(t, bufSize, len(*buf))
+	require.Equal(t, zeroBuf, *buf)
+	require.Equal(t, byte(1), (*buf)[:bufSize+1][bufSize])
 	createCount++
 	openCount++
 
 	buf = p.GetN(refCount)
 	// New (zero-ed) buffer of size 8 with refCount 1 should be created
-	require.Equal(t, bufSize+1, cap(buf))
-	require.Equal(t, bufSize, len(buf))
-	require.Equal(t, zeroBuf, buf)
-	require.Equal(t, refCount, buf[:bufSize+1][bufSize])
+	require.Equal(t, bufSize+1, cap(*buf))
+	require.Equal(t, bufSize, len(*buf))
+	require.Equal(t, zeroBuf, *buf)
+	require.Equal(t, refCount, (*buf)[:bufSize+1][bufSize])
 	createCount++
 	openCount++
 
 	// Populate existing buffer with 1s, for identification purposes
-	for i := range buf {
-		buf[i] = 1
+	for i := range *buf {
+		(*buf)[i] = 1
 	}
 
 	mu := &sync.Mutex{}
@@ -98,23 +98,23 @@ func TestPool(t *testing.T) {
 		for i := 0; i < 100; i++ {
 			buf2 := p.Get()
 			openCount++
-			require.Equal(t, make([]byte, bufSize), buf2)
+			require.Equal(t, make([]byte, bufSize), *buf2)
 			createCount++
 			time.Sleep(time.Millisecond)
 		}
 		r1 := ctx.released.val.Load()
 		require.Equal(t, 0.0, r1-r0)
-		require.Equal(t, refCount-n-1, getRefCount(buf))
+		require.Equal(t, refCount-n-1, getRefCount(*buf))
 	}
 
-	require.Equal(t, byte(1), getRefCount(buf))
+	require.Equal(t, byte(1), getRefCount(*buf))
 
 	r0 := ctx.released.val.Load()
 	p.Put(buf)
 	time.Sleep(50 * time.Millisecond)
 	r1 := ctx.released.val.Load()
 	require.Equal(t, 1.0, r1-r0)
-	require.Equal(t, byte(0), getRefCount(buf))
+	require.Equal(t, byte(0), getRefCount(*buf))
 	closeCount++
 
 	// Existing buffer should be re-added to pool
@@ -125,11 +125,11 @@ func TestPool(t *testing.T) {
 	//    Callers should not assume any relation between values passed to Put and
 	//    the values returned by Get.
 	max := 5000
-	var buf2 []byte
+	var buf2 *[]byte
 	for i := 0; i < max; i++ {
 		buf2 = p.GetN(0)
 		openCount++
-		if buf2[0] == 1 {
+		if (*buf2)[0] == 1 {
 			// Existing buffer was re-added to pool and successfully retrieved with new refCount 0
 			fmt.Println(fmt.Sprintf("found buffer at %d", i))
 			break
@@ -140,21 +140,21 @@ func TestPool(t *testing.T) {
 	}
 
 	// make sure we retrieved our buffer
-	if buf2[0] == 1 {
-		require.Equal(t, buf, buf2, "buffer not found")
-		require.Equal(t, byte(0), buf[:bufSize+1][bufSize])
+	if (*buf2)[0] == 1 {
+		require.Equal(t, *buf, *buf2, "buffer not found")
+		require.Equal(t, byte(0), (*buf)[:bufSize+1][bufSize])
 	}
 
 	p.Put(buf2)
 	time.Sleep(50 * time.Millisecond)
-	require.Equal(t, byte(0), getRefCount(buf2))
+	require.Equal(t, byte(0), getRefCount(*buf2))
 
 	// Existing buffer with refCount 0 should not be re-added to pool
 	// Attempt to retrieve existing buffer from pool; buffer should not be found
 	for i := 0; i < 100; i++ {
 		buf3 := p.Get()
 		openCount++
-		require.Equal(t, make([]byte, bufSize), buf3)
+		require.Equal(t, make([]byte, bufSize), *buf3)
 		createCount++
 		time.Sleep(time.Millisecond)
 	}
@@ -170,15 +170,15 @@ func TestPool(t *testing.T) {
 // pkg: github.com/eluv-io/common-go/util/byteutil
 // cpu: Apple M4 Max
 // BenchmarkPool
-// BenchmarkPool-16        	 3504525	       343.5 ns/op	      24 B/op	       1 allocs/op
+// BenchmarkPool-16        	 3464422	       345.7 ns/op	       0 B/op	       0 allocs/op
 // BenchmarkPoolN
-// BenchmarkPoolN-16       	 3513205	       341.8 ns/op	      24 B/op	       1 allocs/op
+// BenchmarkPoolN-16       	 3478377	       345.8 ns/op	       0 B/op	       0 allocs/op
 // BenchmarkSyncPool
-// BenchmarkSyncPool-16    	 3461325	       348.1 ns/op	       0 B/op	       0 allocs/op
+// BenchmarkSyncPool-16    	 3453873	       349.2 ns/op	       0 B/op	       0 allocs/op
 // BenchmarkNoPool
-// BenchmarkNoPool-16      	  661698	      1780 ns/op	   65536 B/op	       1 allocs/op
+// BenchmarkNoPool-16      	  651565	      1772 ns/op	   65536 B/op	       1 allocs/op
 // PASS
-// ok  	github.com/eluv-io/common-go/util/byteutil	7.043s
+// ok  	github.com/eluv-io/common-go/util/byteutil	6.994s
 
 func BenchmarkPool(b *testing.B) {
 	p := byteutil.NewPool(bufSize)
@@ -188,7 +188,7 @@ func BenchmarkPool(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			buf := p.Get()
-			err := task(b, buf)
+			err := task(b, *buf)
 			if err != nil {
 				return
 			}
@@ -205,7 +205,7 @@ func BenchmarkPoolN(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
 			buf := p.GetN(1)
-			err := task(b, buf)
+			err := task(b, *buf)
 			if err != nil {
 				return
 			}
