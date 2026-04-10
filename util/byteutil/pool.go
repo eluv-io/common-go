@@ -98,6 +98,7 @@ func (p *Pool) Put(buf *[]byte) {
 	if buf != nil {
 		if cap(*buf) == p.BufSize+1 {
 			if len(*buf) != p.BufSize {
+				log.Debug("buffer resized and released back into pool", "expected_size", p.BufSize, "actual_size", len(*buf))
 				b := (*buf)[:p.BufSize]
 				buf = &b // Causes an extra allocation
 			}
