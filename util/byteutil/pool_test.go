@@ -164,21 +164,21 @@ func TestPool(t *testing.T) {
 	require.Equal(t, float64(closeCount), ctx.released.val.Load())
 }
 
-// % go test -count=1 -v -bench="Benchmark*" ./util/byteutil
+// % go test -tags -count=1 -v -bench="Benchmark.*Pool" -run="Benchmark" ./util/byteutil
 // goos: darwin
 // goarch: arm64
 // pkg: github.com/eluv-io/common-go/util/byteutil
 // cpu: Apple M4 Max
 // BenchmarkPool
-// BenchmarkPool-16        	 3464422	       345.7 ns/op	       0 B/op	       0 allocs/op
+// BenchmarkPool-16        	 3599828	       334.8 ns/op	       0 B/op	       0 allocs/op
 // BenchmarkPoolN
-// BenchmarkPoolN-16       	 3478377	       345.8 ns/op	       0 B/op	       0 allocs/op
+// BenchmarkPoolN-16       	 3594460	       332.6 ns/op	       0 B/op	       0 allocs/op
 // BenchmarkSyncPool
-// BenchmarkSyncPool-16    	 3453873	       349.2 ns/op	       0 B/op	       0 allocs/op
+// BenchmarkSyncPool-16    	 3567121	       336.1 ns/op	       0 B/op	       0 allocs/op
 // BenchmarkNoPool
-// BenchmarkNoPool-16      	  651565	      1772 ns/op	   65536 B/op	       1 allocs/op
+// BenchmarkNoPool-16      	  711243	      1626 ns/op	   65536 B/op	       1 allocs/op
 // PASS
-// ok  	github.com/eluv-io/common-go/util/byteutil	6.994s
+// ok  	github.com/eluv-io/common-go/util/byteutil	6.723s
 
 func BenchmarkPool(b *testing.B) {
 	p := byteutil.NewPool(bufSize)
@@ -250,8 +250,8 @@ func BenchmarkNoPool(b *testing.B) {
 
 func task(b *testing.B, buf []byte) error {
 	_, err := r.Read(buf)
-	if err == io.EOF || (err == nil && r.Len() < len(buf)) {
-		_, err = r.Seek(io.SeekStart, 0)
+	if err == io.EOF || (err == nil && r.Len() < len(buf)*32) {
+		_, err = r.Seek(0, io.SeekStart)
 	}
 	if err != nil {
 		b.Error("Unexpected error reading data", err)
