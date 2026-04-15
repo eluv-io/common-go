@@ -250,7 +250,7 @@ func BenchmarkNoPool(b *testing.B) {
 
 func task(b *testing.B, buf []byte) error {
 	_, err := r.Read(buf)
-	if err == io.EOF || (err == nil && r.Len() < len(buf)*32) {
+	if err == io.EOF || (err == nil && r.Len() < len(buf)*64) {
 		_, err = r.Seek(0, io.SeekStart)
 	}
 	if err != nil {
