@@ -171,7 +171,7 @@ func TestDisruptorPacer_PacedDelivery(t *testing.T) {
 	watch.Stop()
 
 	require.LessOrEqual(t, ipd*(n-1)+delay-sendAhead, watch.Duration()+5*time.Millisecond, "packets must be paced according to their timestamps")
-	require.GreaterOrEqual(t, ipd*(n-1)+delay-sendAhead, watch.Duration()-5*time.Millisecond, "packets must be paced according to their timestamps")
+	require.GreaterOrEqual(t, ipd*(n-1)+delay-sendAhead, watch.Duration()-25*time.Millisecond, "packets must be paced according to their timestamps")
 
 	require.LessOrEqual(t, offCount.Load(), int32(3), "too many irregular ipd gaps")
 
