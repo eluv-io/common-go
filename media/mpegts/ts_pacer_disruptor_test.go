@@ -399,40 +399,6 @@ func TestTsDisruptorPacer_NoPCRBatch(t *testing.T) {
 	<-done
 }
 
-// TestTsDisruptorPacer_MultiPID verifies that two PCR PIDs are tracked independently.
-func TestTsDisruptorPacer_MultiPID(t *testing.T) {
-	const pid1 = 100
-	const pid2 = 200
-	const pcrPerBatch = uint64(270_000) // 10ms
-	const numBatchesPerPID = 4
-
-	conf := defaultTestConfig(0)
-	conf.Logic.Delay = duration.Spec(30 * time.Millisecond)
-	pacer, err := NewTsDisruptorPacer(conf)
-	require.NoError(t, err)
-
-	delivered, done := runPacer(t, pacer)
-
-	// Push batches alternating between the two PIDs.
-	// First batch per PID is discarded (T0 init per PID), rest are delivered.
-	var pcr1, pcr2 uint64
-	for i := 0; i < numBatchesPerPID; i++ {
-		require.NoError(t, pacer.Push(makeTsBatch(pid1, pcr1, 7)))
-		pcr1 += pcrPerBatch
-		require.NoError(t, pacer.Push(makeTsBatch(pid2, pcr2, 7)))
-		pcr2 += pcrPerBatch
-	}
-
-	// numBatchesPerPID batches per PID pushed; first per PID is discarded.
-	// Total delivered = (numBatchesPerPID-1) * 2.
-	expectedDelivered := (numBatchesPerPID - 1) * 2
-	batches := waitDelivered(t, delivered, expectedDelivered, 5*time.Second)
-	require.Len(t, batches, expectedDelivered)
-
-	pacer.Shutdown()
-	<-done
-}
-
 // TestTsDisruptorPacer_NonPowerOfTwoCapacity verifies that a non-power-of-two buffer capacity is rounded up.
 func TestTsDisruptorPacer_NonPowerOfTwoCapacity(t *testing.T) {
 	conf := defaultTestConfig(0)

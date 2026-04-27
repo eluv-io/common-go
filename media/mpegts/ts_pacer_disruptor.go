@@ -2,7 +2,6 @@ package mpegts
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -65,14 +64,6 @@ func (c *TsDisruptorPacerConfig) InitDefaults() *TsDisruptorPacerConfig {
 	return c
 }
 
-// pidState holds per-PCR-PID timing state.
-type pidState struct {
-	logic   *pacer.PacerLogic
-	inStats pacer.InStats
-	gapDet  PcrGapDetector
-	tsStats pacer.TsInStats
-}
-
 // tsDisruptorEntry is a pre-allocated ring buffer slot.
 type tsDisruptorEntry struct {
 	targetTs utc.UTC // target wall clock time when to send the packet
@@ -80,9 +71,9 @@ type tsDisruptorEntry struct {
 	pkt      []byte  // the TS packet bytes
 }
 
-// TsDisruptorPacer is an MPEG-TS callback pacer that uses a lock-free disruptor ring buffer as the jitter buffer.
-// It uses PCR (Program Clock Reference, 27 MHz clock) for timestamp calculations and target-time scheduling. Multiple
-// PCR PIDs are supported; each PID maintains independent timing state.
+// TsDisruptorPacer is an MPEG-TS callback pacer that uses a lock-free disruptor ring buffer as the jitter buffer. It
+// uses PCR (Program Clock Reference, 27 MHz clock) for timestamp calculations and target-time scheduling. The first PCR
+// found in each batch drives timing regardless of which PID carries it.
 //
 // Usage:
 //
@@ -95,17 +86,22 @@ type tsDisruptorEntry struct {
 //	}
 //	pacer.Shutdown()
 type TsDisruptorPacer struct {
-	conf           TsDisruptorPacerConfig
-	pidStates      map[int]*pidState // keyed by PCR PID; accessed only from Push goroutine (under inStatsMu for logStats)
-	lastTarget     utc.UTC           // most recent target from any PID (for no-PCR batches)
-	lastPcrArrival utc.UTC           // wall clock arrival time of the batch that set lastTarget
+	conf    TsDisruptorPacerConfig
+	logic   *pacer.PacerLogic // PCR timing logic; accessed only from Push goroutine (under inStatsMu for logStats)
+	inStats pacer.InStats     // timing input stats; accessed only from Push goroutine (under inStatsMu for logStats)
+	gapDet  PcrGapDetector    // PCR gap detector; accessed only from Push goroutine
+	tsStats pacer.TsInStats   // last seen PCR value/PID; accessed only from Push goroutine (under inStatsMu for logStats)
+
+	lastTarget     utc.UTC // most recent target (for no-PCR batches)
+	lastPcrArrival utc.UTC // wall clock arrival time of the batch that set lastTarget
 	outStats       pacer.OutStats
 
 	// outStatsMu guards outStats between the consumer goroutine and logStats.
-	// inStatsMu guards pidStates (updated by Push via PacketTs, read by logStats for snapshots).
-	// Both mutexes are uncontended in the fast path; logStats holds each for ~100ns once per StatsInterval.
 	outStatsMu sync.Mutex
-	inStatsMu  sync.Mutex
+	// inStatsMu guards inStats and tsStats (updated by Push, read by logStats for snapshots).
+	inStatsMu sync.Mutex
+	// NOTE: both outStatsMu and inStatsMu are uncontended in the fast path; logStats holds each for ~100ns once per
+	// StatsInterval.
 
 	ringBuffer   []tsDisruptorEntry
 	bufferMask   int64
@@ -170,13 +166,14 @@ func NewTsDisruptorPacer(conf TsDisruptorPacerConfig) (*TsDisruptorPacer, error)
 	ctx, cancel := context.WithCancelCause(context.Background())
 	p := &TsDisruptorPacer{
 		conf:       conf,
-		pidStates:  make(map[int]*pidState),
+		gapDet:     PcrGapDetector{Threshold: DurationToPcr(conf.PcrGapThreshold.Duration())},
 		outStats:   pacer.NewOutStats(conf.StatsInterval),
 		ringBuffer: make([]tsDisruptorEntry, conf.BufferCapacity),
 		bufferMask: int64(conf.BufferCapacity - 1),
 		ctx:        ctx,
 		cancel:     cancel,
 	}
+	p.logic = pacer.NewPacerLogic(conf.Logic, &p.inStats)
 
 	handler := &tsDisruptorHandler{pacer: p}
 	dis, err := disruptor.New(
@@ -229,9 +226,7 @@ func (p *TsDisruptorPacer) Push(bts []byte) error {
 
 	var target utc.UTC
 	if pcrFound {
-		state := p.pidStateFor(pcrPid, now)
-
-		prev, curr, gap := state.gapDet.Detect(pcrValue)
+		prev, curr, gap := p.gapDet.Detect(pcrValue)
 		if gap {
 			p.conf.EventLog.Warn("pcr gap",
 				"stream", p.conf.Stream,
@@ -243,12 +238,12 @@ func (p *TsDisruptorPacer) Push(bts []byte) error {
 		}
 
 		p.inStatsMu.Lock()
-		state.tsStats.PCR = pcrValue
-		state.tsStats.PCRu = curr
-		state.tsStats.PID = pcrPid
+		p.tsStats.PCR = pcrValue
+		p.tsStats.PCRu = curr
+		p.tsStats.PID = pcrPid
 		var discard bool
 		var err error
-		target, discard, err = state.logic.Packet(now, curr, gap)
+		target, discard, err = p.logic.Packet(now, curr, gap)
 		p.inStatsMu.Unlock()
 
 		if err != nil {
@@ -285,25 +280,6 @@ func (p *TsDisruptorPacer) Push(bts []byte) error {
 	return nil
 }
 
-// pidStateFor returns the existing pidState for the given PID, or creates a new one. Must be called from the Push
-// goroutine; concurrent access from logStats is guarded by inStatsMu only for stats reads, not for map writes.
-func (p *TsDisruptorPacer) pidStateFor(pid int, now utc.UTC) *pidState {
-	if state, ok := p.pidStates[pid]; ok {
-		return state
-	}
-	state := &pidState{
-		gapDet: PcrGapDetector{
-			Threshold: DurationToPcr(p.conf.PcrGapThreshold.Duration()),
-		},
-		tsStats: pacer.TsInStats{PID: pid},
-	}
-	state.logic = pacer.NewPacerLogic(p.conf.Logic, &state.inStats)
-	p.conf.EventLog.Info("new PCR PID", "stream", p.conf.Stream, "pid", pid)
-	p.pidStates[pid] = state
-	_ = now
-	return state
-}
-
 // Run starts the consumer loop and calls deliver for each batch at its scheduled time. It blocks until the pacer is
 // shut down via Shutdown. deliver is called sequentially from a single goroutine. The at parameter is the scheduled
 // delivery time. The provided []byte will be re-used after the call to deliver returns — make a copy if needed.
@@ -337,15 +313,10 @@ func (p *TsDisruptorPacer) BufferCap() int {
 	return len(p.ringBuffer)
 }
 
-// Stats returns a snapshot of the current input and output statistics. The InStats returned is for the first PCR PID
-// seen; use StatsForPID for per-PID stats.
+// Stats returns a snapshot of the current input and output statistics.
 func (p *TsDisruptorPacer) Stats() (pacer.InStats, pacer.OutStatsPeriod) {
 	p.inStatsMu.Lock()
-	var inSnap pacer.InStats
-	for _, state := range p.pidStates {
-		inSnap = state.inStats
-		break
-	}
+	inSnap := p.inStats
 	p.inStatsMu.Unlock()
 
 	p.outStatsMu.Lock()
@@ -364,19 +335,9 @@ func (p *TsDisruptorPacer) logStats() {
 		case <-t.C:
 			now := utc.Now()
 
-			// Snapshot per-PID input stats under inStatsMu.
 			p.inStatsMu.Lock()
-			type pidSnap struct {
-				In pacer.InStats   `json:"in"`
-				TS pacer.TsInStats `json:"ts"`
-			}
-			snaps := make(map[string]pidSnap, len(p.pidStates))
-			for pid, state := range p.pidStates {
-				snaps[fmt.Sprintf("pid%d", pid)] = pidSnap{
-					In: state.inStats,
-					TS: state.tsStats,
-				}
-			}
+			inSnap := p.inStats
+			tsSnap := p.tsStats
 			p.inStatsMu.Unlock()
 
 			p.outStatsMu.Lock()
@@ -386,7 +347,8 @@ func (p *TsDisruptorPacer) logStats() {
 			p.conf.StatsLog.Info("stats",
 				"stream", p.conf.Stream,
 				"out", jsonutil.Stringer(outSnap),
-				"in", jsonutil.Stringer(snaps))
+				"in", jsonutil.Stringer(inSnap),
+				"ts", jsonutil.Stringer(tsSnap))
 		case <-p.ctx.Done():
 			return
 		}
