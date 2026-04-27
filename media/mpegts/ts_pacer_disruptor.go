@@ -95,10 +95,11 @@ type tsDisruptorEntry struct {
 //	}
 //	pacer.Shutdown()
 type TsDisruptorPacer struct {
-	conf       TsDisruptorPacerConfig
-	pidStates  map[int]*pidState // keyed by PCR PID; accessed only from Push goroutine (under inStatsMu for logStats)
-	lastTarget utc.UTC           // most recent target from any PID (for no-PCR batches)
-	outStats   pacer.OutStats
+	conf           TsDisruptorPacerConfig
+	pidStates      map[int]*pidState // keyed by PCR PID; accessed only from Push goroutine (under inStatsMu for logStats)
+	lastTarget     utc.UTC           // most recent target from any PID (for no-PCR batches)
+	lastPcrArrival utc.UTC           // wall clock arrival time of the batch that set lastTarget
+	outStats       pacer.OutStats
 
 	// outStatsMu guards outStats between the consumer goroutine and logStats.
 	// inStatsMu guards pidStates (updated by Push via PacketTs, read by logStats for snapshots).
@@ -192,8 +193,9 @@ func NewTsDisruptorPacer(conf TsDisruptorPacerConfig) (*TsDisruptorPacer, error)
 }
 
 // Push extracts PCR timing from the batch of TS packets and schedules the batch for delivery at the computed target
-// time. If no PCR is found in the batch, the last known target time is reused. Batches arriving before any PCR has
-// been seen are silently dropped. Push must be called from a single goroutine.
+// time. If no PCR is found in the batch, the batch is scheduled at the last known target time offset by the elapsed
+// wall-clock time since that target was established, so no-PCR batches are spread out by arrival time. Batches
+// arriving before any PCR has been seen are silently dropped. Push must be called from a single goroutine.
 func (p *TsDisruptorPacer) Push(bts []byte) error {
 	if p.ctx.Err() != nil {
 		return errors.E("TsDisruptorPacer.Push", errors.K.Cancelled, context.Cause(p.ctx))
@@ -256,14 +258,15 @@ func (p *TsDisruptorPacer) Push(bts []byte) error {
 			return nil
 		}
 		p.lastTarget = target
+		p.lastPcrArrival = now
 	} else {
-		// No PCR in this batch: reuse last known target so the batch is delivered at the same scheduled time as the
-		// preceding PCR batch.
-		target = p.lastTarget
-		if target.IsZero() {
+		// No PCR in this batch: schedule at the last known target offset by how much time has elapsed since that target
+		// was established, so consecutive no-PCR batches are spread out according to their arrival times.
+		if p.lastTarget.IsZero() {
 			// No PCR seen yet — drop the batch; we cannot schedule it.
 			return nil
 		}
+		target = p.lastTarget.Add(now.Sub(p.lastPcrArrival))
 	}
 
 	// Reserve one slot; blocks (spin-waits) if the ring buffer is full.
@@ -364,8 +367,8 @@ func (p *TsDisruptorPacer) logStats() {
 			// Snapshot per-PID input stats under inStatsMu.
 			p.inStatsMu.Lock()
 			type pidSnap struct {
-				In pacer.InStats    `json:"in"`
-				TS pacer.TsInStats  `json:"ts"`
+				In pacer.InStats   `json:"in"`
+				TS pacer.TsInStats `json:"ts"`
 			}
 			snaps := make(map[string]pidSnap, len(p.pidStates))
 			for pid, state := range p.pidStates {

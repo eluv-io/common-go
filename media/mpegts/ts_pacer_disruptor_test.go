@@ -334,28 +334,66 @@ func TestTsDisruptorPacer_DiscardPhase(t *testing.T) {
 }
 
 // TestTsDisruptorPacer_NoPCRBatch verifies that batches without PCR reuse the last known target time.
+// TestTsDisruptorPacer_NoPCRBatch verifies that no-PCR batches are scheduled relative to the arrival time of the last
+// PCR batch: a no-PCR batch pushed T ms after the preceding PCR batch should be delivered ~T ms later than it.
 func TestTsDisruptorPacer_NoPCRBatch(t *testing.T) {
 	const pid = 100
+	const delay = 50 * time.Millisecond
+	const sleepBetween = 20 * time.Millisecond
+	const tolerance = 12 * time.Millisecond
 
 	conf := defaultTestConfig(0)
-	conf.Logic.Delay = duration.Spec(30 * time.Millisecond)
+	conf.Logic.Delay = duration.Spec(delay)
 	pacer, err := NewTsDisruptorPacer(conf)
 	require.NoError(t, err)
 
-	delivered, done := runPacer(t, pacer)
+	var mu sync.Mutex
+	var deliveryTimes []utc.UTC
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = pacer.Run(func(bts []byte, at utc.UTC) error {
+			mu.Lock()
+			deliveryTimes = append(deliveryTimes, at)
+			mu.Unlock()
+			return nil
+		})
+	}()
 
-	// Batch 1 (discarded): establishes T0.
+	// Batch 1 (delivered): PCR=0, establishes baseline.
 	require.NoError(t, pacer.Push(makeTsBatch(pid, 0, 7)))
-	// Batch 2 (delivered): PCR=0, establishes baseline, lastTarget = now+30ms.
-	require.NoError(t, pacer.Push(makeTsBatch(pid, 0, 7)))
-	// Batch 3 (delivered): no PCR, reuses lastTarget.
+	// Sleep to create a measurable arrival-time gap before the no-PCR batch.
+	time.Sleep(sleepBetween)
+	// Batch 2 (delivered): no PCR; should be scheduled ~sleepBetween after batch 1's target.
 	require.NoError(t, pacer.Push(makeTsBatchNoPCR(pid, 7)))
-	// Batch 4 (delivered): PCR=pcrPerBatch.
-	require.NoError(t, pacer.Push(makeTsBatch(pid, 270_000, 7)))
 
-	// All three post-discard batches should arrive.
-	batches := waitDelivered(t, delivered, 3, 5*time.Second)
-	require.Len(t, batches, 3)
+	// Wait for both deliveries.
+	deadline := time.After(5 * time.Second)
+	for {
+		time.Sleep(5 * time.Millisecond)
+		mu.Lock()
+		n := len(deliveryTimes)
+		mu.Unlock()
+		if n >= 2 {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatal("timed out waiting for deliveries")
+		default:
+		}
+	}
+
+	mu.Lock()
+	times := append([]utc.UTC(nil), deliveryTimes...)
+	mu.Unlock()
+
+	require.Len(t, times, 2)
+
+	// The no-PCR batch must be scheduled ~sleepBetween after the PCR batch's target.
+	interval := times[1].Sub(times[0])
+	require.InDeltaf(t, float64(sleepBetween), float64(interval), float64(tolerance),
+		"no-PCR batch delivery interval: got %v, want %v ± %v", interval, sleepBetween, tolerance)
 
 	pacer.Shutdown()
 	<-done
