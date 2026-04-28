@@ -22,9 +22,9 @@ const DefaultPcrGapThreshold = duration.Second
 
 // TsDisruptorPacerConfig holds configuration for a TsDisruptorPacer.
 type TsDisruptorPacerConfig struct {
-	Stream   string    `json:"stream"`    // Stream is the stream name for logging.
-	StatsLog elog.ILog `json:"stats_log"` // StatsLog is the logger to use for stats logging. If nil, stats are not logged.
-	EventLog elog.ILog `json:"event_log"` // EventLog is the logger to use for event logging. If nil, events are not logged.
+	Stream   string    `json:"-"` // Stream is the stream name for logging.
+	StatsLog elog.ILog `json:"-"` // StatsLog is the logger to use for stats logging. If nil, stats are not logged.
+	EventLog elog.ILog `json:"-"` // EventLog is the logger to use for event logging. If nil, events are not logged.
 
 	// Logic holds timing logic configuration. ToDuration will be overridden to PcrToDuration; SeqThreshold and
 	// TsThreshold are unused for MPEG-TS pacing (PCR gap detection is handled separately via PcrGapThreshold).
