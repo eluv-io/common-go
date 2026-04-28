@@ -22,39 +22,39 @@ const DefaultPcrGapThreshold = duration.Second
 
 // TsDisruptorPacerConfig holds configuration for a TsDisruptorPacer.
 type TsDisruptorPacerConfig struct {
-	Stream   string    // Stream is the stream name for logging.
-	StatsLog elog.ILog // StatsLog is the logger to use for stats logging. If nil, stats are not logged.
-	EventLog elog.ILog // EventLog is the logger to use for event logging. If nil, events are not logged.
+	Stream   string    `json:"stream"`    // Stream is the stream name for logging.
+	StatsLog elog.ILog `json:"stats_log"` // StatsLog is the logger to use for stats logging. If nil, stats are not logged.
+	EventLog elog.ILog `json:"event_log"` // EventLog is the logger to use for event logging. If nil, events are not logged.
 
 	// Logic holds timing logic configuration. ToDuration will be overridden to PcrToDuration; SeqThreshold and
 	// TsThreshold are unused for MPEG-TS pacing (PCR gap detection is handled separately via PcrGapThreshold).
-	Logic pacer.PacerLogicConfig
+	Logic pacer.PacerLogicConfig `json:"logic"`
 
 	// PcrGapThreshold is the maximum PCR jump between consecutive PCR-bearing packets before a stream reset is
 	// triggered. Defaults to 1 second when zero.
-	PcrGapThreshold duration.Spec
+	PcrGapThreshold duration.Spec `json:"pcr_gap_threshold"`
 
-	BufferCapacity    int           // ring buffer capacity (rounded up to next power of 2; 0 → rtp.DefaultDisruptorCapacity)
-	MinSleepThreshold duration.Spec // sleep durations shorter than this are skipped (0 → rtp.DefaultMinSleepThreshold)
-	TickerPeriod      duration.Spec // ticker period for scheduling delivery (0 → rtp.DefaultTickerPeriod)
-	StatsInterval     duration.Spec // interval for periodic stats logging (0 → rtp.DefaultStatsInterval, -1 → disabled)
+	BufferCapacity    int           `json:"buffer_capacity"`     // ring buffer capacity (rounded up to next power of 2; 0 → rtp.DefaultDisruptorCapacity)
+	MinSleepThreshold duration.Spec `json:"min_sleep_threshold"` // sleep durations shorter than this are skipped (0 → rtp.DefaultMinSleepThreshold)
+	TickerPeriod      duration.Spec `json:"ticker_period"`       // ticker period for scheduling delivery (0 → rtp.DefaultTickerPeriod)
+	StatsInterval     duration.Spec `json:"stats_interval"`      // interval for periodic stats logging (0 → rtp.DefaultStatsInterval, -1 → disabled)
 
 	// SendAhead is how early the consumer dispatches a packet before its target time. 0 = dispatch at targetTs.
-	SendAhead duration.Spec
+	SendAhead duration.Spec `json:"send_ahead"`
 
 	// DeliveryMargin is the minimum lead time guaranteed to the "deliver" callback:
 	//   sendAt = max(targetTs, now + DeliveryMargin)
 	// Should be ≤ SendAhead so the floor is reliably reachable under normal conditions. 0 = disabled.
-	DeliveryMargin duration.Spec
+	DeliveryMargin duration.Spec `json:"delivery_margin"`
 
 	// EstimatePcrRate, when true, schedules no-PCR batches using a PCR-tick rate estimated from consecutive
 	// PCR-bearing batches instead of raw arrival time. This smooths input jitter for fixed-bandwidth streams where
 	// packets arrive at a nominally constant rate. Falls back to arrival-time scheduling until the estimate is
 	// available (requires two consecutive non-discarded PCR batches).
-	EstimatePcrRate bool
+	EstimatePcrRate bool `json:"estimate_pcr_rate"`
 
 	// StripRtp, when true, strips the RTP header from each incoming byte slice before extracting PCR.
-	StripRtp bool
+	StripRtp bool `json:"strip_rtp"`
 }
 
 func (c *TsDisruptorPacerConfig) InitDefaults() *TsDisruptorPacerConfig {
@@ -102,9 +102,9 @@ type TsDisruptorPacer struct {
 	lastPcrArrival utc.UTC // wall clock arrival time of the batch that set lastTarget
 
 	// PCR rate estimation fields — accessed only from the Push goroutine; no locking required.
-	lastPcrUnwrapped    int64 // unwrapped PCR value from the last non-discarded PCR batch
+	lastPcrUnwrapped     int64 // unwrapped PCR value from the last non-discarded PCR batch
 	estimatedPcrPerBatch int64 // estimated PCR ticks per batch; 0 = estimate not yet available
-	noPcrBatchCount     int   // number of consecutive non-PCR batches since the last PCR batch
+	noPcrBatchCount      int   // number of consecutive non-PCR batches since the last PCR batch
 
 	outStats pacer.OutStats
 
