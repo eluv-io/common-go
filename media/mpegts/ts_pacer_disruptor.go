@@ -47,6 +47,12 @@ type TsDisruptorPacerConfig struct {
 	// Should be ≤ SendAhead so the floor is reliably reachable under normal conditions. 0 = disabled.
 	DeliveryMargin duration.Spec
 
+	// EstimatePcrRate, when true, schedules no-PCR batches using a PCR-tick rate estimated from consecutive
+	// PCR-bearing batches instead of raw arrival time. This smooths input jitter for fixed-bandwidth streams where
+	// packets arrive at a nominally constant rate. Falls back to arrival-time scheduling until the estimate is
+	// available (requires two consecutive non-discarded PCR batches).
+	EstimatePcrRate bool
+
 	// StripRtp, when true, strips the RTP header from each incoming byte slice before extracting PCR.
 	StripRtp bool
 }
@@ -94,7 +100,13 @@ type TsDisruptorPacer struct {
 
 	lastTarget     utc.UTC // most recent target (for no-PCR batches)
 	lastPcrArrival utc.UTC // wall clock arrival time of the batch that set lastTarget
-	outStats       pacer.OutStats
+
+	// PCR rate estimation fields — accessed only from the Push goroutine; no locking required.
+	lastPcrUnwrapped    int64 // unwrapped PCR value from the last non-discarded PCR batch
+	estimatedPcrPerBatch int64 // estimated PCR ticks per batch; 0 = estimate not yet available
+	noPcrBatchCount     int   // number of consecutive non-PCR batches since the last PCR batch
+
+	outStats pacer.OutStats
 
 	// outStatsMu guards outStats between the consumer goroutine and logStats.
 	outStatsMu sync.Mutex
@@ -190,9 +202,10 @@ func NewTsDisruptorPacer(conf TsDisruptorPacerConfig) (*TsDisruptorPacer, error)
 }
 
 // Push extracts PCR timing from the batch of TS packets and schedules the batch for delivery at the computed target
-// time. If no PCR is found in the batch, the batch is scheduled at the last known target time offset by the elapsed
-// wall-clock time since that target was established, so no-PCR batches are spread out by arrival time. Batches
-// arriving before any PCR has been seen are silently dropped. Push must be called from a single goroutine.
+// time. Batches without PCR are scheduled by offsetting the last known target by the elapsed wall-clock time since
+// that target was established; if EstimatePcrRate is enabled and an estimate is available, the estimated per-batch
+// PCR tick rate is used instead to smooth input jitter. Batches arriving before any PCR has been seen are silently
+// dropped. Push must be called from a single goroutine.
 func (p *TsDisruptorPacer) Push(bts []byte) error {
 	if p.ctx.Err() != nil {
 		return errors.E("TsDisruptorPacer.Push", errors.K.Cancelled, context.Cause(p.ctx))
@@ -235,6 +248,11 @@ func (p *TsDisruptorPacer) Push(bts []byte) error {
 				"curr_pcru", curr,
 				"diff", curr-prev,
 				"threshold", p.conf.PcrGapThreshold)
+			if p.conf.EstimatePcrRate {
+				// Invalidate the rate estimate across a gap: the PCR clock jumps discontinuously.
+				p.estimatedPcrPerBatch = 0
+				p.noPcrBatchCount = 0
+			}
 		}
 
 		p.inStatsMu.Lock()
@@ -252,16 +270,38 @@ func (p *TsDisruptorPacer) Push(bts []byte) error {
 		if discard {
 			return nil
 		}
+		if p.conf.EstimatePcrRate {
+			// Update rate estimate from the interval between consecutive non-discarded PCR batches.
+			// totalBatches counts the intervals covered: noPcrBatchCount non-PCR batches + this PCR batch.
+			if !p.lastTarget.IsZero() {
+				pcrDelta := curr - p.lastPcrUnwrapped
+				totalBatches := int64(p.noPcrBatchCount + 1)
+				if pcrDelta > 0 {
+					p.estimatedPcrPerBatch = pcrDelta / totalBatches
+				}
+			}
+			p.lastPcrUnwrapped = curr
+			p.noPcrBatchCount = 0
+		}
 		p.lastTarget = target
 		p.lastPcrArrival = now
 	} else {
-		// No PCR in this batch: schedule at the last known target offset by how much time has elapsed since that target
-		// was established, so consecutive no-PCR batches are spread out according to their arrival times.
+		// No PCR in this batch.
 		if p.lastTarget.IsZero() {
 			// No PCR seen yet — drop the batch; we cannot schedule it.
 			return nil
 		}
-		target = p.lastTarget.Add(now.Sub(p.lastPcrArrival))
+		if p.conf.EstimatePcrRate {
+			// Always count no-PCR batches so the denominator is correct when the first estimate is computed.
+			p.noPcrBatchCount++
+		}
+		if p.conf.EstimatePcrRate && p.estimatedPcrPerBatch > 0 {
+			// Schedule using the estimated PCR tick rate to avoid propagating arrival-time jitter.
+			target = p.lastTarget.Add(PcrToDuration(uint64(p.estimatedPcrPerBatch) * uint64(p.noPcrBatchCount)))
+		} else {
+			// Fall back to arrival-time offset (also used before the estimate is available).
+			target = p.lastTarget.Add(now.Sub(p.lastPcrArrival))
+		}
 	}
 
 	// Reserve one slot; blocks (spin-waits) if the ring buffer is full.

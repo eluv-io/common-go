@@ -1,7 +1,6 @@
 package mpegts
 
 import (
-	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -160,15 +159,12 @@ func TestTsDisruptorPacer_PacedDelivery(t *testing.T) {
 	pacer, err := NewTsDisruptorPacer(conf)
 	require.NoError(t, err)
 
-	var deliveryTimes []utc.UTC
-	var mu sync.Mutex
+	delivered := make(chan utc.UTC, numBatches)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		_ = pacer.Run(func(bts []byte, at utc.UTC) error {
-			mu.Lock()
-			deliveryTimes = append(deliveryTimes, at)
-			mu.Unlock()
+			delivered <- at
 			return nil
 		})
 	}()
@@ -180,28 +176,17 @@ func TestTsDisruptorPacer_PacedDelivery(t *testing.T) {
 		pcr += pcrPerBatch
 	}
 
-	// Wait for numBatches-1 deliveries (first discarded).
+	// Collect all delivery times.
+	times := make([]utc.UTC, numBatches)
 	deadline := time.After(5 * time.Second)
-	for {
-		time.Sleep(5 * time.Millisecond)
-		mu.Lock()
-		n := len(deliveryTimes)
-		mu.Unlock()
-		if n >= numBatches-1 {
-			break
-		}
+	for i := range times {
 		select {
+		case at := <-delivered:
+			times[i] = at
 		case <-deadline:
-			t.Fatalf("timed out: got %d deliveries", n)
-		default:
+			t.Fatalf("timed out waiting for delivery %d of %d", i+1, numBatches)
 		}
 	}
-
-	mu.Lock()
-	times := append([]utc.UTC(nil), deliveryTimes...)
-	mu.Unlock()
-
-	require.GreaterOrEqual(t, len(times), numBatches-1)
 
 	// Verify inter-delivery intervals are close to batchInterval.
 	for i := 1; i < len(times); i++ {
@@ -333,7 +318,6 @@ func TestTsDisruptorPacer_DiscardPhase(t *testing.T) {
 	<-done
 }
 
-// TestTsDisruptorPacer_NoPCRBatch verifies that batches without PCR reuse the last known target time.
 // TestTsDisruptorPacer_NoPCRBatch verifies that no-PCR batches are scheduled relative to the arrival time of the last
 // PCR batch: a no-PCR batch pushed T ms after the preceding PCR batch should be delivered ~T ms later than it.
 func TestTsDisruptorPacer_NoPCRBatch(t *testing.T) {
@@ -347,15 +331,12 @@ func TestTsDisruptorPacer_NoPCRBatch(t *testing.T) {
 	pacer, err := NewTsDisruptorPacer(conf)
 	require.NoError(t, err)
 
-	var mu sync.Mutex
-	var deliveryTimes []utc.UTC
+	delivered := make(chan utc.UTC, 4)
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
 		_ = pacer.Run(func(bts []byte, at utc.UTC) error {
-			mu.Lock()
-			deliveryTimes = append(deliveryTimes, at)
-			mu.Unlock()
+			delivered <- at
 			return nil
 		})
 	}()
@@ -367,33 +348,82 @@ func TestTsDisruptorPacer_NoPCRBatch(t *testing.T) {
 	// Batch 2 (delivered): no PCR; should be scheduled ~sleepBetween after batch 1's target.
 	require.NoError(t, pacer.Push(makeTsBatchNoPCR(pid, 7)))
 
-	// Wait for both deliveries.
+	var times [2]utc.UTC
 	deadline := time.After(5 * time.Second)
-	for {
-		time.Sleep(5 * time.Millisecond)
-		mu.Lock()
-		n := len(deliveryTimes)
-		mu.Unlock()
-		if n >= 2 {
-			break
-		}
+	for i := range times {
 		select {
+		case at := <-delivered:
+			times[i] = at
 		case <-deadline:
-			t.Fatal("timed out waiting for deliveries")
-		default:
+			t.Fatalf("timed out waiting for delivery %d of 2", i+1)
 		}
 	}
-
-	mu.Lock()
-	times := append([]utc.UTC(nil), deliveryTimes...)
-	mu.Unlock()
-
-	require.Len(t, times, 2)
 
 	// The no-PCR batch must be scheduled ~sleepBetween after the PCR batch's target.
 	interval := times[1].Sub(times[0])
 	require.InDeltaf(t, float64(sleepBetween), float64(interval), float64(tolerance),
 		"no-PCR batch delivery interval: got %v, want %v ± %v", interval, sleepBetween, tolerance)
+
+	pacer.Shutdown()
+	<-done
+}
+
+// TestTsDisruptorPacer_EstimatePcrRate verifies that when EstimatePcrRate is enabled, no-PCR batches are scheduled
+// using the PCR-derived rate rather than raw arrival time, so arrival jitter does not propagate to delivery times.
+// It also verifies that no-PCR batches arriving before the estimate is established are counted correctly in the
+// denominator when the first estimate is computed.
+func TestTsDisruptorPacer_EstimatePcrRate(t *testing.T) {
+	const pid = 100
+	const delay = 50 * time.Millisecond
+	const tolerance = 5 * time.Millisecond
+	pcrPerBatch := DurationToPcr(10 * time.Millisecond)
+
+	conf := defaultTestConfig(0)
+	conf.Logic.Delay = duration.Spec(delay)
+	conf.EstimatePcrRate = true
+	pacer, err := NewTsDisruptorPacer(conf)
+	require.NoError(t, err)
+
+	delivered := make(chan utc.UTC, 8)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = pacer.Run(func(bts []byte, at utc.UTC) error {
+			delivered <- at
+			return nil
+		})
+	}()
+
+	// Batch 1 (PCR=0): establishes baseline; estimate not yet available.
+	require.NoError(t, pacer.Push(makeTsBatch(pid, 0, 7)))
+	// Batch 2 (no PCR): arrives before the estimate exists; noPcrBatchCount must still be incremented so the
+	// first estimate uses the correct denominator (2 intervals, not 1).
+	require.NoError(t, pacer.Push(makeTsBatchNoPCR(pid, 7)))
+	// Batch 3 (PCR=2*pcrPerBatch): first estimate computed — pcrDelta=2*pcrPerBatch over 2 intervals → pcrPerBatch/batch.
+	require.NoError(t, pacer.Push(makeTsBatch(pid, 2*pcrPerBatch, 7)))
+	// Sleep longer than pcrPerBatch to introduce jitter that should NOT affect the estimate.
+	time.Sleep(25 * time.Millisecond)
+	// Batch 4 (no PCR): should be scheduled one estimated interval (10ms) after batch 3, not 25ms after.
+	require.NoError(t, pacer.Push(makeTsBatchNoPCR(pid, 7)))
+
+	var times [4]utc.UTC
+	deadline := time.After(5 * time.Second)
+	for i := range times {
+		select {
+		case at := <-delivered:
+			times[i] = at
+		case <-deadline:
+			t.Fatalf("timed out waiting for delivery %d of 4", i+1)
+		}
+	}
+
+	// batch3→batch4 must be ~pcrPerBatch (10ms), not the 25ms sleep, proving the estimate is correct.
+	// If noPcrBatchCount were not incremented before the estimate was available, the estimate would be
+	// 2*pcrPerBatch (20ms) instead of pcrPerBatch (10ms), and this check would fail.
+	want := PcrToDuration(pcrPerBatch)
+	ipd34 := times[3].Sub(times[2])
+	require.InDeltaf(t, float64(want), float64(ipd34), float64(tolerance),
+		"batch3→batch4 interval: got %v, want %v ± %v", ipd34, want, tolerance)
 
 	pacer.Shutdown()
 	<-done
