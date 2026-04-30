@@ -84,3 +84,38 @@ func TestPeriodic_UpdateNow_actualDuration(t *testing.T) {
 	assert.Equal(t, 4, p.Current.Sum)
 	assert.Equal(t, 12, p.Total.Sum)
 }
+
+func TestPeriodic_ManualSwitch(t *testing.T) {
+	p := Periodic[int]{Period: duration.Second, ManualSwitch: true}
+	start := utc.Now()
+
+	// Test first update
+	result := p.UpdateNow(start, 5)
+	assert.False(t, result)
+	assertStatistics(t, p.Current, start, 0, 5, 5, 5)
+	assertStatistics(t, p.Total, start, 0, 5, 5, 5)
+
+	// Test update within same period
+	result = p.UpdateNow(start.Add(500*time.Millisecond), 3)
+	assert.False(t, result)
+	assertStatistics(t, p.Current, start, 500*time.Millisecond, 3, 5, 8)
+	assertStatistics(t, p.Total, start, 500*time.Millisecond, 3, 5, 8)
+
+	start2 := start.Add(time.Second)
+	p.Switch(start2)
+
+	// Test update in new period
+	result = p.UpdateNow(start.Add(1100*time.Millisecond), 4)
+	assert.False(t, result)
+	assertStatistics(t, p.Previous, start, time.Second, 3, 5, 8)
+	assertStatistics(t, p.Current, start2, 100*time.Millisecond, 4, 4, 4)
+	assertStatistics(t, p.Total, start, 1100*time.Millisecond, 3, 5, 12)
+}
+
+func assertStatistics[T Number](t *testing.T, s Statistics[T], start utc.UTC, dur time.Duration, min, max, sum T) {
+	assert.Equal(t, start, s.Start, "start")
+	assert.Equal(t, dur, s.Duration.Duration(), "duration")
+	assert.Equal(t, min, s.Min, "min")
+	assert.Equal(t, max, s.Max, "max")
+	assert.Equal(t, sum, s.Sum, "sum")
+}

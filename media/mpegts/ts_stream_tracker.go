@@ -48,6 +48,9 @@ func NewTsStreamTracker(streamId string, statsLogPeriod time.Duration, stripRtp 
 	if statsLogPeriod > 0 {
 		tracker.statsLogger = timeutil.NewPeriodic(statsLogPeriod)
 	}
+	tracker.statsLogFunc = func() {
+		statsLog.Info("ts-stream-tracker", "stream", tracker.streamId, "stats", jsonutil.Stringer(tracker.Stats()))
+	}
 	return tracker
 }
 
@@ -55,14 +58,17 @@ type tsStreamTracker struct {
 	streamId    string
 	stripRtp    bool
 	statsLogger timeutil.Periodic
-	start       utc.UTC
-	errCount    int
-	streams     map[int]*Stream
-	pmtParsed   bool // true if the PMT has been parsed
-	pmtAcc      packet.Accumulator
-	pat         psi.PAT
-	logThrottle timeutil.Periodic
-	panics      int
+	// pre-allocated closure for periodic stats logging, stored to avoid the per-call allocation that a bound method
+	// value or an inline closure with a capture of t `t.statsLogger.Do(func() { t.Xyz ...}` would cause.
+	statsLogFunc func()
+	start        utc.UTC
+	errCount     int
+	streams      map[int]*Stream
+	pmtParsed    bool // true if the PMT has been parsed
+	pmtAcc       packet.Accumulator
+	pat          psi.PAT
+	logThrottle  timeutil.Periodic
+	panics       int
 }
 
 func (t *tsStreamTracker) Track(bts []byte) (packetCount int, errList error) {
@@ -70,9 +76,7 @@ func (t *tsStreamTracker) Track(bts []byte) (packetCount int, errList error) {
 
 	defer func() {
 		t.errCount += errCount
-		t.statsLogger.Do(func() {
-			statsLog.Info("ts-stream-tracker", "stream", t.streamId, "stats", jsonutil.Stringer(t.Stats()))
-		})
+		t.statsLogger.Do(t.statsLogFunc)
 	}()
 
 	appendErr := func(err error) {
@@ -95,7 +99,10 @@ func (t *tsStreamTracker) Track(bts []byte) (packetCount int, errList error) {
 			return packetCount, errList
 		}
 		packetCount++
-		pkt := packet.Packet(bts)
+		// Previous code `pkt := packet.Packet(bts)` copied 188 bytes into a local value, which escaped to the heap
+		// because its address was taken further below (&pkt). Fixed by casting the slice to a pointer directly, so no
+		// copy or heap allocation occurs.
+		pkt := (*packet.Packet)(bts[:packet.PacketSize])
 
 		err := pkt.CheckErrors()
 		if err != nil {
@@ -126,7 +133,7 @@ func (t *tsStreamTracker) Track(bts []byte) (packetCount int, errList error) {
 		}
 		stream.packetCount++
 
-		if pcr, ok := ExtractPCR(&pkt); ok {
+		if pcr, ok := ExtractPCR(pkt); ok {
 			now := utc.Now()
 			if stream.pcr0 == utc.Zero {
 				stream.pcr0 = now.Add(-PcrToDuration(pcr))
@@ -152,7 +159,7 @@ func (t *tsStreamTracker) Track(bts []byte) (packetCount int, errList error) {
 			stream.pcr = pcr
 		}
 
-		err = t.parsePmt(&pkt)
+		err = t.parsePmt(pkt)
 		if err != nil {
 			appendErr(err)
 		}

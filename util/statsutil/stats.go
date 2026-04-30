@@ -1,6 +1,8 @@
 package statsutil
 
 import (
+	"encoding/json"
+
 	"golang.org/x/exp/constraints"
 
 	"github.com/eluv-io/common-go/collections/slidingwindow"
@@ -44,16 +46,13 @@ func (p *Periodic[T]) UpdateNow(now utc.UTC, val T) bool {
 	}
 	p.Total.Update(now, val)
 
-	if !p.Current.Start.IsZero() && now.Sub(p.Current.Start) > p.Period.Duration() {
-		if !p.ManualSwitch {
-			p.Switch(now)
-		}
-		p.Current.Update(now, val)
-		return true
+	periodElapsed := !p.Current.Start.IsZero() && now.Sub(p.Current.Start) > p.Period.Duration()
+	if periodElapsed && !p.ManualSwitch {
+		p.Switch(now)
 	}
 
 	p.Current.Update(now, val)
-	return false
+	return periodElapsed
 }
 
 // Switch switches to a new period by finalizing the previous period and starting a new one.
@@ -80,12 +79,16 @@ type Statistics[T Number] struct {
 	Mean     float64       `json:"mean"`
 	Variance float64       `json:"variance,omitempty"`
 	m2       float64       // used for variance calculation
+	updated  bool          // set to true on first Update to initialize Min and Max correctly
 }
 
 // Update updates the statistics with a new value.
 func (p *Statistics[T]) Update(now utc.UTC, val T) {
-	if p.Start.IsZero() {
-		p.Start = now
+	if !p.updated {
+		p.updated = true
+		if p.Start.IsZero() {
+			p.Start = now
+		}
 		p.Min = val
 		p.Max = val
 	}
@@ -112,4 +115,35 @@ func (p *Statistics[T]) Update(now utc.UTC, val T) {
 
 func (p *Statistics[T]) CalcVariance(useSampleVariance bool) {
 	p.Variance = slidingwindow.Variance(useSampleVariance, p.m2, int(p.Count))
+}
+
+// Raw returns a RawStatistics view of this Statistics, which marshals only the value fields (Count, Min, Max, Sum,
+// Mean, Variance), omitting Start and Duration.
+func (p Statistics[T]) Raw() RawStatistics[T] {
+	return RawStatistics[T]{p}
+}
+
+// RawStatistics is a variant of Statistics[T] that marshals only the value fields (Count, Min, Max, Sum, Mean,
+// Variance), omitting Start and Duration. Use it when the period boundaries are tracked externally (e.g. logged at a
+// fixed interval) and the timestamp metadata would be noise in the output.
+type RawStatistics[T Number] struct {
+	Statistics[T]
+}
+
+func (s RawStatistics[T]) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Count    uint64  `json:"count"`
+		Min      T       `json:"min"`
+		Max      T       `json:"max"`
+		Sum      T       `json:"sum"`
+		Mean     float64 `json:"mean"`
+		Variance float64 `json:"variance,omitempty"`
+	}{
+		Count:    s.Count,
+		Min:      s.Min,
+		Max:      s.Max,
+		Sum:      s.Sum,
+		Mean:     s.Mean,
+		Variance: s.Variance,
+	})
 }

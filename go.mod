@@ -1,6 +1,6 @@
 module github.com/eluv-io/common-go
 
-go 1.23.0
+go 1.26
 
 require (
 	github.com/Comcast/gots/v2 v2.2.1
@@ -15,7 +15,7 @@ require (
 	github.com/eluv-io/apexlog-go v1.9.1-elv4
 	github.com/eluv-io/errors-go v1.0.5
 	github.com/eluv-io/inject-go v1.0.2
-	github.com/eluv-io/log-go v1.0.8
+	github.com/eluv-io/log-go v1.0.10-0.20260314163338-6554b440b488
 	github.com/eluv-io/utc-go v1.0.1
 	github.com/ethereum/go-ethereum v1.10.19
 	github.com/fxamacker/cbor/v2 v2.8.0
@@ -34,6 +34,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/ricochet2200/go-disk-usage/du v0.0.0-20210707232629-ac9918953285
 	github.com/satori/go.uuid v1.2.0
+	github.com/smarty/go-disruptor v0.5.0
 	github.com/smartystreets/goconvey v1.8.1
 	github.com/spf13/afero v1.3.2
 	github.com/stretchr/testify v1.11.1

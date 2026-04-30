@@ -12,9 +12,11 @@ import (
 )
 
 func TestWaitCondition(t *testing.T) {
-	res := "poufff"
-	sleep := 10 * time.Millisecond
-	timeout := 95 * time.Millisecond
+	const (
+		res     = "poufff"
+		sleep   = 10 * time.Millisecond
+		timeout = 95 * time.Millisecond
+	)
 	checkCount := atomic.NewInt32(0)
 
 	tests := []struct {

@@ -20,9 +20,9 @@ const (
 
 // ExtractPCR extracts the PCR (Program Clock Reference) from a given TS packet, if available.
 // Returns
-//	- pid: the PID of the packet
-//	- pcr: the PCR value
-//	- ok: true if the packet contains a PCR, false otherwise
+//   - pid: the PID of the packet
+//   - pcr: the PCR value
+//   - ok: true if the packet contains a PCR, false otherwise
 func ExtractPCR(pkt *packet.Packet) (pcr uint64, ok bool) {
 	af, err := pkt.AdaptationField()
 	if err != nil {
@@ -39,10 +39,10 @@ func ExtractPCR(pkt *packet.Packet) (pcr uint64, ok bool) {
 
 // ExtractPTS extracts the PTS and DTS from a given TS packet, if available.
 // Returns
-//	- pid: the PID of the packet
-//	- pts: the presentation timestamp PTS of the packet
-//	- dts: the decoding timestamp DTS of the packet. Is set to the PTS if no specific DTS is present.
-//	- ok: true if the packet contains a PTS / DTS, false otherwise
+//   - pid: the PID of the packet
+//   - pts: the presentation timestamp PTS of the packet
+//   - dts: the decoding timestamp DTS of the packet. Is set to the PTS if no specific DTS is present.
+//   - ok: true if the packet contains a PTS / DTS, false otherwise
 func ExtractPTS(pkt *packet.Packet) (pts, dts uint64, ok bool) {
 	// Check for Payload Unit Start Indicator (PUSI)
 	if !pkt.PayloadUnitStartIndicator() {
@@ -85,9 +85,16 @@ func PcrDiff(p1, p2 uint64) time.Duration {
 	return PcrToDuration(diff)
 }
 
+// PcrToDuration converts the given PCR ticks to a time.Duration.
+// PCR is in 27 mHz units, i.e. 1 tick = 1/27000000 s
 func PcrToDuration(diff uint64) time.Duration {
-	// PCR is in 27 mHz units, i.e. 1 tick = 1/27000000 s
 	return time.Duration(diff) * time.Microsecond / 27
+}
+
+// DurationToPcr converts a time.Duration to PCR ticks (27 MHz clock).
+// Inverse of PcrToDuration: t = d * 27 / µs.
+func DurationToPcr(d time.Duration) uint64 {
+	return uint64(int64(d) * 27 / int64(time.Microsecond))
 }
 
 func PtsToDuration(diff uint64) time.Duration {
