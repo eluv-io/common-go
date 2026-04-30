@@ -25,6 +25,8 @@ const (
 //
 // For each custom event specified by the caller, a name and optional data are given by the caller, and StatsLogger
 // collects the event along with the time, offset, and result of the last Read/Write/Seek call before the event.
+//
+// Read, Write, Seek, Close may not be called concurrently, but Record may be called concurrently with any other.
 func NewStatsLogger(
 	rwsc interface{}, // Accepts any Reader, Writer, Seeker, Closer
 	statsLog func(msg string, fields ...interface{}),
@@ -72,6 +74,7 @@ type StatsLogger struct {
 	stats    *statistics
 	events   []*statsEvent
 	slows    []*statsEvent
+	mutex    sync.Mutex
 	once     sync.Once
 }
 
@@ -174,6 +177,8 @@ func (l *StatsLogger) Record(name string, data interface{}, now ...utc.UTC) {
 
 func (l *StatsLogger) record(slow bool, t utc.UTC, name string, limit time.Duration, dur time.Duration, data interface{}) {
 	s := &statsEvent{T: t, Name: name, Limit: duration.Spec(limit), Dur: duration.Spec(dur), Off: l.lastOff, N: l.lastN, Data: data}
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
 	if slow {
 		l.slows = append(l.slows, s)
 	} else {
