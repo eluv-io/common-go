@@ -15,7 +15,7 @@ require (
 	github.com/eluv-io/apexlog-go v1.9.1-elv4
 	github.com/eluv-io/errors-go v1.0.5
 	github.com/eluv-io/inject-go v1.0.2
-	github.com/eluv-io/log-go v1.0.10-0.20260314163338-6554b440b488
+	github.com/eluv-io/log-go v1.0.10
 	github.com/eluv-io/utc-go v1.0.1
 	github.com/ethereum/go-ethereum v1.10.19
 	github.com/fxamacker/cbor/v2 v2.8.0
