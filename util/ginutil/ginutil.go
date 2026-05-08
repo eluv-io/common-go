@@ -51,9 +51,13 @@ func HttpStatus(err error) int {
 			code = http.StatusConflict
 		case errors.K.NotExist:
 			code = http.StatusNotFound
+		case errors.K.NotFound:
+			code = http.StatusConflict
 		case errors.K.Finalized:
 			code = http.StatusConflict
 		case errors.K.NotFinalized:
+			code = http.StatusConflict
+		case errors.K.IO:
 			code = http.StatusConflict
 		case errors.K.Permission:
 			code = http.StatusForbidden
@@ -65,6 +69,10 @@ func HttpStatus(err error) int {
 			code = http.StatusNotImplemented
 		case httputil.KindRangeNotSatisfiable:
 			code = http.StatusRequestedRangeNotSatisfiable
+		case errors.K.AVInput:
+			code = http.StatusConflict
+		case errors.K.AVProcessing:
+			code = http.StatusConflict
 		}
 	}
 	return code
