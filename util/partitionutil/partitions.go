@@ -85,6 +85,9 @@ func PartitionPrefixForIndex(index, level int) ([]byte, error) {
 
 // PartitionCount returns the total number of partitions at the given partition level (2^level).
 func PartitionCount(level int) int {
+	if err := ValidateLevel(level); err != nil {
+		return 0
+	}
 	return 1 << level
 }
 
