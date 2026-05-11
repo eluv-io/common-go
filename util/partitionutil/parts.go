@@ -79,7 +79,7 @@ func PartitionPrefixForIndex(index, level int) ([]byte, error) {
 			"index", index,
 			"level", level)
 	}
-	si := index << (16 - level)
+	si := index << (PartitionPrefixBits - level)
 	return []byte{byte(si >> 8), byte(si)}, nil
 }
 
