@@ -99,17 +99,17 @@ func (b Spec) HR() string {
 
 func (b Spec) HumanReadable() string {
 	switch {
-	case b > EB:
+	case b >= EB:
 		return fmt.Sprintf("%.1fEB", b.EBytes())
-	case b > PB:
+	case b >= PB:
 		return fmt.Sprintf("%.1fPB", b.PBytes())
-	case b > TB:
+	case b >= TB:
 		return fmt.Sprintf("%.1fTB", b.TBytes())
-	case b > GB:
+	case b >= GB:
 		return fmt.Sprintf("%.1fGB", b.GBytes())
-	case b > MB:
+	case b >= MB:
 		return fmt.Sprintf("%.1fMB", b.MBytes())
-	case b > KB:
+	case b >= KB:
 		return fmt.Sprintf("%.1fKB", b.KBytes())
 	default:
 		return fmt.Sprintf("%d B", b)

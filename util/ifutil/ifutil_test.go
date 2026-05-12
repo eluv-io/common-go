@@ -263,16 +263,16 @@ func Test_FirstOrDefault(t *testing.T) {
 	assert.Equal(t, nil, FirstOrDefault[any]([]any{nil, nil}, nil))
 
 	assert.Equal(t, nonEmptyChan, FirstOrDefault(nil, nonEmptyChan))
-	assert.Equal(t, nonEmptyChan, FirstOrDefault([]chanType{nil, nil}, nonEmptyChan))
+	assert.Equal(t, zeroChan, FirstOrDefault([]chanType{nil, nil}, nonEmptyChan))
 	assert.Equal(t, nonEmptyChan, FirstOrDefault([]chanType{nonEmptyChan, nil}, nil))
-	assert.Equal(t, nonEmptyChan, FirstOrDefault([]chanType{nil, nonEmptyChan}, nil))
+	assert.Equal(t, zeroChan, FirstOrDefault([]chanType{nil, nonEmptyChan}, nil))
 
 	assert.Equal(t, aStruct, FirstOrDefault(nil, aStruct))
-	assert.Equal(t, aStruct, FirstOrDefault([]structType{{}}, aStruct))
+	assert.Equal(t, zeroStruct, FirstOrDefault([]structType{{}}, aStruct))
 	assert.Equal(t, aStruct, FirstOrDefault([]structType{aStruct}, structType{}))
 
 	assert.Equal(t, &aStruct, FirstOrDefault(nil, &aStruct))
-	assert.Equal(t, &aStruct, FirstOrDefault([]*structType{zeroStructPtr}, &aStruct))
+	assert.Equal(t, zeroStructPtr, FirstOrDefault([]*structType{zeroStructPtr}, &aStruct))
 	assert.Equal(t, &aStruct, FirstOrDefault([]*structType{&aStruct}, zeroStructPtr))
 
 	assert.Equal(t, 1, FirstOrDefault(nil, 1))
@@ -280,9 +280,18 @@ func Test_FirstOrDefault(t *testing.T) {
 	assert.Equal(t, 1.1, FirstOrDefault(nil, 1.1))
 	assert.Equal(t, 1.0, FirstOrDefault([]float64{1.0, 2.0}, 5.0))
 	assert.Equal(t, "def", FirstOrDefault([]string{}, "def"))
-	assert.Equal(t, "a", FirstOrDefault([]string{"", "a", "b"}, "def")) // empty string is zero value!
-	assert.Equal(t, "def", FirstOrDefault([]interface{}{zeroString, zeroStringIface}, "def"))
-	assert.Equal(t, "a", FirstOrDefault([]interface{}{zeroString, zeroStringIface, "a"}, "def"))
+	assert.Equal(t, "", FirstOrDefault([]string{"", "a", "b"}, "def"))
+	assert.Equal(t, "a", FirstOrDefault([]string{"a", "b"}, "def"))
+	assert.Equal(t, zeroString, FirstOrDefault([]interface{}{zeroString, zeroStringIface}, "def"))
+	assert.Equal(t, zeroStringIface, FirstOrDefault([]interface{}{zeroStringIface}, "def"))
+	assert.Equal(t, "a", FirstOrDefault([]interface{}{"a"}, "def"))
+
+	assert.Equal(t, true, FirstOrDefault(nil, true))
+	assert.Equal(t, true, FirstOrDefault([]bool{}, true))
+	assert.Equal(t, false, FirstOrDefault([]bool{false}, true))
+	assert.Equal(t, false, FirstOrDefault([]bool{false}, false))
+	assert.Equal(t, true, FirstOrDefault([]bool{true}, false))
+	assert.Equal(t, true, FirstOrDefault([]bool{true}, true))
 }
 
 // verr implements error

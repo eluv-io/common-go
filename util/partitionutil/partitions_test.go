@@ -49,6 +49,7 @@ func TestPartitionMatch(t *testing.T) {
 		{nil, 12, []byte{0, 0}, "p00000000_0000", false},
 		{[]byte{0b1001_0110}, 12, []byte{0b1001_0110, 0b0000_0000}, "p10010110_0000", false},
 		{[]byte{0b1001_0110}, 16, []byte{0b1001_0110, 0b0000_0000}, "p10010110_00000000", false},
+		{[]byte{1, 2, 3, 4}, 12, []byte{1, 0}, "p00000001_0000", false},
 	}
 	for _, tt := range tests {
 		name := PartitionName(tt.want, tt.level)
