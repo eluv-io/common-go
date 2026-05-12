@@ -36,10 +36,10 @@ func TestAbort(t *testing.T) {
 		{errors.E("op", errors.K.Exist), 409},
 		{errors.E("op", errors.K.Finalized), 409},
 		{errors.E("op", errors.K.NotFinalized), 409},
-		{errors.E("op", errors.K.NotFound), 500},
-		{errors.E("op", errors.K.IO), 500},
-		{errors.E("op", errors.K.AVInput), 500},
-		{errors.E("op", errors.K.AVProcessing), 500},
+		{errors.E("op", errors.K.NotFound), 409},
+		{errors.E("op", errors.K.IO), 409},
+		{errors.E("op", errors.K.AVInput), 409},
+		{errors.E("op", errors.K.AVProcessing), 409},
 		{errors.E("op", errors.K.NotImplemented), 501},
 		{errors.E("op", errors.K.Unavailable), 503},
 		{errors.E("op", httputil.KindRangeNotSatisfiable), 416},
@@ -258,7 +258,7 @@ func TestSendErrorAfterWrite(t *testing.T) {
 		{description: `with-stack`, err: errors.E("omg", errors.K.Invalid)},
 		{description: `no-error`, err: nil},
 	}
-	//log.Get("/").SetLevel("debug")
+	// log.Get("/").SetLevel("debug")
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
