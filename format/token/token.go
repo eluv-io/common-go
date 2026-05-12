@@ -6,18 +6,19 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
+	"math/rand"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/mr-tron/base58/base58"
 
-	"github.com/eluv-io/errors-go"
-	"github.com/eluv-io/log-go"
-
 	"github.com/eluv-io/common-go/format/encryption"
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/util/byteutil"
+	"github.com/eluv-io/errors-go"
 )
 
 func NewObject(code Code, qid id.ID, nid id.ID, bytes ...byte) (*Token, error) {
@@ -114,6 +115,25 @@ func NewLocalFile(nid id.ID, qid id.ID, bts []byte) (*Token, error) {
 	return res, nil
 }
 
+// NewJob creates a new job token. Index is the index of the job in the allocation request.
+func NewJob(nid id.ID, allocationID id.ID, index int) (*Token, error) {
+	e := errors.Template("init job token", errors.K.Invalid)
+	if nid.AssertCode(id.QNode) != nil {
+		return nil, e("reason", "invalid nid", "nid", nid)
+	}
+	if allocationID.AssertCode(id.Allocation) != nil {
+		return nil, e("reason", "invalid allocationID", "allocationID", allocationID)
+	}
+	res := &Token{
+		Code:         Job,
+		Bytes:        []byte(strconv.Itoa(index)),
+		AllocationID: allocationID,
+		NID:          nid,
+	}
+	res.MakeString()
+	return res, nil
+}
+
 // Code is the type of a Token
 type Code uint8
 
@@ -160,6 +180,7 @@ const (
 	QPartWrite        // 2nd version: scheme, flags, random bytes
 	LRO               // node ID, random bytes
 	LocalFile         // node ID, content ID, bytes = hash(offering + presentation + format + start + end)
+	Job               // node ID, allocation ID, bytes = index
 )
 
 const prefixLen = 4
@@ -173,6 +194,7 @@ var prefixToCode = map[string]Code{
 	"tqp_": QPartWrite, // QPartWrite new version
 	"tlro": LRO,
 	"tlf_": LocalFile,
+	"tjob": Job,
 }
 var codeToName = map[Code]string{
 	UNKNOWN:      "unknown",
@@ -182,6 +204,7 @@ var codeToName = map[Code]string{
 	QPartWrite:   "content part write token",
 	LRO:          "bitcode LRO handle",
 	LocalFile:    "local file",
+	Job:          "allocated job",
 }
 
 // NOTE: 5 char prefix - 2 underscores!
@@ -238,13 +261,14 @@ func init() {
 // form (String(), JSON) as a short text prefix instead of their encoded varint
 // for increased readability.
 type Token struct {
-	Code   Code
-	Bytes  []byte
-	QID    id.ID             // content ID
-	NID    id.ID             // node ID of insertion point node
-	Scheme encryption.Scheme // encryption scheme
-	Flags  byte              // misc flags
-	s      string
+	Code         Code
+	Bytes        []byte
+	QID          id.ID // content ID
+	NID          id.ID // node ID of insertion point node
+	AllocationID id.ID
+	Scheme       encryption.Scheme // encryption scheme
+	Flags        byte              // misc flags
+	s            string
 }
 
 func (t *Token) String() string {
@@ -295,6 +319,22 @@ func (t *Token) MakeString() string {
 		off := 0
 		off += copy(b[off:], []byte{byte(t.Scheme)})
 		off += copy(b[off:], []byte{t.Flags})
+		off += binary.PutUvarint(b[off:], uint64(len(t.Bytes)))
+		off += copy(b[off:], t.Bytes)
+
+	case Job:
+		b = make([]byte,
+			byteutil.LenUvarInt(uint64(len(t.AllocationID)))+
+				len(t.AllocationID)+
+				byteutil.LenUvarInt(uint64(len(t.NID)))+
+				len(t.NID)+
+				byteutil.LenUvarInt(uint64(len(t.Bytes)))+
+				len(t.Bytes))
+		off := 0
+		off += binary.PutUvarint(b[off:], uint64(len(t.AllocationID)))
+		off += copy(b[off:], t.AllocationID)
+		off += binary.PutUvarint(b[off:], uint64(len(t.NID)))
+		off += copy(b[off:], t.NID)
 		off += binary.PutUvarint(b[off:], uint64(len(t.Bytes)))
 		off += copy(b[off:], t.Bytes)
 	}
@@ -386,6 +426,7 @@ func (t *Token) Equal(o *Token) bool {
 		bytes.Equal(t.Bytes, o.Bytes) &&
 		t.QID.Equal(o.QID) &&
 		t.NID.Equal(o.NID) &&
+		t.AllocationID.Equal(o.AllocationID) &&
 		t.Scheme == o.Scheme &&
 		t.Flags == o.Flags
 }
@@ -408,7 +449,10 @@ func (t *Token) Describe() string {
 	if t.Code == QWrite || t.Code == LocalFile {
 		add("qid:    " + t.QID.String())
 	}
-	if t.Code == QWrite || t.Code == LRO || t.Code == LocalFile {
+	if t.Code == Job {
+		add("alloc:  " + t.AllocationID.String())
+	}
+	if t.Code == QWrite || t.Code == LRO || t.Code == LocalFile || t.Code == Job {
 		add("nid:    " + t.NID.String())
 	}
 	if t.Code == QPartWrite {
@@ -419,9 +463,26 @@ func (t *Token) Describe() string {
 }
 
 func (t *Token) Validate() (err error) {
+
 	e := errors.Template("validate token", errors.K.Invalid)
 	if t == nil {
 		return e("reason", "token is nil")
+	}
+
+	switch t.Code {
+	case Job:
+		if err = t.AllocationID.AssertCode(id.Allocation); err != nil {
+			return e("reason", "invalid allocation id", "err", err)
+		}
+		if err = t.NID.AssertCode(id.QNode); err != nil {
+			return e("reason", "invalid node id", "err", err)
+		}
+		if len(t.Bytes) == 0 {
+			return e("reason", "no bytes")
+		}
+		return nil
+
+	default:
 	}
 	if t.Code == QWrite {
 		err = t.QID.AssertCode(id.Q)
@@ -453,6 +514,8 @@ func Generate(code Code) *Token {
 		t, _ = NewPart(code, encryption.None, 0)
 	case LRO:
 		t, _ = NewLRO(code, id.Generate(id.QNode))
+	case Job:
+		t, _ = NewJob(id.Generate(id.QNode), id.Generate(id.Allocation), rand.Int())
 	}
 	return t
 }
@@ -507,16 +570,23 @@ func Parse(s string) (*Token, error) {
 	switch code {
 	case QWriteV1, QPartWriteV1:
 		return &Token{Code: code, Bytes: dec, s: s}, nil
-	case QWrite, LRO, LocalFile:
+	case QWrite, LRO, LocalFile, Job:
 		// prefix + base58(uvarint(len(QID) | QID |
 		//                 uvarint(len(NID) | NID |
 		//                 uvarint(len(RAND_BYTES) | RAND_BYTES)
 		res := &Token{Code: code}
 		r := bytes.NewReader(dec)
 
-		res.QID, err = decodeBytes(r)
-		if err != nil {
-			return nil, e(err, "reason", "invalid qid")
+		if code == Job {
+			res.AllocationID, err = decodeBytes(r)
+			if err != nil {
+				return nil, e(err, "reason", "invalid allocation id")
+			}
+		} else {
+			res.QID, err = decodeBytes(r)
+			if err != nil {
+				return nil, e(err, "reason", "invalid qid")
+			}
 		}
 
 		res.NID, err = decodeBytes(r)

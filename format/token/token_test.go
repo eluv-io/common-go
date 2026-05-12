@@ -16,8 +16,10 @@ import (
 )
 
 var (
-	qid = id.MustParse("iq__99d4kp14eSDEP7HWfjU4W6qmqDw")
-	nid = id.MustParse("inod3Sa5p3czRyYi8GnVGnh8gBDLaqJr")
+	qid          = id.MustParse("iq__99d4kp14eSDEP7HWfjU4W6qmqDw")
+	nid          = id.MustParse("inod3Sa5p3czRyYi8GnVGnh8gBDLaqJr")
+	allocationID = id.MustParse("illc2KRn6vRvn8U3gczhSMJwd1")
+
 	qwt = func() *token.Token {
 		t, _ := token.NewObject(token.QWrite, qid, nid, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 		return t
@@ -28,6 +30,10 @@ var (
 	}()
 	lrot = func() *token.Token {
 		t, _ := token.NewLRO(token.LRO, nid, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+		return t
+	}()
+	jobt = func() *token.Token {
+		t, _ := token.NewJob(nid, allocationID, 0)
 		return t
 	}()
 )
@@ -50,6 +56,7 @@ func TestConversion(t *testing.T) {
 	testConversion(t, qpwt, token.QPartWrite, "tqp_")
 	testConversion(t, token.Generate(token.QPartWriteV1), token.QPartWriteV1, "tqpw")
 	testConversion(t, lrot, token.LRO, "tlro")
+	testConversion(t, jobt, token.Job, "tjob")
 }
 
 func testConversion(t *testing.T, tok *token.Token, code token.Code, prefix string) {
@@ -247,5 +254,17 @@ func ExampleToken_Describe_localFile() {
 	// type:   local file
 	// bytes:  0x9cd9260a25a7013e0e9a48f7a83a5937
 	// qid:    iq__99d4kp14eSDEP7HWfjU4W6qmqDw
+	// nid:    inod3Sa5p3czRyYi8GnVGnh8gBDLaqJr
+}
+
+func ExampleToken_Describe_job() {
+	tok, _ := token.FromString("tjobHXBC55Jkr5oz6Eg7LGYUkRgZGygNkjDVBstCGzY1GvJ3i5tsrQTY5ad6w")
+	fmt.Println(tok.Describe())
+
+	// Output:
+	//
+	// type:   allocated job
+	// bytes:  0x30
+	// alloc:  illc2KRn6vRvn8U3gczhSMJwd1
 	// nid:    inod3Sa5p3czRyYi8GnVGnh8gBDLaqJr
 }
