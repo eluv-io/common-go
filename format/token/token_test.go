@@ -153,15 +153,19 @@ func TestInvalidStringConversions2(t *testing.T) {
 }
 
 func TestJSON(t *testing.T) {
-	b, err := json.Marshal(qwt)
-	assert.NoError(t, err)
-	assert.Equal(t, "\""+expTokenString+"\"", string(b))
+	for _, val := range []any{qwt, *qwt} {
+		t.Run(fmt.Sprintf("%T", val), func(t *testing.T) {
+			b, err := json.Marshal(val)
+			assert.NoError(t, err)
+			assert.Equal(t, "\""+expTokenString+"\"", string(b))
 
-	var unmarshalled token.Token
-	err = json.Unmarshal(b, &unmarshalled)
-	assert.NoError(t, err)
-	assert.True(t, qwt.Equal(&unmarshalled))
-	assert.Equal(t, qwt.String(), unmarshalled.String())
+			var unmarshalled token.Token
+			err = json.Unmarshal(b, &unmarshalled)
+			assert.NoError(t, err)
+			assert.True(t, qwt.Equal(&unmarshalled))
+			assert.Equal(t, qwt.String(), unmarshalled.String())
+		})
+	}
 }
 
 type Wrapper struct {

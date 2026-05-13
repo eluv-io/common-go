@@ -397,7 +397,7 @@ func (t *Token) UnmarshalCBOR(b []byte) error {
 }
 
 // MarshalText implements custom marshaling using the string representation.
-func (t *Token) MarshalText() ([]byte, error) {
+func (t Token) MarshalText() ([]byte, error) {
 	return []byte(t.String()), nil
 }
 
