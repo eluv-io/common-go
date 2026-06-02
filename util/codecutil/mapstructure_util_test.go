@@ -140,28 +140,28 @@ type innerColor struct {
 type innerType struct {
 	Type string `json:"type"`
 }
-type upper struct {
+type outer struct {
 	innerColor
 	innerType
 	Name string `json:"name"`
 	Size int    `json:"size"`
 }
 
-type upperP struct {
+type outerP struct {
 	*innerColor
 	*innerType
 	Name string `json:"name"`
 	Size int    `json:"size"`
 }
 
-type upperSimple struct {
+type outerSimple struct {
 	innerColor
 	innerType
 }
 
 func TestMapDecodeSquash(t *testing.T) {
 	{
-		in0 := &upper{
+		in0 := &outer{
 			innerColor: innerColor{Color: "red"},
 			innerType:  innerType{Type: "car"},
 			Name:       "x",
@@ -173,7 +173,7 @@ func TestMapDecodeSquash(t *testing.T) {
 		err = json.Unmarshal(bb, &msi)
 		require.NoError(t, err)
 
-		in1 := &upper{}
+		in1 := &outer{}
 		err = codecutil.MapDecode(msi, in1)
 		require.NoError(t, err)
 		//fmt.Println(jsonutil.MarshalCompactString(in1))
@@ -181,7 +181,7 @@ func TestMapDecodeSquash(t *testing.T) {
 		require.Equal(t, "", in1.Color)
 		require.Equal(t, "", in1.Type)
 
-		in1 = &upper{}
+		in1 = &outer{}
 		err = codecutil.MapDecode(msi, in1, true)
 		require.NoError(t, err)
 		//fmt.Println(jsonutil.MarshalCompactString(in1))
@@ -189,7 +189,7 @@ func TestMapDecodeSquash(t *testing.T) {
 		require.Equal(t, in0, in1)
 	}
 	{
-		in0 := &upperP{
+		in0 := &outerP{
 			innerColor: &innerColor{Color: "red"},
 			innerType:  &innerType{Type: "car"},
 			Name:       "x",
@@ -202,7 +202,7 @@ func TestMapDecodeSquash(t *testing.T) {
 		err = json.Unmarshal(bb, &msi)
 		require.NoError(t, err)
 
-		in1 := &upperP{}
+		in1 := &outerP{}
 		err = codecutil.MapDecode(msi, in1)
 		require.NoError(t, err)
 		//fmt.Println(jsonutil.MarshalCompactString(in1))
@@ -210,7 +210,7 @@ func TestMapDecodeSquash(t *testing.T) {
 		require.Nil(t, in1.innerColor)
 		require.Nil(t, in1.innerType)
 
-		in1 = &upperP{}
+		in1 = &outerP{}
 		err = codecutil.MapDecode(msi, in1, true)
 		require.NoError(t, err)
 		//fmt.Println(jsonutil.MarshalCompactString(in1))
@@ -218,7 +218,7 @@ func TestMapDecodeSquash(t *testing.T) {
 		require.Nil(t, in1.innerColor)
 		require.Nil(t, in1.innerType)
 
-		in1 = &upperP{
+		in1 = &outerP{
 			innerColor: &innerColor{},
 			innerType:  &innerType{},
 		}
@@ -229,7 +229,7 @@ func TestMapDecodeSquash(t *testing.T) {
 		require.Equal(t, in0, in1)
 	}
 	{
-		in0 := &upperSimple{
+		in0 := &outerSimple{
 			innerColor: innerColor{Color: "red"},
 			innerType:  innerType{Type: "car"},
 		}
@@ -241,7 +241,7 @@ func TestMapDecodeSquash(t *testing.T) {
 		err = json.Unmarshal(bb, &msi)
 		require.NoError(t, err)
 
-		in1 := &upperSimple{}
+		in1 := &outerSimple{}
 		err = codecutil.MapDecode(msi, in1)
 		require.NoError(t, err)
 		//fmt.Println(jsonutil.MarshalCompactString(in1))
@@ -249,7 +249,7 @@ func TestMapDecodeSquash(t *testing.T) {
 		require.Equal(t, "", in1.Color)
 		require.Equal(t, "", in1.Type)
 
-		in1 = &upperSimple{}
+		in1 = &outerSimple{}
 		err = codecutil.MapDecode(msi, in1, true)
 		require.NoError(t, err)
 		//fmt.Println(jsonutil.MarshalCompactString(in1))
@@ -309,21 +309,21 @@ func (u *innerColorUnmarshaler) UnmarshalMap(m map[string]interface{}) error {
 	return nil
 }
 
-// upperUnmarshalerIncorrect has a function UnmarshalMap AND embeds a struct
+// outerUnmarshalerIncorrect has a function UnmarshalMap AND embeds a struct
 // that also has an UnmarshalMap function.
 // In that case, using an alias - as below - to decode is incorrect since the
 // actual UnmarshalMap function that gets called in MapDecode is the one of the
 // embedded struct, resulting in failure to assign correctly all fields.
-// See upperUnmarshalerCorrect for a solution.
-type upperUnmarshalerIncorrect struct {
+// See outerUnmarshalerCorrect for a solution.
+type outerUnmarshalerIncorrect struct {
 	innerColorUnmarshaler
 	innerType
 	Name string `json:"name"`
 	Size int    `json:"size"`
 }
 
-func (u *upperUnmarshalerIncorrect) UnmarshalMap(m map[string]interface{}) error {
-	type alias upperUnmarshalerIncorrect
+func (u *outerUnmarshalerIncorrect) UnmarshalMap(m map[string]interface{}) error {
+	type alias outerUnmarshalerIncorrect
 	err := codecutil.MapDecode(m, (*alias)(u), true)
 	if err != nil {
 		return err
@@ -333,7 +333,7 @@ func (u *upperUnmarshalerIncorrect) UnmarshalMap(m map[string]interface{}) error
 
 func TestMapDecodeSquashUnmarshalerIncorrect(t *testing.T) {
 	{
-		in0 := &upperUnmarshalerIncorrect{
+		in0 := &outerUnmarshalerIncorrect{
 			innerColorUnmarshaler: innerColorUnmarshaler{Color: "red"},
 			innerType:             innerType{Type: "car"},
 			Name:                  "x",
@@ -345,7 +345,7 @@ func TestMapDecodeSquashUnmarshalerIncorrect(t *testing.T) {
 		err = json.Unmarshal(bb, &msi)
 		require.NoError(t, err)
 
-		in1 := &upperUnmarshalerIncorrect{}
+		in1 := &outerUnmarshalerIncorrect{}
 		err = codecutil.MapDecode(msi, in1)
 		require.NoError(t, err)
 		//fmt.Println(jsonutil.MarshalCompactString(in1))
@@ -356,7 +356,7 @@ func TestMapDecodeSquashUnmarshalerIncorrect(t *testing.T) {
 		require.Equal(t, "red", in1.Color)
 		require.Equal(t, "", in1.Type)
 
-		in1 = &upperUnmarshalerIncorrect{}
+		in1 = &outerUnmarshalerIncorrect{}
 		err = codecutil.MapDecode(msi, in1, true)
 		require.NoError(t, err)
 		//fmt.Println(jsonutil.MarshalCompactString(in1))
@@ -366,14 +366,14 @@ func TestMapDecodeSquashUnmarshalerIncorrect(t *testing.T) {
 	}
 }
 
-type upperUnmarshalerCorrect struct {
+type outerUnmarshalerCorrect struct {
 	innerColorUnmarshaler
 	innerType
 	Name string `json:"name"`
 	Size int    `json:"size"`
 }
 
-func (u *upperUnmarshalerCorrect) UnmarshalMap(m map[string]interface{}) error {
+func (u *outerUnmarshalerCorrect) UnmarshalMap(m map[string]interface{}) error {
 	type partial struct {
 		innerType
 		Name string `json:"name"`
@@ -396,7 +396,7 @@ func (u *upperUnmarshalerCorrect) UnmarshalMap(m map[string]interface{}) error {
 
 func TestMapDecodeSquashUnmarshalerCorrect(t *testing.T) {
 	{
-		in0 := &upperUnmarshalerCorrect{
+		in0 := &outerUnmarshalerCorrect{
 			innerColorUnmarshaler: innerColorUnmarshaler{Color: "red"},
 			innerType:             innerType{Type: "car"},
 			Name:                  "x",
@@ -408,7 +408,7 @@ func TestMapDecodeSquashUnmarshalerCorrect(t *testing.T) {
 		err = json.Unmarshal(bb, &msi)
 		require.NoError(t, err)
 
-		in1 := &upperUnmarshalerCorrect{}
+		in1 := &outerUnmarshalerCorrect{}
 		err = codecutil.MapDecode(msi, in1)
 		require.NoError(t, err)
 		//fmt.Println(jsonutil.MarshalCompactString(in1))
