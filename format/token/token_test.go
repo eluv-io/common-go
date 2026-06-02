@@ -36,6 +36,7 @@ var (
 		t, _ := token.NewJob(nid, allocationID, 0)
 		return t
 	}()
+	zerot = &token.Token{}
 )
 
 const expTokenString = "tqw__8UmhDD9cZah58THfAYPf3Shj9hVzfwT51Cf4ZHKpayajzZRyMwCPiSpfS5yqRZfjkDjrtXuRmDa"
@@ -107,6 +108,12 @@ func TestNil(t *testing.T) {
 	err = codecs.CborV2MuxCodec.Decoder(buf).Decode(&tokWrapper)
 	require.NoError(t, err)
 	require.True(t, tokWrapper.Token.IsNil())
+}
+
+func TestZero(t *testing.T) {
+	require.NotNil(t, zerot)
+	require.NotZero(t, zerot)
+	require.Error(t, zerot.Validate())
 }
 
 func TestInvalidStringConversions(t *testing.T) {
