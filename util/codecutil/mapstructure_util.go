@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"reflect"
 
-	"github.com/mitchellh/mapstructure"
+	"github.com/eluv-io/mapstructure"
 )
 
 type MapUnmarshaler interface {
@@ -25,7 +25,7 @@ var textUnmarshaler = reflect.TypeOf((*encoding.TextUnmarshaler)(nil)).Elem()
 // `json:...` tags defined on the destination structure's member fields will be
 // used for unmarshaling (just like when unmarshaling JSON text).
 //
-// The implementation uses github.com/mitchellh/mapstructure to do the decoding,
+// The implementation uses github.com/eluv-io/mapstructure to do the decoding,
 // with the following special decoding hooks:
 //   - decodes with the 'UnmarshalMap(m map[string]interface{}) error'
 //     function if implemented by the destination object/field
