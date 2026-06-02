@@ -11,7 +11,7 @@ import (
 )
 
 func TestGapDetector_Detect(t *testing.T) {
-	detector := rtp.NewRtpGapDetector(1, time.Second)
+	detector := rtp.NewGapDetector(1, time.Second)
 	tests := []struct {
 		seq        uint16
 		ts         uint32

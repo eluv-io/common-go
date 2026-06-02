@@ -30,7 +30,7 @@ func NewStreamTracker(streamId string, statsLogPeriod time.Duration, sequenceThr
 		streamId:    streamId,
 		statsLogger: NoopPeriodic{},
 		logThrottle: timeutil.NewPeriodic(10 * time.Second),
-		detector:    NewRtpGapDetector(sequenceThreshold, timestampThreshold),
+		detector:    NewGapDetector(sequenceThreshold, timestampThreshold),
 	}
 	if statsLogPeriod > 0 {
 		tracker.statsLogger = timeutil.NewPeriodic(statsLogPeriod)

@@ -7,17 +7,17 @@ import (
 	"github.com/eluv-io/errors-go"
 )
 
-// NewRtpGapDetector creates a new RTP gap detector that checks consecutive RTP packets for unexpected gaps in sequence
-// numbers and timestamps. The detection triggers when the difference between the current and previous sequence number
-// or timestamp is greater than their respective thresholds.
-func NewRtpGapDetector(sequenceThreshold int64, timestampThreshold time.Duration) *GapDetector {
+// NewGapDetector creates a new gap detector that checks consecutive packets for unexpected gaps in sequence numbers and
+// timestamps. The detection triggers when the difference between the current and previous sequence number or timestamp
+// is greater than their respective thresholds.
+func NewGapDetector(sequenceThreshold int64, timestampThreshold time.Duration) *GapDetector {
 	return &GapDetector{
 		SequenceThreshold:  sequenceThreshold,
 		TimestampThreshold: DurationToTicks(timestampThreshold),
 	}
 }
 
-// GapDetector detects RTP stream resets.
+// GapDetector detects stream resets.
 type GapDetector struct {
 	Sequence           SequenceUnwrapper
 	Timestamp          TimestampUnwrapper
@@ -35,7 +35,7 @@ func (r *GapDetector) Detect(seq uint16, ts uint32) (seqUnwrapped, tsUnwrapped i
 		if r.abs(diff) > r.SequenceThreshold {
 			err = errors.Append(
 				err,
-				errors.NoTrace("rtp gap detection", errors.K.Invalid,
+				errors.NoTrace("gap detection", errors.K.Invalid,
 					"reason", "sequence number gap",
 					"previous", previous,
 					"current", current,
@@ -52,7 +52,7 @@ func (r *GapDetector) Detect(seq uint16, ts uint32) (seqUnwrapped, tsUnwrapped i
 		if r.abs(diff) > r.TimestampThreshold {
 			err = errors.Append(
 				err,
-				errors.NoTrace("rtp gap detection", errors.K.Invalid,
+				errors.NoTrace("gap detection", errors.K.Invalid,
 					"reason", "timestamp gap",
 					"previous", previous,
 					"current", current,
