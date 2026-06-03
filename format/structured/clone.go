@@ -17,8 +17,15 @@ func CloneMap[Map ~map[K]V, K comparable, V any](m Map) Map {
 		return nil
 	}
 	cp := make(Map, len(m))
-	for k, v := range m {
-		cp[k] = castClone[V](cloneAny(v, reflect.Value{}))
+	switch any(*new(V)).(type) {
+	case byte, string, int, int8, int16, int32, int64, uint, uint16, uint32, uint64, float32, float64, bool, uintptr, complex64, complex128:
+		for k, v := range m {
+			cp[k] = v
+		}
+	default:
+		for k, v := range m {
+			cp[k] = castClone[V](cloneAny(v, reflect.Value{}))
+		}
 	}
 	return cp
 }
@@ -32,7 +39,7 @@ func CloneSlice[S ~[]E, E any](source S) S {
 
 	dup := make(S, len(source))
 	switch any(*new(E)).(type) {
-	case byte, string, int, int8, int16, int32, int64, uint, uint16, uint32, uint64, float32, float64, bool:
+	case byte, string, int, int8, int16, int32, int64, uint, uint16, uint32, uint64, float32, float64, bool, uintptr, complex64, complex128:
 		// E is a basic type, hence we can just copy the slice.
 		// This also works for named byte slice types, e.g. `type Bytes []byte`
 		copy(dup, source)
@@ -112,6 +119,12 @@ func cloneAny(v any, rv reflect.Value) any {
 		out := make([]string, len(m))
 		copy(out, m)
 		return out
+	case string, bool,
+		int, int8, int16, int32, int64,
+		uint, uint8, uint16, uint32, uint64, uintptr,
+		float32, float64,
+		complex64, complex128:
+		return v
 	default:
 		if !rv.IsValid() {
 			// rv is only valid if it was created from reflect.ValueOf(xyz) in cloneReflect. Otherwise, we pass in a
@@ -140,15 +153,9 @@ func cloneReflect(rv reflect.Value) reflect.Value {
 		}
 		out := reflect.MakeSlice(rv.Type(), rv.Len(), rv.Len())
 		switch rv.Type().Elem().Kind() {
-		case
-			reflect.Uint8,
-			reflect.String,
-			reflect.Int,
-			reflect.Float32, reflect.Float64,
-			reflect.Uint16, reflect.Uint32, reflect.Uint64,
-			reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-			reflect.Uintptr,
-			reflect.Bool:
+		case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+			reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+			reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.String:
 
 			// the slice element type is a basic type, hence we can just copy the slice.
 			reflect.Copy(out, rv)
@@ -177,6 +184,12 @@ func cloneElem(rv reflect.Value) reflect.Value {
 			return rv
 		}
 		rv = rv.Elem() // unwrap to the concrete Value, not the interface wrapper
+	}
+	switch rv.Kind() {
+	case reflect.Bool, reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64, reflect.Complex64, reflect.Complex128, reflect.String:
+		return rv
 	}
 	return reflect.ValueOf(cloneAny(rv.Interface(), rv))
 }
