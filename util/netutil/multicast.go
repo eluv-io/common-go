@@ -37,7 +37,7 @@ func NewMulticastReceiver(ctx context.Context, multicastAddr string, localAddr s
 
 	group := net.ParseIP(multicastIP)
 	ip := net.ParseIP(localIP)
-	addr := net.JoinHostPort(ip.String(), port)
+	addr := net.JoinHostPort("0.0.0.0", port)
 	iface, err := findInterfaceByIP(ip)
 	if err != nil {
 		return nil, e(err, "addr", localAddr)
@@ -62,12 +62,9 @@ func NewMulticastReceiver(ctx context.Context, multicastAddr string, localAddr s
 	}
 
 	conn := ipv4.NewPacketConn(c)
-	err = conn.SetMulticastLoopback(false)
+	err = conn.SetControlMessage(ipv4.FlagDst, true)
 	if err == nil {
-		err = conn.SetControlMessage(ipv4.FlagDst, true)
-		if err == nil {
-			err = conn.JoinGroup(iface, &net.UDPAddr{IP: group})
-		}
+		err = conn.JoinGroup(iface, &net.UDPAddr{IP: group})
 	}
 	if err != nil {
 		return nil, e(err, "addr", multicastAddr)
