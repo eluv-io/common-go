@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"strings"
+	"time"
 
 	"golang.org/x/net/ipv4"
 
@@ -12,6 +13,7 @@ import (
 
 type MulticastReceiver struct {
 	conn  *ipv4.PacketConn
+	stop  func() bool
 	group net.IP
 	ip    net.IP
 	buf   []byte
@@ -42,10 +44,18 @@ func NewMulticastReceiver(ctx context.Context, multicastAddr string, localAddr s
 	}
 
 	var c net.PacketConn
+	stop := func() bool {
+		return false
+	}
 	if ctx == nil {
 		c, err = net.ListenPacket("udp4", addr)
 	} else {
 		c, err = (&net.ListenConfig{}).ListenPacket(ctx, "udp4", addr)
+		if err == nil {
+			stop = context.AfterFunc(ctx, func() {
+				c.SetReadDeadline(time.Now().Add(time.Second * -1))
+			})
+		}
 	}
 	if err != nil {
 		return nil, e(err, "addr", localAddr)
@@ -65,6 +75,7 @@ func NewMulticastReceiver(ctx context.Context, multicastAddr string, localAddr s
 
 	return &MulticastReceiver{
 		conn:  conn,
+		stop:  stop,
 		group: group,
 		ip:    ip,
 		buf:   make([]byte, 66507), // Maximum packet payload size
@@ -90,6 +101,7 @@ func (r *MulticastReceiver) ReadPacket() ([]byte, bool, string, error) {
 func (r *MulticastReceiver) Close() error {
 	var err error
 	if r.conn != nil {
+		_ = r.stop()
 		err = r.conn.Close()
 		r.conn = nil
 	}
