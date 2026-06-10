@@ -1,6 +1,7 @@
 package netutil
 
 import (
+	"context"
 	"net"
 	"strings"
 
@@ -16,7 +17,7 @@ type MulticastReceiver struct {
 	buf   []byte
 }
 
-func NewMulticastReceiver(multicastAddr string, localAddr string) (*MulticastReceiver, error) {
+func NewMulticastReceiver(ctx context.Context, multicastAddr string, localAddr string) (*MulticastReceiver, error) {
 	e := errors.Template("MulticastReceiver", errors.K.IO.Default())
 
 	multicastIP, port, err := net.SplitHostPort(multicastAddr)
@@ -34,12 +35,18 @@ func NewMulticastReceiver(multicastAddr string, localAddr string) (*MulticastRec
 
 	group := net.ParseIP(multicastIP)
 	ip := net.ParseIP(localIP)
+	addr := net.JoinHostPort(ip.String(), port)
 	iface, err := findInterfaceByIP(ip)
 	if err != nil {
 		return nil, e(err, "addr", localAddr)
 	}
 
-	c, err := net.ListenPacket("udp4", net.JoinHostPort(ip.String(), port))
+	var c net.PacketConn
+	if ctx == nil {
+		c, err = net.ListenPacket("udp4", addr)
+	} else {
+		c, err = (&net.ListenConfig{}).ListenPacket(ctx, "udp4", addr)
+	}
 	if err != nil {
 		return nil, e(err, "addr", localAddr)
 	}
@@ -89,13 +96,18 @@ func (r *MulticastReceiver) Close() error {
 	return err
 }
 
-func NewMulticastSender(multicastAddr string, maxPacketSize ...int) (*MulticastSender, error) {
+func NewMulticastSender(ctx context.Context, multicastAddr string, maxPacketSize ...int) (*MulticastSender, error) {
 	e := errors.Template("MulticastSender", errors.K.IO.Default(), "addr", multicastAddr)
 	addr, err := net.ResolveUDPAddr("udp4", multicastAddr)
 	if err != nil {
 		return nil, e(errors.K.Invalid, err)
 	}
-	conn, err := net.DialUDP("udp4", nil, addr)
+	var conn net.Conn
+	if ctx == nil {
+		conn, err = net.DialUDP("udp4", nil, addr)
+	} else {
+		conn, err = (&net.Dialer{}).DialContext(ctx, "udp4", addr.String())
+	}
 	if err != nil {
 		return nil, e(err)
 	}
@@ -110,7 +122,7 @@ func NewMulticastSender(multicastAddr string, maxPacketSize ...int) (*MulticastS
 }
 
 type MulticastSender struct {
-	conn *net.UDPConn
+	conn net.Conn
 	mtu  int
 }
 
