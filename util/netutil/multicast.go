@@ -11,36 +11,41 @@ import (
 	"github.com/eluv-io/errors-go"
 )
 
+var controlFlags = ipv4.FlagDst
+
 type MulticastReceiver struct {
-	conn  *ipv4.PacketConn
-	stop  func() bool
-	group net.IP
-	ip    net.IP
-	buf   []byte
+	conn      *ipv4.PacketConn
+	stop      func() bool
+	multicast net.IP
+	unicast   net.IP
+	buf       []byte
 }
 
-func NewMulticastReceiver(ctx context.Context, multicastAddr string, localAddr string) (*MulticastReceiver, error) {
+func NewMulticastReceiver(ctx context.Context, multicastAddr string, interfaceAddr string) (*MulticastReceiver, error) {
 	e := errors.Template("MulticastReceiver", errors.K.IO.Default())
 
 	multicastIP, port, err := net.SplitHostPort(multicastAddr)
 	if err != nil {
 		return nil, e(errors.K.Invalid, err, "addr", multicastAddr)
 	}
-	localIP, _, err := net.SplitHostPort(localAddr)
+	interfaceIP, _, err := net.SplitHostPort(interfaceAddr)
 	if err != nil {
 		if strings.Contains(err.Error(), "missing port in address") {
-			localIP = localAddr
+			interfaceIP = interfaceAddr
 		} else {
-			return nil, e(errors.K.Invalid, err, "addr", localAddr)
+			return nil, e(errors.K.Invalid, err, "addr", interfaceAddr)
 		}
 	}
 
-	group := net.ParseIP(multicastIP)
-	ip := net.ParseIP(localIP)
+	network := "udp4"
 	addr := net.JoinHostPort("0.0.0.0", port)
-	iface, err := findInterfaceByIP(ip)
+	iface, err := findInterfaceByIP(interfaceIP)
 	if err != nil {
-		return nil, e(err, "addr", localAddr)
+		return nil, e(err, network, interfaceAddr)
+	}
+	group, err := net.ResolveUDPAddr(network, multicastAddr)
+	if err != nil {
+		return nil, e(errors.K.Invalid, err, "addr", multicastAddr)
 	}
 
 	var c net.PacketConn
@@ -48,9 +53,9 @@ func NewMulticastReceiver(ctx context.Context, multicastAddr string, localAddr s
 		return false
 	}
 	if ctx == nil {
-		c, err = net.ListenPacket("udp4", addr)
+		c, err = net.ListenPacket(network, addr)
 	} else {
-		c, err = (&net.ListenConfig{}).ListenPacket(ctx, "udp4", addr)
+		c, err = (&net.ListenConfig{}).ListenPacket(ctx, network, addr)
 		if err == nil {
 			stop = context.AfterFunc(ctx, func() {
 				c.SetReadDeadline(time.Now().Add(time.Second * -1))
@@ -58,24 +63,24 @@ func NewMulticastReceiver(ctx context.Context, multicastAddr string, localAddr s
 		}
 	}
 	if err != nil {
-		return nil, e(err, "addr", localAddr)
+		return nil, e(err, "addr", multicastAddr)
 	}
 
 	conn := ipv4.NewPacketConn(c)
-	err = conn.SetControlMessage(ipv4.FlagDst, true)
+	err = conn.SetControlMessage(controlFlags, true)
 	if err == nil {
-		err = conn.JoinGroup(iface, &net.UDPAddr{IP: group})
+		err = conn.JoinGroup(iface, group)
 	}
 	if err != nil {
 		return nil, e(err, "addr", multicastAddr)
 	}
 
 	return &MulticastReceiver{
-		conn:  conn,
-		stop:  stop,
-		group: group,
-		ip:    ip,
-		buf:   make([]byte, 66507), // Maximum packet payload size
+		conn:      conn,
+		stop:      stop,
+		multicast: net.ParseIP(multicastIP),
+		unicast:   net.ParseIP(interfaceIP),
+		buf:       make([]byte, 66507), // Maximum packet payload size
 	}, nil
 }
 
@@ -88,7 +93,7 @@ func (r *MulticastReceiver) ReadPacket() ([]byte, bool, string, error) {
 		n, cm, src, err := r.conn.ReadFrom(r.buf)
 		if err != nil {
 			return nil, false, "", e(err)
-		} else if !cm.Dst.Equal(r.group) && !cm.Dst.Equal(r.ip) {
+		} else if !cm.Dst.Equal(r.multicast) && !cm.Dst.Equal(r.unicast) {
 			continue
 		}
 		return r.buf[:n], cm.Dst.IsMulticast(), src.String(), nil
@@ -105,33 +110,82 @@ func (r *MulticastReceiver) Close() error {
 	return err
 }
 
-func NewMulticastSender(ctx context.Context, multicastAddr string, maxPacketSize ...int) (*MulticastSender, error) {
+func NewMulticastSender(ctx context.Context, multicastAddr string, interfaceAddr string, multicastTTL ...int) (*MulticastSender, error) {
 	e := errors.Template("MulticastSender", errors.K.IO.Default(), "addr", multicastAddr)
-	addr, err := net.ResolveUDPAddr("udp4", multicastAddr)
+
+	_, _, err := net.SplitHostPort(multicastAddr)
 	if err != nil {
-		return nil, e(errors.K.Invalid, err)
+		return nil, e(errors.K.Invalid, err, "addr", multicastAddr)
 	}
-	var conn net.Conn
+	interfaceIP, _, err := net.SplitHostPort(interfaceAddr)
+	if err != nil {
+		if strings.Contains(err.Error(), "missing port in address") {
+			interfaceIP = interfaceAddr
+		} else {
+			return nil, e(errors.K.Invalid, err, "addr", interfaceAddr)
+		}
+	}
+	ttl := 1
+	if len(multicastTTL) > 0 && multicastTTL[0] > 0 {
+		ttl = multicastTTL[0]
+	}
+
+	network := "udp4"
+	addr := net.JoinHostPort("0.0.0.0", "0")
+	iface, err := findInterfaceByIP(interfaceIP)
+	if err != nil {
+		return nil, e(err, "addr", interfaceAddr)
+	}
+	dest, err := net.ResolveUDPAddr(network, multicastAddr)
+	if err != nil {
+		return nil, e(errors.K.Invalid, err, "addr", multicastAddr)
+	}
+
+	var c net.PacketConn
+	stop := func() bool {
+		return false
+	}
 	if ctx == nil {
-		conn, err = net.DialUDP("udp4", nil, addr)
+		c, err = net.ListenPacket(network, addr)
 	} else {
-		conn, err = (&net.Dialer{}).DialContext(ctx, "udp4", addr.String())
+		c, err = (&net.ListenConfig{}).ListenPacket(ctx, network, addr)
+		if err == nil {
+			stop = context.AfterFunc(ctx, func() {
+				c.SetWriteDeadline(time.Now().Add(time.Second * -1))
+			})
+		}
 	}
 	if err != nil {
-		return nil, e(err)
+		return nil, e(err, "addr", multicastAddr)
 	}
-	mtu := 1472 // Realistic MTU payload size
-	if len(maxPacketSize) > 0 && maxPacketSize[0] > 0 {
-		mtu = maxPacketSize[0]
+
+	conn := ipv4.NewPacketConn(c)
+	err = conn.SetControlMessage(controlFlags, true)
+	if err == nil {
+		err = conn.SetMulticastLoopback(false)
+		if err == nil {
+			err = conn.SetMulticastTTL(ttl)
+			if err == nil {
+				err = conn.SetMulticastInterface(iface)
+			}
+		}
 	}
+	if err != nil {
+		return nil, e(err, "addr", multicastAddr)
+	}
+
 	return &MulticastSender{
 		conn: conn,
-		mtu:  mtu,
+		stop: stop,
+		dest: dest,
+		mtu:  1472, // Realistic MTU payload size
 	}, nil
 }
 
 type MulticastSender struct {
-	conn net.Conn
+	conn *ipv4.PacketConn
+	stop func() bool
+	dest *net.UDPAddr
 	mtu  int
 }
 
@@ -142,13 +196,14 @@ func (s *MulticastSender) WritePacket(buf []byte) error {
 	} else if len(buf) > s.mtu {
 		return e(errors.K.Invalid, "reason", "packet exceeds maximum size", "size", len(buf), "max_size", s.mtu)
 	}
-	_, err := s.conn.Write(buf)
+	_, err := s.conn.WriteTo(buf, nil, s.dest)
 	return e.IfNotNil(err)
 }
 
 func (s *MulticastSender) Close() error {
 	var err error
 	if s.conn != nil {
+		_ = s.stop()
 		err = s.conn.Close()
 		s.conn = nil
 	}
@@ -159,8 +214,9 @@ func (s *MulticastSender) MaxPacketSize() int {
 	return s.mtu
 }
 
-func findInterfaceByIP(ip net.IP) (*net.Interface, error) {
+func findInterfaceByIP(ip string) (*net.Interface, error) {
 	e := errors.Template("findInterfaceByIP", errors.K.Invalid, "ip", ip)
+	nip := net.ParseIP(ip)
 	ifaces, err := net.Interfaces()
 	if err != nil {
 		return nil, e(err)
@@ -174,7 +230,7 @@ func findInterfaceByIP(ip net.IP) (*net.Interface, error) {
 			ipaddr, _, err := net.ParseCIDR(addr.String())
 			if err != nil {
 				continue
-			} else if ipaddr.Equal(ip) {
+			} else if ipaddr.Equal(nip) {
 				return &iface, nil
 			}
 		}

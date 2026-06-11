@@ -12,19 +12,17 @@ import (
 
 func TestMulticast(t *testing.T) {
 	port := "8888"
-	multicastIP := "239.0.0.123"
-	localIP := "127.0.0.1"
+	multicastAddr := net.JoinHostPort("239.0.0.123", port)
+	interfaceAddr := net.JoinHostPort("127.0.0.1", port)
 
 	for _, ctx := range []context.Context{nil, context.Background()} {
-		recv, err := NewMulticastReceiver(ctx, net.JoinHostPort(multicastIP, port), localIP)
+		recv, err := NewMulticastReceiver(ctx, multicastAddr, interfaceAddr)
 		require.NoError(t, err)
 
 		// Unicast
-		size := 1024
-		send, err := NewMulticastSender(ctx, net.JoinHostPort(localIP, port), size)
+		send, err := NewMulticastSender(ctx, interfaceAddr, interfaceAddr)
 		require.NoError(t, err)
 		mtu := send.MaxPacketSize()
-		require.Equal(t, size, mtu)
 		data := byteutil.RandomBytes(mtu + 1)
 		err = send.WritePacket(data)
 		require.Error(t, err)
@@ -43,10 +41,10 @@ func TestMulticast(t *testing.T) {
 
 		// DISABLED - depends on network configuration of host
 		// // Multicast
-		// send, err = NewMulticastSender(ctx, net.JoinHostPort(multicastIP, port))
+		// send, err = NewMulticastSender(ctx, multicastAddr, interfaceAddr)
 		// require.NoError(t, err)
 		// mtu = send.MaxPacketSize()
-		// data = byteutil.RandomBytes(mtu+1)
+		// data = byteutil.RandomBytes(mtu + 1)
 		// err = send.WritePacket(data)
 		// require.Error(t, err)
 		// for i := range 10 {
