@@ -16,6 +16,7 @@ require (
 	github.com/eluv-io/errors-go v1.0.5
 	github.com/eluv-io/inject-go v1.0.2
 	github.com/eluv-io/log-go v1.0.10
+	github.com/eluv-io/mapstructure v1.5.1
 	github.com/eluv-io/utc-go v1.0.1
 	github.com/ethereum/go-ethereum v1.10.19
 	github.com/fxamacker/cbor/v2 v2.8.0
@@ -25,7 +26,6 @@ require (
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
 	github.com/maruel/panicparse/v2 v2.3.1
 	github.com/mattn/go-runewidth v0.0.9
-	github.com/mitchellh/mapstructure v1.4.3
 	github.com/modern-go/gls v0.0.0-20220109145502-612d0167dce5
 	github.com/mr-tron/base58 v1.2.0
 	github.com/multiformats/go-varint v0.0.6
