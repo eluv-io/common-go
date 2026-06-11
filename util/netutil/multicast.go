@@ -21,6 +21,10 @@ type MulticastReceiver struct {
 	buf       []byte
 }
 
+// NewMulticastReceiver creates a MulticastReceiver that joins and listens on the given multicast address, using the
+// interface specified by the given interface address. MulticastReceiver reads packets received at both the multicast
+// address and the interface address. The multicast address is expected to contain an ip address and port. The interface
+// address is expected to contain an ip address; any port specified in the interface address will be ignored.
 func NewMulticastReceiver(ctx context.Context, multicastAddr string, interfaceAddr string) (*MulticastReceiver, error) {
 	e := errors.Template("MulticastReceiver", errors.K.IO.Default())
 
@@ -110,6 +114,12 @@ func (r *MulticastReceiver) Close() error {
 	return err
 }
 
+// NewMulticastSender creates a NewMulticastSender that connects to the given multicast address, using the interface
+// specified by the given interface address. MulticastSender sends packets to the multicast address using multicast.
+// As a special case, the multicast address is permitted to be an unicast address, in which case unicast will be used.
+// Optionally, a multicast TTL may be specified for multicast sends. The multicast address is expected to contain an ip
+// address and port. The interface address is expected to contain an ip address; any port specified in the interface
+// address will be ignored.
 func NewMulticastSender(ctx context.Context, multicastAddr string, interfaceAddr string, multicastTTL ...int) (*MulticastSender, error) {
 	e := errors.Template("MulticastSender", errors.K.IO.Default(), "addr", multicastAddr)
 
