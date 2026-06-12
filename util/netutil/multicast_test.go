@@ -22,12 +22,11 @@ func TestMulticast(t *testing.T) {
 		// Unicast
 		send, err := NewMulticastSender(ctx, interfaceAddr, interfaceAddr)
 		require.NoError(t, err)
-		mtu := send.MaxPacketSize()
-		data := byteutil.RandomBytes(mtu + 1)
+		data := byteutil.RandomBytes(MaxSendPacketSize + 1)
 		err = send.WritePacket(data)
 		require.Error(t, err)
 		for i := range 10 {
-			data := byteutil.RandomBytes(mtu)
+			data := byteutil.RandomBytes(MaxSendPacketSize)
 			err := send.WritePacket(data)
 			require.NoError(t, err, i)
 			packet, isMulticast, source, err := recv.ReadPacket()
@@ -43,12 +42,11 @@ func TestMulticast(t *testing.T) {
 		// // Multicast
 		// send, err = NewMulticastSender(ctx, multicastAddr, interfaceAddr)
 		// require.NoError(t, err)
-		// mtu = send.MaxPacketSize()
-		// data = byteutil.RandomBytes(mtu + 1)
+		// data = byteutil.RandomBytes(MaxSendPacketSize + 1)
 		// err = send.WritePacket(data)
 		// require.Error(t, err)
 		// for i := range 10 {
-		// 	data := byteutil.RandomBytes(mtu)
+		// 	data := byteutil.RandomBytes(MaxSendPacketSize)
 		// 	err := send.WritePacket(data)
 		// 	require.NoError(t, err, i)
 		// 	packet, isMulticast, source, err := recv.ReadPacket()

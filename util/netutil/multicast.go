@@ -11,7 +11,11 @@ import (
 	"github.com/eluv-io/errors-go"
 )
 
-var controlFlags = ipv4.FlagDst
+const (
+	MaxRecvPacketSize = 65535 // IPv4 MTU
+	MaxSendPacketSize = 1472  // Maximum UDP payload size
+	controlFlags      = ipv4.FlagDst
+)
 
 type MulticastReceiver struct {
 	conn      *ipv4.PacketConn
@@ -84,7 +88,7 @@ func NewMulticastReceiver(ctx context.Context, multicastAddr string, interfaceAd
 		stop:      stop,
 		multicast: net.ParseIP(multicastIP),
 		unicast:   net.ParseIP(interfaceIP),
-		buf:       make([]byte, 66507), // Maximum packet payload size
+		buf:       make([]byte, MaxRecvPacketSize),
 	}, nil
 }
 
@@ -188,7 +192,6 @@ func NewMulticastSender(ctx context.Context, multicastAddr string, interfaceAddr
 		conn: conn,
 		stop: stop,
 		dest: dest,
-		mtu:  1472, // Realistic MTU payload size
 	}, nil
 }
 
@@ -203,7 +206,7 @@ func (s *MulticastSender) WritePacket(buf []byte) error {
 	e := errors.Template("MulticastSender.WritePacket", errors.K.IO.Default())
 	if s.conn == nil {
 		return e("reason", "closed")
-	} else if len(buf) > s.mtu {
+	} else if len(buf) > MaxSendPacketSize {
 		return e(errors.K.Invalid, "reason", "packet exceeds maximum size", "size", len(buf), "max_size", s.mtu)
 	}
 	_, err := s.conn.WriteTo(buf, nil, s.dest)
@@ -218,10 +221,6 @@ func (s *MulticastSender) Close() error {
 		s.conn = nil
 	}
 	return err
-}
-
-func (s *MulticastSender) MaxPacketSize() int {
-	return s.mtu
 }
 
 func findInterfaceByIP(ip string) (*net.Interface, error) {
