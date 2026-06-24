@@ -33,6 +33,7 @@ func srtOpen(urlStr string) (connect func() (srt.Conn, error), modeListen bool, 
 	}
 
 	statsPeriod := httputil.DurationQuery(u.Query(), "stats_period", duration.Second, 0)
+	encrypted := srtConfig.Passphrase != "" // Passphrase was populated by UnmarshalURL above
 
 	if httputil.StringQuery(u.Query(), "mode", "") != "listener" {
 		return func() (srt.Conn, error) {
@@ -44,7 +45,7 @@ func srtOpen(urlStr string) (connect func() (srt.Conn, error), modeListen bool, 
 				return nil, e(err)
 			}
 
-			return newWrappedConn(conn, nil, hostPort, statsPeriod), nil
+			return newWrappedConn(conn, nil, hostPort, statsPeriod, encrypted), nil
 		}, false, nil
 	}
 
@@ -86,7 +87,7 @@ func srtOpen(urlStr string) (connect func() (srt.Conn, error), modeListen bool, 
 		}
 
 		log.Debug("new connection accepted", "host", hostPort, "remote", req.RemoteAddr(), "srt_version", req.Version(), "stream_id", req.StreamId())
-		return newWrappedConn(conn, listener, hostPort, statsPeriod), nil
+		return newWrappedConn(conn, listener, hostPort, statsPeriod, encrypted), nil
 	}, true, nil
 }
 
@@ -97,12 +98,27 @@ func srtSanitizeUrl(str string) string {
 
 type wrappedConn struct {
 	srt.Conn
-	listener srt.Listener
-	done     chan bool
-	once     sync.Once
+	listener  srt.Listener
+	encrypted bool
+	done      chan bool
+	once      sync.Once
 }
 
-func newWrappedConn(conn srt.Conn, listener srt.Listener, hostPort string, statsPeriod duration.Spec) srt.Conn {
+// ConnStats implements StatsReporter, exposing the connection's remote address and SRT protocol stats.
+func (w *wrappedConn) ConnStats(details bool) ConnStats {
+	cs := ConnStats{}
+	if addr := w.RemoteAddr(); addr != nil {
+		cs.RemoteAddr = addr.String()
+	}
+	srtStats := &SrtConnStats{Version: w.Version(), Encrypted: w.encrypted}
+	if details {
+		w.Stats(&srtStats.Statistics)
+	}
+	cs.SRT = srtStats
+	return cs
+}
+
+func newWrappedConn(conn srt.Conn, listener srt.Listener, hostPort string, statsPeriod duration.Spec, encrypted bool) srt.Conn {
 	done := make(chan bool, 1)
 	if statsPeriod > 0 {
 		go func() {
@@ -128,9 +144,10 @@ func newWrappedConn(conn srt.Conn, listener srt.Listener, hostPort string, stats
 		}()
 	}
 	return &wrappedConn{
-		Conn:     conn,
-		listener: listener,
-		done:     done,
+		Conn:      conn,
+		listener:  listener,
+		encrypted: encrypted,
+		done:      done,
 	}
 }
 
