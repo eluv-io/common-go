@@ -104,11 +104,15 @@ type wrappedConn struct {
 	once      sync.Once
 }
 
-// ConnStats implements StatsReporter, exposing the connection's remote address and SRT protocol stats.
+// ConnStats implements StatsReporter, exposing the connection's local and remote addresses and SRT
+// protocol stats.
 func (w *wrappedConn) ConnStats(details bool) ConnStats {
 	cs := ConnStats{}
 	if addr := w.RemoteAddr(); addr != nil {
 		cs.RemoteAddr = addr.String()
+	}
+	if addr := w.LocalAddr(); addr != nil {
+		cs.LocalAddr = addr.String()
 	}
 	srtStats := &SrtConnStats{Version: w.Version(), Encrypted: w.encrypted}
 	if details {

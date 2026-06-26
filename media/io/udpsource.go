@@ -81,5 +81,5 @@ func (s *udpSource) Open() (io.ReadCloser, error) {
 		log.Trace("listening on UDP address", "addr", bindAddr)
 	}
 
-	return conn, nil
+	return udpConn{conn}, nil
 }

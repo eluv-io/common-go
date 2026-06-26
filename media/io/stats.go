@@ -8,8 +8,12 @@ import (
 // connections that implement StatsReporter.
 type ConnStats struct {
 	// RemoteAddr is the remote peer's address ("host:port") - the destination for a sink, or the
-	// connected client for a source. Empty if unavailable (e.g. not yet connected).
+	// connected client for a source. Empty if unavailable (e.g. not yet connected, or a connectionless
+	// UDP source that has no single remote peer).
 	RemoteAddr string
+	// LocalAddr is the local address ("host:port") of the connection - the address a source listens on,
+	// or the local socket of a sink. Empty if unavailable.
+	LocalAddr string
 	// SRT carries SRT-protocol statistics; nil for non-SRT connections.
 	SRT *SrtConnStats
 }

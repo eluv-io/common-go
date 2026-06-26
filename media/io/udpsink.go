@@ -90,8 +90,10 @@ func (s *udpSink) Open() (io.WriteCloser, error) {
 	return udpConn{conn}, nil
 }
 
-// udpConn wraps a UDP connection so it can report ConnStats (StatsReporter). The remote address is the
-// dialed destination of the sink. UDP has no protocol-level stats, so SRT is left nil.
+// udpConn wraps a UDP connection so it can report ConnStats (StatsReporter). It is used by both the UDP
+// sink and source: for a sink the remote address is the dialed destination, while for a (connectionless)
+// source listening socket only the local listen address is available. UDP has no protocol-level stats,
+// so SRT is left nil.
 type udpConn struct {
 	*net.UDPConn
 }
@@ -100,6 +102,9 @@ func (c udpConn) ConnStats(bool) ConnStats {
 	cs := ConnStats{}
 	if addr := c.RemoteAddr(); addr != nil {
 		cs.RemoteAddr = addr.String()
+	}
+	if addr := c.LocalAddr(); addr != nil {
+		cs.LocalAddr = addr.String()
 	}
 	return cs
 }

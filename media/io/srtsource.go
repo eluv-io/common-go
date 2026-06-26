@@ -81,6 +81,17 @@ func (d *DeferredReader) Close() error {
 	return nil
 }
 
+// ConnStats implements StatsReporter by delegating to the underlying connection once it is connected.
+// Returns a zero ConnStats while no connection has been established yet.
+func (d *DeferredReader) ConnStats(details bool) ConnStats {
+	if w := d.reader.Load(); w != nil {
+		if r, ok := (*w).(StatsReporter); ok {
+			return r.ConnStats(details)
+		}
+	}
+	return ConnStats{}
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 
 type ErrorReader struct {
