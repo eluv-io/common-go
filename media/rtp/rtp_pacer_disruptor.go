@@ -39,9 +39,12 @@ const (
 	// DefaultStatsInterval is the default interval for periodic stats logging.
 	DefaultStatsInterval = 5 * duration.Second
 
-	// DefaultOversleepThreshold is the minimum oversleep duration that is recorded in the oversleeps stat. Oversleeps
-	// shorter than this are considered normal scheduler jitter and are not tracked.
-	DefaultOversleepThreshold = 5 * duration.Millisecond
+	// DefaultOversleepMargin is the default DisruptorPacerConfig.OversleepMargin: the scheduling jitter tolerated on top
+	// of the unavoidable ticker quantization before a wake-up is recorded as an oversleep. The effective oversleep
+	// threshold is TickerPeriod + OversleepMargin: because the consumer wakes on ticker ticks, a wake can legitimately
+	// land up to one TickerPeriod past its target without any real scheduling overrun, so that quantization must not be
+	// counted as an oversleep.
+	DefaultOversleepMargin = 5 * duration.Millisecond
 )
 
 // disruptorEntry is a pre-allocated ring buffer slot. The entry is populated by the producer and read by the consumer.
@@ -63,6 +66,7 @@ type DisruptorPacerConfig struct {
 	BufferCapacity    int                    `json:"buffer_capacity"`     // ring buffer capacity (is rounded up to the next power of 2; 0 → DefaultDisruptorCapacity)
 	MinSleepThreshold duration.Spec          `json:"min_sleep_threshold"` // sleep durations shorter than this are skipped (0 → DefaultMinSleepThreshold)
 	TickerPeriod      duration.Spec          `json:"ticker_period"`       // ticker period for scheduling delivery (0 → DefaultTickerPeriod)
+	OversleepMargin   duration.Spec          `json:"oversleep_margin"`    // jitter tolerated above TickerPeriod before a wake is counted as an oversleep (0 → DefaultOversleepMargin)
 	StatsInterval     duration.Spec          `json:"stats_interval"`      // interval for periodic stats logging (0 → DefaultStatsInterval, -1 → disabled)
 
 	// SendAhead is how early the consumer dispatches a packet before its target time. The ticker loop wakes up when
@@ -84,6 +88,7 @@ func (c *DisruptorPacerConfig) InitDefaults() *DisruptorPacerConfig {
 	c.BufferCapacity = DefaultDisruptorCapacity
 	c.MinSleepThreshold = DefaultMinSleepThreshold
 	c.TickerPeriod = DefaultTickerPeriod
+	c.OversleepMargin = DefaultOversleepMargin
 	c.StatsInterval = DefaultStatsInterval
 	c.SendAhead = 0
 	c.DeliveryMargin = DefaultDeliveryMargin
@@ -156,6 +161,9 @@ func NewDisruptorPacer(conf DisruptorPacerConfig) (*DisruptorPacer, error) {
 	}
 	if conf.TickerPeriod <= 0 {
 		conf.TickerPeriod = DefaultTickerPeriod
+	}
+	if conf.OversleepMargin <= 0 {
+		conf.OversleepMargin = DefaultOversleepMargin
 	}
 	if conf.StatsInterval == 0 {
 		conf.StatsInterval = DefaultStatsInterval
@@ -376,7 +384,7 @@ func (h *disruptorHandler) Handle(lower, upper int64) {
 		h.pacer.outStatsMu.Lock()
 		{
 			os.UpdateBufFill(now, bufFill)
-			if duration.Spec(overslept) > DefaultOversleepThreshold {
+			if duration.Spec(overslept) > h.pacer.conf.TickerPeriod+h.pacer.conf.OversleepMargin {
 				os.UpdateOversleeps(now, overslept)
 			}
 			if lateness > 0 {

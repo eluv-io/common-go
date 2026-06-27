@@ -37,6 +37,7 @@ type TsDisruptorPacerConfig struct {
 	BufferCapacity    int           `json:"buffer_capacity"`     // ring buffer capacity (rounded up to next power of 2; 0 → rtp.DefaultDisruptorCapacity)
 	MinSleepThreshold duration.Spec `json:"min_sleep_threshold"` // sleep durations shorter than this are skipped (0 → rtp.DefaultMinSleepThreshold)
 	TickerPeriod      duration.Spec `json:"ticker_period"`       // ticker period for scheduling delivery (0 → rtp.DefaultTickerPeriod)
+	OversleepMargin   duration.Spec `json:"oversleep_margin"`    // jitter tolerated above TickerPeriod before a wake is counted as an oversleep (0 → rtp.DefaultOversleepMargin)
 	StatsInterval     duration.Spec `json:"stats_interval"`      // interval for periodic stats logging (0 → rtp.DefaultStatsInterval, -1 → disabled)
 
 	// SendAhead is how early the consumer dispatches a packet before its target time. 0 = dispatch at targetTs.
@@ -63,6 +64,7 @@ func (c *TsDisruptorPacerConfig) InitDefaults() *TsDisruptorPacerConfig {
 	c.BufferCapacity = rtp.DefaultDisruptorCapacity
 	c.MinSleepThreshold = rtp.DefaultMinSleepThreshold
 	c.TickerPeriod = rtp.DefaultTickerPeriod
+	c.OversleepMargin = rtp.DefaultOversleepMargin
 	c.StatsInterval = rtp.DefaultStatsInterval
 	c.SendAhead = 0
 	c.DeliveryMargin = 0
@@ -152,6 +154,9 @@ func NewTsDisruptorPacer(conf TsDisruptorPacerConfig) (*TsDisruptorPacer, error)
 	}
 	if conf.TickerPeriod <= 0 {
 		conf.TickerPeriod = rtp.DefaultTickerPeriod
+	}
+	if conf.OversleepMargin <= 0 {
+		conf.OversleepMargin = rtp.DefaultOversleepMargin
 	}
 	if conf.StatsInterval == 0 {
 		conf.StatsInterval = rtp.DefaultStatsInterval
@@ -452,7 +457,7 @@ func (h *tsDisruptorHandler) Handle(lower, upper int64) {
 		h.pacer.outStatsMu.Lock()
 		{
 			os.UpdateBufFill(now, bufFill)
-			if duration.Spec(overslept) > rtp.DefaultOversleepThreshold {
+			if duration.Spec(overslept) > h.pacer.conf.TickerPeriod+h.pacer.conf.OversleepMargin {
 				os.UpdateOversleeps(now, overslept)
 			}
 			if lateness > 0 {
