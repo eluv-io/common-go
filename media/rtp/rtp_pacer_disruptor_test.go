@@ -285,7 +285,8 @@ func TestDisruptorPacer_ShutdownIdempotent(t *testing.T) {
 	collect()
 }
 
-// TestDisruptorPacer_Delay verifies that the first packet is delivered approximately Delay after it is pushed.
+// TestDisruptorPacer_DelayContinuous verifies that the first packet is delivered approximately Delay after it is
+// pushed.
 func TestDisruptorPacer_DelayContinuous(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping timing-sensitive test in short mode")
@@ -328,7 +329,8 @@ func TestDisruptorPacer_DelayContinuous(t *testing.T) {
 
 	require.Equal(t, packets, delivered)
 
-	in, out := pacer.Stats()
+	stats := pacer.Stats()
+	in, out := stats.In, stats.Out
 
 	log.Info("total stats", "in", jsonutil.MarshalString(in), "out", jsonutil.MarshalString(out))
 

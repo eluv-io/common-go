@@ -91,6 +91,8 @@ type tsDisruptorEntry struct {
 //	    pacer.Push(pkt)
 //	}
 //	pacer.Shutdown()
+var _ pacer.StatsReporter = (*TsDisruptorPacer)(nil)
+
 type TsDisruptorPacer struct {
 	conf    TsDisruptorPacerConfig
 	logic   *pacer.PacerLogic // PCR timing logic; accessed only from Push goroutine (under inStatsMu for logStats)
@@ -353,8 +355,8 @@ func (p *TsDisruptorPacer) BufferCap() int {
 	return len(p.ringBuffer)
 }
 
-// Stats returns a snapshot of the current input and output statistics.
-func (p *TsDisruptorPacer) Stats() (pacer.InStats, pacer.OutStatsPeriod) {
+// Stats implements pacer.StatsReporter, returning a snapshot of the current input and output statistics.
+func (p *TsDisruptorPacer) Stats() pacer.PacerStats {
 	p.inStatsMu.Lock()
 	inSnap := p.inStats
 	p.inStatsMu.Unlock()
@@ -363,7 +365,7 @@ func (p *TsDisruptorPacer) Stats() (pacer.InStats, pacer.OutStatsPeriod) {
 	outSnap := p.outStats.Total()
 	p.outStatsMu.Unlock()
 
-	return inSnap, *outSnap
+	return pacer.PacerStats{In: inSnap, Out: *outSnap}
 }
 
 // logStats is the sole logging goroutine. It fires every StatsInterval and logs a full snapshot.

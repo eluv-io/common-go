@@ -104,6 +104,8 @@ func (c *DisruptorPacerConfig) InitDefaults() *DisruptorPacerConfig {
 //	    pacer.Push(pkt)
 //	}
 //	pacer.Shutdown()
+var _ pacer.StatsReporter = (*DisruptorPacer)(nil)
+
 type DisruptorPacer struct {
 	conf        DisruptorPacerConfig
 	logic       *pacer.PacerLogic
@@ -427,7 +429,8 @@ func (p *DisruptorPacer) logStats() {
 	}
 }
 
-func (p *DisruptorPacer) Stats() (pacer.InStats, pacer.OutStatsPeriod) {
+// Stats implements pacer.StatsReporter, returning a snapshot of the current input and output statistics.
+func (p *DisruptorPacer) Stats() pacer.PacerStats {
 	p.inStatsMu.Lock()
 	inSnap := p.stats // plain value copy; InStats has no atomics or sync values
 	p.inStatsMu.Unlock()
@@ -436,5 +439,5 @@ func (p *DisruptorPacer) Stats() (pacer.InStats, pacer.OutStatsPeriod) {
 	outSnap := p.outStats.Total()
 	p.outStatsMu.Unlock()
 
-	return inSnap, *outSnap
+	return pacer.PacerStats{In: inSnap, Out: *outSnap}
 }

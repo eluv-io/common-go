@@ -68,6 +68,22 @@ func (s *InStats) Reset() {
 	s.LastStreamReset = lastReset
 }
 
+// PacerStats is a snapshot of a pacer's runtime statistics, combining input (timing) and output
+// (delivery) statistics.
+type PacerStats struct {
+	In  InStats        `json:"in"`  // pacer input/timing statistics
+	Out OutStatsPeriod `json:"out"` // pacer output/delivery statistics (cumulative since startup)
+}
+
+// StatsReporter is implemented by pacers that can report runtime statistics. As not all pacer
+// implementations track statistics, callers obtain them via a type assertion on the pacer:
+//
+//	if r, ok := p.(pacer.StatsReporter); ok { s := r.Stats() }
+type StatsReporter interface {
+	// Stats returns a snapshot of the pacer's current statistics.
+	Stats() PacerStats
+}
+
 // OutStatsPeriod holds the per-period output statistics snapshot. It contains only exported Statistics[T] fields
 // and plain counters, so it is safe to copy by value (no atomics or sync values). It is used as the snapshot type
 // for cross-goroutine stats publishing.
