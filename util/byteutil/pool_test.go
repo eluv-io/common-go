@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -162,6 +163,43 @@ func TestPool(t *testing.T) {
 	require.Equal(t, float64(createCount), ctx.created.val.Load())
 	require.Equal(t, float64(openCount), ctx.retrieved.val.Load())
 	require.Equal(t, float64(closeCount), ctx.released.val.Load())
+}
+
+func TestPoolRace(t *testing.T) {
+	bufSize := 8
+	refCount := 2
+
+	ctx := &testCtx{}
+
+	p := byteutil.NewPool(bufSize)
+	p.SetMetrics(&ctx.created, &ctx.retrieved, &ctx.released)
+
+	wg := sync.WaitGroup{}
+	work := func() {
+		defer wg.Done()
+		pbuf := p.GetN(byte(refCount))
+		buf := *pbuf
+		buf[0] = 1
+		locWg := &sync.WaitGroup{}
+		locWg.Add(2)
+		subWork := func() {
+			defer locWg.Done()
+			d := rand.Int31n(100)
+			time.Sleep(time.Millisecond * time.Duration(d))
+			p.Put(pbuf)
+		}
+		for i := 0; i < refCount; i++ {
+			go subWork()
+		}
+		locWg.Wait()
+	}
+
+	count := 10
+	wg.Add(count)
+	for i := 0; i < count; i++ {
+		go work()
+	}
+	wg.Wait()
 }
 
 // % go test -tags -count=1 -v -bench="Benchmark.*Pool" -run="Benchmark" ./util/byteutil

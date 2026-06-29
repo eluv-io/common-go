@@ -3,7 +3,6 @@ package byteutil
 import (
 	"sync"
 
-	"github.com/eluv-io/common-go/util"
 	"github.com/eluv-io/log-go"
 )
 
@@ -40,7 +39,7 @@ func NewPool(bufSize int) *Pool {
 	p := &Pool{}
 	p.BufSize = bufSize
 	p.p = &sync.Pool{New: p.new}
-	p.locker = util.NoopLocker{}
+	p.locker = &sync.Mutex{}
 	return p
 }
 
@@ -134,6 +133,8 @@ func (p *Pool) new() interface{} {
 // Sets the buffer's reference counter. Only the first count is used, if
 // specified. Count is by default 1.
 func (p *Pool) setCounter(buf []byte, count byte) {
+	p.locker.Lock()
+	defer p.locker.Unlock()
 	buf[:p.BufSize+1][p.BufSize] = count
 }
 
@@ -145,12 +146,14 @@ func (p *Pool) setCounter(buf []byte, count byte) {
 // 'go:norace' to disable the race detector in unit-tests where we are reading
 // the ref count.
 func (p *Pool) decrCounter(buf []byte) bool {
+	p.locker.Lock()
+	defer p.locker.Unlock()
+
 	buf = buf[:p.BufSize+1]
+
 	n := buf[p.BufSize]
 	if n > 0 {
-		p.locker.Lock()
 		buf[p.BufSize] = n - 1
-		p.locker.Unlock()
 		if n == 1 {
 			return true
 		}
