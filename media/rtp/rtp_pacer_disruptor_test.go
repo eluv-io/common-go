@@ -335,19 +335,20 @@ func TestDisruptorPacer_DelayContinuous(t *testing.T) {
 	log.Info("total stats", "in", jsonutil.MarshalString(in), "out", jsonutil.MarshalString(out))
 
 	require.EqualValues(t, packets, in.PushAhead.Count)
-	require.InDelta(t, time.Second, in.PushAhead.Mean, float64(5*time.Millisecond))
+	// Mean.Duration() needed because InDelta only handles primitive number types and time.Duration...
+	require.InDelta(t, time.Second, in.PushAhead.Mean.Duration(), float64(5*time.Millisecond))
 	require.EqualValues(t, packets, in.Rtp.Sequ)
 	require.EqualValues(t, packets*(int)(rtp.DurationToTicks(ipd)), in.Rtp.Tsu)
 
 	require.EqualValues(t, packets, out.JBD.Count, "number of sent packets should match")
-	require.InDelta(t, 880*time.Millisecond, out.JBD.Mean, float64(5*time.Millisecond), "jitter buffer delay should be constant")
+	require.InDelta(t, 880*time.Millisecond, out.JBD.Mean.Duration(), float64(5*time.Millisecond), "jitter buffer delay should be constant")
 	require.EqualValues(t, packets, out.IPD.Count, "number of IPD measurements should match")
-	require.InDelta(t, ipd, out.IPD.Mean, float64(5*time.Millisecond), "IPD should be constant")
+	require.InDelta(t, ipd, out.IPD.Mean.Duration(), float64(5*time.Millisecond), "IPD should be constant")
 	// Note: out.Lateness.Count and out.OverSleeps.Count are deliberately not asserted. They measure OS scheduling
 	// jitter (a wake landing >5ms past its target), not pacer behavior, and spike unpredictably under CPU contention.
 	// Correct pacing is verified by the mean-based assertions (JBD, IPD, SendAhead) instead.
 	require.EqualValues(t, packets, out.SendAhead.Count, "no send-ahead expected")
-	require.InDelta(t, float64(sendAhead), out.SendAhead.Mean, float64(5*time.Millisecond), "send-ahead should be constant")
+	require.InDelta(t, float64(sendAhead), out.SendAhead.Mean.Duration(), float64(5*time.Millisecond), "send-ahead should be constant")
 }
 
 func TestDisruptorPacerConfig_Unmarshal(t *testing.T) {

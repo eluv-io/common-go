@@ -244,7 +244,9 @@ func assertStats(T *testing.T,
 	statsSum, err := duration.FromString(stats["sum"].(string))
 	require.NoError(T, err)
 	assert.InDelta(T, int64(sum), int64(statsSum), float64(durDelta))
-	assert.InDelta(T, float64(statsSum)/statsCount/float64(time.Millisecond), stats["mean"].(float64), float64(durDelta)/float64(time.Millisecond))
+	statsMean, err := duration.FromString(stats["mean"].(string))
+	require.NoError(T, err)
+	assert.InDelta(T, float64(statsSum)/statsCount, float64(statsMean), float64(durDelta))
 	if reads > 0 {
 		assert.Equal(T, float64(reads), stats["reads"].(float64))
 	} else {

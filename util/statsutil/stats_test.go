@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/utc-go"
@@ -22,7 +23,7 @@ func TestStatistics_Update(t *testing.T) {
 	assert.Equal(t, 5, stats.Min)
 	assert.Equal(t, 5, stats.Max)
 	assert.Equal(t, 5, stats.Sum)
-	assert.Equal(t, float64(5), stats.Mean)
+	assert.Equal(t, 5, stats.Mean)
 
 	// Test subsequent updates
 	stats.Update(now.Add(time.Second), 3)
@@ -32,7 +33,30 @@ func TestStatistics_Update(t *testing.T) {
 	assert.Equal(t, 3, stats.Min)
 	assert.Equal(t, 5, stats.Max)
 	assert.Equal(t, 8, stats.Sum)
-	assert.Equal(t, float64(4), stats.Mean)
+	assert.Equal(t, 4, stats.Mean)
+}
+
+// TestStatistics_MeanNoRoundingError proves that the running mean is computed without the integer-rounding drift that
+// a truncating incremental update would introduce. A monotonically increasing ramp 1..N is the worst case: at each step
+// the incremental Welford adjustment delta/count is a fraction < 1, so accumulating the mean directly in the integer
+// type T would truncate every adjustment to 0 and leave the mean stuck at 1. Because the mean is accumulated in float64
+// and only converted to T for reporting, it correctly tracks the true arithmetic mean (Sum/Count).
+func TestStatistics_MeanNoRoundingError(t *testing.T) {
+	const n = 100
+	now := utc.Now()
+
+	stats := Statistics[int]{}
+	for i := 1; i <= n; i++ {
+		stats.Update(now, i)
+	}
+
+	sum := n * (n + 1) / 2 // 1 + 2 + ... + n = 5050
+	require.Equal(t, uint64(n), stats.Count)
+	require.Equal(t, sum, stats.Sum)
+
+	// The true mean is 50.5, reported as int(50) = Sum/Count. A truncating integer running mean would report 1.
+	require.Equal(t, sum/n, stats.Mean)
+	require.Equal(t, 50, stats.Mean)
 }
 
 func TestPeriodic_UpdateNow(t *testing.T) {
