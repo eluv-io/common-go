@@ -368,6 +368,61 @@ func TestTsDisruptorPacer_NoPCRBatch(t *testing.T) {
 	<-done
 }
 
+// TestTsDisruptorPacer_PinsPcrToFirstPid verifies that PCR timing is pinned to the first PID a PCR is detected on:
+// PCRs on any other PID (e.g. a second program in a multi-program transport stream, carrying an independent clock) are
+// ignored and do not drive scheduling.
+func TestTsDisruptorPacer_PinsPcrToFirstPid(t *testing.T) {
+	const (
+		pinnedPid = 100
+		otherPid  = 200
+		tick10ms  = 270_000 // PCR ticks for 10ms at 27 MHz
+	)
+
+	pacer, err := NewTsDisruptorPacer(defaultTestConfig(0))
+	require.NoError(t, err)
+
+	delivered := make(chan utc.UTC, 4)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = pacer.Run(func(_ []byte, at utc.UTC) error {
+			delivered <- at
+			return nil
+		})
+	}()
+
+	// Batch 1: PCR on the pinned PID. Establishes the timeline and pins timing to pinnedPid.
+	require.NoError(t, pacer.Push(makeTsBatch(pinnedPid, 100*tick10ms, 4)))
+
+	// Batch 2: a mixed batch where another program's PCR (otherPid) appears BEFORE the pinned PID's PCR and carries a
+	// wildly different clock value. With pinning, otherPid is ignored and the pinned PID's PCR (+10ms) drives timing.
+	// Without pinning, the bogus PCR would schedule this batch ~hours into the future and it would never be delivered.
+	mixed := append(append([]byte{},
+		makeTsPacketWithPCR(otherPid, 900_000*tick10ms)...),
+		makeTsPacketWithPCR(pinnedPid, 101*tick10ms)...)
+	require.NoError(t, pacer.Push(mixed))
+
+	var times [2]utc.UTC
+	deadline := time.After(5 * time.Second)
+	for i := range times {
+		select {
+		case at := <-delivered:
+			times[i] = at
+		case <-deadline:
+			t.Fatalf("timed out waiting for delivery %d of 2 (batch scheduled from the wrong PCR PID?)", i+1)
+		}
+	}
+
+	// The pinned PID's PCR advanced by 10ms between the two batches, so their targets must be ~10ms apart - proving
+	// the other program's PCR was ignored rather than driving the timeline.
+	interval := times[1].Sub(times[0])
+	require.InDeltaf(t, float64(10*time.Millisecond), float64(interval), float64(2*time.Millisecond),
+		"pinned-PID cadence: got %v, want ~10ms", interval)
+
+	pacer.Shutdown()
+	<-done
+}
+
 // TestTsDisruptorPacer_EstimatePcrRate verifies that when EstimatePcrRate is enabled, no-PCR batches are scheduled
 // using the PCR-derived rate rather than raw arrival time, so arrival jitter does not propagate to delivery times.
 // It also verifies that no-PCR batches arriving before the estimate is established are counted correctly in the
@@ -438,4 +493,3 @@ func TestTsDisruptorPacer_NonPowerOfTwoCapacity(t *testing.T) {
 	require.Equal(t, 128, pacer.BufferCap())
 	pacer.Shutdown()
 }
-

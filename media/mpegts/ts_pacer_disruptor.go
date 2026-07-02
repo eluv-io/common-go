@@ -20,6 +20,10 @@ import (
 
 const DefaultPcrGapThreshold = duration.Second
 
+// pcrPidUnset marks that no PCR PID has been pinned yet (see TsDisruptorPacer.pcrPid). Valid PIDs are 0..8191, so -1
+// is an unambiguous sentinel.
+const pcrPidUnset = -1
+
 // TsDisruptorPacerConfig holds configuration for a TsDisruptorPacer.
 type TsDisruptorPacerConfig struct {
 	Stream   string    `json:"-"` // Stream is the stream name for logging.
@@ -80,8 +84,9 @@ type tsDisruptorEntry struct {
 }
 
 // TsDisruptorPacer is an MPEG-TS callback pacer that uses a lock-free disruptor ring buffer as the jitter buffer. It
-// uses PCR (Program Clock Reference, 27 MHz clock) for timestamp calculations and target-time scheduling. The first PCR
-// found in each batch drives timing regardless of which PID carries it.
+// uses PCR (Program Clock Reference, 27 MHz clock) for timestamp calculations and target-time scheduling. PCR timing is
+// pinned to the first PID a PCR is detected on; PCRs on any other PID are ignored, so the independent program clocks of
+// a multi-program transport stream do not corrupt the timeline.
 //
 // Usage:
 //
@@ -104,6 +109,11 @@ type TsDisruptorPacer struct {
 
 	lastTarget     utc.UTC // most recent target (for no-PCR batches)
 	lastPcrArrival utc.UTC // wall clock arrival time of the batch that set lastTarget
+
+	// pcrPid is the PID that PCR timing is pinned to: the first PID a PCR is detected on. PCRs on any other PID are
+	// ignored so that the independent clocks of other programs in a multi-program transport stream do not corrupt the
+	// timeline. pcrPidUnset until the first PCR is seen. Accessed only from the Push goroutine.
+	pcrPid int
 
 	// PCR rate estimation fields — accessed only from the Push goroutine; no locking required.
 	lastPcrUnwrapped     int64 // unwrapped PCR value from the last non-discarded PCR batch
@@ -189,6 +199,7 @@ func NewTsDisruptorPacer(conf TsDisruptorPacerConfig) (*TsDisruptorPacer, error)
 		outStats:   pacer.NewOutStats(conf.StatsInterval),
 		ringBuffer: make([]tsDisruptorEntry, conf.BufferCapacity),
 		bufferMask: int64(conf.BufferCapacity - 1),
+		pcrPid:     pcrPidUnset,
 		ctx:        ctx,
 		cancel:     cancel,
 	}
@@ -228,18 +239,25 @@ func (p *TsDisruptorPacer) Push(bts []byte) error {
 
 	now := utc.Now()
 
-	// Scan TS packets in the batch for the first PCR from any PID.
+	// Scan TS packets in the batch for a PCR. Timing is pinned to a single PID: once the first PCR PID is detected,
+	// only PCRs on that PID are used. PCRs from other programs (other PIDs) in a multi-program transport stream carry
+	// independent clocks and are ignored so they cannot corrupt the timeline.
 	var pcrFound bool
 	var pcrValue uint64
-	var pcrPid int
 	for scan := bts; len(scan) >= packet.PacketSize; scan = scan[packet.PacketSize:] {
 		// Cast slice to pointer directly to avoid copying 188 bytes into a local value that would escape to the heap
 		// because its address is taken when calling ExtractPCR.
 		pkt := (*packet.Packet)(scan[:packet.PacketSize])
+		if p.pcrPid != pcrPidUnset && pkt.PID() != p.pcrPid {
+			continue // not the pinned PCR PID
+		}
 		if pcr, ok := ExtractPCR(pkt); ok {
 			pcrFound = true
 			pcrValue = pcr
-			pcrPid = pkt.PID()
+			if p.pcrPid == pcrPidUnset {
+				p.pcrPid = pkt.PID() // pin timing to the first PID we detect a PCR on
+				p.conf.EventLog.Info("pinned PCR PID", "stream", p.conf.Stream, "pid", p.pcrPid)
+			}
 			break
 		}
 	}
@@ -250,7 +268,7 @@ func (p *TsDisruptorPacer) Push(bts []byte) error {
 		if gap {
 			p.conf.EventLog.Warn("pcr gap",
 				"stream", p.conf.Stream,
-				"pid", pcrPid,
+				"pid", p.pcrPid,
 				"prev_pcru", prev,
 				"curr_pcru", curr,
 				"diff", curr-prev,
@@ -265,7 +283,7 @@ func (p *TsDisruptorPacer) Push(bts []byte) error {
 		p.inStatsMu.Lock()
 		p.tsStats.PCR = pcrValue
 		p.tsStats.PCRu = curr
-		p.tsStats.PID = pcrPid
+		p.tsStats.PID = p.pcrPid
 		var discard bool
 		var err error
 		target, discard, err = p.logic.Packet(now, curr, gap)
