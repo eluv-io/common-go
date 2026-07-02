@@ -3,6 +3,7 @@ package pktpool
 import (
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/eluv-io/errors-go"
 )
@@ -10,10 +11,11 @@ import (
 // Packet is a wrapper around a byte slice that tracks the number of references to it and releases it back to the packet
 // pool when the last reference is dropped.
 type Packet struct {
-	Data []byte
-	data []byte // reference to original slice for resetting to full capacity
-	refs atomic.Int32
-	pool *sync.Pool
+	Data       []byte
+	ReceivedAt time.Time
+	data       []byte // reference to original slice for resetting to full capacity
+	refs       atomic.Int32
+	pool       *sync.Pool
 }
 
 // Reference increments the reference count by one or the given number.
