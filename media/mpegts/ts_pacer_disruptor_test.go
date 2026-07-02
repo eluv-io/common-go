@@ -63,7 +63,8 @@ func makeTsBatchNoPCR(pid, n int) []byte {
 }
 
 // defaultTestConfig returns a TsDisruptorPacerConfig suitable for unit tests.
-// discardPeriod=0 means: first batch is discarded (T0 init), all subsequent are delivered immediately.
+// discardPeriod=0 disables the discard phase: the first batch establishes the T0 baseline and is delivered (not
+// discarded), as is every subsequent batch.
 func defaultTestConfig(discardPeriod time.Duration) TsDisruptorPacerConfig {
 	return TsDisruptorPacerConfig{
 		Stream:            "test",
@@ -418,6 +419,11 @@ func TestTsDisruptorPacer_PinsPcrToFirstPid(t *testing.T) {
 	interval := times[1].Sub(times[0])
 	require.InDeltaf(t, float64(10*time.Millisecond), float64(interval), float64(2*time.Millisecond),
 		"pinned-PID cadence: got %v, want ~10ms", interval)
+
+	// Stats() exposes the pinned PID and its last PCR (from the pinned PID, not the other program's).
+	st := pacer.Stats()
+	require.Equal(t, pinnedPid, st.In.Ts.PID, "Stats should expose the pinned PCR PID")
+	require.EqualValues(t, 101*tick10ms, st.In.Ts.PCR, "Stats should expose the pinned PID's last PCR")
 
 	pacer.Shutdown()
 	<-done

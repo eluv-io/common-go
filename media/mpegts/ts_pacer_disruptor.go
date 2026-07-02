@@ -103,9 +103,8 @@ var _ pacer.StatsReporter = (*TsDisruptorPacer)(nil)
 type TsDisruptorPacer struct {
 	conf    TsDisruptorPacerConfig
 	logic   *pacer.PacerLogic // PCR timing logic; accessed only from Push goroutine (under inStatsMu for logStats)
-	inStats pacer.InStats     // timing input stats; accessed only from Push goroutine (under inStatsMu for logStats)
+	inStats pacer.InStats     // timing input stats (incl. inStats.Ts PCR/PID); accessed only from Push (under inStatsMu)
 	gapDet  PcrGapDetector    // PCR gap detector; accessed only from Push goroutine
-	tsStats pacer.TsInStats   // last seen PCR value/PID; accessed only from Push goroutine (under inStatsMu for logStats)
 
 	lastTarget     utc.UTC // most recent target (for no-PCR batches)
 	lastPcrArrival utc.UTC // wall clock arrival time of the batch that set lastTarget
@@ -124,7 +123,7 @@ type TsDisruptorPacer struct {
 
 	// outStatsMu guards outStats between the consumer goroutine and logStats.
 	outStatsMu sync.Mutex
-	// inStatsMu guards inStats and tsStats (updated by Push, read by logStats for snapshots).
+	// inStatsMu guards inStats (updated by Push, read by logStats and Stats for snapshots).
 	inStatsMu sync.Mutex
 	// NOTE: both outStatsMu and inStatsMu are uncontended in the fast path; logStats holds each for ~100ns once per
 	// StatsInterval.
@@ -281,9 +280,9 @@ func (p *TsDisruptorPacer) Push(bts []byte) error {
 		}
 
 		p.inStatsMu.Lock()
-		p.tsStats.PCR = pcrValue
-		p.tsStats.PCRu = curr
-		p.tsStats.PID = p.pcrPid
+		p.inStats.Ts.PCR = pcrValue
+		p.inStats.Ts.PCRu = curr
+		p.inStats.Ts.PID = p.pcrPid
 		var discard bool
 		var err error
 		target, discard, err = p.logic.Packet(now, curr, gap)
@@ -401,8 +400,7 @@ func (p *TsDisruptorPacer) logStats() {
 			now := utc.Now()
 
 			p.inStatsMu.Lock()
-			inSnap := p.inStats
-			tsSnap := p.tsStats
+			inSnap := p.inStats // includes inSnap.Ts (PCR value/PID)
 			p.inStatsMu.Unlock()
 
 			p.outStatsMu.Lock()
@@ -412,8 +410,7 @@ func (p *TsDisruptorPacer) logStats() {
 			p.conf.StatsLog.Info("stats",
 				"stream", p.conf.Stream,
 				"out", jsonutil.Stringer(outSnap),
-				"in", jsonutil.Stringer(inSnap),
-				"ts", jsonutil.Stringer(tsSnap))
+				"in", jsonutil.Stringer(inSnap))
 		case <-p.ctx.Done():
 			return
 		}
