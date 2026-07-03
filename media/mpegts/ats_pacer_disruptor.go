@@ -1,7 +1,6 @@
 package mpegts
 
 import (
-	"encoding/binary"
 	"time"
 
 	"github.com/eluv-io/common-go/format/duration"
@@ -10,12 +9,6 @@ import (
 	elog "github.com/eluv-io/log-go"
 	"github.com/eluv-io/utc-go"
 )
-
-// AtsTimestampLen is the size in bytes of the arrival-timestamp prefix on each ATS-TS packet: an int64 nanoseconds-
-// since-Unix-epoch value encoded big-endian, followed by the raw MPEG-TS packets. It mirrors avpipe's
-// broadcastproto/tlv.AtsTimestampLen (the value of a TlvTypeAtsTs blob); the TLV framing itself is handled by the
-// transport layer, so the ATS pacer receives only the value part.
-const AtsTimestampLen = 8
 
 // DefaultAtsGapThreshold is the default AtsDisruptorPacerConfig.GapThreshold: the maximum jump between consecutive
 // arrival timestamps before a stream reset (baseline re-establishment) is triggered.
@@ -162,12 +155,10 @@ var _ pacer.PacketScheduler = (*atsScheduler)(nil)
 func (s *atsScheduler) InStats() *pacer.InStats { return s.stats }
 
 func (s *atsScheduler) Schedule(now utc.UTC, bts []byte) (utc.UTC, []byte, bool, error) {
-	if len(bts) < AtsTimestampLen {
-		return utc.Zero, nil, false, errors.E("atsScheduler.Schedule", errors.K.Invalid,
-			"reason", "packet too short for arrival timestamp", "len", len(bts))
+	arrival, payload, err := ParseAtsTs(bts)
+	if err != nil {
+		return utc.Zero, nil, false, errors.E("atsScheduler.Schedule", err)
 	}
-	arrival := int64(binary.BigEndian.Uint64(bts[:AtsTimestampLen]))
-	payload := bts[AtsTimestampLen:]
 
 	gap := false
 	if s.haveLast && s.gapThreshold > 0 {

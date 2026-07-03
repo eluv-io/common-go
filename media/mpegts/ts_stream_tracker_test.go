@@ -5,6 +5,7 @@
 package mpegts_test
 
 import (
+	"encoding/binary"
 	"fmt"
 	"math/rand/v2"
 	"os"
@@ -12,10 +13,12 @@ import (
 	"testing"
 	"time"
 
+	pionrtp "github.com/pion/rtp"
 	"github.com/stretchr/testify/require"
 
 	"github.com/eluv-io/common-go/media"
 	"github.com/eluv-io/common-go/media/mpegts"
+	"github.com/eluv-io/common-go/media/rtp"
 	"github.com/eluv-io/common-go/media/tlv"
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/common-go/util/testutil"
@@ -24,26 +27,41 @@ import (
 
 func TestTsStreamTracker(t *testing.T) {
 	tests := []struct {
-		stripRtp    bool             // whether to strip rtp headers
-		source      string           // the source filename
-		packetizer  media.Packetizer // the packetizer to use
-		wantStreams int              // expected mpeg streams count
+		name        string
+		framing     mpegts.TsFraming
+		source      string
+		packetizer  media.Packetizer
+		transform   func(pkt []byte) ([]byte, error) // optional per-packet transform applied before tracking
+		wantStreams int                              // expected mpeg streams count
 	}{
 		{
-			stripRtp:    false,
+			name:        "raw",
+			framing:     mpegts.TsFramingNone,
 			source:      "ts-segment.ts",
 			packetizer:  mpegts.NewTsPacketizer(true, mpegts.TsSyncModes.Modulo()),
 			wantStreams: 5,
 		},
 		{
-			stripRtp:    true,
+			name:        "rtp",
+			framing:     mpegts.TsFramingRtp,
 			source:      "tlv-rtp-ts-segment-00001.ts",
 			packetizer:  tlv.NewTlvPacketizer(2 * 1500),
 			wantStreams: 12,
 		},
+		{
+			// Derived from the RTP-TS segment by re-wrapping each packet as ATS-TS, using the RTP timestamp as the
+			// arrival time. The underlying TS payload is identical to the "rtp" case, so it must yield the same streams
+			// and error count.
+			name:        "ats",
+			framing:     mpegts.TsFramingAts,
+			source:      "tlv-rtp-ts-segment-00001.ts",
+			packetizer:  tlv.NewTlvPacketizer(2 * 1500),
+			transform:   rtpValueToAtsTs,
+			wantStreams: 12,
+		},
 	}
 	for _, tt := range tests {
-		t.Run(fmt.Sprint("stripRtp", tt.stripRtp), func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			path, err := testutil.AssetsPath(2)
 			if err != nil {
 				t.Skip("skipping test: ", err)
@@ -53,14 +71,18 @@ func TestTsStreamTracker(t *testing.T) {
 
 			for _, packetLoss := range []float64{0, .005} {
 				t.Run(fmt.Sprint("packet-loss:", packetLoss), func(t *testing.T) {
-					tracker := mpegts.NewTsStreamTracker("", 5*time.Second, tt.stripRtp)
-					pacer := mpegts.NewTsPacer().WithStripRtp(tt.stripRtp)
+					tracker := mpegts.NewTsStreamTrackerFramed("", 5*time.Second, tt.framing)
+					pacer := mpegts.NewTsPacer().WithStripRtp(tt.framing == mpegts.TsFramingRtp)
 					tt.packetizer.Write(source)
 					for {
 						pkt, err := tt.packetizer.Next()
 						require.NoError(t, err)
 						if pkt == nil {
 							break
+						}
+						if tt.transform != nil {
+							pkt, err = tt.transform(pkt)
+							require.NoError(t, err)
 						}
 						if false {
 							pacer.Wait(pkt)
@@ -92,4 +114,24 @@ func TestTsStreamTracker(t *testing.T) {
 			}
 		})
 	}
+}
+
+// rtpValueToAtsTs re-wraps an RTP-TS value (an RTP packet carrying MPEG-TS) as an ATS-TS value: it strips the RTP
+// header and prefixes the raw TS payload with an 8-byte big-endian arrival timestamp derived from the RTP timestamp (90
+// kHz clock converted to nanoseconds). This lets the ATS-TS tracker path be exercised against the existing RTP-TS
+// asset.
+func rtpValueToAtsTs(rtpValue []byte) ([]byte, error) {
+	var pkt pionrtp.Packet
+	if err := pkt.Unmarshal(rtpValue); err != nil {
+		return nil, err
+	}
+	tsPayload, err := rtp.StripHeader(rtpValue)
+	if err != nil {
+		return nil, err
+	}
+	arrivalNs := int64(rtp.TicksToDuration(int64(pkt.Timestamp)))
+	out := make([]byte, mpegts.AtsTimestampLen+len(tsPayload))
+	binary.BigEndian.PutUint64(out[:mpegts.AtsTimestampLen], uint64(arrivalNs))
+	copy(out[mpegts.AtsTimestampLen:], tsPayload)
+	return out, nil
 }
