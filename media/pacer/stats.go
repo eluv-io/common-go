@@ -23,6 +23,11 @@ type TsInStats struct {
 	PID  int    `json:"pid"`  // PCR PID
 }
 
+// AtsInStats holds arrival-timestamp-specific input statistics, updated by the ATS disruptor pacer.
+type AtsInStats struct {
+	ArrivalNs int64 `json:"arrival_ns"` // most recent arrival timestamp (nanoseconds since Unix epoch)
+}
+
 // InStats tracks pacer input statistics.
 type InStats struct {
 	// PushAhead is (targetTime - currentTime) when packet is pushed
@@ -56,6 +61,7 @@ type InStats struct {
 
 	Rtp RtpInStats `json:"rtp,omitzero"` // zero for non-RTP pacers
 	Ts  TsInStats  `json:"ts,omitzero"`  // zero for non-TS pacers
+	Ats AtsInStats `json:"ats,omitzero"` // zero for non-ATS pacers
 }
 
 // Reset clears all per-session statistics. Lifetime counters (StreamResets, LastStreamReset) are preserved so that
