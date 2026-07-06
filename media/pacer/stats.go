@@ -43,7 +43,7 @@ type InStats struct {
 	// enabled. When MaxNegDriftCorrection is set, this may be less than NegDrift (the nominal observed drift).
 	NegDriftApplied statsutil.RawStatistics[duration.Millis] `json:"neg_drift_applied,omitempty"`
 
-	// PosDrift records the mean T0 drift for each period in which the mean exceeded PosDriftThreshold.
+	// PosDrift records the mean T0 drift for each period in which the mean exceeded DriftThreshold.
 	// Recorded regardless of whether AdjustTimeDrift is enabled.
 	PosDrift statsutil.RawStatistics[duration.Millis] `json:"pos_drift,omitempty"`
 

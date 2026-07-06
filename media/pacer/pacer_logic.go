@@ -12,9 +12,8 @@ import (
 )
 
 const (
-	DefaultPosDriftThreshold  = 2 * time.Millisecond
-	DefaultPosDriftCorrection = time.Millisecond
-	DefaultPosDriftPeriod     = time.Minute
+	DefaultDriftThreshold = 2 * time.Millisecond
+	DefaultPosDriftPeriod = time.Minute
 )
 
 // PacerLogicConfig holds the configuration for PacerLogic.
@@ -46,13 +45,16 @@ type PacerLogicConfig struct {
 	// Default: 1 minute when zero.
 	PosDriftPeriod duration.Spec `json:"pos_drift_period"`
 
-	// PosDriftThreshold is the mean positive drift over PosDriftPeriod that triggers a correction.
-	// Only meaningful when AdjustTimeDrift is true. Default: 2ms when zero.
-	PosDriftThreshold duration.Spec `json:"pos_drift_threshold"`
+	// DriftThreshold is the drift dead-band applied in both directions: positive drift is only acted on once its mean
+	// over PosDriftPeriod exceeds this, and a single early packet is only treated as negative drift once it exceeds it.
+	// This keeps normal jitter from re-anchoring the timing baseline. Applies to drift detection regardless of
+	// AdjustTimeDrift (which only gates whether a detected drift also corrects baseTime). Default: 2ms when zero.
+	DriftThreshold duration.Spec `json:"drift_threshold"`
 
-	// PosDriftCorrection is the fixed baseTime advance applied when the mean positive drift exceeds
-	// PosDriftThreshold. Only meaningful when AdjustTimeDrift is true. Default: 1ms when zero.
-	PosDriftCorrection duration.Spec `json:"pos_drift_correction"`
+	// MaxPosDriftCorrection caps the per-period baseTime advance applied for positive drift when AdjustTimeDrift is
+	// true. Zero means no cap: the full mean drift over the period is applied at once (so a large accumulated backlog
+	// is re-anchored in a single step). A non-zero cap makes recovery gradual (at most this much per PosDriftPeriod).
+	MaxPosDriftCorrection duration.Spec `json:"max_pos_drift_correction"`
 
 	// ToDuration converts an unwrapped timestamp (in clock units) to a time.Duration. Must not be nil. Set this to the
 	// appropriate clock conversion, e.g. rtp.TicksToDuration for 90 kHz RTP clocks, or mpegts.PcrToDuration for MPEG-TS
@@ -67,24 +69,23 @@ func (c *PacerLogicConfig) InitDefaults() *PacerLogicConfig {
 	c.AdjustTimeDrift = true
 	c.MaxNegDriftCorrection = 0
 	c.PosDriftPeriod = duration.Spec(DefaultPosDriftPeriod)
-	c.PosDriftThreshold = duration.Spec(DefaultPosDriftThreshold)
-	c.PosDriftCorrection = duration.Spec(DefaultPosDriftCorrection)
+	c.DriftThreshold = duration.Spec(DefaultDriftThreshold)
+	c.MaxPosDriftCorrection = 0
 	return c
 }
 
 // PacerLogic computes target delivery times for packetized streams. It handles early-packet discarding, timing
 // baseline establishment, and optional drift correction.
 type PacerLogic struct {
-	conf               PacerLogicConfig
-	log                elog.ILog
-	stats              *InStats
-	discard            *DiscardContext                   // Early packet discard logic
-	firstTimestamp     int64                             // First unwrapped timestamp
-	baseTime           utc.UTC                           // Base time for first packet (now + delay)
-	posDriftTracker    statsutil.Periodic[time.Duration] // rolling mean of T0 drift per packet
-	posDriftThreshold  time.Duration                     // effective threshold (conf or default 2ms)
-	posDriftCorrection time.Duration                     // effective correction (conf or default 1ms)
-	toDuration         func(int64) time.Duration         // effective clock conversion function
+	conf            PacerLogicConfig
+	log             elog.ILog
+	stats           *InStats
+	discard         *DiscardContext                   // Early packet discard logic
+	firstTimestamp  int64                             // First unwrapped timestamp
+	baseTime        utc.UTC                           // Base time for first packet (now + delay)
+	posDriftTracker statsutil.Periodic[time.Duration] // rolling mean of T0 drift per packet
+	driftThreshold  time.Duration                     // effective drift dead-band (conf or default 2ms)
+	toDuration      func(int64) time.Duration         // effective clock conversion function
 }
 
 // NewPacerLogic creates a new PacerLogic with the given configuration and stats collector.
@@ -92,16 +93,9 @@ func NewPacerLogic(
 	conf PacerLogicConfig,
 	stats *InStats,
 ) *PacerLogic {
-	posDriftThreshold := conf.PosDriftThreshold.Duration()
-	if posDriftThreshold == 0 {
-		posDriftThreshold = DefaultPosDriftThreshold
-	}
-	posDriftCorrection := conf.PosDriftCorrection.Duration()
-	if posDriftCorrection == 0 {
-		posDriftCorrection = DefaultPosDriftCorrection
-	}
-	if posDriftCorrection > posDriftThreshold {
-		posDriftCorrection = posDriftThreshold // cap correction amount to threshold
+	driftThreshold := conf.DriftThreshold.Duration()
+	if driftThreshold == 0 {
+		driftThreshold = DefaultDriftThreshold
 	}
 	posDriftPeriod := conf.PosDriftPeriod.Duration()
 	if posDriftPeriod == 0 {
@@ -112,14 +106,13 @@ func NewPacerLogic(
 		panic("pacer: PacerLogicConfig.ToDuration must not be nil")
 	}
 	p := &PacerLogic{
-		conf:               conf,
-		log:                conf.EventLog,
-		stats:              stats,
-		toDuration:         toDuration,
-		discard:            NewDiscardContext(conf.DiscardPeriod, conf.MaxDiscardPeriod, toDuration),
-		posDriftThreshold:  posDriftThreshold,
-		posDriftCorrection: posDriftCorrection,
-		posDriftTracker:    statsutil.Periodic[time.Duration]{Period: duration.Spec(posDriftPeriod)},
+		conf:            conf,
+		log:             conf.EventLog,
+		stats:           stats,
+		toDuration:      toDuration,
+		discard:         NewDiscardContext(conf.DiscardPeriod, conf.MaxDiscardPeriod, toDuration),
+		driftThreshold:  driftThreshold,
+		posDriftTracker: statsutil.Periodic[time.Duration]{Period: duration.Spec(posDriftPeriod)},
 	}
 	p.reset()
 	return p
@@ -189,10 +182,13 @@ func (p *PacerLogic) Packet(now utc.UTC, tsUnwrapped int64, gap bool) (target ut
 	// Calculate T0 for this packet (wall clock time when the timestamp was 0)
 	t0 := now.Add(-p.toDuration(ts))
 
-	// Track T0: if this T0 is earlier than our stored min, it's a negative drift event
-	if t0.Before(p.stats.MinT0) {
+	// Track T0: if this T0 is earlier than our stored min by more than the dead-band, it's a negative drift event.
+	// Sub-threshold dips are treated as jitter and deliberately ignored: re-anchoring MinT0 (and resetting the
+	// pos-drift tracker) on every early packet would let normal jitter ratchet the timeline earlier and repeatedly
+	// wipe positive-drift recovery. Ignored dips still feed the pos-drift tracker below as small negative samples,
+	// which naturally damps the mean.
+	if negDrift := p.stats.MinT0.Sub(t0); negDrift > p.driftThreshold {
 		// T0 decreased (negative drift) — record nominal drift and optionally apply a capped correction to baseTime.
-		negDrift := p.stats.MinT0.Sub(t0)
 		p.stats.NegDrift.Update(now, duration.Millis(negDrift))
 		p.stats.MinT0 = t0
 		// Reset the pos-drift tracker: prior samples were relative to the old (higher) MinT0 and would
@@ -214,24 +210,32 @@ func (p *PacerLogic) Packet(now utc.UTC, tsUnwrapped int64, gap bool) (target ut
 		}
 	}
 
-	// Track T0 drift (stream running slow relative to wall clock) and optionally correct baseTime forward.
-	// Negative drift values (stream momentarily fast) are included so they pull the mean down and prevent
-	// spurious corrections after a fast burst.
+	// Track T0 drift (stream running slow relative to wall clock) and optionally correct baseTime forward. The
+	// correction is proportional: the mean drift over the period is applied at once (optionally capped by
+	// MaxPosDriftCorrection), so the timeline actually tracks a persistently-slow source instead of creeping. Applying
+	// the mean is flip-flop-safe: it is averaged over PosDriftPeriod (so infrequent late packets barely move it), gated
+	// by the DriftThreshold dead-band, and never exceeds the current drift - MinT0 is advanced by the same amount,
+	// so the correction consumes exactly the measured drift without overshooting into the "too early" regime. Negative
+	// drift values (stream momentarily fast) are included so they pull the mean down and prevent spurious corrections.
 	{
 		drift := t0.Sub(p.stats.MinT0)
 		if periodEnded := p.posDriftTracker.UpdateNow(now, drift); periodEnded {
 			meanDrift := time.Duration(p.posDriftTracker.Previous.Mean)
-			if meanDrift > p.posDriftThreshold {
+			if meanDrift > p.driftThreshold {
 				p.stats.PosDrift.Update(now, duration.Millis(meanDrift))
 				if p.conf.AdjustTimeDrift {
-					p.stats.PosDriftApplied.Update(now, duration.Millis(p.posDriftCorrection))
-					p.baseTime = p.baseTime.Add(p.posDriftCorrection)
-					targetTime = targetTime.Add(p.posDriftCorrection)
-					p.stats.MinT0 = p.stats.MinT0.Add(p.posDriftCorrection)
+					apply := meanDrift
+					if maxCorr := p.conf.MaxPosDriftCorrection.Duration(); maxCorr > 0 && apply > maxCorr {
+						apply = maxCorr
+					}
+					p.stats.PosDriftApplied.Update(now, duration.Millis(apply))
+					p.baseTime = p.baseTime.Add(apply)
+					targetTime = targetTime.Add(apply)
+					p.stats.MinT0 = p.stats.MinT0.Add(apply)
 					p.log.Info("positive drift corrected",
 						"stream", p.conf.Stream,
 						"mean_drift_ms", fmt.Sprintf("%.3f", float64(meanDrift)/float64(time.Millisecond)),
-						"applied_drift_ms", fmt.Sprintf("%.3f", float64(p.posDriftCorrection)/float64(time.Millisecond)),
+						"applied_drift_ms", fmt.Sprintf("%.3f", float64(apply)/float64(time.Millisecond)),
 						"new_base_time", p.baseTime.Format(time.RFC3339Nano))
 				}
 			}
