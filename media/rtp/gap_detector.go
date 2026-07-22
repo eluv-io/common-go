@@ -4,12 +4,13 @@ import (
 	"time"
 
 	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/media/pktpool"
 	"github.com/eluv-io/errors-go"
 )
 
-// NewGapDetector creates a new gap detector that checks consecutive packets for unexpected gaps in sequence numbers and
-// timestamps. The detection triggers when the difference between the current and previous sequence number or timestamp
-// is greater than their respective thresholds.
+// NewGapDetector creates a new RTP gap detector that checks consecutive packets for unexpected gaps in sequence numbers
+// and timestamps. The detection triggers when the difference between the current and previous sequence number or
+// timestamp is greater than their respective thresholds.
 func NewGapDetector(sequenceThreshold int64, timestampThreshold time.Duration) *GapDetector {
 	return &GapDetector{
 		SequenceThreshold:  sequenceThreshold,
@@ -17,12 +18,19 @@ func NewGapDetector(sequenceThreshold int64, timestampThreshold time.Duration) *
 	}
 }
 
-// GapDetector detects stream resets.
+// GapDetector detects RTP stream resets.
 type GapDetector struct {
 	Sequence           SequenceUnwrapper
 	Timestamp          TimestampUnwrapper
 	SequenceThreshold  int64
 	TimestampThreshold int64
+}
+
+// DetectPacket returns the current unwrapped sequence number and timestamp, and a non-nil error if a gap is detected. A
+// gap is signaled if the difference between the new and previous sequence numbers or timestamps is greater than their
+// respective thresholds.
+func (r *GapDetector) DetectPacket(pkt *pktpool.RtpPacket) (seqUnwrapped, tsUnwrapped int64, err error) {
+	return r.Detect(pkt.Packet().SequenceNumber, pkt.Packet().Timestamp)
 }
 
 // Detect returns the current unwrapped sequence number and timestamp, and a non-nil error if a gap is detected. A gap
@@ -35,7 +43,7 @@ func (r *GapDetector) Detect(seq uint16, ts uint32) (seqUnwrapped, tsUnwrapped i
 		if r.abs(diff) > r.SequenceThreshold {
 			err = errors.Append(
 				err,
-				errors.NoTrace("gap detection", errors.K.Invalid,
+				errors.NoTrace("rtp gap detection", errors.K.Invalid,
 					"reason", "sequence number gap",
 					"previous", previous,
 					"current", current,
@@ -52,7 +60,7 @@ func (r *GapDetector) Detect(seq uint16, ts uint32) (seqUnwrapped, tsUnwrapped i
 		if r.abs(diff) > r.TimestampThreshold {
 			err = errors.Append(
 				err,
-				errors.NoTrace("gap detection", errors.K.Invalid,
+				errors.NoTrace("rtp gap detection", errors.K.Invalid,
 					"reason", "timestamp gap",
 					"previous", previous,
 					"current", current,

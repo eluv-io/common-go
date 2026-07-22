@@ -44,6 +44,12 @@ func srtParse(urlStr string) (srtSettings, error) {
 		return srtSettings{}, e(err)
 	}
 
+	// enable SRT internal logging when requested via the "srt_log" query parameter; messages are forwarded to our
+	// logger by the wrapped connection (see newWrappedConn).
+	if topics := srtLogTopics(u.Query()); len(topics) > 0 {
+		srtConfig.Logger = srt.NewLogger(topics)
+	}
+
 	return srtSettings{
 		config:      srtConfig,
 		hostPort:    hostPort,
@@ -63,7 +69,7 @@ func (s srtSettings) dial() (srt.Conn, error) {
 	if err != nil {
 		return nil, e(err)
 	}
-	return newWrappedConn(conn, nil, s.hostPort, s.statsPeriod, s.encrypted), nil
+	return newWrappedConn(conn, nil, s.hostPort, s.statsPeriod, s.encrypted, s.config.Logger), nil
 }
 
 // listen binds an SRT listener to the URL's address (listener mode). The caller owns the returned listener and must
@@ -117,7 +123,7 @@ func (s srtSettings) accept(listener srt.Listener) (srt.Conn, error) {
 		"remote", req.RemoteAddr(),
 		"srt_version", req.Version(),
 		"stream_id", req.StreamId())
-	return newWrappedConn(conn, listener, s.hostPort, s.statsPeriod, s.encrypted), nil
+	return newWrappedConn(conn, listener, s.hostPort, s.statsPeriod, s.encrypted, s.config.Logger), nil
 }
 
 func srtOpen(urlStr string) (connect func() (srt.Conn, error), modeListen bool, err error) {
@@ -153,6 +159,23 @@ func srtSanitizeUrl(str string) string {
 	return strings.Replace(str, "srt+rtp://", "srt://", 1)
 }
 
+// srtLogTopics parses the comma-separated list of SRT logging topics from the "srt_log" query parameter (e.g.
+// "connection,control,data,dial,handshake,listen,packet"). It returns nil if the parameter is absent or empty, in which
+// case SRT internal logging stays disabled.
+func srtLogTopics(query url.Values) []string {
+	csv := httputil.StringQuery(query, "srt_log", "")
+	if csv == "" {
+		return nil
+	}
+	var topics []string
+	for _, topic := range strings.Split(csv, ",") {
+		if topic = strings.TrimSpace(topic); topic != "" {
+			topics = append(topics, topic)
+		}
+	}
+	return topics
+}
+
 type wrappedConn struct {
 	srt.Conn
 	listener  srt.Listener
@@ -185,8 +208,31 @@ func newWrappedConn(
 	hostPort string,
 	statsPeriod duration.Spec,
 	encrypted bool,
+	logger srt.Logger,
 ) srt.Conn {
 	done := make(chan bool, 1)
+
+	// forward SRT internal log messages to our logger until the connection is closed. We do not close the logger's
+	// channel ourselves (SRT may still emit messages during teardown, and sending on a closed channel would panic);
+	// the goroutine exits on done. It also exits if the channel is ever closed elsewhere, to avoid a tight loop
+	// receiving zero values.
+	if logger != nil {
+		go func() {
+			messages := logger.Listen()
+			for {
+				select {
+				case m, ok := <-messages:
+					if !ok {
+						return
+					}
+					log.Info(m.Topic, "socket_id", m.SocketId, "file", m.File, "line", m.Line, "msg", m.Message)
+				case <-done:
+					return
+				}
+			}
+		}()
+	}
+
 	if statsPeriod > 0 {
 		go func() {
 			remote := conn.RemoteAddr().String()

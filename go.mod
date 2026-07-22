@@ -30,7 +30,6 @@ require (
 	github.com/mr-tron/base58 v1.2.0
 	github.com/multiformats/go-varint v0.0.6
 	github.com/pion/rtp v1.8.25
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/ricochet2200/go-disk-usage/du v0.0.0-20210707232629-ac9918953285
 	github.com/satori/go.uuid v1.2.0
@@ -42,6 +41,7 @@ require (
 	go.uber.org/atomic v1.9.0
 	golang.org/x/exp v0.0.0-20220426173459-3bcf042a4bf5
 	golang.org/x/net v0.21.0
+	golang.org/x/sync v0.11.0
 	golang.org/x/sys v0.30.0
 	golang.org/x/text v0.22.0
 )
@@ -69,6 +69,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/pion/randutil v0.1.0 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rjeczalik/notify v0.9.3 // indirect
 	github.com/shirou/gopsutil v3.21.4-0.20210419000835-c7a38de76ee5+incompatible // indirect
 	github.com/smarty/assertions v1.15.0 // indirect
