@@ -243,12 +243,15 @@ func (p *Packet) Write(writer io.Writer) error {
 }
 
 // WrapTlv prepends a TLV header (type + 2-byte big-endian length) to the full packet extent, growing Data accordingly.
-// The decode cursor is left untouched, so it continues to point at the wrapped (inner) payload. Returns
-// io.ErrShortBuffer if there is not enough head room (configured via wrapCap) to prepend the 3-byte header, and
-// errors.K.Invalid if the payload is too large to encode in the 16-bit length field.
+// The decode cursor is left untouched, so it continues to point at the wrapped (inner) payload, but p.Data is updated
+// to include the TLV header. Returns io.ErrShortBuffer if there is not enough head room (configured via wrapCap) to
+// prepend the 3-byte header, and errors.K.Invalid if the payload is too large to encode in the 16-bit length field.
 //
 // If a TLV header is already present (the TLV layer was decoded or previously wrapped), WrapTlv only updates the type
 // byte in place — both the in-memory layer and the serialized buffer — without prepending a second header.
+//
+// Also see FrameTlv for a zero-copy framing alternative that does not mutate the packet and is safe for concurrent
+// readers.
 func (p *Packet) WrapTlv(typ byte) error {
 	if p.tlv.parsed {
 		// retype the existing header in place; p.buf[p.off] is the TLV type byte for both a wrapped and a decoded TLV
@@ -276,6 +279,36 @@ func (p *Packet) WrapTlv(typ byte) error {
 	p.tlv.typ = typ
 	p.tlv.size = size
 	return nil
+}
+
+// FrameTlv returns this packet's data wrapped in a TLV header (a type byte plus a big-endian 16-bit length), with the
+// optional prefix inserted between the header and the payload - e.g. FrameTlv(atsType, timestamp) yields
+// [header][timestamp][payload]. The framing is written into the reserved head room (configured via wrapCap) and the
+// returned slice aliases the packet buffer, so it is valid only until the packet is reloaded or released.
+//
+// Unlike WrapTlv, FrameTlv does NOT mutate the packet: Data, the full-packet extent and the decode cursor are all left
+// unchanged. Because it never touches Data, FrameTlv is safe to call on a packet concurrently read (via Data) by other
+// consumers sharing it through the pool's reference counting - provided no other goroutine writes the same head room.
+// This makes it the tool for framing output on a fanned-out packet, where WrapTlv's in-place Data reassignment would
+// race with the other readers.
+//
+// Returns io.ErrShortBuffer if the head room cannot hold the header plus prefix, and errors.K.Invalid if the framed
+// value (prefix + payload) exceeds the 16-bit TLV length field.
+func (p *Packet) FrameTlv(typ byte, prefix []byte) ([]byte, error) {
+	valueLen := len(prefix) + p.len
+	if valueLen > 0xffff {
+		return nil, errors.NoTrace("Packet.FrameTlv", errors.K.Invalid,
+			"reason", "value too large for TLV length field", "len", valueLen)
+	}
+	head := 3 + len(prefix)
+	if p.off < head {
+		return nil, io.ErrShortBuffer
+	}
+	start := p.off - head
+	p.buf[start] = typ
+	binary.BigEndian.PutUint16(p.buf[start+1:start+3], uint16(valueLen))
+	copy(p.buf[start+3:p.off], prefix)
+	return p.buf[start : p.off+p.len], nil
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

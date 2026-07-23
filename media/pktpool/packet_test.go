@@ -217,6 +217,81 @@ func TestPacket_WrapTlv_NoHeadRoom(t *testing.T) {
 	require.Error(t, pkt.T.WrapTlv(0x07))
 }
 
+// TestPacket_FrameTlv verifies that FrameTlv returns a TLV-wrapped view without a prefix (e.g. arrival timestamp) and,
+// crucially, does not mutate the packet: Data and the decode cursor are unchanged, so the packet remains usable by
+// concurrent readers.
+func TestPacket_FrameTlv(t *testing.T) {
+	pool := pktpool.NewPacketPool(3, 64)
+	pkt := pool.Borrow()
+	defer pkt.Release()
+
+	payload := []byte("hello world")
+	require.NoError(t, pkt.T.From(payload))
+
+	framed, err := pkt.T.FrameTlv(0x07, nil)
+	require.NoError(t, err)
+	require.Len(t, framed, 3+len(payload))
+	require.EqualValues(t, 0x07, framed[0])
+	require.EqualValues(t, len(payload), int(framed[1])<<8|int(framed[2]))
+	require.Equal(t, payload, framed[3:])
+
+	// FrameTlv must not touch the packet's own view.
+	require.Equal(t, payload, pkt.T.Data)
+}
+
+// TestPacket_FrameTlv_WithPrefix mirrors the ATS-TS output framing: an 8-byte prefix between the TLV header and the
+// payload. It verifies the head room accounting (wrapCap = header + prefix) and the encoded value length.
+func TestPacket_FrameTlv_WithPrefix(t *testing.T) {
+	const headerLen, prefixLen = 3, 8
+	pool := pktpool.NewPacketPool(headerLen+prefixLen, 2048)
+	pkt := pool.Borrow()
+	defer pkt.Release()
+
+	payload := tsPayload(2)
+	require.NoError(t, pkt.T.From(payload))
+
+	prefix := []byte{1, 2, 3, 4, 5, 6, 7, 8}
+	framed, err := pkt.T.FrameTlv(0x04, prefix)
+	require.NoError(t, err)
+	require.Len(t, framed, headerLen+prefixLen+len(payload))
+	require.EqualValues(t, 0x04, framed[0])
+	require.EqualValues(t, prefixLen+len(payload), int(framed[1])<<8|int(framed[2]))
+	require.Equal(t, prefix, framed[headerLen:headerLen+prefixLen])
+	require.Equal(t, payload, framed[headerLen+prefixLen:])
+	require.Equal(t, payload, pkt.T.Data) // unchanged
+}
+
+// TestPacket_FrameTlv_NoHeadRoom verifies FrameTlv fails (rather than corrupting the buffer) when the head room cannot
+// hold the header plus prefix.
+func TestPacket_FrameTlv_NoHeadRoom(t *testing.T) {
+	pool := pktpool.NewPacketPool(3, 64) // room for the 3-byte header but not an extra prefix
+	pkt := pool.Borrow()
+	defer pkt.Release()
+	require.NoError(t, pkt.T.From([]byte("data")))
+
+	_, err := pkt.T.FrameTlv(0x07, nil)
+	require.NoError(t, err) // header fits
+
+	_, err = pkt.T.FrameTlv(0x04, []byte{1, 2, 3}) // header + 3-byte prefix does not
+	require.Error(t, err)
+}
+
+// TestPacket_FrameTlv_Idempotent verifies FrameTlv can be called repeatedly and that it overwrites any existing the
+// existing head room.
+func TestPacket_FrameTlv_Idempotent(t *testing.T) {
+	pool := pktpool.NewPacketPool(3, 64)
+	pkt := pool.Borrow()
+	defer pkt.Release()
+	require.NoError(t, pkt.T.From([]byte("payload")))
+
+	a, err := pkt.T.FrameTlv(0x07, nil)
+	require.NoError(t, err)
+	b, err := pkt.T.FrameTlv(0x03, nil)
+	require.NoError(t, err)
+	require.EqualValues(t, 0x03, b[0]) // second call rewrites the same head room
+	require.Equal(t, len(a), len(b))
+}
+
 // TestPacket_ConcurrentDecode verifies that decoding a shared packet from multiple goroutines is race-free.
 func TestPacket_ConcurrentDecode(t *testing.T) {
 	raw := rtpBytes(t, 7, 100, tsPayload(2))
