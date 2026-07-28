@@ -234,10 +234,11 @@ func (s *pcrScheduler) Schedule(now utc.UTC, bts []byte) (utc.UTC, []byte, bool,
 			}
 		}
 
+		target, discard, err := s.logic.Packet(now, curr, gap)
+		// Update the TS stats after Packet (which may have reset the stats via reset() on a gap).
 		s.stats.Ts.PCR = pcrValue
 		s.stats.Ts.PCRu = curr
 		s.stats.Ts.PID = s.pcrPid
-		target, discard, err := s.logic.Packet(now, curr, gap)
 		if err != nil {
 			return utc.Zero, nil, false, errors.E("pcrScheduler.Schedule", err)
 		}

@@ -139,6 +139,10 @@ func (t *tsStreamTracker) Track(bts []byte) (packetCount int, errList error) {
 		if err != nil {
 			return 0, err
 		}
+	default:
+		return 0, errors.NoTrace("TsStreamTracker.Track", errors.K.Invalid,
+			"reason", "unknown TS framing",
+			"framing", int(t.framing))
 	}
 
 	for ; len(bts) >= packet.PacketSize; bts = bts[packet.PacketSize:] {

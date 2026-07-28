@@ -1,0 +1,74 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/eluv-io/common-go/format/structured
+cpu: Apple M4 Max
+                                │ 2026-06-03T1430 │           2026-06-03T1500            │
+                                │     sec/op      │    sec/op     vs base                │
+Clone_MapStringAny_Small-14          120.7n ±  1%   108.5n ±  3%  -10.07% (p=0.000 n=10)
+CloneMap_MapStringAny_Small-14       121.5n ±  1%   109.5n ±  1%   -9.95% (p=0.000 n=10)
+Clone_MapStringAny_Large-14          2.075µ ±  1%   1.952µ ±  2%   -5.95% (p=0.000 n=10)
+CloneMap_MapStringAny_Large-14       2.145µ ±  2%   2.097µ ±  1%   -2.24% (p=0.000 n=10)
+Clone_MapStringAny_Nested-14         349.8n ±  1%   327.1n ±  1%   -6.48% (p=0.000 n=10)
+CloneMap_MapStringAny_Nested-14      345.2n ±  3%   324.4n ±  2%   -6.00% (p=0.000 n=10)
+CloneMap_StringInt-14                147.8n ±  3%   113.0n ±  1%  -23.58% (p=0.000 n=10)
+Clone_SliceAny-14                    372.2n ±  3%   213.9n ±  1%  -42.53% (p=0.000 n=10)
+CloneSlice_SliceAny-14               349.9n ±  1%   188.0n ±  1%  -46.26% (p=0.000 n=10)
+Clone_SliceInt-14                    67.39n ±  1%   65.52n ±  1%   -2.78% (p=0.000 n=10)
+CloneSlice_SliceInt-14               26.66n ±  1%   26.59n ±  1%        ~ (p=0.912 n=10)
+Clone_SliceString-14                 55.89n ±  1%   56.24n ±  2%        ~ (p=0.448 n=10)
+CloneSlice_SliceString-14            32.41n ±  1%   32.56n ±  1%        ~ (p=0.149 n=10)
+Clone_SliceByte-14                   1.890µ ± 11%   1.849µ ± 15%        ~ (p=0.138 n=10)
+CloneSlice_SliceByte-14              1.842µ ±  5%   1.715µ ±  2%   -6.92% (p=0.000 n=10)
+Clone_NamedSliceByte-14              1.956µ ±  5%   1.831µ ±  1%   -6.44% (p=0.000 n=10)
+CloneSlice_NamedSliceByte-14         1.898µ ±  2%   1.728µ ±  2%   -8.96% (p=0.000 n=10)
+Clone_MapCustom-14                   314.9n ±  1%   285.9n ±  1%   -9.19% (p=0.000 n=10)
+CloneMap_MapCustom-14                126.1n ±  1%   113.7n ±  2%   -9.83% (p=0.000 n=10)
+geomean                              312.6n         276.3n        -11.59%
+
+                                │ 2026-06-03T1430 │            2026-06-03T1500            │
+                                │      B/op       │     B/op      vs base                 │
+Clone_MapStringAny_Small-14            336.0 ± 0%     336.0 ± 0%       ~ (p=1.000 n=10) ¹
+CloneMap_MapStringAny_Small-14         336.0 ± 0%     336.0 ± 0%       ~ (p=1.000 n=10) ¹
+Clone_MapStringAny_Large-14          4.836Ki ± 0%   4.836Ki ± 0%       ~ (p=1.000 n=10) ¹
+CloneMap_MapStringAny_Large-14       4.836Ki ± 0%   4.836Ki ± 0%       ~ (p=1.000 n=10) ¹
+Clone_MapStringAny_Nested-14         1.086Ki ± 0%   1.086Ki ± 0%       ~ (p=1.000 n=10) ¹
+CloneMap_MapStringAny_Nested-14      1.086Ki ± 0%   1.086Ki ± 0%       ~ (p=1.000 n=10) ¹
+CloneMap_StringInt-14                  256.0 ± 0%     256.0 ± 0%       ~ (p=1.000 n=10) ¹
+Clone_SliceAny-14                      968.0 ± 0%     968.0 ± 0%       ~ (p=1.000 n=10) ¹
+CloneSlice_SliceAny-14                 920.0 ± 0%     920.0 ± 0%       ~ (p=1.000 n=10) ¹
+Clone_SliceInt-14                      152.0 ± 0%     152.0 ± 0%       ~ (p=1.000 n=10) ¹
+CloneSlice_SliceInt-14                 104.0 ± 0%     104.0 ± 0%       ~ (p=1.000 n=10) ¹
+Clone_SliceString-14                   152.0 ± 0%     152.0 ± 0%       ~ (p=1.000 n=10) ¹
+CloneSlice_SliceString-14              104.0 ± 0%     104.0 ± 0%       ~ (p=1.000 n=10) ¹
+Clone_SliceByte-14                   26.70Ki ± 0%   26.70Ki ± 0%       ~ (p=1.000 n=10) ¹
+CloneSlice_SliceByte-14              26.65Ki ± 0%   26.65Ki ± 0%       ~ (p=1.000 n=10) ¹
+Clone_NamedSliceByte-14              26.70Ki ± 0%   26.70Ki ± 0%       ~ (p=1.000 n=10) ¹
+CloneSlice_NamedSliceByte-14         26.65Ki ± 0%   26.65Ki ± 0%       ~ (p=1.000 n=10) ¹
+Clone_MapCustom-14                     480.0 ± 0%     480.0 ± 0%       ~ (p=1.000 n=10) ¹
+CloneMap_MapCustom-14                  336.0 ± 0%     336.0 ± 0%       ~ (p=1.000 n=10) ¹
+geomean                              1.135Ki        1.135Ki       +0.00%
+¹ all samples are equal
+
+                                │ 2026-06-03T1430 │           2026-06-03T1500           │
+                                │    allocs/op    │ allocs/op   vs base                 │
+Clone_MapStringAny_Small-14            2.000 ± 0%   2.000 ± 0%       ~ (p=1.000 n=10) ¹
+CloneMap_MapStringAny_Small-14         2.000 ± 0%   2.000 ± 0%       ~ (p=1.000 n=10) ¹
+Clone_MapStringAny_Large-14            4.000 ± 0%   4.000 ± 0%       ~ (p=1.000 n=10) ¹
+CloneMap_MapStringAny_Large-14         4.000 ± 0%   4.000 ± 0%       ~ (p=1.000 n=10) ¹
+Clone_MapStringAny_Nested-14           8.000 ± 0%   8.000 ± 0%       ~ (p=1.000 n=10) ¹
+CloneMap_MapStringAny_Nested-14        8.000 ± 0%   8.000 ± 0%       ~ (p=1.000 n=10) ¹
+CloneMap_StringInt-14                  2.000 ± 0%   2.000 ± 0%       ~ (p=1.000 n=10) ¹
+Clone_SliceAny-14                      4.000 ± 0%   4.000 ± 0%       ~ (p=1.000 n=10) ¹
+CloneSlice_SliceAny-14                 2.000 ± 0%   2.000 ± 0%       ~ (p=1.000 n=10) ¹
+Clone_SliceInt-14                      4.000 ± 0%   4.000 ± 0%       ~ (p=1.000 n=10) ¹
+CloneSlice_SliceInt-14                 2.000 ± 0%   2.000 ± 0%       ~ (p=1.000 n=10) ¹
+Clone_SliceString-14                   4.000 ± 0%   4.000 ± 0%       ~ (p=1.000 n=10) ¹
+CloneSlice_SliceString-14              2.000 ± 0%   2.000 ± 0%       ~ (p=1.000 n=10) ¹
+Clone_SliceByte-14                     4.000 ± 0%   4.000 ± 0%       ~ (p=1.000 n=10) ¹
+CloneSlice_SliceByte-14                2.000 ± 0%   2.000 ± 0%       ~ (p=1.000 n=10) ¹
+Clone_NamedSliceByte-14                4.000 ± 0%   4.000 ± 0%       ~ (p=1.000 n=10) ¹
+CloneSlice_NamedSliceByte-14           2.000 ± 0%   2.000 ± 0%       ~ (p=1.000 n=10) ¹
+Clone_MapCustom-14                     11.00 ± 0%   11.00 ± 0%       ~ (p=1.000 n=10) ¹
+CloneMap_MapCustom-14                  2.000 ± 0%   2.000 ± 0%       ~ (p=1.000 n=10) ¹
+geomean                                3.268        3.268       +0.00%
+¹ all samples are equal

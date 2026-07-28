@@ -173,7 +173,7 @@ func TestAdd(t *testing.T) {
 		{
 			name: "normal",
 			args: args{
-				m:              someMap,
+				m:              map[string]interface{}{"s1": "v1", "s2": "v2"},
 				nameValuePairs: []interface{}{"k1", "v1", "k2", "v2"},
 			},
 			want: map[string]interface{}{
@@ -217,6 +217,86 @@ func TestCopyMSI(t *testing.T) {
 	require.Equal(t, ma2["two"], ma["two"])
 }
 
+func TestCopy(t *testing.T) {
+	t.Run("nil", func(t *testing.T) {
+		var m map[string]string
+		require.Nil(t, Copy(m))
+	})
+
+	t.Run("empty", func(t *testing.T) {
+		m := map[string]string{}
+		cp := Copy(m)
+		require.NotNil(t, cp)
+		require.Empty(t, cp)
+	})
+
+	t.Run("string map", func(t *testing.T) {
+		m := map[string]string{"k1": "v1", "k2": "v2"}
+		cp := Copy(m)
+		require.Equal(t, m, cp)
+		m["k1"] = "changed"
+		m["k3"] = "new"
+		require.Equal(t, "v1", cp["k1"])
+		require.NotContains(t, cp, "k3")
+	})
+
+	t.Run("int map", func(t *testing.T) {
+		m := map[int]int{1: 10, 2: 20, 3: 30}
+		cp := Copy(m)
+		require.Equal(t, m, cp)
+		m[1] = 99
+		delete(m, 2)
+		require.Equal(t, 10, cp[1])
+		require.Contains(t, cp, 2)
+	})
+
+	t.Run("independent copy", func(t *testing.T) {
+		m := map[string]string{"k1": "v1", "k2": "v2"}
+		cp := Copy(m)
+		cp["k1"] = "changed"
+		cp["k3"] = "new"
+		require.Equal(t, "v1", m["k1"])
+		require.NotContains(t, m, "k3")
+		m["k2"] = "also changed"
+		m["k4"] = "also new"
+		require.Equal(t, "v2", cp["k2"])
+		require.NotContains(t, cp, "k4")
+	})
+
+	t.Run("shallow copy shares pointers", func(t *testing.T) {
+		type val struct{ n int }
+		v1 := &val{n: 1}
+		v2 := &val{n: 2}
+		m := map[string]*val{"a": v1, "b": v2}
+		cp := Copy(m)
+		require.Same(t, m["a"], cp["a"])
+		require.Same(t, m["b"], cp["b"])
+	})
+
+	t.Run("custom map type", func(t *testing.T) {
+		type strMap map[string]string
+		m := strMap{"k1": "v1", "k2": "v2"}
+		cp := Copy(m)
+		require.IsType(t, strMap{}, cp)
+		require.Equal(t, m, cp)
+		m["k1"] = "changed"
+		require.Equal(t, "v1", cp["k1"])
+	})
+
+	t.Run("struct key", func(t *testing.T) {
+		type point struct{ x, y int }
+		type pointMap map[point]string
+		m := pointMap{{1, 2}: "a", {3, 4}: "b"}
+		cp := Copy(m)
+		require.IsType(t, pointMap{}, cp)
+		require.Equal(t, m, cp)
+		m[point{1, 2}] = "changed"
+		m[point{5, 6}] = "new"
+		require.Equal(t, "a", cp[point{1, 2}])
+		require.NotContains(t, cp, point{5, 6})
+	})
+}
+
 func TestClear(t *testing.T) {
 	{
 		m := map[string]string{"k1": "v1", "k2": "v2"}
@@ -228,5 +308,10 @@ func TestClear(t *testing.T) {
 		Clear(m)
 		require.Empty(t, m)
 	}
-
+	{
+		type point struct{ x, y int }
+		m := map[point]string{{1, 2}: "a", {3, 4}: "b"}
+		Clear(m)
+		require.Empty(t, m)
+	}
 }
