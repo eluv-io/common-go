@@ -96,6 +96,17 @@ func (d *DeferredWriter) Close() error {
 	return nil
 }
 
+// ConnStats implements StatsReporter by delegating to the underlying connection once it is connected.
+// Returns a zero ConnStats while no connection has been established yet.
+func (d *DeferredWriter) ConnStats(details bool) ConnStats {
+	if w := d.writer.Load(); w != nil {
+		if r, ok := (*w).(StatsReporter); ok {
+			return r.ConnStats(details)
+		}
+	}
+	return ConnStats{}
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 
 type ErrorWriter struct {

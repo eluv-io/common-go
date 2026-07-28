@@ -376,12 +376,11 @@ func TestPacerLogic_AdjustTimeDrift_Cap(t *testing.T) {
 func TestPacerLogic_SlowDrift_Correction(t *testing.T) {
 	const delay = 500 * time.Millisecond
 	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
-		AdjustTimeDrift:    true,
-		PosDriftPeriod:     duration.Spec(60 * time.Millisecond),
-		PosDriftThreshold:  duration.Spec(2 * time.Millisecond),
-		PosDriftCorrection: duration.Spec(time.Millisecond),
-		Delay:              duration.Spec(delay),
-		ToDuration:         rtpToDuration,
+		AdjustTimeDrift: true,
+		PosDriftPeriod:  duration.Spec(60 * time.Millisecond),
+		DriftThreshold:  duration.Spec(2 * time.Millisecond),
+		Delay:           duration.Spec(delay),
+		ToDuration:      rtpToDuration,
 	})
 
 	T0 := utc.UnixMilli(10_000)
@@ -412,12 +411,13 @@ func TestPacerLogic_SlowDrift_Correction(t *testing.T) {
 	require.Equal(t, uint64(1), stats.PosDrift.Count, "one period must be recorded")
 	require.EqualValues(t, 6*time.Millisecond, stats.PosDrift.Sum, "mean drift for the period")
 	require.Equal(t, uint64(1), stats.PosDriftApplied.Count, "one correction must be applied")
-	require.EqualValues(t, time.Millisecond, stats.PosDriftApplied.Sum)
+	// The correction is proportional: the full mean drift (6ms, uncapped) is applied, not a fixed step.
+	require.EqualValues(t, 6*time.Millisecond, stats.PosDriftApplied.Sum)
 
 	rtpDelta8 := rtpToDuration(ts - ticksMS(0))
 	wantUnadjusted := baseTime.Add(rtpDelta8)
-	require.Equal(t, wantUnadjusted.Add(time.Millisecond), target8,
-		"target must be 1ms later due to slow-drift correction")
+	require.Equal(t, wantUnadjusted.Add(6*time.Millisecond), target8,
+		"target must be 6ms later due to the proportional slow-drift correction")
 }
 
 // TestPacerLogic_SlowDrift_BelowThreshold verifies that no correction is applied when the mean positive drift
@@ -425,12 +425,11 @@ func TestPacerLogic_SlowDrift_Correction(t *testing.T) {
 func TestPacerLogic_SlowDrift_BelowThreshold(t *testing.T) {
 	const delay = 500 * time.Millisecond
 	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
-		AdjustTimeDrift:    true,
-		PosDriftPeriod:     duration.Spec(60 * time.Millisecond),
-		PosDriftThreshold:  duration.Spec(10 * time.Millisecond),
-		PosDriftCorrection: duration.Spec(time.Millisecond),
-		Delay:              duration.Spec(delay),
-		ToDuration:         rtpToDuration,
+		AdjustTimeDrift: true,
+		PosDriftPeriod:  duration.Spec(60 * time.Millisecond),
+		DriftThreshold:  duration.Spec(10 * time.Millisecond),
+		Delay:           duration.Spec(delay),
+		ToDuration:      rtpToDuration,
 	})
 
 	T0 := utc.UnixMilli(10_000)
@@ -457,12 +456,11 @@ func TestPacerLogic_SlowDrift_BelowThreshold(t *testing.T) {
 func TestPacerLogic_SlowDrift_StatsWithoutCorrection(t *testing.T) {
 	const delay = 500 * time.Millisecond
 	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
-		AdjustTimeDrift:    false,
-		PosDriftPeriod:     duration.Spec(60 * time.Millisecond),
-		PosDriftThreshold:  duration.Spec(2 * time.Millisecond),
-		PosDriftCorrection: duration.Spec(time.Millisecond),
-		Delay:              duration.Spec(delay),
-		ToDuration:         rtpToDuration,
+		AdjustTimeDrift: false,
+		PosDriftPeriod:  duration.Spec(60 * time.Millisecond),
+		DriftThreshold:  duration.Spec(2 * time.Millisecond),
+		Delay:           duration.Spec(delay),
+		ToDuration:      rtpToDuration,
 	})
 
 	T0 := utc.UnixMilli(10_000)
@@ -559,8 +557,8 @@ func TestPacerLogicConfig_Unmarshal(t *testing.T) {
 			AdjustTimeDrift:       false,
 			MaxNegDriftCorrection: 100 * duration.Millisecond,
 			PosDriftPeriod:        5 * duration.Minute,
-			PosDriftThreshold:     5 * duration.Millisecond,
-			PosDriftCorrection:    10 * duration.Millisecond,
+			DriftThreshold:        5 * duration.Millisecond,
+			MaxPosDriftCorrection: 10 * duration.Millisecond,
 		}
 
 		marshaled, err := json.Marshal(cfg)
@@ -571,4 +569,94 @@ func TestPacerLogicConfig_Unmarshal(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, cfg, unmarshaled)
 	})
+}
+
+// TestPacerLogic_PersistentSlowSource_StaysCaughtUp reproduces the drift-ratchet bug: a source whose media clock runs
+// persistently slower than wall clock. With the old fixed 1ms-per-period correction the timing baseline could not keep
+// up, so target times fell ever further behind now (push_ahead going hundreds of ms negative) and the de-jitter buffer
+// collapsed. With the proportional correction the baseline tracks the slow source and push_ahead stays near Delay.
+func TestPacerLogic_PersistentSlowSource_StaysCaughtUp(t *testing.T) {
+	const delay = 100 * time.Millisecond
+	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
+		AdjustTimeDrift: true,
+		PosDriftPeriod:  duration.Spec(60 * time.Millisecond),
+		DriftThreshold:  duration.Spec(2 * time.Millisecond),
+		// MaxPosDriftCorrection: 0 -> apply the full mean drift each period (no cap).
+		Delay:      duration.Spec(delay),
+		ToDuration: rtpToDuration,
+	})
+
+	T0 := utc.UnixMilli(10_000)
+
+	// Source is 10% slow: every 10ms of wall clock, the media clock advances only 9ms.
+	const packets = 400
+	minPushAhead := delay
+	var now utc.UTC
+	for i := 0; i < packets; i++ {
+		now = T0.Add(time.Duration(i) * 10 * time.Millisecond)
+		ts := ticksMS(i * 9)
+		target, discarded, err := p.Packet(now, ts, false)
+		require.NoError(t, err)
+		require.False(t, discarded)
+		if pushAhead := target.Sub(now); pushAhead < minPushAhead {
+			minPushAhead = pushAhead
+		}
+	}
+
+	// Without the fix, push_ahead decays ~1ms/packet toward roughly delay-packets = -300ms. With the proportional
+	// correction it stays comfortably positive (the buffer is maintained).
+	require.Greater(t, minPushAhead, delay/2,
+		"push_ahead must stay near Delay - the pacer tracks the slow source instead of ratcheting behind")
+	require.Positive(t, stats.PosDriftApplied.Count, "positive-drift corrections must have been applied")
+	require.Zero(t, stats.NegDrift.Count, "a monotonically slow source produces no negative-drift events")
+}
+
+// TestPacerLogic_SubThresholdJitter_NotRatcheted verifies the negative-drift dead-band: a single early packet within the
+// threshold (normal jitter) must not re-anchor MinT0 or shift the baseline earlier - otherwise jitter would ratchet the
+// timeline and repeatedly defeat positive-drift recovery (the flip-flop hazard).
+func TestPacerLogic_SubThresholdJitter_NotRatcheted(t *testing.T) {
+	const delay = 100 * time.Millisecond
+	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
+		AdjustTimeDrift: true,
+		PosDriftPeriod:  duration.Spec(60 * time.Millisecond),
+		DriftThreshold:  duration.Spec(2 * time.Millisecond),
+		Delay:           duration.Spec(delay),
+		ToDuration:      rtpToDuration,
+	})
+
+	T0 := utc.UnixMilli(10_000)
+
+	// First packet establishes the baseline: baseTime = T0 + delay, MinT0 = T0.
+	_, discarded, err := p.Packet(T0, ticksMS(0), false)
+	require.NoError(t, err)
+	require.False(t, discarded)
+	baseMinT0 := stats.MinT0
+
+	// A real-time source (media advances with wall) where every few packets arrives 1ms early - a sub-threshold dip
+	// (1ms < 2ms). Each early packet's t0 is 1ms below MinT0 but must be ignored.
+	for i := 1; i <= 30; i++ {
+		now := T0.Add(time.Duration(i) * 10 * time.Millisecond)
+		mediaMs := i * 10
+		if i%3 == 0 {
+			mediaMs++ // 1ms of media ahead of schedule => packet arrives 1ms early => t0 dips 1ms below MinT0
+		}
+		target, discarded, err := p.Packet(now, ticksMS(mediaMs), false)
+		require.NoError(t, err)
+		require.False(t, discarded)
+		// Baseline unchanged => target is exactly baseTime + media delta, no drift correction applied.
+		require.Equal(t, T0.Add(delay).Add(rtpToDuration(ticksMS(mediaMs))), target,
+			"packet %d: sub-threshold jitter must not shift the baseline", i)
+	}
+
+	require.Zero(t, stats.NegDrift.Count, "sub-threshold early packets must not count as negative drift")
+	require.Zero(t, stats.PosDriftApplied.Count, "a real-time source must not trigger positive-drift corrections")
+	require.Equal(t, baseMinT0, stats.MinT0, "MinT0 must not ratchet on sub-threshold jitter")
+
+	// Boundary check: a clearly early packet (5ms > 2ms threshold) IS treated as negative drift. At wall 310ms, media
+	// 315ms is 5ms ahead of schedule, so t0 = now - toDuration(ts) dips 5ms below MinT0.
+	now := T0.Add(310 * time.Millisecond)
+	_, _, err = p.Packet(now, ticksMS(310+5), false)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), stats.NegDrift.Count, "an above-threshold early packet must be corrected")
+	require.True(t, stats.MinT0.Before(baseMinT0), "MinT0 must move earlier on a real negative-drift event")
 }

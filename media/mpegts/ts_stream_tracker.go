@@ -34,11 +34,51 @@ type TsStreamTracker interface {
 	Reset()
 }
 
-// NewTsStreamTracker creates a tracker for MPEG TS elementary streams.
+// TsFraming describes how each Track() input is framed on top of the raw MPEG-TS packets. A given stream uses exactly
+// one framing for its lifetime.
+type TsFraming int
+
+const (
+	// TsFramingNone indicates raw MPEG-TS packets with no additional per-input framing.
+	TsFramingNone TsFraming = iota
+	// TsFramingRtp indicates each input is an RTP packet; the RTP header is stripped before TS parsing.
+	TsFramingRtp
+	// TsFramingAts indicates each input is an ATS-TS value: an 8-byte big-endian arrival timestamp (nanoseconds since
+	// the Unix epoch, see AtsTimestampLen) followed by the raw MPEG-TS packets. The timestamp prefix is stripped before
+	// TS parsing.
+	TsFramingAts
+)
+
+func (f TsFraming) String() string {
+	switch f {
+	case TsFramingNone:
+		return "none"
+	case TsFramingRtp:
+		return "rtp"
+	case TsFramingAts:
+		return "ats"
+	default:
+		return fmt.Sprintf("unknown:%d", int(f))
+	}
+}
+
+// NewTsStreamTracker creates a tracker for MPEG TS elementary streams. stripRtp selects between raw (TsFramingNone) and
+// RTP (TsFramingRtp) input framing; use NewTsStreamTrackerFramed for ATS-TS or to specify the framing explicitly.
 func NewTsStreamTracker(streamId string, statsLogPeriod time.Duration, stripRtp bool) TsStreamTracker {
+	framing := TsFramingNone
+	if stripRtp {
+		framing = TsFramingRtp
+	}
+	return NewTsStreamTrackerFramed(streamId, statsLogPeriod, framing)
+}
+
+// NewTsStreamTrackerFramed creates a tracker for MPEG TS elementary streams, specifying how each Track() input is
+// framed (see TsFraming). Use this for ATS-TS input (TsFramingAts), which carries an 8-byte arrival-timestamp prefix
+// that is stripped before TS parsing.
+func NewTsStreamTrackerFramed(streamId string, statsLogPeriod time.Duration, framing TsFraming) TsStreamTracker {
 	tracker := &tsStreamTracker{
 		streamId:    streamId,
-		stripRtp:    stripRtp,
+		framing:     framing,
 		statsLogger: NoopPeriodic{},
 		start:       utc.Now(),
 		streams:     make(map[int]*Stream),
@@ -56,7 +96,7 @@ func NewTsStreamTracker(streamId string, statsLogPeriod time.Duration, stripRtp 
 
 type tsStreamTracker struct {
 	streamId    string
-	stripRtp    bool
+	framing     TsFraming
 	statsLogger timeutil.Periodic
 	// pre-allocated closure for periodic stats logging, stored to avoid the per-call allocation that a bound method
 	// value or an inline closure with a capture of t `t.statsLogger.Do(func() { t.Xyz ...}` would cause.
@@ -84,12 +124,25 @@ func (t *tsStreamTracker) Track(bts []byte) (packetCount int, errList error) {
 		errCount++
 	}
 
-	if t.stripRtp {
+	switch t.framing {
+	case TsFramingNone:
+		// raw MPEG-TS: no per-input framing to strip
+	case TsFramingRtp:
 		var err error
 		bts, err = rtp.StripHeader(bts)
 		if err != nil {
 			return 0, err
 		}
+	case TsFramingAts:
+		var err error
+		_, bts, err = ParseAtsTs(bts)
+		if err != nil {
+			return 0, err
+		}
+	default:
+		return 0, errors.NoTrace("TsStreamTracker.Track", errors.K.Invalid,
+			"reason", "unknown TS framing",
+			"framing", int(t.framing))
 	}
 
 	for ; len(bts) >= packet.PacketSize; bts = bts[packet.PacketSize:] {

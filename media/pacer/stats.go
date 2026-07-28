@@ -23,6 +23,11 @@ type TsInStats struct {
 	PID  int    `json:"pid"`  // PCR PID
 }
 
+// AtsInStats holds arrival-timestamp-specific input statistics, updated by the ATS disruptor pacer.
+type AtsInStats struct {
+	ArrivalNs int64 `json:"arrival_ns"` // most recent arrival timestamp (nanoseconds since Unix epoch)
+}
+
 // InStats tracks pacer input statistics.
 type InStats struct {
 	// PushAhead is (targetTime - currentTime) when packet is pushed
@@ -38,7 +43,7 @@ type InStats struct {
 	// enabled. When MaxNegDriftCorrection is set, this may be less than NegDrift (the nominal observed drift).
 	NegDriftApplied statsutil.RawStatistics[duration.Millis] `json:"neg_drift_applied,omitempty"`
 
-	// PosDrift records the mean T0 drift for each period in which the mean exceeded PosDriftThreshold.
+	// PosDrift records the mean T0 drift for each period in which the mean exceeded DriftThreshold.
 	// Recorded regardless of whether AdjustTimeDrift is enabled.
 	PosDrift statsutil.RawStatistics[duration.Millis] `json:"pos_drift,omitempty"`
 
@@ -56,6 +61,7 @@ type InStats struct {
 
 	Rtp RtpInStats `json:"rtp,omitzero"` // zero for non-RTP pacers
 	Ts  TsInStats  `json:"ts,omitzero"`  // zero for non-TS pacers
+	Ats AtsInStats `json:"ats,omitzero"` // zero for non-ATS pacers
 }
 
 // Reset clears all per-session statistics. Lifetime counters (StreamResets, LastStreamReset) are preserved so that
@@ -66,6 +72,22 @@ func (s *InStats) Reset() {
 	*s = InStats{}
 	s.StreamResets = streamResets
 	s.LastStreamReset = lastReset
+}
+
+// PacerStats is a snapshot of a pacer's runtime statistics, combining input (timing) and output
+// (delivery) statistics.
+type PacerStats struct {
+	In  InStats        `json:"in"`  // pacer input/timing statistics
+	Out OutStatsPeriod `json:"out"` // pacer output/delivery statistics (cumulative since startup)
+}
+
+// StatsReporter is implemented by pacers that can report runtime statistics. As not all pacer
+// implementations track statistics, callers obtain them via a type assertion on the pacer:
+//
+//	if r, ok := p.(pacer.StatsReporter); ok { s := r.Stats() }
+type StatsReporter interface {
+	// Stats returns a snapshot of the pacer's current statistics.
+	Stats() PacerStats
 }
 
 // OutStatsPeriod holds the per-period output statistics snapshot. It contains only exported Statistics[T] fields

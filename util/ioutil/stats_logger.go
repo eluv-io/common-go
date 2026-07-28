@@ -147,7 +147,6 @@ func (l *StatsLogger) Close() error {
 	l.once.Do(func() {
 		l.stats.Start = l.start
 		l.stats.Duration = duration.Spec(utc.Since(l.start))
-		l.stats.Mean = l.stats.Mean / float64(time.Millisecond) // Express mean in milliseconds, not nanoseconds
 		op, limit := l.normalize()
 		msg := op + " stats"
 		fields := append(l.fields, "stats", l.stats, "events", l.events)

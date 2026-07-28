@@ -1,55 +1,28 @@
 package rtp
 
 import (
-	"context"
-	"sync"
 	"time"
 
 	pionrtp "github.com/pion/rtp"
-	"github.com/smarty/go-disruptor"
 
 	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/media/pacer"
-	"github.com/eluv-io/common-go/util/ifutil"
-	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/errors-go"
 	elog "github.com/eluv-io/log-go"
 	"github.com/eluv-io/utc-go"
 )
 
+// The disruptor timing/capacity defaults are owned by the pacer package (the home of DisruptorEngine). These aliases
+// preserve the historical rtp.Default* names for existing callers.
 const (
-	// MaxDisruptorCapacity is the max capacity of the ring buffer. The disruptor uses uint32 for sequence numbers and
-	// the capacity must be a power of 2, so the largest power of 2 smaller than MaxUint (1<<32-1) is 1<<31.
-	MaxDisruptorCapacity = 1 << 31
-
-	// DefaultDisruptorCapacity is the default ring buffer capacity. Must be a power of 2.
-	DefaultDisruptorCapacity = 1 << 12 // 4096 slots
-
-	// DefaultDeliveryMargin is the default delivery margin. 0 = disabled, which means that packets may be sent with a
-	// targetTs in the past.
-	DefaultDeliveryMargin = 0
-
-	// DefaultMinSleepThreshold is the default minimum sleep threshold. Sleep durations shorter than this are skipped.
-	DefaultMinSleepThreshold = 5 * duration.Millisecond
-
-	// DefaultTickerPeriod is the default ticker period used to schedule packet delivery. A ticker avoids the
-	// per-packet timer allocation of time.After and supports prompt Shutdown interruption.
-	DefaultTickerPeriod = 5 * duration.Millisecond
-
-	// DefaultStatsInterval is the default interval for periodic stats logging.
-	DefaultStatsInterval = 5 * duration.Second
-
-	// DefaultOversleepThreshold is the minimum oversleep duration that is recorded in the oversleeps stat. Oversleeps
-	// shorter than this are considered normal scheduler jitter and are not tracked.
-	DefaultOversleepThreshold = 5 * duration.Millisecond
+	MaxDisruptorCapacity     = pacer.MaxDisruptorCapacity
+	DefaultDisruptorCapacity = pacer.DefaultDisruptorCapacity
+	DefaultDeliveryMargin    = pacer.DefaultDeliveryMargin
+	DefaultMinSleepThreshold = pacer.DefaultMinSleepThreshold
+	DefaultTickerPeriod      = pacer.DefaultTickerPeriod
+	DefaultStatsInterval     = pacer.DefaultStatsInterval
+	DefaultOversleepMargin   = pacer.DefaultOversleepMargin
 )
-
-// disruptorEntry is a pre-allocated ring buffer slot. The entry is populated by the producer and read by the consumer.
-type disruptorEntry struct {
-	targetTs utc.UTC // target wall clock time when to send the packet
-	inTs     utc.UTC // wall clock time when the packet was written to the ring buffer
-	pkt      []byte  // the RTP packet bytes
-}
 
 // DisruptorPacerConfig holds configuration for a DisruptorPacer.
 type DisruptorPacerConfig struct {
@@ -63,6 +36,7 @@ type DisruptorPacerConfig struct {
 	BufferCapacity    int                    `json:"buffer_capacity"`     // ring buffer capacity (is rounded up to the next power of 2; 0 → DefaultDisruptorCapacity)
 	MinSleepThreshold duration.Spec          `json:"min_sleep_threshold"` // sleep durations shorter than this are skipped (0 → DefaultMinSleepThreshold)
 	TickerPeriod      duration.Spec          `json:"ticker_period"`       // ticker period for scheduling delivery (0 → DefaultTickerPeriod)
+	OversleepMargin   duration.Spec          `json:"oversleep_margin"`    // jitter tolerated above TickerPeriod before a wake is counted as an oversleep (0 → DefaultOversleepMargin)
 	StatsInterval     duration.Spec          `json:"stats_interval"`      // interval for periodic stats logging (0 → DefaultStatsInterval, -1 → disabled)
 
 	// SendAhead is how early the consumer dispatches a packet before its target time. The ticker loop wakes up when
@@ -84,83 +58,53 @@ func (c *DisruptorPacerConfig) InitDefaults() *DisruptorPacerConfig {
 	c.BufferCapacity = DefaultDisruptorCapacity
 	c.MinSleepThreshold = DefaultMinSleepThreshold
 	c.TickerPeriod = DefaultTickerPeriod
+	c.OversleepMargin = DefaultOversleepMargin
 	c.StatsInterval = DefaultStatsInterval
 	c.SendAhead = 0
 	c.DeliveryMargin = DefaultDeliveryMargin
 	return c
 }
 
+// engineConfig maps the protocol-independent knobs onto a pacer.DisruptorEngineConfig.
+func (c *DisruptorPacerConfig) engineConfig() pacer.DisruptorEngineConfig {
+	return pacer.DisruptorEngineConfig{
+		Stream:            c.Stream,
+		StatsLog:          c.StatsLog,
+		EventLog:          c.EventLog,
+		BufferCapacity:    c.BufferCapacity,
+		MinSleepThreshold: c.MinSleepThreshold,
+		TickerPeriod:      c.TickerPeriod,
+		OversleepMargin:   c.OversleepMargin,
+		StatsInterval:     c.StatsInterval,
+		SendAhead:         c.SendAhead,
+		DeliveryMargin:    c.DeliveryMargin,
+	}
+}
+
+var _ pacer.StatsReporter = (*DisruptorPacer)(nil)
+
 // DisruptorPacer is an RTP callback pacer that uses a lock-free disruptor ring buffer as the jitter buffer. It uses
 // PacerLogic for timestamp calculations and target-time scheduling. The ring buffer replaces the Go channel used by
-// RtpPacer, trading simplicity for lower and more consistent per-slot overhead.
+// RtpPacer, trading simplicity for lower and more consistent per-slot overhead. All protocol-independent machinery
+// (ring buffer, consumer loop, stats, lifecycle) lives in the embedded pacer.DisruptorEngine; this type only supplies
+// the RTP-specific scheduling via rtpScheduler.
 //
 // Usage:
 //
 //	pacer, _ := NewDisruptorPacer(conf)
 //	go func() {
-//	    err := pacer.Run(func(pkt []byte, at time.Time) error { ... })
+//	    err := pacer.Run(func(pkt []byte, at utc.UTC) error { ... })
 //	}()
 //	for _, pkt := range packets {
 //	    pacer.Push(pkt)
 //	}
 //	pacer.Shutdown()
 type DisruptorPacer struct {
-	conf        DisruptorPacerConfig
-	logic       *pacer.PacerLogic
-	gapDetector *GapDetector
-	stats       pacer.InStats
-	outStats    pacer.OutStats
-
-	// outStatsMu guards outStats between Handle() (per-packet UpdateNow calls) and logStats() (forced period close).
-	// inStatsMu guards p.stats (InStats) between Push() (updated via p.logic.Packet()) and logStats() (snapshot read).
-	// Both mutexes are uncontended in the fast path; logStats() holds each for ~100ns once per StatsInterval.
-	outStatsMu sync.Mutex
-	inStatsMu  sync.Mutex
-
-	ringBuffer   []disruptorEntry
-	bufferMask   int64
-	dis          disruptor.Disruptor
-	handler      *disruptorHandler
-	ctx          context.Context
-	cancel       context.CancelCauseFunc
-	shutdownOnce sync.Once
+	*pacer.DisruptorEngine
 }
 
 // NewDisruptorPacer creates a new DisruptorPacer with the given configuration.
 func NewDisruptorPacer(conf DisruptorPacerConfig) (*DisruptorPacer, error) {
-	if conf.BufferCapacity <= 0 {
-		conf.BufferCapacity = DefaultDisruptorCapacity
-	} else if conf.BufferCapacity > MaxDisruptorCapacity {
-		return nil, errors.E("NewDisruptorPacer",
-			"reason", "buffer capacity too large",
-			"max", MaxDisruptorCapacity,
-			"actual", conf.BufferCapacity,
-		)
-	}
-	if conf.BufferCapacity&(conf.BufferCapacity-1) != 0 {
-		// Round up to the next power of 2. Shifts go up to >>32 to cover the full int64 range even though
-		// MaxDisruptorCapacity (1<<31) currently bounds the input; the extra shift is a no-op in practice.
-		conf.BufferCapacity--
-		conf.BufferCapacity |= conf.BufferCapacity >> 1
-		conf.BufferCapacity |= conf.BufferCapacity >> 2
-		conf.BufferCapacity |= conf.BufferCapacity >> 4
-		conf.BufferCapacity |= conf.BufferCapacity >> 8
-		conf.BufferCapacity |= conf.BufferCapacity >> 16
-		conf.BufferCapacity |= conf.BufferCapacity >> 32
-		conf.BufferCapacity++
-	}
-	if conf.MinSleepThreshold <= 0 {
-		conf.MinSleepThreshold = DefaultMinSleepThreshold
-	}
-	if conf.TickerPeriod <= 0 {
-		conf.TickerPeriod = DefaultTickerPeriod
-	}
-	if conf.StatsInterval == 0 {
-		conf.StatsInterval = DefaultStatsInterval
-	}
-	if conf.DeliveryMargin < 0 {
-		conf.DeliveryMargin = DefaultDeliveryMargin
-	}
 	if conf.StatsLog == nil {
 		conf.StatsLog = elog.Noop
 	}
@@ -185,256 +129,59 @@ func NewDisruptorPacer(conf DisruptorPacerConfig) (*DisruptorPacer, error) {
 		tsThreshold = time.Second
 	}
 
-	ctx, cancel := context.WithCancelCause(context.Background())
-	p := &DisruptorPacer{
-		conf:        conf,
+	stats := &pacer.InStats{}
+	sched := &rtpScheduler{
+		logic:       pacer.NewPacerLogic(conf.Logic, stats),
 		gapDetector: NewGapDetector(seqThreshold, tsThreshold),
-		outStats:    pacer.NewOutStats(conf.StatsInterval),
-		ringBuffer:  make([]disruptorEntry, conf.BufferCapacity),
-		bufferMask:  int64(conf.BufferCapacity - 1),
-		ctx:         ctx,
-		cancel:      cancel,
+		stats:       stats,
+		eventLog:    conf.EventLog,
+		stream:      conf.Stream,
 	}
-	p.logic = pacer.NewPacerLogic(conf.Logic, &p.stats)
-
-	handler := &disruptorHandler{pacer: p}
-	dis, err := disruptor.New(
-		disruptor.Options.BufferCapacity(uint32(conf.BufferCapacity)),
-		disruptor.Options.NewHandlerGroup(handler),
-	)
+	engine, err := pacer.NewDisruptorEngine(conf.engineConfig(), sched)
 	if err != nil {
-		cancel(err)
 		return nil, errors.E("NewDisruptorPacer", err)
 	}
-	p.dis = dis
-	p.handler = handler
-	return p, nil
+	return &DisruptorPacer{DisruptorEngine: engine}, nil
 }
 
-// Push parses the RTP packet, computes its target transmission time via PacerLogic, and writes it into the ring buffer.
-// It returns an error if the pacer has been shut down or the packet is invalid. Packets in the discard phase are
-// silently dropped (nil returned). Push must be called from a single goroutine.
-func (p *DisruptorPacer) Push(bts []byte) error {
-	if p.ctx.Err() != nil {
-		return errors.E("DisruptorPacer.Push", errors.K.Cancelled, context.Cause(p.ctx))
-	}
+// rtpScheduler is the RTP pacer.PacketScheduler: it unmarshals RTP packets, detects sequence/timestamp gaps, and
+// computes target delivery times via PacerLogic. It is accessed only from the engine's Push goroutine, under the
+// engine's input-stats lock.
+type rtpScheduler struct {
+	logic       *pacer.PacerLogic
+	gapDetector *GapDetector
+	stats       *pacer.InStats
+	eventLog    elog.ILog
+	stream      string
+}
 
+var _ pacer.PacketScheduler = (*rtpScheduler)(nil)
+
+func (s *rtpScheduler) InStats() *pacer.InStats { return s.stats }
+
+func (s *rtpScheduler) Schedule(now utc.UTC, bts []byte) (utc.UTC, []byte, bool, error) {
 	// Use a stack-local Packet so escape analysis keeps it off the heap. ParsePacket returns *rtp.Packet, which forces
 	// a heap allocation on every call; inlining the unmarshal here eliminates that alloc in the steady-state path.
 	var pkt pionrtp.Packet
 	if err := pkt.Unmarshal(bts); err != nil {
-		return errors.E("DisruptorPacer.Push", errors.K.Invalid, err)
+		return utc.Zero, nil, false, errors.E("rtpScheduler.Schedule", errors.K.Invalid, err)
 	}
 
-	now := utc.Now()
-	// Hold inStatsMu around the gap detection + PacketTs so that logStats() can take a consistent snapshot of p.stats.
-	p.inStatsMu.Lock()
-	seq, ts, gapErr := p.gapDetector.Detect(pkt.SequenceNumber, pkt.Timestamp)
+	seq, ts, gapErr := s.gapDetector.Detect(pkt.SequenceNumber, pkt.Timestamp)
 	if gapErr != nil {
-		p.conf.EventLog.Warn("gap", "stream", p.conf.Stream, gapErr)
+		s.eventLog.Warn("gap", "stream", s.stream, gapErr)
 	}
-	target, discard, err := p.logic.Packet(now, ts, gapErr != nil)
-	// Update RTP-specific stats after PacketTs (which may have reset p.stats via reset()).
-	p.stats.Rtp.Seq = pkt.SequenceNumber
-	p.stats.Rtp.Sequ = seq
-	p.stats.Rtp.Ts = pkt.Timestamp
-	p.stats.Rtp.Tsu = ts
-	p.inStatsMu.Unlock()
+	target, discard, err := s.logic.Packet(now, ts, gapErr != nil)
+	// Update RTP-specific stats after Packet (which may have reset the stats via reset()).
+	s.stats.Rtp.Seq = pkt.SequenceNumber
+	s.stats.Rtp.Sequ = seq
+	s.stats.Rtp.Ts = pkt.Timestamp
+	s.stats.Rtp.Tsu = ts
 	if err != nil {
-		return errors.E("DisruptorPacer.Push", err)
+		return utc.Zero, nil, false, errors.E("rtpScheduler.Schedule", err)
 	}
 	if discard {
-		return nil
+		return utc.Zero, nil, true, nil
 	}
-
-	// Reserve one slot; blocks (spin-waits) if the ring buffer is full.
-	slot := p.dis.Reserve(1)
-	entry := &p.ringBuffer[slot&p.bufferMask]
-	entry.targetTs = target
-	entry.inTs = now
-	// Copy packet bytes; the caller's buffer may be reused after Push returns.
-	if cap(entry.pkt) >= len(bts) {
-		entry.pkt = entry.pkt[:len(bts)]
-	} else {
-		entry.pkt = make([]byte, len(bts))
-	}
-	copy(entry.pkt, bts)
-	p.outStats.IncrBuffered()
-	p.dis.Commit(slot, slot)
-	return nil
-}
-
-// Run starts the consumer loop and calls deliver for each packet at its scheduled time. It blocks until the pacer
-// is shut down via Shutdown. deliver is called sequentially from a single goroutine. The at parameter is the
-// scheduled delivery time (max(targetTs, now+DeliveryMargin)); SendAhead shortens the consumer's sleep but does not
-// affect the value of at. The provided []byte will be re-used after the call to deliver returns — make a copy if
-// needed to avoid data races.
-func (p *DisruptorPacer) Run(deliver func(bts []byte, at utc.UTC) error) error {
-	p.handler.deliver = deliver
-	p.handler.ticker = time.NewTicker(p.conf.TickerPeriod.Duration())
-	p.handler.lastTick = time.Now() // simulated first tick
-	defer p.handler.ticker.Stop()
-
-	// logStats goroutine: the sole logging goroutine. Runs independently of packet flow.
-	if p.conf.StatsInterval > 0 {
-		go p.logStats()
-	}
-
-	p.dis.Listen() // blocks until dis.Close() is called
-	return context.Cause(p.ctx)
-}
-
-// Shutdown stops the pacer. Any in-progress sleep in the consumer is interrupted. Idempotent.
-func (p *DisruptorPacer) Shutdown(err ...error) {
-	p.shutdownOnce.Do(func() {
-		p.cancel(ifutil.FirstOrDefault[error](
-			err,
-			errors.NoTrace("DisruptorPacer.Shutdown", errors.K.Cancelled, "reason", "pacer shutdown"),
-		))
-		_ = p.dis.Close()
-	})
-}
-
-// BufferCap returns the actual ring buffer capacity, which is the configured capacity rounded up to the next power
-// of 2.
-func (p *DisruptorPacer) BufferCap() int {
-	return len(p.ringBuffer)
-}
-
-// disruptorHandler implements disruptor.MessageHandler and is the consumer side of the ring buffer. For each batch
-// [lower, upper] it waits until each packet's scheduled time, then calls deliver.
-type disruptorHandler struct {
-	pacer    *DisruptorPacer
-	deliver  func(bts []byte, at utc.UTC) error
-	ticker   *time.Ticker
-	lastTick time.Time
-}
-
-func (h *disruptorHandler) Handle(lower, upper int64) {
-	for seq := lower; seq <= upper; seq++ {
-		now := utc.Now()
-		entry := &h.pacer.ringBuffer[seq&h.pacer.bufferMask]
-		os := &h.pacer.outStats
-
-		// Sleep until SendAhead before targetTs, counting ticker ticks consumed.
-		wakeTarget := entry.targetTs.Add(-h.pacer.conf.SendAhead.Duration())
-		wait := wakeTarget.Sub(now)
-		var ticksConsumed int
-		var overslept duration.Millis
-		if wait > h.pacer.conf.MinSleepThreshold.Duration() {
-			// Wake up SendAhead before targetTs so the deliver callback has a look-ahead scheduling window.
-			// Using a ticker avoids the per-packet timer allocation of time.After and lets ctx.Done() interrupt
-			// a long wait promptly.
-			for wakeTarget.Mono().After(h.lastTick) {
-				select {
-				case h.lastTick = <-h.ticker.C:
-					ticksConsumed++
-				case <-h.pacer.ctx.Done():
-					return
-				}
-			}
-			// Measure whether we overslept
-			if ticksConsumed > 0 {
-				now = utc.Now()
-				overslept = duration.Millis(now.Sub(wakeTarget))
-			}
-
-		}
-
-		if h.pacer.ctx.Err() != nil {
-			return
-		}
-
-		// Decrement the buffered counter atomically; the value feeds into bufFill stats under the lock below.
-		// Note: technically, the packet is still buffered until after its wakeTarget is reached.
-		bufFill := os.DecrBuffered()
-
-		// lateness is how much the actual send time (sendAt) falls short of the ideal target time. If a packet is "on
-		// time", lateness is 0.
-		var lateness duration.Millis
-
-		// Compute the actual send time:
-		// * When DeliveryMargin=0: sendAt = targetTs (packets may be sent with a target ts in the past).
-		// * Otherwise:             sendAt = max(targetTs, now+DeliveryMargin)
-		sendAt := entry.targetTs
-		minSendAt := now.Add(h.pacer.conf.DeliveryMargin.Duration())
-		if sendAt.Before(minSendAt) {
-			lateness = duration.Millis(minSendAt.Sub(sendAt))
-			if h.pacer.conf.DeliveryMargin > 0 {
-				// correct targetTs to the minimum send time only if a delivery margin is configured. Otherwise, we send
-				// the packet with a taget ts in the past (and let the "deliver" callback deal with it).
-				sendAt = minSendAt
-			}
-		}
-
-		sendAhead := duration.Millis(sendAt.Sub(now))
-
-		// Update all outStats under the mutex so that logStats() always observes a consistent view when it
-		// forces a period close. The lock is held only for the fast UpdateNow calls — never during sleeps.
-		h.pacer.outStatsMu.Lock()
-		{
-			os.UpdateBufFill(now, bufFill)
-			if duration.Spec(overslept) > DefaultOversleepThreshold {
-				os.UpdateOversleeps(now, overslept)
-			}
-			if lateness > 0 {
-				os.UpdateLateness(now, lateness)
-			}
-			os.UpdateSendAhead(now, sendAhead)
-			os.UpdateIPD(now)
-			os.UpdateJBD(now, entry.inTs)
-			if wait > 0 {
-				os.UpdateWait(now, duration.Millis(wait))
-			}
-			os.AddSleeps(ticksConsumed)
-		}
-		h.pacer.outStatsMu.Unlock()
-
-		if err := h.deliver(entry.pkt, sendAt); err != nil {
-			h.pacer.conf.EventLog.Warn("deliver error",
-				"stream", h.pacer.conf.Stream,
-				"err", err)
-		}
-	}
-}
-
-// logStats is the sole logging goroutine. It fires every StatsInterval, forces a period close on both outStats
-// and stats (InStats) under their respective mutexes, and logs a full snapshot — even during silence (where the
-// snapshot has Count=0 for all Statistics fields, indicating no traffic in that period).
-func (p *DisruptorPacer) logStats() {
-	t := time.NewTicker(p.conf.StatsInterval.Duration())
-	defer t.Stop()
-	for {
-		select {
-		case <-t.C:
-			now := utc.Now()
-
-			p.inStatsMu.Lock()
-			inSnap := p.stats // plain value copy; InStats has no atomics or sync values
-			p.inStatsMu.Unlock()
-
-			p.outStatsMu.Lock()
-			outSnap := p.outStats.SwitchPeriod(now)
-			p.outStatsMu.Unlock()
-
-			p.conf.StatsLog.Info("stats",
-				"stream", p.conf.Stream,
-				"out", jsonutil.Stringer(outSnap),
-				"in", jsonutil.Stringer(&inSnap))
-		case <-p.ctx.Done():
-			return
-		}
-	}
-}
-
-func (p *DisruptorPacer) Stats() (pacer.InStats, pacer.OutStatsPeriod) {
-	p.inStatsMu.Lock()
-	inSnap := p.stats // plain value copy; InStats has no atomics or sync values
-	p.inStatsMu.Unlock()
-
-	p.outStatsMu.Lock()
-	outSnap := p.outStats.Total()
-	p.outStatsMu.Unlock()
-
-	return inSnap, *outSnap
+	return target, bts, false, nil
 }

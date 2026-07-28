@@ -17,6 +17,7 @@ func NewTsPacer() *TsPacer {
 		stripRtp:     false,
 		usePCR:       true,
 		pid2start:    make(map[int]*streamStart),
+		pcrPid:       pcrPidUnset,
 		logThrottler: timeutil.NewPeriodic(10 * time.Second),
 		stream:       "n/a",
 	}
@@ -39,6 +40,11 @@ type TsPacer struct {
 	pid2start    map[int]*streamStart // map of stream start times, keyed by PIDs
 	logThrottler timeutil.Periodic    // prevent spamming the log with errors
 	stream       string               // stream name
+
+	// pcrPid pins PCR pacing to a single PID: the first PID a PCR is detected on. PCRs on any other PID (other
+	// programs in a multi-program transport stream, carrying independent clocks) are ignored. pcrPidUnset until the
+	// first PCR is seen. Only used in PCR mode (usePCR).
+	pcrPid int
 }
 
 func (p *TsPacer) SetDelay(delay time.Duration) {
@@ -81,7 +87,7 @@ func (p *TsPacer) Wait(bts []byte) {
 		time.Sleep(p.initialDelay)
 		p.initialDelay = 0
 	}
-	for len(bts) > packet.PacketSize && !done {
+	for len(bts) >= packet.PacketSize && !done {
 		// Cast slice to pointer directly to avoid copying 188 bytes into a local value that would escape to the heap
 		// because its address is taken below when calling waitPcr/waitPts.
 		pkt := (*packet.Packet)(bts[:packet.PacketSize])
@@ -107,12 +113,22 @@ func (p *TsPacer) CalculateWait(now utc.UTC, bts []byte) time.Duration {
 }
 
 func (p *TsPacer) waitPcr(pkt *packet.Packet) bool {
+	pid := pkt.PID()
+	// Pin pacing to a single PID: once a PCR PID is detected, ignore PCRs on any other PID. Other programs in a
+	// multi-program transport stream carry independent clocks that would otherwise corrupt pacing.
+	if p.pcrPid != pcrPidUnset && pid != p.pcrPid {
+		return false
+	}
+
 	pcr, hasPcr := ExtractPCR(pkt)
 	if !hasPcr {
 		return false
 	}
 
-	pid := pkt.PID()
+	if p.pcrPid == pcrPidUnset {
+		p.pcrPid = pid // pin to the first PID we detect a PCR on
+	}
+
 	if start, ok := p.pid2start[pid]; !ok {
 		log.Info("start pcr", "pid", pid, "pcr", pcr, "stream", p.stream)
 		p.pid2start[pid] = &streamStart{

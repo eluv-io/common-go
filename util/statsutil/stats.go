@@ -76,8 +76,9 @@ type Statistics[T Number] struct {
 	Min      T             `json:"min"`
 	Max      T             `json:"max"`
 	Sum      T             `json:"sum"`
-	Mean     float64       `json:"mean"`
+	Mean     T             `json:"mean"`
 	Variance float64       `json:"variance,omitempty"`
+	mean     float64       // running mean in float64 to avoid integer-rounding drift; exported Mean is derived from it
 	m2       float64       // used for variance calculation
 	updated  bool          // set to true on first Update to initialize Min and Max correctly
 }
@@ -101,16 +102,19 @@ func (p *Statistics[T]) Update(now utc.UTC, val T) {
 		p.Max = val
 	}
 
-	// Update mean and m2 using Welford's method
+	// Update the running mean and m2 using Welford's method. The mean is accumulated in float64 (p.mean) to avoid the
+	// rounding drift that an integer T would introduce on every step; the exported Mean is derived from it. Using the
+	// float mean here also keeps the m2 (and hence variance) calculation accurate.
 	vf64 := float64(val)
 	if p.Count == 1 {
-		p.Mean = vf64
+		p.mean = vf64
 		p.m2 = 0.0
 	} else {
-		delta := vf64 - p.Mean
-		p.Mean += delta / float64(p.Count)
-		p.m2 += delta * (vf64 - p.Mean)
+		delta := vf64 - p.mean
+		p.mean += delta / float64(p.Count)
+		p.m2 += delta * (vf64 - p.mean)
 	}
+	p.Mean = T(p.mean)
 }
 
 func (p *Statistics[T]) CalcVariance(useSampleVariance bool) {
@@ -136,7 +140,7 @@ func (s RawStatistics[T]) MarshalJSON() ([]byte, error) {
 		Min      T       `json:"min"`
 		Max      T       `json:"max"`
 		Sum      T       `json:"sum"`
-		Mean     float64 `json:"mean"`
+		Mean     T       `json:"mean"`
 		Variance float64 `json:"variance,omitempty"`
 	}{
 		Count:    s.Count,

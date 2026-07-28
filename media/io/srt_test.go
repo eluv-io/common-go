@@ -78,6 +78,67 @@ func testSourceSinkUrl(t *testing.T, src, snk string) {
 	require.Equal(t, 3, n)
 
 	require.Equal(t, []byte{1, 2, 3}, packet[:n])
+
+	// both the source reader and the sink writer should report connection stats
+	for name, rc := range map[string]any{"source": reader, "sink": writer} {
+		sr, ok := rc.(StatsReporter)
+		require.True(t, ok, "%s does not implement StatsReporter", name)
+		stats := sr.ConnStats(true)
+		// the local address is always known once connected; the source listens on it and the sink
+		// binds a local socket to it
+		require.NotEmpty(t, stats.LocalAddr, "%s local address", name)
+	}
+}
+
+// TestSrtSourceCloseUnblocksAccept verifies that closing an SRT source in listener mode promptly interrupts a pending
+// Accept (and the Read waiting on it) even when no peer ever connects. This is the shutdown path exercised when a live
+// recorder is cancelled while waiting for a source to (re)connect.
+func TestSrtSourceCloseUnblocksAccept(t *testing.T) {
+	log.SetDebug()
+
+	port, err := testutil.FreePort()
+	require.NoError(t, err)
+	url := fmt.Sprintf("srt://127.0.0.1:%d?mode=listener", port)
+
+	source, err := CreatePacketSource(url)
+	require.NoError(t, err)
+	reader, err := source.Open()
+	require.NoError(t, err)
+
+	// Allow the listener to start and the accept to block waiting for a connection that never arrives.
+	time.Sleep(200 * time.Millisecond)
+
+	// A Read blocks until a source connects or the reader is closed.
+	readDone := make(chan error, 1)
+	go func() {
+		_, rerr := reader.Read(make([]byte, 1024))
+		readDone <- rerr
+	}()
+
+	// Confirm the Read is genuinely blocked while no source is connected.
+	select {
+	case rerr := <-readDone:
+		t.Fatalf("Read returned before any source connected or Close: %v", rerr)
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	// Closing the source must promptly interrupt the pending Accept.
+	closeDone := make(chan error, 1)
+	go func() { closeDone <- reader.Close() }()
+	select {
+	case cerr := <-closeDone:
+		require.NoError(t, cerr)
+	case <-time.After(time.Second):
+		t.Fatal("Close did not return promptly after cancel")
+	}
+
+	// ...and the blocked Read must unblock with an error rather than hang.
+	select {
+	case rerr := <-readDone:
+		require.Error(t, rerr)
+	case <-time.After(time.Second):
+		t.Fatal("Read did not unblock promptly after Close")
+	}
 }
 
 func TestSourceCreationErrors(t *testing.T) {
