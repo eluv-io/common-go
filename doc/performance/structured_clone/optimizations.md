@@ -1,6 +1,6 @@
 # Review and Optimization Analysis of clone.go
 
-This report document contains the thorough correctness and performance review of the cloning functions in [clone.go](file:///Users/luk/dev/qluvio/git/common-go/format/structured/clone.go), with comparisons of the baseline and optimized benchmark runs.
+This report document contains the thorough correctness and performance review of the cloning functions in [clone.go](../../../format/structured/clone.go), with comparisons of the baseline and optimized benchmark runs.
 
 ---
 

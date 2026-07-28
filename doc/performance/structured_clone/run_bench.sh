@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "${script_dir}/../../.." && pwd)"
 base="${script_dir}/bench_run_"
 
+cd "${repo_root}" || exit 1
 go test -run=^$ -bench=^BenchmarkClone -benchmem -count=10 ./format/structured/. > "${base}$(date +%Y-%m-%dT%H%M).txt"
 
 # shellcheck disable=SC2046

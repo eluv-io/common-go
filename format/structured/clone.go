@@ -45,13 +45,6 @@ func CloneSlice[S ~[]E, E any](source S) S {
 		copy(dup, source)
 		return dup
 	}
-	// if _, ok := any(*new(E)).(byte); ok {
-	// 	// E is a byte, hence S is a byte slice, so we can just copy the slice. This also works for named byte slice
-	// 	// types, e.g. `type Bytes []byte`
-	// 	copy(dup, source)
-	// 	return dup
-	// }
-
 	for i, val := range source {
 		dup[i] = castClone[E](cloneAny(val, reflect.Value{}))
 	}
@@ -161,11 +154,6 @@ func cloneReflect(rv reflect.Value) reflect.Value {
 			reflect.Copy(out, rv)
 			return out
 		}
-		// if rv.Type().Elem().Kind() == reflect.Uint8 {
-		// 	// same byte slice trick as in CopySlice...
-		// 	reflect.Copy(out, rv)
-		// 	return out
-		// }
 		for i := 0; i < rv.Len(); i++ {
 			out.Index(i).Set(cloneElem(rv.Index(i)))
 		}
