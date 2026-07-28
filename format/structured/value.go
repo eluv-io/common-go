@@ -17,14 +17,13 @@ import (
 	"github.com/eluv-io/common-go/util/stringutil"
 )
 
-// Wrap wraps the given data structure as a structured Value object, offering
-// query, manipulation and conversion functions for the data.
+// Wrap wraps the given data structure as a structured Value object, offering query, manipulation and conversion
+// functions for the data.
 //
-// Err is an optional error value that occured as a result of retrieving or
-// creating the data value. It allows to make error handling optional through
-// the IsError() and Error() functions. All query and manipulation functions
-// act on nil if an error is set, and conversion functions return the zero value
-// or the optional default value specified in the conversion call.
+// Err is an optional error value that occured as a result of retrieving or creating the data value. It allows to
+// make error handling optional through the IsError() and Error() functions. All query and manipulation functions act
+// on nil if an error is set, and conversion functions return the zero value or the optional default value specified
+// in the conversion call.
 func Wrap(data interface{}, err ...error) *Value {
 	var e error
 	if len(err) > 0 {
@@ -33,7 +32,7 @@ func Wrap(data interface{}, err ...error) *Value {
 	return NewValue(data, e)
 }
 
-// Unwraps any directly nested Value objects and returns the raw data.
+// Unwrap unwraps any directly nested Value objects and returns the raw data.
 func Unwrap(v interface{}) interface{} {
 	for {
 		if val, ok := v.(*Value); ok {
@@ -44,8 +43,7 @@ func Unwrap(v interface{}) interface{} {
 	}
 }
 
-// NewValue creates a new Value wrapper from the given value and error. Same
-// as Wrap(val, err).
+// NewValue creates a new Value wrapper from the given value and error. Same as Wrap(val, err).
 func NewValue(val interface{}, err error) *Value {
 	return &Value{
 		Data: val,
@@ -60,14 +58,12 @@ func WrapJson(jsonDoc string) *Value {
 	return val
 }
 
-// Value is a wrapper around structured data or the result of a structured data
-// operation with convenience functions for querying and manipulating the
-// structured data and accessing it as a specific data type.
+// Value is a wrapper around structured data or the result of a structured data operation with convenience functions
+// for querying and manipulating the structured data and accessing it as a specific data type.
 //
-// All typed conversion functions return the type's "zero value" if the
-// structured value was created with an error or if the value is not of the
-// requested type. Alternatively, a default value can be specified that is
-// returned instead of the zero value.
+// All typed conversion functions return the type's "zero value" if the structured value was created with an error or
+// if the value is not of the requested type. Alternatively, a default value can be specified that is returned instead
+// of the zero value.
 //
 //	val := structured.NewValue(structured.Resolve(path, data))
 //	val.String()  // the string at path or "" if error or not a string
@@ -109,8 +105,8 @@ func (v *Value) Merge(path Path, data interface{}) error {
 	return nil
 }
 
-// Delete deletes the element at the given path and returns true if the element
-// existed and was therefore deleted, false otherwise.
+// Delete deletes the element at the given path and returns true if the element existed and was therefore deleted,
+// false otherwise.
 func (v *Value) Delete(path ...string) (deleted bool) {
 	v.Data, deleted = Delete(v.Data, path)
 	return deleted
@@ -151,8 +147,7 @@ func (v *Value) Clear() error {
 	return v.Set(nil, nil)
 }
 
-// Path is a convenience method to create a path from an arbitrary number of
-// strings.
+// Path is a convenience method to create a path from an arbitrary number of strings.
 func (v *Value) Path(p ...string) Path {
 	return Path(p)
 }
@@ -170,212 +165,434 @@ func (v *Value) Error() error {
 	return v.err
 }
 
+// ValueErr returns the value as empty interface, along with any stored error. If the value wraps an error, the error
+// is returned together with the optional default def if specified, or nil.
+func (v *Value) ValueErr(def ...interface{}) (interface{}, error) {
+	if v.err != nil {
+		if len(def) > 0 {
+			return def[0], v.err
+		}
+		return nil, v.err
+	}
+	return v.Data, nil
+}
+
 // Value returns the value as empty interface. If the value wraps an error,
 // returns the optional default value def if specified, or nil.
 func (v *Value) Value(def ...interface{}) interface{} {
-	if v.err == nil {
-		return v.Data
-	}
-	if len(def) > 0 {
-		return def[0]
-	}
-	return nil
+	res, _ := v.ValueErr(def...)
+	return res
 }
 
-// Int returns the value as an int. If the value wraps an error, returns
+// IntErr returns the value as an int along with any conversion error. If the value wraps an error, the error is
+// returned. If the value is absent (nil) and no default is provided, errors.K.NotExist is returned.
+func (v *Value) IntErr(def ...int) (int, error) {
+	var i64Def []int64
+	if len(def) > 0 {
+		i64Def = []int64{int64(def[0])}
+	}
+	res, err := v.Int64Err(i64Def...)
+	return int(res), err
+}
+
+// Int returns the value as an int. If the value wraps an error or is absent, returns
 // the optional default value def if specified, or 0.
 func (v *Value) Int(def ...int) int {
-	if len(def) > 0 {
-		return int(v.Int64(int64(def[0])))
-	}
-	return int(v.Int64())
+	res, _ := v.IntErr(def...)
+	return res
 }
 
-// Int64 returns the value as an int. If the value wraps an error, returns
+// Int64Err returns the value as an int64 along with any conversion error. If the value wraps an error, the error is
+// returned. If the value is absent (nil), the default def is returned if provided, otherwise errors.K.NotExist is
+// returned.
+func (v *Value) Int64Err(def ...int64) (int64, error) {
+	if v.err != nil {
+		if len(def) > 0 {
+			return def[0], v.err
+		}
+		return 0, v.err
+	}
+	if v.Data == nil {
+		if len(def) > 0 {
+			return def[0], nil
+		}
+		return 0, errors.NoTrace("Int64", errors.K.NotExist)
+	}
+	res, err := numberutil.AsInt64Err(v.Data)
+	if err != nil {
+		if len(def) > 0 {
+			return def[0], err
+		}
+		return 0, err
+	}
+	return res, nil
+}
+
+// Int64 returns the value as an int64. If the value wraps an error or is absent, returns
 // the optional default value def if specified, or 0.
 func (v *Value) Int64(def ...int64) int64 {
-	if v.err == nil && v.Data != nil {
-		res, err := numberutil.AsInt64Err(v.Data)
-		if err == nil {
-			return res
-		}
-	}
-	if len(def) > 0 {
-		return def[0]
-	}
-	return 0
+	res, _ := v.Int64Err(def...)
+	return res
 }
 
-// UInt returns the value as an uint. If the value wraps an error, returns
+// UIntErr returns the value as a uint along with any conversion error. If the value wraps an error, the error is
+// returned. If the value is absent (nil) and no default is provided, errors.K.NotExist is returned.
+func (v *Value) UIntErr(def ...uint) (uint, error) {
+	var u64Def []uint64
+	if len(def) > 0 {
+		u64Def = []uint64{uint64(def[0])}
+	}
+	res, err := v.UInt64Err(u64Def...)
+	return uint(res), err
+}
+
+// UInt returns the value as an uint. If the value wraps an error or is absent, returns
 // the optional default value def if specified, or 0.
 func (v *Value) UInt(def ...uint) uint {
-	if len(def) > 0 {
-		return uint(v.UInt64(uint64(def[0])))
-	}
-	return uint(v.UInt64())
+	res, _ := v.UIntErr(def...)
+	return res
 }
 
-// UInt64 returns the value as an uint. If the value wraps an error, returns
+// UInt64Err returns the value as a uint64 along with any conversion error. If the value wraps an error, the error
+// is returned. If the value is absent (nil), the default def is returned if provided, otherwise errors.K.NotExist
+// is returned.
+func (v *Value) UInt64Err(def ...uint64) (uint64, error) {
+	if v.err != nil {
+		if len(def) > 0 {
+			return def[0], v.err
+		}
+		return 0, v.err
+	}
+	if v.Data == nil {
+		if len(def) > 0 {
+			return def[0], nil
+		}
+		return 0, errors.NoTrace("UInt64", errors.K.NotExist)
+	}
+	res, err := numberutil.AsUInt64Err(v.Data)
+	if err != nil {
+		if len(def) > 0 {
+			return def[0], err
+		}
+		return 0, err
+	}
+	return res, nil
+}
+
+// UInt64 returns the value as an uint64. If the value wraps an error or is absent, returns
 // the optional default value def if specified, or 0.
 func (v *Value) UInt64(def ...uint64) uint64 {
-	if v.err == nil && v.Data != nil {
-		res, err := numberutil.AsUInt64Err(v.Data)
-		if err == nil {
-			return res
-		}
-	}
-	if len(def) > 0 {
-		return def[0]
-	}
-	return 0
+	res, _ := v.UInt64Err(def...)
+	return res
 }
 
-// Float64 returns the value as a float64. If the value wraps an error, returns
+// Float64Err returns the value as a float64 along with any conversion error. If the value wraps an error, the error
+// is returned. If the value is absent (nil), the default def is returned if provided, otherwise errors.K.NotExist
+// is returned.
+func (v *Value) Float64Err(def ...float64) (float64, error) {
+	if v.err != nil {
+		if len(def) > 0 {
+			return def[0], v.err
+		}
+		return 0, v.err
+	}
+	if v.Data == nil {
+		if len(def) > 0 {
+			return def[0], nil
+		}
+		return 0, errors.NoTrace("Float64", errors.K.NotExist)
+	}
+	res, err := numberutil.AsFloat64Err(v.Data)
+	if err != nil {
+		if len(def) > 0 {
+			return def[0], err
+		}
+		return 0, err
+	}
+	return res, nil
+}
+
+// Float64 returns the value as a float64. If the value wraps an error or is absent, returns
 // the optional default value def if specified, or 0.
 func (v *Value) Float64(def ...float64) float64 {
-	if v.err == nil && v.Data != nil {
-		res, err := numberutil.AsFloat64Err(v.Data)
-		if err == nil {
-			return res
-		}
-	}
-	if len(def) > 0 {
-		return def[0]
-	}
-	return 0
+	res, _ := v.Float64Err(def...)
+	return res
 }
 
-// String returns the value as a string. If the value wraps an error, returns
+// StringErr returns the value as a string along with any conversion error. If the value wraps an error, the error is
+// returned. If the value is absent (nil), the default def is returned if provided, otherwise errors.K.NotExist is
+// returned. If the value exists but is not a string, a conversion error is returned.
+func (v *Value) StringErr(def ...string) (string, error) {
+	if v.err != nil {
+		if len(def) > 0 {
+			return def[0], v.err
+		}
+		return "", v.err
+	}
+	if v.Data == nil {
+		if len(def) > 0 {
+			return def[0], nil
+		}
+		return "", errors.NoTrace("String", errors.K.NotExist)
+	}
+	t, ok := v.Data.(string)
+	if !ok {
+		if len(def) > 0 {
+			return def[0], errors.NoTrace("String", errors.K.Invalid, "value", v.Data)
+		}
+		return "", errors.NoTrace("String", errors.K.Invalid, "value", v.Data)
+	}
+	return t, nil
+}
+
+// String returns the value as a string. If the value wraps an error or is absent, returns
 // the optional default value def if specified, or "".
 func (v *Value) String(def ...string) string {
-	if v.err == nil && v.Data != nil {
-		if t, ok := v.Data.(string); ok {
-			return t
+	res, _ := v.StringErr(def...)
+	return res
+}
+
+// ToStringErr converts the value to a string and returns it along with any error. If the value wraps an error, the
+// error is returned. If the value is absent (nil), the default def is returned if provided, otherwise
+// errors.K.NotExist is returned. The conversion itself always succeeds for non-nil values.
+func (v *Value) ToStringErr(def ...string) (string, error) {
+	if v.err != nil {
+		if len(def) > 0 {
+			return def[0], v.err
 		}
+		return "", v.err
 	}
-	if len(def) > 0 {
-		return def[0]
+	if v.Data == nil {
+		if len(def) > 0 {
+			return def[0], nil
+		}
+		return "", errors.NoTrace("ToString", errors.K.NotExist)
 	}
-	return ""
+	return stringutil.ToString(v.Data), nil
 }
 
 // ToString converts the value to a string. Returns optional default or "" if
-// the value wraps an error or is nil.
+// the value wraps an error or is absent.
 func (v *Value) ToString(def ...string) string {
-	if v.err == nil && v.Data != nil {
-		return stringutil.ToString(v.Data)
-	}
-	if len(def) > 0 {
-		return def[0]
-	}
-	return ""
+	res, _ := v.ToStringErr(def...)
+	return res
 }
 
-// StringSlice returns the value as a string slice. If the value wraps an
-// error, returns the optional default slice def if specified, or an empty slice.
-func (v *Value) StringSlice(def ...string) []string {
-	if v.err == nil && v.Data != nil {
-		if t, ok := v.Data.([]string); ok {
-			return t
+// StringSliceErr returns the value as a string slice along with any conversion error. If the value wraps an error,
+// the error is returned with def as the result. If the value is absent (nil) and a default is provided, def is
+// returned with no error. If absent with no default, errors.K.NotExist is returned. If the value is not a []string,
+// a conversion error is returned.
+func (v *Value) StringSliceErr(def ...string) ([]string, error) {
+	if v.err != nil {
+		if len(def) > 0 {
+			return def, v.err
 		}
+		return make([]string, 0), v.err
+	}
+	if v.Data == nil {
+		if len(def) > 0 {
+			return def, nil
+		}
+		return make([]string, 0), errors.NoTrace("StringSlice", errors.K.NotExist)
+	}
+	if t, ok := v.Data.([]string); ok {
+		return t, nil
 	}
 	if len(def) > 0 {
-		return def
+		return def, errors.NoTrace("StringSlice", errors.K.Invalid, "value", v.Data)
 	}
-	return make([]string, 0)
+	return make([]string, 0), errors.NoTrace("StringSlice", errors.K.Invalid, "value", v.Data)
 }
 
-// Map returns the value as a map. If the value wraps an error, returns
+// StringSlice returns the value as a string slice. If the value wraps an error or is absent, returns the optional
+// default slice def if specified, or an empty slice.
+func (v *Value) StringSlice(def ...string) []string {
+	res, _ := v.StringSliceErr(def...)
+	return res
+}
+
+// MapErr returns the value as a map along with any conversion error. If the value wraps an error, the error is
+// returned. If the value is absent (nil) and a default is provided, def is returned with no error. If absent with no
+// default, errors.K.NotExist is returned. If the value is not a map[string]interface{}, a conversion error is
+// returned.
+func (v *Value) MapErr(def ...map[string]interface{}) (map[string]interface{}, error) {
+	if v.err != nil {
+		if len(def) > 0 {
+			return def[0], v.err
+		}
+		return make(map[string]interface{}), v.err
+	}
+	if v.Data == nil {
+		if len(def) > 0 {
+			return def[0], nil
+		}
+		return make(map[string]interface{}), errors.NoTrace("Map", errors.K.NotExist)
+	}
+	if t, ok := v.Data.(map[string]interface{}); ok {
+		return t, nil
+	}
+	if len(def) > 0 {
+		return def[0], errors.NoTrace("Map", errors.K.Invalid, "value", v.Data)
+	}
+	return make(map[string]interface{}), errors.NoTrace("Map", errors.K.Invalid, "value", v.Data)
+}
+
+// Map returns the value as a map. If the value wraps an error or is absent, returns
 // the optional default value def if specified, or an empty map.
 func (v *Value) Map(def ...map[string]interface{}) map[string]interface{} {
-	if v.err == nil && v.Data != nil {
-		if t, ok := v.Data.(map[string]interface{}); ok {
-			return t
-		}
-	}
-	if len(def) > 0 {
-		return def[0]
-	}
-	return make(map[string]interface{})
+	res, _ := v.MapErr(def...)
+	return res
 }
 
-// Slice returns the value as an []interface{}. If the value wraps an error,
+// SliceErr returns the value as a []interface{} along with any conversion error. If the value wraps an error, the
+// error is returned with def as the result. If the value is absent (nil) and a default is provided, def is returned
+// with no error. If absent with no default, errors.K.NotExist is returned. If the value is not a []interface{}, a
+// conversion error is returned.
+func (v *Value) SliceErr(def ...interface{}) ([]interface{}, error) {
+	if v.err != nil {
+		if len(def) > 0 {
+			return def, v.err
+		}
+		return make([]interface{}, 0), v.err
+	}
+	if v.Data == nil {
+		if len(def) > 0 {
+			return def, nil
+		}
+		return make([]interface{}, 0), errors.NoTrace("Slice", errors.K.NotExist)
+	}
+	if t, ok := v.Data.([]interface{}); ok {
+		return t, nil
+	}
+	if len(def) > 0 {
+		return def, errors.NoTrace("Slice", errors.K.Invalid, "value", v.Data)
+	}
+	return make([]interface{}, 0), errors.NoTrace("Slice", errors.K.Invalid, "value", v.Data)
+}
+
+// Slice returns the value as an []interface{}. If the value wraps an error or is absent,
 // returns the optional default slice def if specified, or an empty slice.
 func (v *Value) Slice(def ...interface{}) []interface{} {
-	if v.err == nil && v.Data != nil {
-		if t, ok := v.Data.([]interface{}); ok {
-			return t
-		}
-	}
-	if len(def) > 0 {
-		return def
-	}
-	return make([]interface{}, 0)
+	res, _ := v.SliceErr(def...)
+	return res
 }
 
-// Bool returns the value as a string. If the value wraps an error, returns
+// BoolErr returns the value as a bool along with any conversion error. If the value wraps an error, the error is
+// returned. If the value is absent (nil), the default def is returned if provided, otherwise errors.K.NotExist is
+// returned. If the value is not a bool, a conversion error is returned.
+func (v *Value) BoolErr(def ...bool) (bool, error) {
+	if v.err != nil {
+		if len(def) > 0 {
+			return def[0], v.err
+		}
+		return false, v.err
+	}
+	if v.Data == nil {
+		if len(def) > 0 {
+			return def[0], nil
+		}
+		return false, errors.NoTrace("Bool", errors.K.NotExist)
+	}
+	if t, ok := v.Data.(bool); ok {
+		return t, nil
+	}
+	if len(def) > 0 {
+		return def[0], errors.NoTrace("Bool", errors.K.Invalid, "value", v.Data)
+	}
+	return false, errors.NoTrace("Bool", errors.K.Invalid, "value", v.Data)
+}
+
+// Bool returns the value as a bool. If the value wraps an error or is absent, returns
 // the optional default value def if specified, or false.
 func (v *Value) Bool(def ...bool) bool {
-	if v.err == nil && v.Data != nil {
-		if t, ok := v.Data.(bool); ok {
-			return t
-		}
-	}
-	if len(def) > 0 {
-		return def[0]
-	}
-	return false
+	res, _ := v.BoolErr(def...)
+	return res
 }
 
-// ToBool converts the value to a boolean. If the value wraps an error, returns
-// the optional default value def if specified, or false.
-func (v *Value) ToBool(def ...bool) bool {
-	if v.err == nil && v.Data != nil {
-		if t, ok := v.Data.(bool); ok {
-			return t
+// ToBoolErr converts the value to a bool and returns it along with any error. A bool value is returned as-is.
+// String values "true"/"false" (case-insensitive) are parsed. All other values result in a conversion error. If the
+// value wraps an error, the error is returned. If the value is absent (nil), the default def is returned if
+// provided, otherwise errors.K.NotExist is returned.
+func (v *Value) ToBoolErr(def ...bool) (bool, error) {
+	if v.err != nil {
+		if len(def) > 0 {
+			return def[0], v.err
 		}
+		return false, v.err
 	}
-	switch strings.ToLower(v.ToString()) {
+	if v.Data == nil {
+		if len(def) > 0 {
+			return def[0], nil
+		}
+		return false, errors.NoTrace("ToBool", errors.K.NotExist)
+	}
+	if t, ok := v.Data.(bool); ok {
+		return t, nil
+	}
+	switch strings.ToLower(stringutil.ToString(v.Data)) {
 	case "true":
-		return true
+		return true, nil
 	case "false":
-		return false
+		return false, nil
 	}
 	if len(def) > 0 {
-		return def[0]
+		return def[0], errors.NoTrace("ToBool", errors.K.Invalid, "value", v.Data)
 	}
-	return false
+	return false, errors.NoTrace("ToBool", errors.K.Invalid, "value", v.Data)
+}
+
+// ToBool converts the value to a boolean. If the value wraps an error or is absent, returns
+// the optional default value def if specified, or false.
+func (v *Value) ToBool(def ...bool) bool {
+	res, _ := v.ToBoolErr(def...)
+	return res
+}
+
+// UTCErr returns the value as a utc.UTC along with any conversion error. If the value wraps an error, the error is
+// returned. If the value is absent (nil), the default def is returned if provided, otherwise errors.K.NotExist is
+// returned. String values are parsed as UTC timestamps.
+func (v *Value) UTCErr(def ...utc.UTC) (utc.UTC, error) {
+	if v.err != nil {
+		if len(def) > 0 {
+			return def[0], v.err
+		}
+		return utc.Zero, v.err
+	}
+	if v.Data == nil {
+		if len(def) > 0 {
+			return def[0], nil
+		}
+		return utc.Zero, errors.NoTrace("UTC", errors.K.NotExist)
+	}
+	switch t := v.Unwrap().(type) {
+	case utc.UTC:
+		return t, nil
+	case time.Time:
+		return utc.New(t), nil
+	case string:
+		res, err := utc.FromString(t)
+		if err == nil {
+			return res, nil
+		}
+	}
+	if len(def) > 0 {
+		return def[0], errors.NoTrace("UTC", errors.K.Invalid, "value", v.Data)
+	}
+	return utc.Zero, errors.NoTrace("UTC", errors.K.Invalid, "value", v.Data)
 }
 
 // UTC returns the value as a UTC instance. If the value is a string, it
-// attempts to parse it as a UTC time. If the value wraps an error, returns the
+// attempts to parse it as a UTC time. If the value wraps an error or is absent, returns the
 // optional default value def if specified, or utc.Zero.
 func (v *Value) UTC(def ...utc.UTC) utc.UTC {
-	if v.err == nil && v.Data != nil {
-		switch t := v.Unwrap().(type) {
-		case utc.UTC:
-			return t
-		case time.Time:
-			return utc.New(t)
-		case string:
-			res, err := utc.FromString(t)
-			if err == nil {
-				return res
-			}
-		}
-	}
-	if len(def) > 0 {
-		return def[0]
-	}
-	return utc.Zero
+	res, _ := v.UTCErr(def...)
+	return res
 }
 
-// Decode decodes this Value into the given target object, which is assumed
-// to be a pointer to a struct with optional `json`-annotated public members,
-// and returns a potential unmarshaling error.
-// If this Value wraps an error, the error is returned without attempting the
-// decoding.
-// See codecutil.MapDecode() for more information on the decoding process.
+// Decode decodes this Value into the given target object, which is assumed to be a pointer to a struct with optional
+// `json`-annotated public members, and returns a potential unmarshaling error. If this Value wraps an error, the
+// error is returned without attempting the decoding. See codecutil.MapDecode() for more information on the decoding
+// process.
 func (v *Value) Decode(target interface{}) error {
 	if v.IsError() {
 		return v.Error()
@@ -422,30 +639,48 @@ func (v *Value) ID(code id.Code, def ...id.ID) (id.ID, error) {
 	return ret, nil
 }
 
-// Duration converts this value to a duration spec. If the value is numeric, it is interpreted as a multiple of the
-// provided unit. Returns the default value or 0 if the conversion fails.
-func (v *Value) Duration(unit duration.Spec, def ...duration.Spec) duration.Spec {
-	if v.err == nil && v.Data != nil {
-		data := v.Unwrap()
-		switch t := data.(type) {
-		case duration.Spec:
-			return t
-		case time.Duration:
-			return duration.Spec(t)
-		case string:
-			d, err := duration.FromString(t) // also parses time.Duration correctly
-			if err == nil {
-				return d
-			}
-			// otherwise try to parse as numeric value below
+// DurationErr converts this value to a duration spec and returns it along with any error. If the value is numeric,
+// it is interpreted as a multiple of the provided unit. If the value wraps an error, the error is returned. If the
+// value is absent (nil), the default def is returned if provided, otherwise errors.K.NotExist is returned.
+func (v *Value) DurationErr(unit duration.Spec, def ...duration.Spec) (duration.Spec, error) {
+	if v.err != nil {
+		if len(def) > 0 {
+			return def[0], v.err
 		}
-		f, err := numberutil.AsFloat64Err(data)
+		return 0, v.err
+	}
+	if v.Data == nil {
+		if len(def) > 0 {
+			return def[0], nil
+		}
+		return 0, errors.NoTrace("Duration", errors.K.NotExist)
+	}
+	data := v.Unwrap()
+	switch t := data.(type) {
+	case duration.Spec:
+		return t, nil
+	case time.Duration:
+		return duration.Spec(t), nil
+	case string:
+		d, err := duration.FromString(t) // also parses time.Duration correctly
 		if err == nil {
-			return duration.Spec(f * float64(unit))
+			return d, nil
 		}
+		// otherwise try to parse as numeric value below
+	}
+	f, err := numberutil.AsFloat64Err(data)
+	if err == nil {
+		return duration.Spec(f * float64(unit)), nil
 	}
 	if len(def) > 0 {
-		return def[0]
+		return def[0], err
 	}
-	return 0
+	return 0, err
+}
+
+// Duration converts this value to a duration spec. If the value is numeric, it is interpreted as a multiple of the
+// provided unit. Returns the default value or 0 if the value is absent or the conversion fails.
+func (v *Value) Duration(unit duration.Spec, def ...duration.Spec) duration.Spec {
+	res, _ := v.DurationErr(unit, def...)
+	return res
 }
