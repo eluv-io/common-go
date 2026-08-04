@@ -27,6 +27,11 @@ type TsStreamTracker interface {
 	// method will validate each packet and aggregate any errors. The method returns nil if all packets are valid or a
 	// list of errors otherwise.
 	Track(bts []byte) (packetCount int, errList error)
+	// TrackPackets feeds already-decoded MPEG-TS packets to the tracker, e.g. ones obtained from
+	// pktpool.Packet.Ts().Packets(). It performs the same validation and statistics aggregation as Track, without
+	// re-parsing or re-framing bytes that have already been decoded - so unlike Track, no TsFraming is applied; the
+	// caller/decoder must already have stripped any RTP header or ATS-TS timestamp prefix.
+	TrackPackets(pkts []*packet.Packet) (packetCount int, errList error)
 	// Stats returns TS statistics
 	Stats() *Stats
 	// Reset resets the tracker state, clearing all statistics and errors. It keeps the list of discovered streams and
@@ -156,66 +161,7 @@ func (t *tsStreamTracker) Track(bts []byte) (packetCount int, errList error) {
 		// because its address was taken further below (&pkt). Fixed by casting the slice to a pointer directly, so no
 		// copy or heap allocation occurs.
 		pkt := (*packet.Packet)(bts[:packet.PacketSize])
-
-		err := pkt.CheckErrors()
-		if err != nil {
-			appendErr(fmt.Errorf("checkerr=%s ts-packet=%d", err, packetCount))
-			continue
-		}
-
-		pid := pkt.PID()
-
-		cc := pkt.ContinuityCounter()
-		stream, ok := t.streams[pid]
-		if !ok {
-			stream = t.newStream(pid, cc)
-			t.streams[pid] = stream
-		} else if stream.cc == -1 {
-			stream.cc = cc
-		} else if pid != packet.NullPacketPid {
-			expectCC := stream.cc
-			if pkt.HasPayload() {
-				expectCC = (stream.cc + 1) % 16
-			}
-			if cc != expectCC {
-				stream.ccErrors++
-				err = fmt.Errorf("continuity counter mismatch: expected=%02d actual=%02d ts-packet=%d pid=%d", expectCC, cc, packetCount, pid)
-				appendErr(err)
-			}
-			stream.cc = cc
-		}
-		stream.packetCount++
-
-		if pcr, ok := ExtractPCR(pkt); ok {
-			now := utc.Now()
-			if stream.pcr0 == utc.Zero {
-				stream.pcr0 = now.Add(-PcrToDuration(pcr))
-			} else {
-				if pcr < stream.pcr {
-					if pcr+100_000_000 < stream.pcr {
-						// PCR wrapped around. Reset the reference time.
-						stream.pcr0 = stream.pcr0.Add(PcrToDuration(MaxPCR + 1))
-					} else {
-						// likely packet re-ordering or an encoder bug. Ignore the
-					}
-				}
-				jitter := PcrToDuration(pcr) - now.Sub(stream.pcr0)
-				if jitter < 0 {
-					jitter = -jitter
-				}
-				stream.jitter = jitter
-				err = stream.jitterMillisHist.RecordValue(jitter.Milliseconds())
-				if err != nil {
-					// appendErr(errors.E("jitter histogram", errors.K.Invalid, err))
-				}
-			}
-			stream.pcr = pcr
-		}
-
-		err = t.parsePmt(pkt)
-		if err != nil {
-			appendErr(err)
-		}
+		t.trackPacket(pkt, packetCount, appendErr)
 	}
 	if len(bts) > 0 {
 		err := fmt.Errorf("packet too short: %d ts-packet=%d", len(bts), packetCount+1)
@@ -223,6 +169,100 @@ func (t *tsStreamTracker) Track(bts []byte) (packetCount int, errList error) {
 	}
 
 	return packetCount, errList
+}
+
+// TrackPackets feeds already-decoded MPEG-TS packets to the tracker, e.g. ones obtained from
+// pktpool.Packet.Ts().Packets(). It performs the same validation and statistics aggregation as Track, without
+// re-parsing or re-framing bytes that have already been decoded - letting a caller that already holds decoded
+// packets (such as pooled, lazily-decoded ones) avoid a second parse.
+func (t *tsStreamTracker) TrackPackets(pkts []*packet.Packet) (packetCount int, errList error) {
+	errCount := 0
+
+	defer func() {
+		t.errCount += errCount
+		t.statsLogger.Do(t.statsLogFunc)
+	}()
+
+	appendErr := func(err error) {
+		errList = errors.Append(errList, err)
+		errCount++
+	}
+
+	for _, pkt := range pkts {
+		if errCount >= 20 {
+			appendErr(fmt.Errorf("too many errors: %d", errCount))
+			return len(pkts), errList
+		}
+		packetCount++
+		t.trackPacket(pkt, packetCount, appendErr)
+	}
+
+	return packetCount, errList
+}
+
+// trackPacket validates a single already-positioned TS packet and updates stream statistics accordingly. packetCount
+// is used only to identify the offending packet in diagnostic error messages (its position within the current
+// Track/TrackPackets call).
+func (t *tsStreamTracker) trackPacket(pkt *packet.Packet, packetCount int, appendErr func(error)) {
+	err := pkt.CheckErrors()
+	if err != nil {
+		appendErr(fmt.Errorf("checkerr=%s ts-packet=%d", err, packetCount))
+		return
+	}
+
+	pid := pkt.PID()
+
+	cc := pkt.ContinuityCounter()
+	stream, ok := t.streams[pid]
+	if !ok {
+		stream = t.newStream(pid, cc)
+		t.streams[pid] = stream
+	} else if stream.cc == -1 {
+		stream.cc = cc
+	} else if pid != packet.NullPacketPid {
+		expectCC := stream.cc
+		if pkt.HasPayload() {
+			expectCC = (stream.cc + 1) % 16
+		}
+		if cc != expectCC {
+			stream.ccErrors++
+			err = fmt.Errorf("continuity counter mismatch: expected=%02d actual=%02d ts-packet=%d pid=%d", expectCC, cc, packetCount, pid)
+			appendErr(err)
+		}
+		stream.cc = cc
+	}
+	stream.packetCount++
+
+	if pcr, ok := ExtractPCR(pkt); ok {
+		now := utc.Now()
+		if stream.pcr0 == utc.Zero {
+			stream.pcr0 = now.Add(-PcrToDuration(pcr))
+		} else {
+			if pcr < stream.pcr {
+				if pcr+100_000_000 < stream.pcr {
+					// PCR wrapped around. Reset the reference time.
+					stream.pcr0 = stream.pcr0.Add(PcrToDuration(MaxPCR + 1))
+				} else {
+					// likely packet re-ordering or an encoder bug. Ignore the
+				}
+			}
+			jitter := PcrToDuration(pcr) - now.Sub(stream.pcr0)
+			if jitter < 0 {
+				jitter = -jitter
+			}
+			stream.jitter = jitter
+			err = stream.jitterMillisHist.RecordValue(jitter.Milliseconds())
+			if err != nil {
+				// appendErr(errors.E("jitter histogram", errors.K.Invalid, err))
+			}
+		}
+		stream.pcr = pcr
+	}
+
+	err = t.parsePmt(pkt)
+	if err != nil {
+		appendErr(err)
+	}
 }
 
 func (t *tsStreamTracker) newStream(pid int, cc int) *Stream {
@@ -370,6 +410,10 @@ type Stream struct {
 type NoopTracker struct{}
 
 func (n NoopTracker) Track(bts []byte) (int, error) {
+	return 0, nil
+}
+
+func (n NoopTracker) TrackPackets(pkts []*packet.Packet) (int, error) {
 	return 0, nil
 }
 
