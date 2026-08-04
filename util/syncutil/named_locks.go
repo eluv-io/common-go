@@ -23,8 +23,7 @@ type Unlocker interface {
 //	 defer l.Unlock()
 //	 ...
 type NamedLocks struct {
-	mutex sync.Mutex
-	named map[interface{}]*lock
+	named sync.Map // interface{} -> lock
 }
 
 // Lock gets or creates the lock for the given name, calls its Lock() method and
@@ -32,53 +31,79 @@ type NamedLocks struct {
 // interface). This ensures that the returned lock is not stored and re-used.
 // Instead, simply call NamedLocks.Lock() again.
 func (n *NamedLocks) Lock(name interface{}) Unlocker {
-	l := n.get(name)
-	l.mutex.Lock()
-	return l
+	return n.get(name, true)
 }
 
-func (n *NamedLocks) get(name interface{}) *lock {
-	n.mutex.Lock()
-	defer n.mutex.Unlock()
+func (n *NamedLocks) RLock(name interface{}) Unlocker {
+	return n.get(name, false)
+}
 
-	if n.named == nil {
-		n.named = make(map[interface{}]*lock)
-	}
-
-	l, found := n.named[name]
-	if found {
-		l.refCount++
-		return l
-	}
-	l = &lock{name: name}
+func (n *NamedLocks) get(name interface{}, write bool) *unlocker {
+	l := &lock{name: name, refCount: 1}
 	l.onUnlock = func() {
 		n.release(l)
 	}
-	n.named[name] = l
-	return l
+	l.lock(write)
+	for {
+		v, found := n.named.LoadOrStore(name, l)
+		if !found {
+			break
+		} else {
+			l2 := v.(*lock)
+			l2.lock(write)
+			if l2.refCount > 0 {
+				l.unlock(write)
+				l2.refCount++
+				l = l2
+				break
+			}
+			l2.unlock(write)
+		}
+	}
+	u := &unlocker{unlock: func() {
+		l.onUnlock()
+		l.unlock(write)
+	}}
+	return u
 }
 
 func (n *NamedLocks) release(l *lock) {
-	n.mutex.Lock()
-	defer n.mutex.Unlock()
-
-	if l.refCount > 0 {
-		l.refCount--
-		return
+	l.refCount--
+	if l.refCount == 0 {
+		n.named.Delete(l.name)
 	}
-
-	delete(n.named, l.name)
 }
 
 type lock struct {
-	mutex    sync.Mutex
+	mutex    sync.RWMutex
 	refCount int
 
 	name     interface{}
 	onUnlock func()
 }
 
-func (l *lock) Unlock() {
-	l.onUnlock()
-	l.mutex.Unlock()
+func (l *lock) lock(write bool) {
+	if write {
+		l.mutex.Lock()
+	} else {
+		l.mutex.RLock()
+	}
+}
+
+func (l *lock) unlock(write bool) {
+	if write {
+		l.mutex.Unlock()
+	} else {
+		l.mutex.RUnlock()
+	}
+}
+
+type unlocker struct {
+	unlock func()
+}
+
+func (u *unlocker) Unlock() {
+	if u.unlock != nil {
+		u.unlock()
+	}
 }
