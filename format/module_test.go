@@ -5,14 +5,14 @@ import (
 
 	"github.com/eluv-io/common-go/format/hash"
 
-	"github.com/eluv-io/inject-go"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/eluv-io/inject-go"
 )
 
 func TestModule(t *testing.T) {
 	f := NewTestFactory(t)
-
-	f.NewContentDigest(hash.Unencrypted, f.GenerateQID())
+	f.NewContentPartDigest(hash.Unencrypted)
 }
 
 func NewTestFactory(t *testing.T) Factory {
