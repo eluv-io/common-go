@@ -18,7 +18,6 @@ import (
 	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/media/mpegts"
 	"github.com/eluv-io/common-go/media/pktpool"
-	"github.com/eluv-io/common-go/media/rtp"
 	"github.com/eluv-io/common-go/util/histogram"
 	"github.com/eluv-io/common-go/util/statsutil"
 	"github.com/eluv-io/errors-go"
@@ -90,6 +89,7 @@ func NewMediaTracker(streamId string, cfg Config) MediaTracker {
 		// We feed already-decapsulated TS bytes/packets to the tracker (stripRtp=false), since MediaTracker itself
 		// strips the RTP layer before feeding the tracker.
 		tsTracker:     mpegts.NewTsStreamTracker(streamId, cfg.StatsLogPeriod, false),
+		rawPkt:        pktpool.NewRawPacket(nil),
 		pcrClock:      newPcrCorrelator(cfg.MaxGaps),
 		ipdHistTotal:  newIpdHistogram(),
 		ipdHistPeriod: newIpdHistogram(),
@@ -136,6 +136,11 @@ type mediaTracker struct {
 	// packet counts, continuity-counter errors).
 	tsTracker mpegts.TsStreamTracker
 
+	// rawPkt is owned exclusively by this tracker and reused across TrackDatagram calls so it decodes without
+	// allocating; it aliases the datagram passed to TrackDatagram only for the duration of that call - never
+	// retained after trackLocked returns.
+	rawPkt *pktpool.RawPacket
+
 	// counters for input validation/integrity conditions not covered by tsTracker/the clock correlators.
 	smallPacketsDropped   uint64 // datagram too small to plausibly contain a TS packet (+ RTP header, if configured)
 	rtcpPacketsDropped    uint64 // subset of smallPacketsDropped that looks like a misdirected RTCP packet
@@ -151,46 +156,7 @@ type mediaTracker struct {
 func (t *mediaTracker) TrackDatagram(now utc.UTC, datagram []byte) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-
-	t.recordArrival(now, len(datagram))
-
-	tsBytes := datagram
-	if t.rtpClock != nil {
-		if len(datagram) < rtpTsMinLen {
-			t.smallPacketsDropped++
-			if isRTCP(datagram) {
-				t.rtcpPacketsDropped++
-			}
-			return nil
-		}
-		pkt, err := rtp.ParsePacket(datagram)
-		if err != nil {
-			t.badPackets++
-			t.rtpClock.parseErrors++
-			return err
-		}
-		if t.cfg.OnRtpSample != nil {
-			t.cfg.OnRtpSample(pkt.SequenceNumber, pkt.Timestamp)
-		}
-		if headerLen := len(datagram) - len(pkt.Payload) - int(pkt.PaddingSize); headerLen != 12 {
-			t.longHeaders++
-		}
-		t.rtpClock.record(now, pkt.SequenceNumber, pkt.Timestamp)
-		tsBytes = pkt.Payload
-	} else if len(datagram) < packet.PacketSize {
-		t.smallPacketsDropped++
-		return nil
-	}
-
-	if len(tsBytes)%packet.PacketSize != 0 {
-		t.incompletePackets++
-		return errors.NoTrace("MediaTracker.TrackDatagram", errors.K.Invalid,
-			"reason", "ts payload length is not a multiple of the TS packet size", "len", len(tsBytes))
-	}
-
-	_, errList := t.tsTracker.Track(tsBytes)
-	t.scanTsBytes(now, tsBytes)
-	return errList
+	return t.trackLocked(now, datagram, t.rawPkt.Reset(datagram))
 }
 
 // TrackPacket processes one already-decoded pooled packet received at now (the packet's arrival time), reusing its
@@ -198,8 +164,14 @@ func (t *mediaTracker) TrackDatagram(now utc.UTC, datagram []byte) error {
 func (t *mediaTracker) TrackPacket(now utc.UTC, pkt *pktpool.Packet) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	return t.trackLocked(now, pkt.Data, pkt)
+}
 
-	datagram := pkt.Data
+// trackLocked contains the RTP/MPEG-TS parsing and stats logic shared by TrackDatagram and TrackPacket - the two
+// differ only in how they obtain a pktpool.Decoder for the datagram (a reused pktpool.RawPacket vs. an
+// already-decoded pktpool.Packet), not in how that decoder's layers are processed. Must be called with t.mu held.
+// datagram is src's full extent, used for the length checks below; src provides the actual layer decoding.
+func (t *mediaTracker) trackLocked(now utc.UTC, datagram []byte, src pktpool.Decoder) error {
 	t.recordArrival(now, len(datagram))
 
 	if t.rtpClock != nil {
@@ -210,7 +182,7 @@ func (t *mediaTracker) TrackPacket(now utc.UTC, pkt *pktpool.Packet) error {
 			}
 			return nil
 		}
-		rtpLayer, err := pkt.Rtp()
+		rtpLayer, err := src.Rtp()
 		if err != nil {
 			t.badPackets++
 			t.rtpClock.parseErrors++
@@ -220,7 +192,7 @@ func (t *mediaTracker) TrackPacket(now utc.UTC, pkt *pktpool.Packet) error {
 		if hdr.Version != 2 {
 			t.badPackets++
 			t.rtpClock.parseErrors++
-			return errors.NoTrace("MediaTracker.TrackPacket", errors.K.Invalid,
+			return errors.NoTrace("MediaTracker.trackLocked", errors.K.Invalid,
 				"reason", "unsupported RTP version", "version", hdr.Version)
 		}
 		if t.cfg.OnRtpSample != nil {
@@ -235,7 +207,7 @@ func (t *mediaTracker) TrackPacket(now utc.UTC, pkt *pktpool.Packet) error {
 		return nil
 	}
 
-	tsLayer, err := pkt.Ts()
+	tsLayer, err := src.Ts()
 	if err != nil {
 		t.incompletePackets++
 		return err
@@ -276,23 +248,9 @@ func (t *mediaTracker) recordArrival(now utc.UTC, n int) {
 	t.lastArrival = now
 }
 
-// scanTsBytes walks the given already-validated (length is a multiple of the TS packet size) raw TS bytes, extracting
-// PCR values and checking null-packet integrity. It stops (and counts a stream-level parse error) at the first
-// TS-misaligned packet, mirroring scanTsPackets's per-packet checks for a caller that only has raw bytes.
-func (t *mediaTracker) scanTsBytes(now utc.UTC, tsBytes []byte) {
-	for off := 0; off+packet.PacketSize <= len(tsBytes); off += packet.PacketSize {
-		if tsBytes[off] != packet.SyncByte {
-			t.pcrClock.parseErrors++
-			return
-		}
-		pkt := (*packet.Packet)(tsBytes[off : off+packet.PacketSize])
-		t.scanOneTsPacket(now, pkt)
-	}
-}
-
 // scanTsPackets walks the given already-parsed TS packets, extracting PCR values and checking null-packet integrity.
 // It does not perform continuity-counter/PID/PMT validation - that's tsTracker's job, fed separately via
-// Track/TrackPackets so the caller controls whether/how re-parsing happens.
+// TrackPackets so the caller controls whether/how re-parsing happens.
 func (t *mediaTracker) scanTsPackets(now utc.UTC, pkts []*packet.Packet) {
 	for _, pkt := range pkts {
 		t.scanOneTsPacket(now, pkt)
@@ -300,8 +258,14 @@ func (t *mediaTracker) scanTsPackets(now utc.UTC, pkts []*packet.Packet) {
 }
 
 // scanOneTsPacket extracts a PCR value from pkt (feeding the PID correlator and the optional OnPcr callback) and, for
-// a null-PID packet, checks that its payload is valid 0xFF padding.
+// a null-PID packet, checks that its payload is valid 0xFF padding. A bad sync byte only drops this one packet (counted
+// via pcrClock.parseErrors) - it does not abort scanning the rest of the caller's packet slice, mirroring how
+// tsTracker.TrackPackets already treats a CheckErrors failure as per-packet, not per-datagram.
 func (t *mediaTracker) scanOneTsPacket(now utc.UTC, pkt *packet.Packet) {
+	if pkt[0] != packet.SyncByte {
+		t.pcrClock.parseErrors++
+		return
+	}
 	if pkt.IsNull() {
 		if !isValidPadding(pkt) {
 			t.faultyPaddingPackets++

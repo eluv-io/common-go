@@ -16,8 +16,8 @@ import (
 )
 
 // TestClockCorrelator_Drift feeds a perfectly regular media clock that runs 100 ppm faster than wall clock and
-// verifies the estimated drift and skew. Inputs are exact, so the assertions are tight. Ported from
-// content-fabric's qfab/cmd/media/probe/probe_test.go to document the sign convention this package inherited.
+// verifies the estimated drift and skew. Inputs are exact, so the assertions are tight; it documents the sign
+// convention clockCorrelator uses.
 func TestClockCorrelator_Drift(t *testing.T) {
 	c := newClockCorrelator("rtp", rtp.TicksToDuration) // RTP: 90 kHz clock
 
@@ -37,7 +37,7 @@ func TestClockCorrelator_Drift(t *testing.T) {
 }
 
 // TestMediaTracker_RawTs drives a raw (non-RTP) MPEG-TS source and verifies the aggregate stats and the PCR
-// correlation, mirroring content-fabric's TestProbe_UDP.
+// correlation.
 func TestMediaTracker_RawTs(t *testing.T) {
 	tr := NewMediaTracker("test", Config{})
 
@@ -64,7 +64,7 @@ func TestMediaTracker_RawTs(t *testing.T) {
 }
 
 // TestMediaTracker_RTP drives an RTP-wrapped MPEG-TS source and verifies that both the RTP-timestamp and PCR clocks
-// are correlated, mirroring content-fabric's TestProbe_RTP.
+// are correlated.
 func TestMediaTracker_RTP(t *testing.T) {
 	tr := NewMediaTracker("test", Config{Rtp: true})
 
@@ -99,7 +99,7 @@ func TestMediaTracker_RTP(t *testing.T) {
 }
 
 // TestMediaTracker_MultiProgramPCR drives a multi-program transport stream and verifies that both PCR-bearing PIDs
-// are correlated independently, mirroring content-fabric's TestProbe_MultiProgramPCR.
+// are correlated independently.
 func TestMediaTracker_MultiProgramPCR(t *testing.T) {
 	tr := NewMediaTracker("test", Config{})
 
@@ -177,8 +177,8 @@ func TestMediaTracker_PeriodStats(t *testing.T) {
 }
 
 // TestMediaTracker_TrackPacket verifies that feeding the same bytes via TrackPacket (the zero-reparse entry point
-// used by a caller that already holds a decoded pktpool.Packet, e.g. avpipe) produces the same aggregate stats as
-// feeding them via TrackDatagram (the raw-bytes entry point used by the probe CLI).
+// used by a caller that already holds a decoded pktpool.Packet) produces the same aggregate stats as feeding them
+// via TrackDatagram (the raw-bytes entry point used by a caller with no pktpool dependency).
 func TestMediaTracker_TrackPacket(t *testing.T) {
 	base := utc.Now()
 	var seq uint16
@@ -291,8 +291,115 @@ func TestMediaTracker_NumWraps(t *testing.T) {
 	require.EqualValues(t, 1, s.Clocks[0].NumWraps)
 }
 
+// TestMediaTracker_ParityMalformedInputs feeds a battery of malformed/edge-case datagrams through both TrackDatagram
+// and TrackPacket, asserting they produce identical ErrorStats. This is a regression test for a real divergence
+// found when the two entry points had independent parsing paths: TrackDatagram used raw pion (rtp.ParsePacket),
+// which never validates the RTP version field, while TrackPacket explicitly rejected a bad version - so a
+// malformed-version datagram was silently accepted (and polluted clock stats) via TrackDatagram while being
+// correctly rejected via TrackPacket. Both entry points now share trackLocked, closing the gap by construction.
+func TestMediaTracker_ParityMalformedInputs(t *testing.T) {
+	tsOK, _ := tsDatagramWithPCR(1_000_000)
+
+	tsTruncated := append([]byte{}, tsOK[:189]...) // 1 full TS packet + 1 stray byte: not a multiple of 188
+
+	cases := []struct {
+		name string
+		dg   []byte
+	}{
+		{"bad RTP version", rtpWrapVersion(1, 0, 1000, tsOK)},
+		{"TS payload not multiple of 188", rtpWrap(0, 1000, tsTruncated)},
+		{"undersized, not RTCP-shaped", []byte{0x80, 0x00}},
+		{"undersized, RTCP-shaped", []byte{0x80, 200}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			trDg := NewMediaTracker("test", Config{Rtp: true})
+			errDg := trDg.TrackDatagram(utc.Now(), c.dg)
+
+			trPkt := NewMediaTracker("test", Config{Rtp: true})
+			p := pktpool.NewPacket(0, len(c.dg))
+			require.NoError(t, p.From(c.dg))
+			errPkt := trPkt.TrackPacket(utc.Now(), p)
+
+			require.Equal(t, errDg == nil, errPkt == nil, "error-or-not must agree between TrackDatagram and TrackPacket")
+			require.Equal(t, trDg.Stats().Errors, trPkt.Stats().Errors)
+		})
+	}
+}
+
+// TestMediaTracker_BadSyncByte verifies that a corrupted TS sync byte mid-datagram is handled identically by
+// TrackDatagram and TrackPacket, and that it only drops the one bad packet from the PCR/padding scan (not the rest
+// of the datagram) - a second divergence found during the same review: TrackPacket's scanTsPackets had no sync-byte
+// check at all before this fix, unlike TrackDatagram's (now-deleted) scanTsBytes. Note tsTracker.TrackPackets
+// independently flags the same bad packet via CheckErrors (sync-byte validation is one of its checks), so both
+// TrackDatagram and TrackPacket still return an error here regardless of the scanOneTsPacket fix below - what this
+// test locks in is that the PCR scan itself skips only the one bad packet and keeps processing the rest.
+func TestMediaTracker_BadSyncByte(t *testing.T) {
+	base := utc.Now()
+	pcr := uint64(1_000_000)
+	nextDatagram := func(corrupt bool) []byte {
+		dg, _ := tsDatagramWithPCR(pcr) // 7 TS packets, the first (PID 0x100) carries the PCR
+		pcr += mpegts.DurationToPcr(2 * time.Millisecond)
+		if corrupt {
+			dg[packet.PacketSize*3] = 0x00 // corrupt the sync byte of the 4th packet only
+		}
+		return rtpWrap(0, 1000, dg)
+	}
+
+	// Two clean datagrams first, to establish the PCR correlator's reference and get one real sample (sample()
+	// consumes its first call just arming the reference - see clockCorrelator.sample), then a third with a
+	// corrupted sync byte.
+	dgs := [][]byte{nextDatagram(false), nextDatagram(false), nextDatagram(true)}
+
+	trDg := NewMediaTracker("test", Config{Rtp: true})
+	var errDg error
+	for i, dg := range dgs {
+		errDg = trDg.TrackDatagram(base.Add(time.Duration(i)*2*time.Millisecond), dg)
+	}
+
+	trPkt := NewMediaTracker("test", Config{Rtp: true})
+	var errPkt error
+	for i, dg := range dgs {
+		p := pktpool.NewPacket(0, len(dg))
+		require.NoError(t, p.From(dg))
+		errPkt = trPkt.TrackPacket(base.Add(time.Duration(i)*2*time.Millisecond), p)
+	}
+
+	require.Error(t, errDg, "tsTracker.TrackPackets flags the bad sync byte via CheckErrors")
+	require.Error(t, errPkt)
+
+	for _, tr := range []MediaTracker{trDg, trPkt} {
+		s := tr.Stats()
+		var pcrClock *ClockStats
+		for i := range s.Clocks {
+			if s.Clocks[i].Source == "pcr" {
+				pcrClock = &s.Clocks[i]
+			}
+		}
+		require.NotNil(t, pcrClock)
+		require.EqualValues(t, 1, pcrClock.ParseErrors, "exactly the one corrupted packet is counted")
+		require.EqualValues(t, 2, pcrClock.Samples,
+			"the PCR-bearing packet in the 3rd (corrupted) datagram is still processed despite the bad packet elsewhere in it")
+	}
+}
+
+// TestMediaTracker_TrackDatagram_Unbounded verifies TrackDatagram accepts a datagram far larger than any fixed
+// buffer capacity would allow - the property RawPacket gives "for free" (no backing buffer, unlike the
+// Wrap-on-Packet alternative considered and rejected during design, which would have needed a capacity limit).
+func TestMediaTracker_TrackDatagram_Unbounded(t *testing.T) {
+	var large []byte
+	for i := 0; i < 1000; i++ { // ~188KB, well beyond any typical UDP/RTP datagram
+		large = append(large, tsNullPacket()...)
+	}
+
+	tr := NewMediaTracker("test", Config{})
+	require.NoError(t, tr.TrackDatagram(utc.Now(), large))
+	require.EqualValues(t, 1000, tr.Stats().Ts.PacketCount)
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
-// Fixtures below are ported from content-fabric's qfab/cmd/media/probe/probe_test.go.
+// Fixture helpers below build synthetic RTP/MPEG-TS datagrams for the tests above.
 
 // rtpWrap prepends a minimal 12-byte RTP header (payload type 33 = MP2T) carrying the given sequence number and
 // timestamp to the given MPEG-TS payload.
@@ -304,6 +411,13 @@ func rtpWrap(seq uint16, ts uint32, payload []byte) []byte {
 	binary.BigEndian.PutUint32(pkt[4:], ts)
 	binary.BigEndian.PutUint32(pkt[8:], 0xdeadbeef) // arbitrary SSRC
 	copy(pkt[12:], payload)
+	return pkt
+}
+
+// rtpWrapVersion is rtpWrap with an explicit (possibly invalid) RTP version instead of the fixed version 2.
+func rtpWrapVersion(version byte, seq uint16, ts uint32, payload []byte) []byte {
+	pkt := rtpWrap(seq, ts, payload)
+	pkt[0] = (pkt[0] &^ 0xC0) | (version << 6)
 	return pkt
 }
 
