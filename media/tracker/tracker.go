@@ -34,13 +34,6 @@ const defaultMaxGaps = 100
 // rtpTsMinLen is the minimum datagram length for RTP-wrapped MPEG-TS: an RTP header plus at least one TS packet.
 const rtpTsMinLen = 12 + packet.PacketSize
 
-// ErrDropped is returned by TrackDatagram/TrackPacket when the datagram was too small to plausibly contain valid
-// media data and was dropped before any parsing was attempted (see ErrorStats.SmallPacketsDropped/RtcpPacketsDropped).
-// A caller that only forwards/writes successfully-tracked datagrams should treat any non-nil return value - including
-// ErrDropped - the same way (skip); a caller that specifically needs to distinguish "dropped outright" from "parsed
-// but found invalid" can compare against this sentinel.
-var ErrDropped = errors.NoTrace("MediaTracker", errors.K.Invalid, "reason", "datagram dropped: too small")
-
 // Config configures a MediaTracker.
 type Config struct {
 	// Rtp selects whether the input is RTP-wrapped MPEG-TS. When true, the RTP timestamp clock is correlated in
@@ -146,7 +139,7 @@ type mediaTracker struct {
 	// counters for input validation/integrity conditions not covered by tsTracker/the clock correlators.
 	smallPacketsDropped   uint64 // datagram too small to plausibly contain a TS packet (+ RTP header, if configured)
 	rtcpPacketsDropped    uint64 // subset of smallPacketsDropped that looks like a misdirected RTCP packet
-	badPackets            uint64 // datagram dropped due to a malformed RTP header or a bad TS packet within it
+	badPackets            uint64 // RTP header failed to parse, or carried an unsupported RTP version
 	incompletePackets     uint64 // TS payload length not a multiple of the TS packet size
 	adaptationFieldErrors uint64 // TS adaptation-field/PCR parse errors
 	faultyPaddingPackets  uint64 // null-PID packet whose payload is not valid 0xFF padding
@@ -168,7 +161,7 @@ func (t *mediaTracker) TrackDatagram(now utc.UTC, datagram []byte) error {
 			if isRTCP(datagram) {
 				t.rtcpPacketsDropped++
 			}
-			return ErrDropped
+			return nil
 		}
 		pkt, err := rtp.ParsePacket(datagram)
 		if err != nil {
@@ -186,7 +179,7 @@ func (t *mediaTracker) TrackDatagram(now utc.UTC, datagram []byte) error {
 		tsBytes = pkt.Payload
 	} else if len(datagram) < packet.PacketSize {
 		t.smallPacketsDropped++
-		return ErrDropped
+		return nil
 	}
 
 	if len(tsBytes)%packet.PacketSize != 0 {
@@ -196,9 +189,6 @@ func (t *mediaTracker) TrackDatagram(now utc.UTC, datagram []byte) error {
 	}
 
 	_, errList := t.tsTracker.Track(tsBytes)
-	if errList != nil {
-		t.badPackets++
-	}
 	t.scanTsBytes(now, tsBytes)
 	return errList
 }
@@ -218,7 +208,7 @@ func (t *mediaTracker) TrackPacket(now utc.UTC, pkt *pktpool.Packet) error {
 			if isRTCP(datagram) {
 				t.rtcpPacketsDropped++
 			}
-			return ErrDropped
+			return nil
 		}
 		rtpLayer, err := pkt.Rtp()
 		if err != nil {
@@ -242,7 +232,7 @@ func (t *mediaTracker) TrackPacket(now utc.UTC, pkt *pktpool.Packet) error {
 		t.rtpClock.record(now, hdr.SequenceNumber, hdr.Timestamp)
 	} else if len(datagram) < packet.PacketSize {
 		t.smallPacketsDropped++
-		return ErrDropped
+		return nil
 	}
 
 	tsLayer, err := pkt.Ts()
@@ -253,9 +243,6 @@ func (t *mediaTracker) TrackPacket(now utc.UTC, pkt *pktpool.Packet) error {
 	tsPkts := tsLayer.Packets()
 
 	_, errList := t.tsTracker.TrackPackets(tsPkts)
-	if errList != nil {
-		t.badPackets++
-	}
 	t.scanTsPackets(now, tsPkts)
 	return errList
 }

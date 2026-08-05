@@ -227,13 +227,13 @@ func TestMediaTracker_SmallPacketsDropped(t *testing.T) {
 	tr := NewMediaTracker("test", Config{Rtp: true})
 
 	// too small to be RTP-wrapped MPEG-TS, and not RTCP-shaped
-	require.ErrorIs(t, tr.TrackDatagram(utc.Now(), []byte{0x80, 0x00}), ErrDropped)
+	require.NoError(t, tr.TrackDatagram(utc.Now(), []byte{0x80, 0x00}))
 	s := tr.Stats()
 	require.EqualValues(t, 1, s.Errors.SmallPacketsDropped)
 	require.EqualValues(t, 0, s.Errors.RtcpPacketsDropped)
 
 	// small and RTCP-shaped (payload type 200 = SR)
-	require.ErrorIs(t, tr.TrackDatagram(utc.Now(), []byte{0x80, 200}), ErrDropped)
+	require.NoError(t, tr.TrackDatagram(utc.Now(), []byte{0x80, 200}))
 	s = tr.Stats()
 	require.EqualValues(t, 2, s.Errors.SmallPacketsDropped)
 	require.EqualValues(t, 1, s.Errors.RtcpPacketsDropped)

@@ -93,8 +93,10 @@ type ErrorStats struct {
 	CcErrors int         `json:"cc_errors"`
 	ByPid    []PidErrors `json:"by_pid,omitempty"`
 
-	SmallPacketsDropped   uint64 `json:"small_packets_dropped"`
-	RtcpPacketsDropped    uint64 `json:"rtcp_packets_dropped"`
+	SmallPacketsDropped uint64 `json:"small_packets_dropped"`
+	RtcpPacketsDropped  uint64 `json:"rtcp_packets_dropped"`
+	// BadPackets counts RTP-layer failures only (header parse failure or an unsupported RTP version) - it does not
+	// include malformed/misaligned TS packets, which surface via Total/CcErrors instead.
 	BadPackets            uint64 `json:"bad_packets"`
 	IncompletePackets     uint64 `json:"incomplete_packets"`
 	AdaptationFieldErrors uint64 `json:"adaptation_field_errors"`
