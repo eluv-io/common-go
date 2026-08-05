@@ -34,6 +34,13 @@ const defaultMaxGaps = 100
 // rtpTsMinLen is the minimum datagram length for RTP-wrapped MPEG-TS: an RTP header plus at least one TS packet.
 const rtpTsMinLen = 12 + packet.PacketSize
 
+// ErrDropped is returned by TrackDatagram/TrackPacket when the datagram was too small to plausibly contain valid
+// media data and was dropped before any parsing was attempted (see ErrorStats.SmallPacketsDropped/RtcpPacketsDropped).
+// A caller that only forwards/writes successfully-tracked datagrams should treat any non-nil return value - including
+// ErrDropped - the same way (skip); a caller that specifically needs to distinguish "dropped outright" from "parsed
+// but found invalid" can compare against this sentinel.
+var ErrDropped = errors.NoTrace("MediaTracker", errors.K.Invalid, "reason", "datagram dropped: too small")
+
 // Config configures a MediaTracker.
 type Config struct {
 	// Rtp selects whether the input is RTP-wrapped MPEG-TS. When true, the RTP timestamp clock is correlated in
@@ -161,7 +168,7 @@ func (t *mediaTracker) TrackDatagram(now utc.UTC, datagram []byte) error {
 			if isRTCP(datagram) {
 				t.rtcpPacketsDropped++
 			}
-			return nil
+			return ErrDropped
 		}
 		pkt, err := rtp.ParsePacket(datagram)
 		if err != nil {
@@ -179,7 +186,7 @@ func (t *mediaTracker) TrackDatagram(now utc.UTC, datagram []byte) error {
 		tsBytes = pkt.Payload
 	} else if len(datagram) < packet.PacketSize {
 		t.smallPacketsDropped++
-		return nil
+		return ErrDropped
 	}
 
 	if len(tsBytes)%packet.PacketSize != 0 {
@@ -211,7 +218,7 @@ func (t *mediaTracker) TrackPacket(now utc.UTC, pkt *pktpool.Packet) error {
 			if isRTCP(datagram) {
 				t.rtcpPacketsDropped++
 			}
-			return nil
+			return ErrDropped
 		}
 		rtpLayer, err := pkt.Rtp()
 		if err != nil {
@@ -235,7 +242,7 @@ func (t *mediaTracker) TrackPacket(now utc.UTC, pkt *pktpool.Packet) error {
 		t.rtpClock.record(now, hdr.SequenceNumber, hdr.Timestamp)
 	} else if len(datagram) < packet.PacketSize {
 		t.smallPacketsDropped++
-		return nil
+		return ErrDropped
 	}
 
 	tsLayer, err := pkt.Ts()
