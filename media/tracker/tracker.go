@@ -59,6 +59,15 @@ type Config struct {
 	OnPcr func(pid int, pcr uint64)
 }
 
+// SnapshotOptions controls which parts of a Snapshot call are populated, letting a caller skip computing fields it
+// doesn't need.
+type SnapshotOptions struct {
+	// SkipTs, if true, skips mpegts.TsStreamTracker's per-PID walk and histogram capture - the most expensive part
+	// of a snapshot. Stats.Ts is left nil; Errors.Total/CcErrors still populate from cheap running totals, but
+	// Errors.ByPid (which requires the per-PID breakdown) is left empty.
+	SkipTs bool
+}
+
 // MediaTracker tracks the timing and integrity of a live media stream. See the package doc for an overview.
 type MediaTracker interface {
 	// TrackDatagram processes one raw network datagram received at now (the datagram's arrival time), parsing the
@@ -67,10 +76,19 @@ type MediaTracker interface {
 	// TrackPacket processes one already-decoded pooled packet received at now (the packet's arrival time), reusing
 	// its already-parsed RTP/MPEG-TS layers instead of re-parsing pkt.Data.
 	TrackPacket(now utc.UTC, pkt *pktpool.Packet) error
-	// Stats returns the cumulative stats for the whole capture.
+	// Stats returns the cumulative stats for the whole capture. Equivalent to Snapshot(&Stats{}, true, utc.Now(),
+	// SnapshotOptions{}).
 	Stats() *Stats
-	// PeriodStats returns the stats for the current reporting period and resets the period window.
+	// PeriodStats returns the stats for the current reporting period and resets the period window. Equivalent to
+	// Snapshot(&Stats{}, false, utc.Now(), SnapshotOptions{}).
 	PeriodStats() *Stats
+	// Snapshot populates snap with the cumulative (total=true) or current-period (total=false) stats as of now,
+	// reusing snap's existing slices (Clocks, each ClockStats.Gaps, Errors.ByPid) where possible instead of
+	// allocating new ones - for a caller that polls periodically and wants to bound per-call garbage. When
+	// total is false, this also resets the period window, exactly like PeriodStats. snap's nested slices are
+	// invalidated by the next Snapshot/Stats/PeriodStats call that reuses the same snap; do not read them
+	// concurrently with such a call, and see Stats.CopyInto to detach a copy that outlives the next call.
+	Snapshot(snap *Stats, total bool, now utc.UTC, opts SnapshotOptions) *Stats
 	// Reset resets the tracker state, clearing all statistics.
 	Reset()
 }
@@ -140,6 +158,11 @@ type mediaTracker struct {
 	// allocating; it aliases the datagram passed to TrackDatagram only for the duration of that call - never
 	// retained after trackLocked returns.
 	rawPkt *pktpool.RawPacket
+
+	// tsScratch is a reused destination for gathering tsTracker's stats when the result isn't exposed via
+	// Stats.Ts itself (a period snapshot, which never sets Ts - see Snapshot) but is still needed to derive
+	// Errors.Total/CcErrors/ByPid. Lazily allocated on first use.
+	tsScratch *mpegts.Stats
 
 	// counters for input validation/integrity conditions not covered by tsTracker/the clock correlators.
 	smallPacketsDropped   uint64 // datagram too small to plausibly contain a TS packet (+ RTP header, if configured)
@@ -301,18 +324,11 @@ func (t *mediaTracker) scanOneTsPacket(now utc.UTC, pkt *packet.Packet) {
 }
 
 func (t *mediaTracker) Stats() *Stats {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return t.snapshot(true, utc.Now())
+	return t.Snapshot(&Stats{}, true, utc.Now(), SnapshotOptions{})
 }
 
 func (t *mediaTracker) PeriodStats() *Stats {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	now := utc.Now()
-	s := t.snapshot(false, now)
-	t.resetPeriod(now)
-	return s
+	return t.Snapshot(&Stats{}, false, utc.Now(), SnapshotOptions{})
 }
 
 func (t *mediaTracker) Reset() {
@@ -340,11 +356,15 @@ func (t *mediaTracker) Reset() {
 	t.tsTracker.Reset()
 }
 
-// snapshot builds a Stats for the whole capture (total) or the current period, as of now. Must be called with t.mu
-// held.
-func (t *mediaTracker) snapshot(total bool, now utc.UTC) *Stats {
+// Snapshot populates snap with the cumulative (total=true) or current-period (total=false) stats as of now. See
+// the MediaTracker interface doc for the reuse/reset contract.
+func (t *mediaTracker) Snapshot(snap *Stats, total bool, now utc.UTC, opts SnapshotOptions) *Stats {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	if t.start.IsZero() {
-		return &Stats{Source: t.streamId}
+		*snap = Stats{Source: t.streamId}
+		return snap
 	}
 
 	var elapsed time.Duration
@@ -360,43 +380,61 @@ func (t *mediaTracker) snapshot(total bool, now utc.UTC) *Stats {
 	}
 	pps, bps := rates(packets, bytes, elapsed)
 
-	var rate *RateStats
 	if total {
-		rate = &RateStats{
-			PpsMean:   round(t.rateTotal.Mean, 1),
-			PpsStddev: round(stddev(&t.rateTotal), 1),
-			PpsMin:    round(t.rateTotal.Min, 1),
-			PpsMax:    round(t.rateTotal.Max, 1),
-			BpsMean:   uint64(t.bitrateTotal.Mean),
-			BpsStddev: uint64(stddev(&t.bitrateTotal)),
-			BpsMin:    uint64(t.bitrateTotal.Min),
-			BpsMax:    uint64(t.bitrateTotal.Max),
+		if snap.Rate == nil {
+			snap.Rate = &RateStats{}
 		}
-	} else if packets > 0 {
-		t.rateTotal.Update(now, pps)
-		t.bitrateTotal.Update(now, bps)
+		snap.Rate.PpsMean = round(t.rateTotal.Mean, 1)
+		snap.Rate.PpsStddev = round(stddev(&t.rateTotal), 1)
+		snap.Rate.PpsMin = round(t.rateTotal.Min, 1)
+		snap.Rate.PpsMax = round(t.rateTotal.Max, 1)
+		snap.Rate.BpsMean = uint64(t.bitrateTotal.Mean)
+		snap.Rate.BpsStddev = uint64(stddev(&t.bitrateTotal))
+		snap.Rate.BpsMin = uint64(t.bitrateTotal.Min)
+		snap.Rate.BpsMax = uint64(t.bitrateTotal.Max)
+	} else {
+		snap.Rate = nil // period snapshots never populate Rate, same as today
+		if packets > 0 {
+			t.rateTotal.Update(now, pps)
+			t.bitrateTotal.Update(now, bps)
+		}
 	}
 
-	tsStats := t.tsTracker.Stats()
-	s := &Stats{
-		Source:  t.streamId,
-		Elapsed: duration.Spec(elapsed).RoundTo(2),
-		Packets: packets,
-		Bytes:   bytes,
-		Pps:     round(pps, 1),
-		Bitrate: uint64(bps),
-		Rate:    rate,
-		Ipd:     newDistribution(ipdStats, ipdHist),
-		Clocks:  t.clockStats(total),
-		Outages: OutageStats{Count: t.outageCount, TotalMs: t.outageTotal},
-		Errors:  t.errorStats(tsStats),
-	}
-	if total {
-		s.Ts = tsStats
+	// Gather tsTracker's stats into snap.Ts itself when it will be exposed (total, not skipped), or into a
+	// private scratch buffer otherwise (period snapshots never expose Ts; SkipTs skips the expensive walk
+	// either way) - errorStats still needs the result either way to derive Errors.Total/CcErrors/ByPid.
+	var tsStats *mpegts.Stats
+	if total && !opts.SkipTs {
+		if snap.Ts == nil {
+			snap.Ts = &mpegts.Stats{}
+		}
+		tsStats = snap.Ts
 	} else {
-		s.Window = duration.Spec(elapsed).RoundTo(2)
+		snap.Ts = nil
+		if t.tsScratch == nil {
+			t.tsScratch = &mpegts.Stats{}
+		}
+		tsStats = t.tsScratch
 	}
-	return s
+	t.tsTracker.Snapshot(tsStats, !opts.SkipTs)
+
+	snap.Source = t.streamId
+	snap.Elapsed = duration.Spec(elapsed).RoundTo(2)
+	snap.Packets = packets
+	snap.Bytes = bytes
+	snap.Pps = round(pps, 1)
+	snap.Bitrate = uint64(bps)
+	snap.Ipd = newDistribution(ipdStats, ipdHist)
+	snap.Clocks = t.clockStats(snap.Clocks, total)
+	snap.Outages = OutageStats{Count: t.outageCount, TotalMs: t.outageTotal}
+	t.errorStats(&snap.Errors, tsStats)
+	if total {
+		snap.Window = 0
+	} else {
+		snap.Window = duration.Spec(elapsed).RoundTo(2)
+		t.resetPeriod(now)
+	}
+	return snap
 }
 
 func (t *mediaTracker) resetPeriod(now utc.UTC) {
@@ -410,35 +448,38 @@ func (t *mediaTracker) resetPeriod(now utc.UTC) {
 	t.pcrClock.resetPeriod()
 }
 
-// clockStats builds a ClockStats for each active correlation: the RTP timestamp clock (if any) followed by one PCR
-// entry per PCR-bearing PID.
-func (t *mediaTracker) clockStats(total bool) []ClockStats {
-	var stats []ClockStats
+// clockStats builds a ClockStats for each active correlation into dst (reused across calls, see Snapshot): the RTP
+// timestamp clock (if any) followed by one PCR entry per PCR-bearing PID.
+func (t *mediaTracker) clockStats(dst []ClockStats, total bool) []ClockStats {
+	dst = dst[:0]
 	if t.rtpClock != nil {
-		stats = append(stats, t.rtpClock.report(total))
+		dst = append(dst, ClockStats{}) // reuses dst's backing array if it has capacity
+		t.rtpClock.report(&dst[0], total)
 	}
-	return append(stats, t.pcrClock.reports(total)...)
+	// pcrClock.reports appends after whatever's already in dst (the rtp report, if any), starting at len(dst).
+	return t.pcrClock.reports(dst, total)
 }
 
-// errorStats summarizes the transport-stream validation errors and input-integrity conditions accumulated so far.
-func (t *mediaTracker) errorStats(ts *mpegts.Stats) ErrorStats {
-	r := ErrorStats{
-		Total:                 ts.ErrorCount,
-		SmallPacketsDropped:   t.smallPacketsDropped,
-		RtcpPacketsDropped:    t.rtcpPacketsDropped,
-		BadPackets:            t.badPackets,
-		IncompletePackets:     t.incompletePackets,
-		AdaptationFieldErrors: t.adaptationFieldErrors,
-		FaultyPaddingPackets:  t.faultyPaddingPackets,
-		LongHeaders:           t.longHeaders,
-	}
+// errorStats summarizes the transport-stream validation errors and input-integrity conditions accumulated so far
+// into dst (reused across calls, see Snapshot). ts.CcErrors/ts.Streams reflect the cheap running total / the
+// per-PID walk respectively - see TsStreamTracker.Snapshot for when the latter is populated.
+func (t *mediaTracker) errorStats(dst *ErrorStats, ts *mpegts.Stats) {
+	dst.Total = ts.ErrorCount
+	dst.CcErrors = ts.CcErrors
+	dst.SmallPacketsDropped = t.smallPacketsDropped
+	dst.RtcpPacketsDropped = t.rtcpPacketsDropped
+	dst.BadPackets = t.badPackets
+	dst.IncompletePackets = t.incompletePackets
+	dst.AdaptationFieldErrors = t.adaptationFieldErrors
+	dst.FaultyPaddingPackets = t.faultyPaddingPackets
+	dst.LongHeaders = t.longHeaders
+
+	dst.ByPid = dst.ByPid[:0]
 	for _, stream := range ts.Streams {
-		r.CcErrors += stream.CcErrors
 		if stream.CcErrors > 0 {
-			r.ByPid = append(r.ByPid, PidErrors{Pid: stream.Pid, CcErrors: stream.CcErrors})
+			dst.ByPid = append(dst.ByPid, PidErrors{Pid: stream.Pid, CcErrors: stream.CcErrors})
 		}
 	}
-	return r
 }
 
 // isValidPadding reports whether pkt's payload (bytes 4 through 187) is valid 0xFF padding.

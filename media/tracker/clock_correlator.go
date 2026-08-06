@@ -93,23 +93,26 @@ func (c *clockCorrelator) driftPpm() float64 {
 	return (slope - 1) * 1e6
 }
 
-func (c *clockCorrelator) report(total bool) ClockStats {
+// report writes this correlator's clock stats into dst, so a caller can reuse the same ClockStats across calls
+// instead of allocating a new one each time (see MediaTracker.Snapshot). It only sets the fields common to every
+// clock source (rtp and pcr); the caller-specific fields (Pid, NumWraps, PacketCount, ErrorCount, Gaps,
+// GapsOverflow) are left to rtpCorrelator.report/pcrCorrelator.reports, since which of those apply depends on the
+// concrete correlator, not this base type.
+func (c *clockCorrelator) report(dst *ClockStats, total bool) {
 	skew := &c.skewPeriod
 	if total {
 		skew = &c.skewTotal
 	}
-	return ClockStats{
-		Source:          c.source,
-		Samples:         c.samples,
-		CurrentSkewMs:   c.lastSkew,
-		SkewMinMs:       skew.Min,
-		SkewMeanMs:      skew.Mean,
-		SkewMaxMs:       skew.Max,
-		JitterMs:        duration.Millis(stddev(skew)),
-		DriftPpm:        round(c.driftPpm(), 1),
-		Discontinuities: c.discontinuities,
-		ParseErrors:     c.parseErrors,
-	}
+	dst.Source = c.source
+	dst.Samples = c.samples
+	dst.CurrentSkewMs = c.lastSkew
+	dst.SkewMinMs = skew.Min
+	dst.SkewMeanMs = skew.Mean
+	dst.SkewMaxMs = skew.Max
+	dst.JitterMs = duration.Millis(stddev(skew))
+	dst.DriftPpm = round(c.driftPpm(), 1)
+	dst.Discontinuities = c.discontinuities
+	dst.ParseErrors = c.parseErrors
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -168,13 +171,14 @@ func (c *rtpCorrelator) recordGap(seq, ts int64) {
 	})
 }
 
-func (c *rtpCorrelator) report(total bool) ClockStats {
-	s := c.clockCorrelator.report(total)
-	s.PacketCount = c.packetCount
-	s.ErrorCount = c.errorCount
-	s.Gaps = append([]rtp.Gap(nil), c.gaps...)
-	s.GapsOverflow = c.gapsOverflow
-	return s
+// report writes this correlator's clock stats into dst, reusing dst.Gaps's backing array where capacity allows
+// instead of the defensive copy this used to allocate unconditionally.
+func (c *rtpCorrelator) report(dst *ClockStats, total bool) {
+	c.clockCorrelator.report(dst, total)
+	dst.PacketCount = c.packetCount
+	dst.ErrorCount = c.errorCount
+	dst.Gaps = append(dst.Gaps[:0], c.gaps...)
+	dst.GapsOverflow = c.gapsOverflow
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -230,23 +234,40 @@ func (c *pcrCorrelator) resetPeriod() {
 	}
 }
 
-// reports builds one ClockStats per PCR-bearing PID, in discovery order. Stream-level TS-alignment parse errors are
-// surfaced on the first program's report (they cannot be attributed to a specific program). Before any PCR is seen a
-// single placeholder report is returned so parse errors remain visible.
-func (c *pcrCorrelator) reports(total bool) []ClockStats {
+// reports builds one ClockStats per PCR-bearing PID, in discovery order, appending after whatever dst already holds
+// (e.g. an rtp report at index 0 - see MediaTracker.clockStats) instead of allocating a new slice every call. PIDs
+// are stable for a live stream, so position base+i usually already holds the right PID's ClockStats from the
+// previous call. Stream-level TS-alignment parse errors are surfaced on the first program's report (they cannot be
+// attributed to a specific program). Before any PCR is seen a single placeholder report is returned so parse errors
+// remain visible.
+func (c *pcrCorrelator) reports(dst []ClockStats, total bool) []ClockStats {
+	base := len(dst)
+	n := len(c.pids)
+	if n == 0 {
+		n = 1 // the placeholder entry
+	}
+
+	if cap(dst) < base+n {
+		grown := make([]ClockStats, base+n)
+		copy(grown, dst)
+		dst = grown
+	} else {
+		dst = dst[:base+n]
+	}
+
 	if len(c.pids) == 0 {
-		return []ClockStats{{Source: "pcr", ParseErrors: c.parseErrors}}
+		dst[base] = ClockStats{Source: "pcr", ParseErrors: c.parseErrors}
+		return dst
 	}
-	reports := make([]ClockStats, 0, len(c.pids))
-	for _, pid := range c.pids {
+
+	for i, pid := range c.pids {
 		p := c.byPid[pid]
-		r := p.report(total)
-		r.Pid = p.pid
-		r.NumWraps = p.numWraps
-		reports = append(reports, r)
+		p.report(&dst[base+i], total)
+		dst[base+i].Pid = p.pid
+		dst[base+i].NumWraps = p.numWraps
 	}
-	reports[0].ParseErrors += c.parseErrors
-	return reports
+	dst[base].ParseErrors += c.parseErrors
+	return dst
 }
 
 // record folds a single PCR sample into the PID's correlation statistics. now is the caller-supplied arrival time.

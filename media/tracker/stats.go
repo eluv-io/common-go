@@ -110,6 +110,76 @@ type PidErrors struct {
 	CcErrors int `json:"cc_errors"`
 }
 
+// CopyInto deep-copies s into dst, reusing dst's existing slices/pointers (Clocks, each ClockStats.Gaps, Ts,
+// Ts.Streams, Errors.ByPid) where their shape already matches, allocating only where it doesn't. Use this to detach
+// a Stats obtained from a caller that may reuse/mutate it later (see MediaTracker.Snapshot) into memory the
+// receiver owns outright - unlike a plain struct copy, which would still alias every nested slice/pointer.
+func (s *Stats) CopyInto(dst *Stats) {
+	dst.Source = s.Source
+	dst.Elapsed = s.Elapsed
+	dst.Window = s.Window
+	dst.Packets = s.Packets
+	dst.Bytes = s.Bytes
+	dst.Pps = s.Pps
+	dst.Bitrate = s.Bitrate
+	dst.Ipd = s.Ipd
+	dst.Outages = s.Outages
+
+	if s.Rate != nil {
+		if dst.Rate == nil {
+			dst.Rate = &RateStats{}
+		}
+		*dst.Rate = *s.Rate
+	} else {
+		dst.Rate = nil
+	}
+
+	if cap(dst.Clocks) < len(s.Clocks) {
+		dst.Clocks = make([]ClockStats, len(s.Clocks))
+	} else {
+		dst.Clocks = dst.Clocks[:len(s.Clocks)]
+	}
+	for i, c := range s.Clocks {
+		d := &dst.Clocks[i]
+		d.Source = c.Source
+		d.Pid = c.Pid
+		d.Samples = c.Samples
+		d.CurrentSkewMs = c.CurrentSkewMs
+		d.SkewMinMs = c.SkewMinMs
+		d.SkewMeanMs = c.SkewMeanMs
+		d.SkewMaxMs = c.SkewMaxMs
+		d.JitterMs = c.JitterMs
+		d.DriftPpm = c.DriftPpm
+		d.Discontinuities = c.Discontinuities
+		d.ParseErrors = c.ParseErrors
+		d.NumWraps = c.NumWraps
+		d.PacketCount = c.PacketCount
+		d.ErrorCount = c.ErrorCount
+		d.Gaps = append(d.Gaps[:0], c.Gaps...)
+		d.GapsOverflow = c.GapsOverflow
+	}
+
+	dst.Errors.Total = s.Errors.Total
+	dst.Errors.CcErrors = s.Errors.CcErrors
+	dst.Errors.SmallPacketsDropped = s.Errors.SmallPacketsDropped
+	dst.Errors.RtcpPacketsDropped = s.Errors.RtcpPacketsDropped
+	dst.Errors.BadPackets = s.Errors.BadPackets
+	dst.Errors.IncompletePackets = s.Errors.IncompletePackets
+	dst.Errors.AdaptationFieldErrors = s.Errors.AdaptationFieldErrors
+	dst.Errors.FaultyPaddingPackets = s.Errors.FaultyPaddingPackets
+	dst.Errors.LongHeaders = s.Errors.LongHeaders
+	dst.Errors.ByPid = append(dst.Errors.ByPid[:0], s.Errors.ByPid...)
+
+	if s.Ts != nil {
+		if dst.Ts == nil {
+			dst.Ts = &mpegts.Stats{}
+		}
+		s.Ts.CopyInto(dst.Ts)
+	} else {
+		dst.Ts = nil
+	}
+}
+
 // newDistribution builds a Distribution report from the collected statistics and the matching percentile histogram.
 func newDistribution(s *statsutil.Statistics[duration.Millis], h *histogram.Histogram[duration.Millis]) Distribution {
 	return Distribution{

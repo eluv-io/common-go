@@ -398,6 +398,120 @@ func TestMediaTracker_TrackDatagram_Unbounded(t *testing.T) {
 	require.EqualValues(t, 1000, tr.Stats().Ts.PacketCount)
 }
 
+// TestMediaTracker_Snapshot_ReusesSlices verifies that calling Snapshot repeatedly with the same destination reuses
+// the Clocks slice, each ClockStats.Gaps slice, and Errors.ByPid's backing array instead of reallocating, as long as
+// the shape (RTP + PCR-bearing PIDs, retained gaps) is stable across calls - the common case for a live stream.
+func TestMediaTracker_Snapshot_ReusesSlices(t *testing.T) {
+	tr := NewMediaTracker("test", Config{Rtp: true})
+	base := utc.Now()
+	var seq uint16
+	var rtpTs uint32 = 1_000
+	var pcr uint64 = 1_000_000
+
+	track := func() {
+		dg, _ := tsDatagramWithPCR(pcr)
+		_ = tr.TrackDatagram(base, rtpWrap(seq, rtpTs, dg))
+		seq++
+		rtpTs += 180
+		pcr += mpegts.DurationToPcr(2 * time.Millisecond)
+		base = base.Add(2 * time.Millisecond)
+	}
+	for i := 0; i < 3; i++ {
+		track()
+	}
+
+	snap := &Stats{}
+	tr.Snapshot(snap, true, base, SnapshotOptions{})
+	require.Len(t, snap.Clocks, 2)
+	clocksArray := snap.Clocks
+	gapsArray := snap.Clocks[0].Gaps // rtp entry always at index 0 when Config.Rtp is set
+
+	for i := 0; i < 3; i++ {
+		track()
+	}
+	tr.Snapshot(snap, true, base, SnapshotOptions{})
+	require.Len(t, snap.Clocks, 2)
+	require.Same(t, &clocksArray[0], &snap.Clocks[0], "Clocks' backing array is reused, not reallocated")
+	if len(snap.Clocks[0].Gaps) > 0 && len(gapsArray) > 0 {
+		require.Same(t, &gapsArray[0], &snap.Clocks[0].Gaps[0], "Gaps' backing array is reused, not reallocated")
+	}
+}
+
+// TestMediaTracker_Snapshot_PeriodResets verifies Snapshot(total=false) resets the period window exactly like
+// PeriodStats does - the defining behavior a reuse-minded caller (e.g. content-fabric's probe command) still needs
+// when it calls Snapshot directly instead of PeriodStats.
+func TestMediaTracker_Snapshot_PeriodResets(t *testing.T) {
+	tr := NewMediaTracker("test", Config{})
+	base := utc.Now()
+	var pcr uint64 = 1_000_000
+	for i := 0; i < 5; i++ {
+		dg, _ := tsDatagramWithPCR(pcr)
+		_ = tr.TrackDatagram(base.Add(time.Duration(i)*2*time.Millisecond), dg)
+		pcr += mpegts.DurationToPcr(2 * time.Millisecond)
+	}
+
+	snap := &Stats{}
+	tr.Snapshot(snap, false, base, SnapshotOptions{})
+	require.EqualValues(t, 5, snap.Packets)
+
+	for i := 5; i < 8; i++ {
+		dg, _ := tsDatagramWithPCR(pcr)
+		_ = tr.TrackDatagram(base.Add(time.Duration(i)*2*time.Millisecond), dg)
+		pcr += mpegts.DurationToPcr(2 * time.Millisecond)
+	}
+
+	tr.Snapshot(snap, false, base, SnapshotOptions{})
+	require.EqualValues(t, 3, snap.Packets, "period counters reset after the previous Snapshot(total=false) call")
+
+	require.EqualValues(t, 8, tr.Stats().Packets, "Stats keeps reporting the cumulative total")
+}
+
+// TestMediaTracker_Snapshot_SkipTs verifies SkipTs leaves Ts nil and Errors.ByPid empty, while Errors.Total/CcErrors
+// still populate correctly from mpegts.TsStreamTracker's cheap running totals.
+func TestMediaTracker_Snapshot_SkipTs(t *testing.T) {
+	tr := NewMediaTracker("test", Config{})
+	base := utc.Now()
+	dg, _ := tsDatagramWithPCR(1_000_000)
+	_ = tr.TrackDatagram(base, dg)
+	// A second datagram on the same fixed continuity counter legitimately trips a CC error (as in other tests).
+	_ = tr.TrackDatagram(base.Add(2*time.Millisecond), dg)
+
+	full := &Stats{}
+	tr.Snapshot(full, true, base, SnapshotOptions{})
+	require.NotNil(t, full.Ts)
+	require.NotZero(t, full.Errors.CcErrors)
+	require.NotEmpty(t, full.Errors.ByPid)
+
+	lean := &Stats{}
+	tr.Snapshot(lean, true, base, SnapshotOptions{SkipTs: true})
+	require.Nil(t, lean.Ts)
+	require.Empty(t, lean.Errors.ByPid)
+	require.Equal(t, full.Errors.Total, lean.Errors.Total, "Total is available cheaply either way")
+	require.Equal(t, full.Errors.CcErrors, lean.Errors.CcErrors, "CcErrors is available cheaply either way")
+}
+
+// TestMediaTracker_Stats_CopyInto verifies CopyInto produces a deeply independent copy - mutating the source via a
+// tracker's next Snapshot call (simulating reuse) must not affect a destination copied out earlier.
+func TestMediaTracker_Stats_CopyInto(t *testing.T) {
+	tr := NewMediaTracker("test", Config{Rtp: true})
+	base := utc.Now()
+	dg, _ := tsDatagramWithPCR(1_000_000)
+	_ = tr.TrackDatagram(base, rtpWrap(0, 1000, dg))
+	_ = tr.TrackDatagram(base.Add(2*time.Millisecond), rtpWrap(1, 1180, dg))
+
+	src := tr.Stats()
+	dst := &Stats{}
+	src.CopyInto(dst)
+	require.Equal(t, src.Packets, dst.Packets)
+	require.Len(t, dst.Clocks, len(src.Clocks))
+	require.NotSame(t, &src.Clocks[0], &dst.Clocks[0])
+
+	// Advance the tracker and re-snapshot into src (as a caller reusing src via Snapshot would) - dst must not see it.
+	_ = tr.TrackDatagram(base.Add(4*time.Millisecond), rtpWrap(2, 1360, dg))
+	tr.Snapshot(src, true, base.Add(4*time.Millisecond), SnapshotOptions{})
+	require.NotEqual(t, src.Packets, dst.Packets, "dst must not have changed just because src was refreshed")
+}
+
 // ---------------------------------------------------------------------------------------------------------------------
 // Fixture helpers below build synthetic RTP/MPEG-TS datagrams for the tests above.
 
