@@ -123,27 +123,36 @@ type mediaTracker struct {
 	streamId string
 	cfg      Config
 
-	start       utc.UTC // arrival time of the first packet
-	lastArrival utc.UTC // arrival time of the previous packet
+	start       utc.UTC // arrival time of the first packet ever tracked - never reset by resetPeriod, only by Reset
+	lastArrival utc.UTC // arrival time of the previous packet, used to compute the next inter-packet delay
 
-	// cumulative counters
-	totalPackets uint64
-	totalBytes   uint64
-	outageCount  uint64
-	outageTotal  duration.Millis
+	// cumulative counters, reset only by Reset (never by resetPeriod/PeriodStats/Snapshot(total: false)). These, and
+	// their periodXxx counterparts below, are the fields recorded for every datagram exactly as received on the wire,
+	// unconditionally, regardless of whether it's later classified as dropped/invalid. That is a *different* signal
+	// from the validation/integrity counters further down (smallPacketsDropped, badPackets, etc.), which only increment
+	// for a datagram/packet these have already counted here - "how much arrived" vs. "how much of what arrived was
+	// valid media".
+	totalPackets uint64          // every datagram TrackDatagram/TrackPacket has ever been called with
+	totalBytes   uint64          // sum of every such datagram's length, in bytes
+	outageCount  uint64          // number of inter-packet gaps >= cfg.OutageThreshold, ever
+	outageTotal  duration.Millis // sum of those gaps' durations
 
-	// cumulative distributions
-	ipdTotal     statsutil.Statistics[duration.Millis]
-	ipdHistTotal *histogram.Histogram[duration.Millis]
-	rateTotal    statsutil.Statistics[float64] // per-period packet rate (packets/s) - captures rate variation
-	bitrateTotal statsutil.Statistics[float64] // per-period bitrate (bits/s) - captures bitrate variation
+	// cumulative distributions, reset only by Reset.
+	ipdTotal     statsutil.Statistics[duration.Millis] // inter-packet-delay distribution over the whole capture
+	ipdHistTotal *histogram.Histogram[duration.Millis] // same, as a histogram (for percentiles)
+	rateTotal    statsutil.Statistics[float64]         // per-period packet rate (packets/s) - captures rate variation
+	bitrateTotal statsutil.Statistics[float64]         // per-period bitrate (bits/s) - captures bitrate variation
 
-	// current period counters and distributions (reset on each PeriodStats call)
-	periodStart   utc.UTC
-	periodPackets uint64
-	periodBytes   uint64
-	ipdPeriod     statsutil.Statistics[duration.Millis]
-	ipdHistPeriod *histogram.Histogram[duration.Millis]
+	// current period counters and distributions: the periodXxx counterpart of each cumulative field above,
+	// tracking the exact same thing but reset to zero by resetPeriod on each PeriodStats/Snapshot(total: false)
+	// call, so a caller polling periodically gets "since I last asked" instead of "since the stream started".
+	periodStart       utc.UTC                               // start of the current period
+	periodPackets     uint64                                // totalPackets' counterpart, this period only
+	periodBytes       uint64                                // totalBytes' counterpart, this period only
+	periodOutageCount uint64                                // outageCount's counterpart, this period only
+	periodOutageTotal duration.Millis                       // outageTotal's counterpart, this period only
+	ipdPeriod         statsutil.Statistics[duration.Millis] // ipdTotal's counterpart, this period only
+	ipdHistPeriod     *histogram.Histogram[duration.Millis] // ipdHistTotal's counterpart, this period only
 
 	// arrival vs media-clock correlation. The PCR correlation is always present (extracted from the MPEG-TS
 	// payload); for RTP sources the RTP-timestamp correlation is present too, so both clocks are correlated.
@@ -165,6 +174,9 @@ type mediaTracker struct {
 	tsScratch *mpegts.Stats
 
 	// counters for input validation/integrity conditions not covered by tsTracker/the clock correlators.
+	// Cumulative only - no periodXxx counterpart, unlike the arrival counters above. Each of these increments for
+	// a datagram/packet that recordArrival has *already* counted in totalPackets/totalBytes above; they're the
+	// "how much of what arrived was actually valid media" half of that pair, not a separate arrival count.
 	smallPacketsDropped   uint64 // datagram too small to plausibly contain a TS packet (+ RTP header, if configured)
 	rtcpPacketsDropped    uint64 // subset of smallPacketsDropped that looks like a misdirected RTCP packet
 	badPackets            uint64 // RTP header failed to parse, or carried an unsupported RTP version
@@ -246,6 +258,13 @@ func (t *mediaTracker) trackLocked(now utc.UTC, datagram []byte, src pktpool.Dec
 // statistics. now is the packet's arrival time, as supplied by the caller (never sampled internally), so callers
 // whose packets pass through an intermediate queue (e.g. a channel) can supply the true network arrival time rather
 // than the time TrackDatagram/TrackPacket happens to be invoked.
+//
+// trackLocked calls this unconditionally, before any of its own drop/validation checks - so Packets/Bytes/Pps/
+// Bitrate/Ipd/Outages count every datagram exactly as received on the wire, including ones later classified as
+// dropped or invalid (too small, malformed RTP, misdirected RTCP, ...). This is deliberate, not an oversight: it's
+// the network-level arrival signal (useful for spotting e.g. a flood of garbage/misdirected traffic), distinct from
+// "how much valid media arrived" - which is tracked separately via smallPacketsDropped/rtcpPacketsDropped/
+// badPackets/incompletePackets/etc. Do not move this call after validation without considering both signals.
 func (t *mediaTracker) recordArrival(now utc.UTC, n int) {
 	if t.start.IsZero() {
 		t.start = now
@@ -266,6 +285,8 @@ func (t *mediaTracker) recordArrival(now utc.UTC, n int) {
 		if ipd >= t.cfg.OutageThreshold {
 			t.outageCount++
 			t.outageTotal += duration.Millis(ipd)
+			t.periodOutageCount++
+			t.periodOutageTotal += duration.Millis(ipd)
 		}
 	}
 	t.lastArrival = now
@@ -339,6 +360,7 @@ func (t *mediaTracker) Reset() {
 	t.totalPackets, t.totalBytes = 0, 0
 	t.outageCount, t.outageTotal = 0, 0
 	t.periodPackets, t.periodBytes = 0, 0
+	t.periodOutageCount, t.periodOutageTotal = 0, 0
 	t.ipdTotal = statsutil.Statistics[duration.Millis]{}
 	t.ipdPeriod = statsutil.Statistics[duration.Millis]{}
 	t.ipdHistTotal.Clear()
@@ -371,7 +393,7 @@ func (t *mediaTracker) Snapshot(snap *Stats, total bool, now utc.UTC, opts Snaps
 	var packets, bytes uint64
 	ipdStats, ipdHist := &t.ipdPeriod, t.ipdHistPeriod
 	if total {
-		elapsed = utc.Since(t.start)
+		elapsed = now.Sub(t.start)
 		packets, bytes = t.totalPackets, t.totalBytes
 		ipdStats, ipdHist = &t.ipdTotal, t.ipdHistTotal
 	} else {
@@ -426,7 +448,11 @@ func (t *mediaTracker) Snapshot(snap *Stats, total bool, now utc.UTC, opts Snaps
 	snap.Bitrate = uint64(bps)
 	snap.Ipd = newDistribution(ipdStats, ipdHist)
 	snap.Clocks = t.clockStats(snap.Clocks, total)
-	snap.Outages = OutageStats{Count: t.outageCount, TotalMs: t.outageTotal}
+	if total {
+		snap.Outages = OutageStats{Count: t.outageCount, TotalMs: t.outageTotal}
+	} else {
+		snap.Outages = OutageStats{Count: t.periodOutageCount, TotalMs: t.periodOutageTotal}
+	}
 	t.errorStats(&snap.Errors, tsStats)
 	if total {
 		snap.Window = 0
@@ -440,6 +466,7 @@ func (t *mediaTracker) Snapshot(snap *Stats, total bool, now utc.UTC, opts Snaps
 func (t *mediaTracker) resetPeriod(now utc.UTC) {
 	t.periodStart = now
 	t.periodPackets, t.periodBytes = 0, 0
+	t.periodOutageCount, t.periodOutageTotal = 0, 0
 	t.ipdPeriod = statsutil.Statistics[duration.Millis]{}
 	t.ipdHistPeriod.Clear()
 	if t.rtpClock != nil {
@@ -482,9 +509,22 @@ func (t *mediaTracker) errorStats(dst *ErrorStats, ts *mpegts.Stats) {
 	}
 }
 
-// isValidPadding reports whether pkt's payload (bytes 4 through 187) is valid 0xFF padding.
+// isValidPadding reports whether pkt's payload is valid 0xFF padding. A null-PID packet is not required to be
+// payload-only (adaptation_field_control 01) - the spec permits an adaptation field here too (10/11), in which case
+// the payload starts later than byte 4, or there may be no payload at all.
 func isValidPadding(pkt *packet.Packet) bool {
-	for i := 4; i < packet.PacketSize; i++ {
+	payloadStart := 4
+	if pkt.HasAdaptationField() {
+		af, err := pkt.AdaptationField()
+		if err != nil {
+			return false
+		}
+		payloadStart = 4 + 1 + af.Length() // TS header + the length byte itself + its content
+	}
+	if !pkt.HasPayload() {
+		return true // adaptation-field-only null packet: no payload bytes to validate
+	}
+	for i := payloadStart; i < packet.PacketSize; i++ {
 		if pkt[i] != 0xFF {
 			return false
 		}

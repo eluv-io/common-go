@@ -269,6 +269,28 @@ func TestMediaTracker_FaultyPaddingPackets(t *testing.T) {
 	require.EqualValues(t, 1, tr.Stats().Errors.FaultyPaddingPackets)
 }
 
+// TestMediaTracker_ValidPadding_AdaptationField is a regression test for isValidPadding unconditionally treating
+// bytes 4..187 as payload: a null-PID packet is not required to be payload-only (adaptation_field_control 01) - it
+// may legally carry an adaptation field too (11), in which case the real payload starts later than byte 4.
+func TestMediaTracker_ValidPadding_AdaptationField(t *testing.T) {
+	valid := append(tsPcrPacket(0x100, 1_000_000), tsNullPacketWithAdaptationField()...)
+	valid = append(valid, tsNullPacket()...)
+
+	tr := NewMediaTracker("test", Config{})
+	require.NoError(t, tr.TrackDatagram(utc.Now(), valid))
+	require.EqualValues(t, 0, tr.Stats().Errors.FaultyPaddingPackets,
+		"a well-formed adaptation-field-bearing null packet must not be flagged as faulty")
+
+	corrupted := append(tsPcrPacket(0x100, 1_000_000), tsNullPacketWithAdaptationField()...)
+	corrupted[packet.PacketSize+6] = 0x00 // corrupt the first payload byte, after the adaptation field
+	corrupted = append(corrupted, tsNullPacket()...)
+
+	tr2 := NewMediaTracker("test", Config{})
+	require.NoError(t, tr2.TrackDatagram(utc.Now(), corrupted))
+	require.EqualValues(t, 1, tr2.Stats().Errors.FaultyPaddingPackets,
+		"corruption after the adaptation field must still be detected")
+}
+
 // TestMediaTracker_NumWraps verifies that a true PCR wraparound (as opposed to a small backward jump from
 // reordering) is counted - logic ported from avpipe's MpegtsPacketProcessor.updatePCR.
 func TestMediaTracker_NumWraps(t *testing.T) {
@@ -466,6 +488,55 @@ func TestMediaTracker_Snapshot_PeriodResets(t *testing.T) {
 	require.EqualValues(t, 8, tr.Stats().Packets, "Stats keeps reporting the cumulative total")
 }
 
+// TestMediaTracker_Snapshot_TotalElapsedUsesCallerNow is a regression test for a bug where the total-path branch of
+// Snapshot read the real wall clock (utc.Since(t.start)) instead of the caller-supplied now, breaking determinism
+// for any caller/test passing a synthetic now - and silently diverging from the period branch a few lines below,
+// which already used now correctly.
+func TestMediaTracker_Snapshot_TotalElapsedUsesCallerNow(t *testing.T) {
+	tr := NewMediaTracker("test", Config{})
+	start := utc.Now()
+	dg, _ := tsDatagramWithPCR(1_000_000)
+	_ = tr.TrackDatagram(start, dg)
+
+	// A synthetic "now" far from the real wall clock - only correct if Snapshot actually uses it.
+	syntheticNow := start.Add(time.Hour)
+	snap := &Stats{}
+	tr.Snapshot(snap, true, syntheticNow, SnapshotOptions{})
+
+	require.Equal(t, duration.Spec(time.Hour).RoundTo(2), snap.Elapsed,
+		"Elapsed must be derived from the caller-supplied now, not the real wall clock")
+}
+
+// TestMediaTracker_Snapshot_PeriodOutagesReset verifies that a period snapshot's Outages reflects only the current
+// period, resetting after each period snapshot like Packets/Bytes/Ipd already do - a regression test for outages
+// previously always being reported from the cumulative (never-reset) counters even for total=false.
+func TestMediaTracker_Snapshot_PeriodOutagesReset(t *testing.T) {
+	tr := NewMediaTracker("test", Config{OutageThreshold: 10 * time.Millisecond})
+	base := utc.Now()
+	var pcr uint64 = 1_000_000
+
+	track := func(at utc.UTC) {
+		dg, _ := tsDatagramWithPCR(pcr)
+		_ = tr.TrackDatagram(at, dg)
+		pcr += mpegts.DurationToPcr(2 * time.Millisecond)
+	}
+
+	track(base)
+	track(base.Add(20 * time.Millisecond)) // gap >= OutageThreshold: one outage
+
+	p1 := tr.PeriodStats()
+	require.EqualValues(t, 1, p1.Outages.Count, "period reports the outage that happened during this period")
+	require.NotZero(t, p1.Outages.TotalMs)
+
+	track(base.Add(21 * time.Millisecond)) // 1ms gap: below OutageThreshold, no new outage
+
+	p2 := tr.PeriodStats()
+	require.Zero(t, p2.Outages.Count, "period outages reset after the previous PeriodStats call")
+	require.Zero(t, p2.Outages.TotalMs)
+
+	require.EqualValues(t, 1, tr.Stats().Outages.Count, "total snapshot keeps reporting the cumulative outage count")
+}
+
 // TestMediaTracker_Snapshot_SkipTs verifies SkipTs leaves Ts nil and Errors.ByPid empty, while Errors.Total/CcErrors
 // still populate correctly from mpegts.TsStreamTracker's cheap running totals.
 func TestMediaTracker_Snapshot_SkipTs(t *testing.T) {
@@ -606,6 +677,23 @@ func tsNullPacket() []byte {
 	pkt[3] = 0x10 // payload only, continuity counter 0
 	for i := 4; i < packet.PacketSize; i++ {
 		pkt[i] = 0xff
+	}
+	return pkt
+}
+
+// tsNullPacketWithAdaptationField builds a null-PID (0x1fff) TS packet carrying both an adaptation field and a
+// payload (adaptation_field_control 11) - a spec-legal but unusual shape for a null packet, used to verify
+// isValidPadding locates the payload after the adaptation field rather than assuming it always starts at byte 4.
+func tsNullPacketWithAdaptationField() []byte {
+	pkt := make([]byte, packet.PacketSize)
+	pkt[0] = packet.SyncByte
+	pkt[1] = 0x1f // PID 0x1fff (null)
+	pkt[2] = 0xff
+	pkt[3] = 0x30 // adaptation field + payload, continuity counter 0
+	pkt[4] = 1    // adaptation field length: 1 flags byte, no PCR/OPCR/splicing/private data/extension
+	pkt[5] = 0x00 // flags: none set
+	for i := 6; i < packet.PacketSize; i++ {
+		pkt[i] = 0xff // payload: valid padding
 	}
 	return pkt
 }

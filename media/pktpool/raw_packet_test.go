@@ -33,9 +33,9 @@ func TestRawPacket_LazyDecode(t *testing.T) {
 	}
 }
 
-// TestRawPacket_DecodeOutOfOrder verifies the same layer-ordering guard as Packet: decoding Ts before Rtp on
-// RTP-wrapped data is rejected once bytes have already been consumed by a later-ranked layer... concretely, Rtp then
-// Ts is fine; there is no outer layer to go back to since RawPacket does not expose Tlv.
+// TestRawPacket_DecodeOutOfOrder verifies the same layer-ordering guard as Packet: Rtp then Ts (in rank order) is
+// fine; Ts before Rtp is rejected, since bytes would already have been consumed by the higher-ranked layer with no
+// outer layer to go back to (RawPacket does not expose Tlv).
 func TestRawPacket_DecodeOutOfOrder(t *testing.T) {
 	raw := rtpBytes(t, 1, 0, tsPayload(1))
 	p := pktpool.NewRawPacket(raw)
@@ -44,6 +44,10 @@ func TestRawPacket_DecodeOutOfOrder(t *testing.T) {
 	require.NoError(t, err)
 	_, err = p.Ts()
 	require.NoError(t, err)
+
+	p2 := pktpool.NewRawPacket(rtpBytes(t, 1, 0, tsPayload(1)))
+	_, err = p2.Ts()
+	require.Error(t, err, "Ts before Rtp must be rejected")
 }
 
 // TestRawPacket_Reset verifies that Reset discards previously decoded layers and re-points the cursor at the new
