@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/pion/rtp"
 	"github.com/stretchr/testify/require"
@@ -57,12 +58,39 @@ func TestPacket_FromReader_EmptyRead(t *testing.T) {
 
 	require.NoError(t, pkt.T.FromReader(emptyReader{})) // n == 0, err == nil
 	require.Empty(t, pkt.T.Data)
+	require.Zero(t, pkt.T.ReceivedAt) // no data read -> no arrival time to record
 }
 
 // emptyReader is an io.Reader that reads no bytes without erroring (returns 0, nil).
 type emptyReader struct{}
 
 func (emptyReader) Read([]byte) (int, error) { return 0, nil }
+
+// TestPacket_FromReader_StampsReceivedAt verifies that FromReader stamps ReceivedAt itself, as of its own Read call,
+// rather than relying on the caller to do so afterwards. FromReader resets the packet (including ReceivedAt) before
+// reading, so a caller that stamps ReceivedAt before calling FromReader - instead of after - would always observe the
+// zero value; this guards against that ordering mistake regressing (see avpipe's mpegtsInputHandler.ReadPacket, which
+// once had exactly this bug).
+func TestPacket_FromReader_StampsReceivedAt(t *testing.T) {
+	pool := pktpool.NewPacketPool(0, 64)
+	pkt := pool.Borrow()
+	defer pkt.Release()
+
+	require.Zero(t, pkt.T.ReceivedAt) // pristine on borrow
+
+	before := time.Now()
+	require.NoError(t, pkt.T.FromReader(bytes.NewReader(tsPayload(1))))
+	after := time.Now()
+
+	require.False(t, pkt.T.ReceivedAt.IsZero())
+	require.False(t, pkt.T.ReceivedAt.Before(before))
+	require.False(t, pkt.T.ReceivedAt.After(after))
+
+	// A second successful read re-stamps ReceivedAt rather than retaining the first call's value.
+	first := pkt.T.ReceivedAt
+	require.NoError(t, pkt.T.FromReader(bytes.NewReader(tsPayload(1))))
+	require.False(t, pkt.T.ReceivedAt.Before(first))
+}
 
 // TestPacket_LazyDecode_Idempotent verifies that decoding a layer is cached and that repeated access does not corrupt
 // the decode cursor (regression for the missing parsed=true flag).

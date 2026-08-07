@@ -34,6 +34,12 @@ type TsStreamTracker interface {
 	TrackPackets(pkts []*packet.Packet) (packetCount int, errList error)
 	// Stats returns TS statistics
 	Stats() *Stats
+	// Snapshot populates snap with the tracker's current stats, reusing snap's Streams slice (and each entry's
+	// JitterMillisHist) where possible instead of allocating new ones - for a caller that polls periodically and
+	// wants to bound per-call garbage. When full is false, it skips the per-PID walk and histogram capture
+	// entirely (the expensive part): Streams is cleared, not populated, and only the cheap running totals
+	// (ErrorCount, PacketCount) are set. Stats() is equivalent to Snapshot(&Stats{}, true).
+	Snapshot(snap *Stats, full bool) *Stats
 	// Reset resets the tracker state, clearing all statistics and errors. It keeps the list of discovered streams and
 	// their information from the PMT (Program Map Table).
 	Reset()
@@ -108,12 +114,16 @@ type tsStreamTracker struct {
 	statsLogFunc func()
 	start        utc.UTC
 	errCount     int
-	streams      map[int]*Stream
-	pmtParsed    bool // true if the PMT has been parsed
-	pmtAcc       packet.Accumulator
-	pat          psi.PAT
-	logThrottle  timeutil.Periodic
-	panics       int
+	// totalCcErrors/totalPacketCount mirror the sum of every stream's ccErrors/packetCount, kept in sync
+	// incrementally in trackPacket so Snapshot(full=false) can report them without walking streams.
+	totalCcErrors    int
+	totalPacketCount int
+	streams          map[int]*Stream
+	pmtParsed        bool // true if the PMT has been parsed
+	pmtAcc           packet.Accumulator
+	pat              psi.PAT
+	logThrottle      timeutil.Periodic
+	panics           int
 }
 
 func (t *tsStreamTracker) Track(bts []byte) (packetCount int, errList error) {
@@ -226,12 +236,14 @@ func (t *tsStreamTracker) trackPacket(pkt *packet.Packet, packetCount int, appen
 		}
 		if cc != expectCC {
 			stream.ccErrors++
+			t.totalCcErrors++
 			err = fmt.Errorf("continuity counter mismatch: expected=%02d actual=%02d ts-packet=%d pid=%d", expectCC, cc, packetCount, pid)
 			appendErr(err)
 		}
 		stream.cc = cc
 	}
 	stream.packetCount++
+	t.totalPacketCount++
 
 	if pcr, ok := ExtractPCR(pkt); ok {
 		now := utc.Now()
@@ -338,46 +350,76 @@ func (t *tsStreamTracker) parsePmt(pkt *packet.Packet) error {
 	return nil
 }
 
+// Stats returns the tracker's current stats as a freshly-allocated Stats. Equivalent to
+// Snapshot(&Stats{}, true).
 func (t *tsStreamTracker) Stats() *Stats {
-	res := &Stats{
-		Start:      t.start,
-		Duration:   duration.Spec(utc.Since(t.start)).RoundTo(2),
-		ErrorCount: t.errCount,
-		Streams:    make([]*StreamStats, 0, len(t.streams)),
+	return t.Snapshot(&Stats{}, true)
+}
+
+// Snapshot populates snap with the tracker's current stats. See the TsStreamTracker interface doc for the
+// full/reuse contract.
+func (t *tsStreamTracker) Snapshot(snap *Stats, full bool) *Stats {
+	snap.Start = t.start
+	snap.Duration = duration.Spec(utc.Since(t.start)).RoundTo(2)
+	snap.ErrorCount = t.errCount
+	snap.CcErrors = t.totalCcErrors
+
+	if !full {
+		snap.Streams = snap.Streams[:0]
+		snap.PacketCount = t.totalPacketCount
+		return snap
 	}
 
 	keys := maputil.SortedKeys(t.streams)
-	for _, pid := range keys {
+	for i, pid := range keys {
 		stream := t.streams[pid]
-		s := &StreamStats{
-			Pid:         pid,
-			PacketCount: stream.packetCount,
-			Cc:          stream.cc,
-			CcErrors:    stream.ccErrors,
-			Pcr:         stream.pcr,
-			Jitter:      duration.Spec(stream.jitter).RoundTo(2),
-		}
-		if stream.pcr0 != utc.Zero {
-			s.Pcr0 = &stream.pcr0
+
+		var s *StreamStats
+		if i < len(snap.Streams) && snap.Streams[i] != nil && snap.Streams[i].Pid == pid {
+			s = snap.Streams[i] // reuse in place - same PID as last time at this position
+		} else {
+			s = &StreamStats{}
+			if i < len(snap.Streams) {
+				snap.Streams[i] = s
+			} else {
+				snap.Streams = append(snap.Streams, s)
+			}
 		}
 
+		s.Pid = pid
+		s.PacketCount = stream.packetCount
+		s.Cc = stream.cc
+		s.CcErrors = stream.ccErrors
+		s.Pcr = stream.pcr
+		s.Jitter = duration.Spec(stream.jitter).RoundTo(2)
+		s.Info = ""
+		if stream.pcr0 != utc.Zero {
+			s.Pcr0 = &stream.pcr0
+		} else {
+			s.Pcr0 = nil
+		}
 		if stream.pes != nil {
 			s.Info = fmt.Sprintf("%d: %s", stream.pes.StreamType(), stream.pes.StreamTypeDescription())
 		}
 		if stream.jitterMillisHist.TotalCount() > 0 {
-			s.JitterMillisHist = &HistogramCapture{}
+			if s.JitterMillisHist == nil {
+				s.JitterMillisHist = &HistogramCapture{}
+			}
 			CaptureHistogram(stream.jitterMillisHist, s.JitterMillisHist)
+		} else {
+			s.JitterMillisHist = nil
 		}
-		res.Streams = append(res.Streams, s)
-
-		res.PacketCount += stream.packetCount
 	}
-	return res
+	snap.Streams = snap.Streams[:len(keys)]
+	snap.PacketCount = t.totalPacketCount
+	return snap
 }
 
 func (t *tsStreamTracker) Reset() {
 	t.start = utc.Now()
 	t.errCount = 0
+	t.totalCcErrors = 0
+	t.totalPacketCount = 0
 	t.pmtParsed = false
 	t.pmtAcc.Reset()
 	for _, stream := range t.streams {
@@ -421,16 +463,23 @@ func (n NoopTracker) Stats() *Stats {
 	return nil
 }
 
+func (n NoopTracker) Snapshot(snap *Stats, full bool) *Stats {
+	return snap
+}
+
 func (n NoopTracker) Reset() {}
 
 // ---------------------------------------------------------------------------------------------------------------------
 
 type Stats struct {
-	Start       utc.UTC        `json:"start"`
-	Duration    duration.Spec  `json:"duration"`
-	PacketCount int            `json:"packet_count"`
-	ErrorCount  int            `json:"error_count"`
-	Streams     []*StreamStats `json:"streams"`
+	Start       utc.UTC       `json:"start"`
+	Duration    duration.Spec `json:"duration"`
+	PacketCount int           `json:"packet_count"`
+	ErrorCount  int           `json:"error_count"`
+	// CcErrors is the sum of every stream's continuity-counter error count - available cheaply (from an
+	// incrementally-maintained running total) even when Streams itself is empty (see Snapshot's full=false case).
+	CcErrors int            `json:"cc_errors"`
+	Streams  []*StreamStats `json:"streams"`
 }
 
 // Categorize returns a packet count per stream type.
@@ -462,6 +511,55 @@ func (s *Stats) Categorize() (stats PacketStats) {
 	stats.PaddingRatio = rat(stats.Padding)
 	stats.OtherRatio = rat(stats.Other)
 	return
+}
+
+// CopyInto deep-copies s into dst, reusing dst's existing Streams slice (and each entry's
+// JitterMillisHist) where their shape already matches, allocating only where it doesn't. Use this to
+// detach a Stats obtained from a caller that may reuse/mutate it later (see TsStreamTracker.Snapshot)
+// into memory the receiver owns outright - unlike a plain struct copy, which would still alias Streams
+// and its nested pointers.
+func (s *Stats) CopyInto(dst *Stats) {
+	dst.Start = s.Start
+	dst.Duration = s.Duration
+	dst.PacketCount = s.PacketCount
+	dst.ErrorCount = s.ErrorCount
+	dst.CcErrors = s.CcErrors
+
+	for i, stream := range s.Streams {
+		var d *StreamStats
+		if i < len(dst.Streams) && dst.Streams[i] != nil {
+			d = dst.Streams[i]
+		} else {
+			d = &StreamStats{}
+			if i < len(dst.Streams) {
+				dst.Streams[i] = d
+			} else {
+				dst.Streams = append(dst.Streams, d)
+			}
+		}
+		d.Pid = stream.Pid
+		d.PacketCount = stream.PacketCount
+		d.Cc = stream.Cc
+		d.CcErrors = stream.CcErrors
+		d.Pcr = stream.Pcr
+		d.Jitter = stream.Jitter
+		d.Info = stream.Info
+		if stream.Pcr0 != nil {
+			pcr0 := *stream.Pcr0
+			d.Pcr0 = &pcr0
+		} else {
+			d.Pcr0 = nil
+		}
+		if stream.JitterMillisHist != nil {
+			if d.JitterMillisHist == nil {
+				d.JitterMillisHist = &HistogramCapture{}
+			}
+			*d.JitterMillisHist = *stream.JitterMillisHist
+		} else {
+			d.JitterMillisHist = nil
+		}
+	}
+	dst.Streams = dst.Streams[:len(s.Streams)]
 }
 
 type PacketStats struct {
