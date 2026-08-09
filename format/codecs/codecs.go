@@ -9,6 +9,7 @@ import (
 	"github.com/fxamacker/cbor/v2"
 	cd "github.com/ugorji/go/codec"
 
+	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/format/hash"
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/link"
@@ -160,6 +161,7 @@ func makeCborV2Codec() Codec {
 		{42, reflect.TypeOf((*link.Link)(nil))},
 		{43, reflect.TypeOf((*utc.UTC)(nil))},
 		{44, reflect.TypeOf((*token.Token)(nil))},
+		{45, reflect.TypeOf((*duration.Spec)(nil))},
 	}
 
 	for _, tag := range tags {
