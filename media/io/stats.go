@@ -33,9 +33,15 @@ type SrtConnStats struct {
 // PacketSource.Open) when it can report runtime statistics. Callers obtain stats via a type
 // assertion on the opened writer/reader:
 //
-//	if r, ok := wc.(io.StatsReporter); ok { stats := r.ConnStats(true) }
+//	if r, ok := wc.(io.StatsReporter); ok {
+//		var cs io.ConnStats
+//		r.ConnStats(&cs, true)
+//	}
 type StatsReporter interface {
-	// ConnStats returns the connection's current statistics. When details is false, expensive
-	// protocol-level fields (SrtConnStats.Statistics) may be left zero.
-	ConnStats(details bool) ConnStats
+	// ConnStats copies the connection's current statistics into the provided *ConnStats, overwriting it in place -
+	// reusing into.SRT if it is already non-nil instead of allocating a new SrtConnStats, so a caller that polls stats
+	// repeatedly can reuse the same ConnStats value across calls. This also ensures that the embedded srt.Statistics
+	// correctly report "interval stats" for the period since the last call m(ade with the same ConnStats instance).
+	// When details is false, expensive protocol-level fields (SrtConnStats.Statistics) are zeroed rather than gathered.
+	ConnStats(into *ConnStats, details bool)
 }
