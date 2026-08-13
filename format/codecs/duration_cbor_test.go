@@ -1,4 +1,4 @@
-package codecs_test
+package codecs
 
 import (
 	"bytes"
@@ -8,13 +8,16 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/common-go/util/codecutil"
 )
 
-// TestDurationSpecCBORBackwardCompat verifies that a duration.Spec value stored before Spec was tag-registered -
-// a bare, untagged CBOR integer of nanoseconds, since Spec's underlying type is int64 - still decodes correctly now
-// that it is. This encodes through the same MultiCodec (header included), just as a plain int64 rather than a
-// tagged Spec, matching what's already persisted in existing metadata; it must keep decoding as nanoseconds, not be
-// misread as some other unit.
+var cborCodec = NewCborV2Codec()
+
+// TestDurationSpecCBORBackwardCompat verifies that a plain, untagged CBOR integer of nanoseconds - the wire format
+// duration.Spec has always used, and what's already persisted in existing metadata from before any CBOR tag for it
+// existed - still decodes correctly into a *duration.Spec, regardless of what tag 45 is currently bound to (see
+// durationSpecRevert). This encodes through the same MultiCodec (header included), just as a plain int64, with no tag
+// or marshaler involved at all; it must keep decoding as nanoseconds, not be misread as some other unit.
 func TestDurationSpecCBORBackwardCompat(t *testing.T) {
 	buf := &bytes.Buffer{}
 	require.NoError(t, cborCodec.Encoder(buf).Encode(int64(200*time.Millisecond))) // 200,000,000 ns, no tag/marshaler
@@ -25,15 +28,18 @@ func TestDurationSpecCBORBackwardCompat(t *testing.T) {
 	require.Equal(t, 200*time.Millisecond, s.Duration())
 }
 
-// TestDurationSpecCBORRoundTrip verifies a duration.Spec round-trips through the codec, including inside a generic
-// interface{} decode - the shape used when reading raw metadata (e.g. SQMDR.Get()) - to confirm the decoded value
-// comes back as a duration.Spec, not a bare number. Spec has no custom CBOR marshaling of its own; this relies
-// entirely on Spec's CBOR tag registration (codecs.go) identifying the type on the wire.
+// TestDurationSpecCBORRoundTrip verifies a duration.Spec round-trips through the codec both via a typed decode and,
+// deliberately, inside a generic interface{} decode - the shape used when reading raw metadata (e.g. SQMDR.Get()).
+// Since bb0f8437 was reverted, a generic decode of tag 45 no longer produces a duration.Spec directly - it comes back
+// as the plain durationSpecRevert int64 the tag is now bound to, matching the bare-number wire format API clients
+// expect (see durationSpecRevert's doc). The final MapDecode step confirms that value can still be recovered as a
+// proper duration.Spec on demand, for callers that need one.
 func TestDurationSpecCBORRoundTrip(t *testing.T) {
 	spec := duration.MustParse("200ms")
+	var revert = durationSpecRevert(spec)
 
 	buf := &bytes.Buffer{}
-	require.NoError(t, cborCodec.Encoder(buf).Encode(&spec))
+	require.NoError(t, cborCodec.Encoder(buf).Encode(&revert))
 
 	var decoded duration.Spec
 	require.NoError(t, cborCodec.Decoder(bytes.NewReader(buf.Bytes())).Decode(&decoded))
@@ -41,13 +47,18 @@ func TestDurationSpecCBORRoundTrip(t *testing.T) {
 
 	var generic interface{}
 	require.NoError(t, cborCodec.Decoder(bytes.NewReader(buf.Bytes())).Decode(&generic))
-	genSpec, ok := generic.(duration.Spec)
-	require.True(t, ok, "expected duration.Spec, got %T: %v", generic, generic)
-	require.Equal(t, spec, genSpec)
+	genSpec, ok := generic.(durationSpecRevert)
+	require.True(t, ok, "expected durationSpecRevert, got %T: %v", generic, generic)
+	require.EqualValues(t, spec, genSpec)
+
+	var ds duration.Spec
+	err := codecutil.MapDecode(generic, &ds)
+	require.NoError(t, err)
+	require.Equal(t, spec, ds)
 }
 
-// TestDurationSpecCBORWrapped verifies the pointer-field shape actually used in production configs
-// (e.g. SrtConnectionConfig.Latency *duration.Spec) round-trips correctly.
+// TestDurationSpecCBORWrapped verifies the pointer-field shape actually used in production configs (e.g.
+// SrtConnectionConfig.Latency *duration.Spec) round-trips correctly.
 func TestDurationSpecCBORWrapped(t *testing.T) {
 	type wrapper struct {
 		Latency *duration.Spec

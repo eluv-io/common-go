@@ -81,9 +81,11 @@ func TestParsing(t *testing.T) {
 
 	assert.Equal(t, h+m+s+ms+us+ns, from("1h1m1.001001001s"))
 
-	// no units
-	assert.Equal(t, s, from("1"))
-	assert.Equal(t, 10*s, from("10"))
+	// ints
+	assert.Equal(t, ns, from("1"))
+	assert.Equal(t, s, from("1000000000"))
+
+	// floats
 	assert.Equal(t, 100*ms, from("0.1"))
 	assert.Equal(t, s+222*ms+333*us+444*ns, from("1.222333444"))
 }
@@ -126,6 +128,14 @@ func TestUnmarshalJSON(t *testing.T) {
 			want: 99*duration.Second + 500*duration.Millisecond,
 		},
 		{
+			text: `"99"`, // integer string (no unit)
+			want: 99 * ns,
+		},
+		{
+			text: `99`, // integer number
+			want: 99 * ns,
+		},
+		{
 			text:    `{"spec": "15ms"}`,
 			wrapper: true,
 			want:    15 * duration.Millisecond,
@@ -144,6 +154,16 @@ func TestUnmarshalJSON(t *testing.T) {
 			text:    `{"spec": 99.5}`, // number
 			wrapper: true,
 			want:    99*duration.Second + 500*duration.Millisecond,
+		},
+		{
+			text:    `{"spec": "99"}`, // integer string (no unit)
+			wrapper: true,
+			want:    99 * ns,
+		},
+		{
+			text:    `{"spec": 99}`, // integer number
+			wrapper: true,
+			want:    99 * ns,
 		},
 	}
 
