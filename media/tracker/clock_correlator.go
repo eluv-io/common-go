@@ -129,6 +129,12 @@ type rtpCorrelator struct {
 	errorCount   uint64
 	gaps         []rtp.Gap
 	gapsOverflow uint64
+
+	// seqGapCount/seqGapTotal are cumulative and unbounded (unlike errorCount/gaps, which count/retain gaps of
+	// either kind - sequence or timestamp - up to maxGaps): they count only genuine sequence-number gaps, and their
+	// total is the sum of every such gap's |SeqDiff| ever seen, not just the retained ones. See recordGap's doc.
+	seqGapCount uint64
+	seqGapTotal uint64
 }
 
 func newRtpCorrelator(maxGaps int) *rtpCorrelator {
@@ -146,7 +152,15 @@ func (c *rtpCorrelator) record(now utc.UTC, seq uint16, ts uint32) {
 	seqCur, tsCur, err := c.gap.Detect(seq, ts)
 	if err != nil {
 		c.errorCount++
-		c.recordGap(seqCur, tsCur)
+		seqDiff := seqCur - c.gap.Sequence.Previous()
+		if absInt64(seqDiff) > c.gap.SequenceThreshold {
+			// A genuine sequence-number gap, as opposed to one gap.Detect flagged purely for a timestamp
+			// discontinuity (seqDiff would then be the normal ~1 step, not a real skip) - see seqGapCount/
+			// seqGapTotal's doc.
+			c.seqGapCount++
+			c.seqGapTotal += uint64(absInt64(seqDiff))
+		}
+		c.recordGap(seqCur, tsCur, seqDiff)
 		c.discontinuity()
 		return
 	}
@@ -154,8 +168,9 @@ func (c *rtpCorrelator) record(now utc.UTC, seq uint16, ts uint32) {
 }
 
 // recordGap appends a Gap event, or - once maxGaps has been reached - only counts it (gapsOverflow), so a long-running
-// stream with sustained gaps cannot grow this list without bound.
-func (c *rtpCorrelator) recordGap(seq, ts int64) {
+// stream with sustained gaps cannot grow this list without bound. seqDiff is the already-computed sequence delta
+// (see record), passed in rather than recomputed here.
+func (c *rtpCorrelator) recordGap(seq, ts, seqDiff int64) {
 	if len(c.gaps) >= c.maxGaps {
 		c.gapsOverflow++
 		return
@@ -164,7 +179,7 @@ func (c *rtpCorrelator) recordGap(seq, ts int64) {
 		PacketNum: int(c.packetCount),
 		Seq:       seq,
 		SeqPrev:   c.gap.Sequence.Previous(),
-		SeqDiff:   seq - c.gap.Sequence.Previous(),
+		SeqDiff:   seqDiff,
 		Ts:        ts,
 		TsPrev:    c.gap.Timestamp.Previous(),
 		TsDiff:    ts - c.gap.Timestamp.Previous(),
@@ -179,6 +194,8 @@ func (c *rtpCorrelator) report(dst *ClockStats, total bool) {
 	dst.ErrorCount = c.errorCount
 	dst.Gaps = append(dst.Gaps[:0], c.gaps...)
 	dst.GapsOverflow = c.gapsOverflow
+	dst.SeqGapCount = c.seqGapCount
+	dst.SeqGapTotal = c.seqGapTotal
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

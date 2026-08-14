@@ -33,3 +33,11 @@ func round(f float64, decimals int) float64 {
 	p := math.Pow(10, float64(decimals))
 	return math.Round(f*p) / p
 }
+
+// absInt64 returns the absolute value of n.
+func absInt64(n int64) int64 {
+	if n < 0 {
+		return -n
+	}
+	return n
+}

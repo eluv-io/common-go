@@ -33,10 +33,24 @@ var (
 )
 
 func TestTicksToDuration(t *testing.T) {
+	// 1 tick is exactly 11111.111... ns; 11_111 ns is short of that, so DurationToTicks correctly floors to 0. The
+	// round trip through either direction is lossy here for the same reason: this ns/tick conversion can't be exact at
+	// every value.
+	assert.Equal(t, int64(0), rtp2.DurationToTicks(11_111))
+	assert.Equal(t, int64(1), rtp2.DurationToTicks(11_112))
+	assert.Equal(t, int64(1), rtp2.DurationToTicks(22_222))
+	assert.Equal(t, int64(2), rtp2.DurationToTicks(22_223))
+	assert.Equal(t, int64(2), rtp2.DurationToTicks(33_333))
+	assert.Equal(t, int64(3), rtp2.DurationToTicks(33_334))
+
+	assert.Equal(t, time.Duration(0), rtp2.TicksToDuration(0))
 	assert.Equal(t, time.Duration(11_111), rtp2.TicksToDuration(1))
-	assert.Equal(t, int64(1), rtp2.DurationToTicks(11_111))
-	assert.Equal(t, time.Duration(11_111), rtp2.TicksToDuration(rtp2.DurationToTicks(11_111)))
-	assert.Equal(t, int64(1), rtp2.DurationToTicks(rtp2.TicksToDuration(1)))
+	assert.Equal(t, time.Duration(22_222), rtp2.TicksToDuration(2))
+	assert.Equal(t, time.Duration(33_333), rtp2.TicksToDuration(3))
+
+	assert.Equal(t, int64(0), rtp2.DurationToTicks(11_111))
+	assert.Equal(t, time.Duration(0), rtp2.TicksToDuration(rtp2.DurationToTicks(11_111)))
+	assert.Equal(t, int64(0), rtp2.DurationToTicks(rtp2.TicksToDuration(1)))
 
 	assert.Equal(t, time.Second, rtp2.TicksToDuration(90000))
 	assert.Equal(t, int64(90000), rtp2.DurationToTicks(time.Second))

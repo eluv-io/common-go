@@ -98,6 +98,75 @@ func TestMediaTracker_RTP(t *testing.T) {
 	require.EqualValues(t, n, clocks["rtp"].PacketCount, "rtp ClockStats tracks its own packet count")
 }
 
+// TestMediaTracker_SeqGap_ExcludesTimestampOnlyDiscontinuity is a regression test for avpipe's SeqNumSkipCount/
+// SeqNumSkipTot (sourced from ClockStats.SeqGapCount/SeqGapTotal): rtp.GapDetector.Detect flags a gap when either
+// the sequence-number delta or the timestamp delta exceeds its threshold, so a timestamp-only discontinuity (normal
+// sequence delta, abnormal timestamp jump) still increments ErrorCount/Gaps - but must not be counted as a sequence
+// gap.
+func TestMediaTracker_SeqGap_ExcludesTimestampOnlyDiscontinuity(t *testing.T) {
+	tr := NewMediaTracker("test", Config{Rtp: true})
+	base := utc.Now()
+	var seq uint16
+	var rtpTs uint32 = 1_000
+	pcr := uint64(1_000_000)
+
+	track := func() {
+		dg, _ := tsDatagramWithPCR(pcr)
+		_ = tr.TrackDatagram(base, rtpWrap(seq, rtpTs, dg))
+		seq++
+		pcr += mpegts.DurationToPcr(2 * time.Millisecond)
+		base = base.Add(2 * time.Millisecond)
+	}
+	track()
+	rtpTs += 200_000 // > 1s at 90kHz (GapDetector's timestamp threshold), while seq keeps incrementing normally
+	track()
+	track()
+
+	s := tr.Stats()
+	require.Equal(t, "rtp", s.Clocks[0].Source)
+	require.Greater(t, s.Clocks[0].ErrorCount, uint64(0), "test setup must actually produce a (timestamp) gap")
+	require.NotEmpty(t, s.Clocks[0].Gaps)
+	require.EqualValues(t, 0, s.Clocks[0].SeqGapCount, "a timestamp-only discontinuity must not count as a sequence gap")
+	require.EqualValues(t, 0, s.Clocks[0].SeqGapTotal)
+}
+
+// TestMediaTracker_SeqGap_CountsRealSequenceGap verifies that a genuine sequence-number gap is counted in
+// SeqGapCount/SeqGapTotal, and that - unlike Gaps, which is bounded by Config.MaxGaps - the total keeps accumulating
+// across more gaps than MaxGaps retains.
+func TestMediaTracker_SeqGap_CountsRealSequenceGap(t *testing.T) {
+	tr := NewMediaTracker("test", Config{Rtp: true, MaxGaps: 2})
+	base := utc.Now()
+	var seq uint16
+	var rtpTs uint32 = 1_000
+	pcr := uint64(1_000_000)
+
+	track := func() {
+		dg, _ := tsDatagramWithPCR(pcr)
+		_ = tr.TrackDatagram(base, rtpWrap(seq, rtpTs, dg))
+		seq++
+		rtpTs += 180
+		pcr += mpegts.DurationToPcr(2 * time.Millisecond)
+		base = base.Add(2 * time.Millisecond)
+	}
+	track()
+
+	// track() itself advances seq by 1 on every call (its normal per-packet increment), so each iteration's actual
+	// sequence delta is jump+1, not jump.
+	const jump = 5
+	const actualDelta = jump + 1
+	const numGaps = 4 // more than MaxGaps (2), so Gaps/GapsOverflow bound while SeqGapCount/SeqGapTotal must not
+	for i := 0; i < numGaps; i++ {
+		seq += jump
+		track()
+	}
+
+	s := tr.Stats()
+	require.EqualValues(t, numGaps, s.Clocks[0].SeqGapCount)
+	require.EqualValues(t, numGaps*actualDelta, s.Clocks[0].SeqGapTotal)
+	require.Len(t, s.Clocks[0].Gaps, 2, "Gaps stays bounded by MaxGaps")
+	require.EqualValues(t, numGaps-2, s.Clocks[0].GapsOverflow)
+}
+
 // TestMediaTracker_MultiProgramPCR drives a multi-program transport stream and verifies that both PCR-bearing PIDs
 // are correlated independently.
 func TestMediaTracker_MultiProgramPCR(t *testing.T) {
@@ -254,6 +323,36 @@ func TestMediaTracker_LongHeaders(t *testing.T) {
 	require.NoError(t, p.From(pkt))
 	require.NoError(t, tr2.TrackPacket(utc.Now(), p))
 	require.EqualValues(t, 1, tr2.Stats().Errors.LongHeaders)
+}
+
+// TestMediaTracker_RtpHeaderOnlyDatagram is a regression test for a datagram that passes the whole-datagram
+// rtpTsMinLen guard (an RTP header plus at least one TS packet) purely because its RTP header is unusually large
+// (extensions/CSRC), leaving no room for an actual TS packet once the header is stripped. Before the fix, such a
+// datagram slipped through: an RTP clock sample was recorded and Ts() silently accepted the empty remainder as zero
+// TS packets with no error, so trackLocked returned nil without incrementing any drop/error counter.
+func TestMediaTracker_RtpHeaderOnlyDatagram(t *testing.T) {
+	// 12-byte fixed RTP header + a 4-byte extension marker + 46 extension words (184 bytes) of arbitrary extension
+	// data = 200 bytes total (== rtpTsMinLen), entirely header, zero TS payload. The extension profile (0x9999) is
+	// deliberately not the one-byte/two-byte header profiles pion/rtp parses element-by-element, so it's accepted as
+	// one opaque, unvalidated extension blob.
+	const extensionWords = 46
+	pkt := make([]byte, 16+extensionWords*4)
+	pkt[0] = 0x90 // version 2, extension bit set
+	pkt[1] = 33   // payload type MP2T
+	binary.BigEndian.PutUint16(pkt[2:], 0)
+	binary.BigEndian.PutUint32(pkt[4:], 1000)
+	binary.BigEndian.PutUint32(pkt[8:], 0xdeadbeef)
+	binary.BigEndian.PutUint16(pkt[12:], 0x9999)
+	binary.BigEndian.PutUint16(pkt[14:], extensionWords)
+	require.Len(t, pkt, rtpTsMinLen, "test setup must exactly hit the whole-datagram length guard")
+
+	tr := NewMediaTracker("test", Config{Rtp: true})
+	require.NoError(t, tr.TrackDatagram(utc.Now(), pkt))
+	s := tr.Stats()
+	require.EqualValues(t, 1, s.Errors.SmallPacketsDropped,
+		"a datagram with no room for a TS packet after the RTP header must be dropped and counted")
+	require.Len(t, s.Clocks[0].Gaps, 0)
+	require.EqualValues(t, 0, s.Clocks[0].Samples, "no RTP clock sample should be recorded for a payload-less datagram")
 }
 
 // TestMediaTracker_FaultyPaddingPackets verifies that a null-PID packet whose payload is not valid 0xFF padding is
@@ -457,6 +556,46 @@ func TestMediaTracker_Snapshot_ReusesSlices(t *testing.T) {
 	if len(snap.Clocks[0].Gaps) > 0 && len(gapsArray) > 0 {
 		require.Same(t, &gapsArray[0], &snap.Clocks[0].Gaps[0], "Gaps' backing array is reused, not reallocated")
 	}
+}
+
+// TestMediaTracker_Snapshot_ReusesGapsSlice is a regression test for a bug where clockStats rebuilt the RTP entry
+// (dst.Clocks[0]) via append(dst, ClockStats{}) on every call - a zero-value literal that clobbered the entry's
+// existing Gaps slice (and its backing array) before rtpClock.report ran, forcing report's own
+// append(dst.Gaps[:0], ...) to reallocate every single call instead of reusing it. Unlike
+// TestMediaTracker_Snapshot_ReusesSlices (which never actually produces a gap, so its own Gaps-reuse check never
+// executes), this test deliberately introduces a sequence-number gap so Clocks[0].Gaps is non-empty in both
+// snapshots, actually exercising the reuse path. The gap count is deliberately kept the same across the two compared
+// snapshots (one gap total, no new ones in between) so a legitimate slice-growth reallocation - expected the first
+// time Gaps grows past its initial capacity, and not what this test is about - doesn't masquerade as the bug.
+func TestMediaTracker_Snapshot_ReusesGapsSlice(t *testing.T) {
+	tr := NewMediaTracker("test", Config{Rtp: true})
+	base := utc.Now()
+	var seq uint16
+	var rtpTs uint32 = 1_000
+	var pcr uint64 = 1_000_000
+
+	track := func() {
+		dg, _ := tsDatagramWithPCR(pcr)
+		_ = tr.TrackDatagram(base, rtpWrap(seq, rtpTs, dg))
+		seq++
+		rtpTs += 180
+		pcr += mpegts.DurationToPcr(2 * time.Millisecond)
+		base = base.Add(2 * time.Millisecond)
+	}
+	track()
+	seq += 5 // sequence-number gap: SequenceThreshold is 1, so a jump of 5 is detected
+	track()
+	track() // no further gaps from here on
+
+	snap := &Stats{}
+	tr.Snapshot(snap, true, base, SnapshotOptions{})
+	require.Len(t, snap.Clocks[0].Gaps, 1, "test setup must actually produce exactly one gap")
+	gapsArray := snap.Clocks[0].Gaps
+
+	track() // still no new gaps
+	tr.Snapshot(snap, true, base, SnapshotOptions{})
+	require.Len(t, snap.Clocks[0].Gaps, 1)
+	require.Same(t, &gapsArray[0], &snap.Clocks[0].Gaps[0], "Gaps' backing array is reused, not reallocated")
 }
 
 // TestMediaTracker_Snapshot_PeriodResets verifies Snapshot(total=false) resets the period window exactly like

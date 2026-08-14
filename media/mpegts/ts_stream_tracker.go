@@ -545,8 +545,10 @@ func (s *Stats) CopyInto(dst *Stats) {
 		d.Jitter = stream.Jitter
 		d.Info = stream.Info
 		if stream.Pcr0 != nil {
-			pcr0 := *stream.Pcr0
-			d.Pcr0 = &pcr0
+			if d.Pcr0 == nil {
+				d.Pcr0 = &utc.UTC{}
+			}
+			*d.Pcr0 = *stream.Pcr0
 		} else {
 			d.Pcr0 = nil
 		}

@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/eluv-io/utc-go"
 )
 
 // TestTsStreamTracker_Snapshot_ReusesStreamsInPlace verifies that calling Snapshot repeatedly with the same
@@ -130,4 +132,27 @@ func TestStats_CopyInto_JitterMillisHist(t *testing.T) {
 
 	src.Streams[0].JitterMillisHist.Mean = 99
 	require.Equal(t, 42.0, dst.Streams[0].JitterMillisHist.Mean, "dst's copy is unaffected by mutating src's")
+}
+
+// TestStats_CopyInto_Pcr0 is a regression test for CopyInto allocating a fresh *utc.UTC for Pcr0 on every call instead
+// of reusing dst's existing allocation. Verifies both that dst's copy is independent of src's (mutating src afterward
+// must not affect dst) and that a second CopyInto into the same dst reuses the same *utc.UTC in place.
+func TestStats_CopyInto_Pcr0(t *testing.T) {
+	t0 := utc.Now()
+	src := &Stats{Streams: []*StreamStats{{Pid: 100, Pcr0: &t0}}}
+	dst := &Stats{}
+
+	src.CopyInto(dst)
+	require.NotNil(t, dst.Streams[0].Pcr0)
+	require.NotSame(t, src.Streams[0].Pcr0, dst.Streams[0].Pcr0, "CopyInto must not alias the source's Pcr0")
+	require.Equal(t, t0, *dst.Streams[0].Pcr0)
+	dstPcr0 := dst.Streams[0].Pcr0
+
+	t1 := t0.Add(1)
+	src.Streams[0].Pcr0 = &t1
+	require.Equal(t, t0, *dst.Streams[0].Pcr0, "dst's copy is unaffected by mutating src's")
+
+	src.CopyInto(dst)
+	require.Same(t, dstPcr0, dst.Streams[0].Pcr0, "destination reuse: same *utc.UTC, updated in place")
+	require.Equal(t, t1, *dst.Streams[0].Pcr0)
 }

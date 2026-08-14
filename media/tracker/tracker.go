@@ -236,6 +236,12 @@ func (t *mediaTracker) trackLocked(now utc.UTC, datagram []byte, src pktpool.Dec
 		if headerLen := len(datagram) - len(rtpLayer.Payload) - int(hdr.PaddingSize); headerLen != 12 {
 			t.longHeaders++
 		}
+		if len(rtpLayer.Payload) < packet.PacketSize {
+			// rtpTsMinLen above only bounds the whole datagram, not its payload. Drop the datagram if it doesn't at
+			// least contain one TS packet.
+			t.smallPacketsDropped++
+			return nil
+		}
 		t.rtpClock.record(now, hdr.SequenceNumber, hdr.Timestamp)
 	} else if len(datagram) < packet.PacketSize {
 		t.smallPacketsDropped++
@@ -480,7 +486,14 @@ func (t *mediaTracker) resetPeriod(now utc.UTC) {
 func (t *mediaTracker) clockStats(dst []ClockStats, total bool) []ClockStats {
 	dst = dst[:0]
 	if t.rtpClock != nil {
-		dst = append(dst, ClockStats{}) // reuses dst's backing array if it has capacity
+		// Grow back to length 1 without overwriting index 0 with a zero ClockStats{} - doing so would clobber that
+		// entry's Gaps slice (and its backing array) if this dst is being reused across calls, forcing report's own
+		// append(dst.Gaps[:0], ...) to reallocate on every single call instead of reusing it.
+		if cap(dst) >= 1 {
+			dst = dst[:1]
+		} else {
+			dst = append(dst, ClockStats{})
+		}
 		t.rtpClock.report(&dst[0], total)
 	}
 	// pcrClock.reports appends after whatever's already in dst (the rtp report, if any), starting at len(dst).

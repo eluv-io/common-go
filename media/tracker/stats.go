@@ -71,11 +71,19 @@ type ClockStats struct {
 	NumWraps int64 `json:"num_wraps,omitempty"`
 
 	// PacketCount, ErrorCount and Gaps describe RTP-level packet health ("rtp" source only). Gaps is bounded by
-	// Config.MaxGaps; GapsOverflow counts any gaps beyond that bound that were not retained.
+	// Config.MaxGaps; GapsOverflow counts any gaps beyond that bound that were not retained. ErrorCount/Gaps cover
+	// both sequence-number and timestamp discontinuities - see SeqGapCount/SeqGapTotal for sequence-only totals.
 	PacketCount  uint64    `json:"packet_count,omitempty"`
 	ErrorCount   uint64    `json:"error_count,omitempty"`
 	Gaps         []rtp.Gap `json:"gaps,omitempty"`
 	GapsOverflow uint64    `json:"gaps_overflow,omitempty"`
+
+	// SeqGapCount/SeqGapTotal are cumulative and unbounded (unlike ErrorCount/Gaps, above), and count only genuine
+	// sequence-number gaps, excluding gaps that were flagged purely for a timestamp discontinuity ("rtp" source
+	// only). SeqGapTotal is the sum of every such gap's absolute sequence-number delta ever seen, not just the
+	// retained ones in Gaps.
+	SeqGapCount uint64 `json:"seq_gap_count,omitempty"`
+	SeqGapTotal uint64 `json:"seq_gap_total,omitempty"`
 }
 
 // OutageStats counts gaps between consecutive packets exceeding Config.OutageThreshold.
@@ -157,6 +165,8 @@ func (s *Stats) CopyInto(dst *Stats) {
 		d.ErrorCount = c.ErrorCount
 		d.Gaps = append(d.Gaps[:0], c.Gaps...)
 		d.GapsOverflow = c.GapsOverflow
+		d.SeqGapCount = c.SeqGapCount
+		d.SeqGapTotal = c.SeqGapTotal
 	}
 
 	dst.Errors.Total = s.Errors.Total
