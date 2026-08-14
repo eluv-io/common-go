@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fxamacker/cbor/v2"
+
 	"github.com/eluv-io/errors-go"
 )
 
@@ -61,13 +63,51 @@ func (s *Spec) UnmarshalText(text []byte) error {
 
 // UnmarshalJSON implements custom unmarshaling. It supports unmarshalling from
 //   - human readable strings with units: "1h15m"
-//   - numeric strings/values without units, interpreted the same as parseNum:
-//     integers as nanoseconds ("10", 10), floats as seconds ("10.5", 10.5)
+//   - numeric strings without units, interpreted as seconds: "10.5"
+//   - numeric values, interpreted as seconds: 10.5
 func (s *Spec) UnmarshalJSON(b []byte) error {
 	if len(b) >= 2 && b[0] == '"' {
 		return s.UnmarshalText(b[1 : len(b)-1])
 	}
-	return s.parseNum(string(b))
+
+	f, err := strconv.ParseFloat(string(b), 64)
+	if err != nil {
+		return errors.E("unmarshal duration", errors.K.Invalid, err)
+	}
+	*s = Spec(f * float64(Second))
+	return nil
+}
+
+// MarshalCBOR implements cbor.Marshaler, encoding as a CBOR text string (String()'s output) instead of a bare
+// integer of the underlying nanosecond value - so a generic (interface{}) CBOR decode yields a plain, unambiguous
+// Go string (e.g. "200ms"), mirroring MarshalText/JSON.
+func (s Spec) MarshalCBOR() ([]byte, error) {
+	return cbor.Marshal(s.String())
+}
+
+// UnmarshalCBOR implements cbor.Unmarshaler. Accepts a CBOR text string (the current wire format, via FromString)
+// or a bare CBOR integer (Spec's original wire format - nanoseconds, matching its underlying time.Duration - kept
+// for backward compatibility with data persisted before this method existed).
+func (s *Spec) UnmarshalCBOR(data []byte) error {
+	var v any
+	if err := cbor.Unmarshal(data, &v); err != nil {
+		return errors.E("unmarshal duration", errors.K.Invalid, err)
+	}
+	switch val := v.(type) {
+	case string:
+		parsed, err := FromString(val)
+		if err != nil {
+			return errors.E("unmarshal duration", errors.K.Invalid, err)
+		}
+		*s = parsed
+	case int64:
+		*s = Spec(val)
+	case uint64:
+		*s = Spec(int64(val))
+	default:
+		return errors.E("unmarshal duration", errors.K.Invalid, "reason", "unsupported CBOR type", "type", val)
+	}
+	return nil
 }
 
 func (s Spec) Duration() time.Duration {
@@ -121,25 +161,6 @@ func (s Spec) RoundTo(decimals int) Spec {
 	return Spec(d.Round(to * factor))
 }
 
-// parseNum parses a unitless numeric string into a Spec, distinguishing by syntax rather than value: an integer
-// literal ("10") is interpreted as nanoseconds - Spec's own underlying unit, and what a generic (non-typed) decode of
-// a CBOR- or otherwise-serialized Spec re-marshals to JSON as (see format/codecs's CBOR tag 45 handling) - while a
-// float literal ("10.5") is interpreted as seconds, the older, human-authored-config convention. Same value, "10" vs
-// "10.0", therefore parses to a different duration; that's intentional, not a rounding artifact.
-func (s *Spec) parseNum(b string) error {
-	i, err := strconv.ParseInt(b, 10, 64)
-	if err == nil {
-		*s = Spec(i) // integer value interpreted as nanos!
-		return nil
-	}
-	f, err := strconv.ParseFloat(b, 64)
-	if err == nil {
-		*s = Spec(f * float64(Second)) // float value interpreted as seconds!
-		return nil
-	}
-	return errors.E("unmarshal duration", errors.K.Invalid, err)
-}
-
 // FromString parses the given duration string into a duration spec.
 func FromString(s string) (Spec, error) {
 	d, err := time.ParseDuration(s)
@@ -147,9 +168,12 @@ func FromString(s string) (Spec, error) {
 		return Spec(d), nil
 	}
 
-	var spec Spec
-	err = spec.parseNum(s)
-	return spec, err
+	f, err2 := strconv.ParseFloat(s, 64)
+	if err2 == nil {
+		return Spec(f * float64(Second)), nil
+	}
+
+	return 0, errors.E("parse", err, "duration_spec", s)
 }
 
 // MustParse parses the given duration string into a duration spec, panicking in

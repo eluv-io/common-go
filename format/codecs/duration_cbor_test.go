@@ -57,6 +57,25 @@ func TestDurationSpecCBORRoundTrip(t *testing.T) {
 	require.Equal(t, spec, ds)
 }
 
+// TestDurationSpecCBORSelfDescribing verifies duration.Spec's own MarshalCBOR/UnmarshalCBOR: encoding a plain Spec
+// value (no durationSpecRevert wrapping, no tag 45 involved) now produces a CBOR text string - String()'s output -
+// rather than a bare integer, so a generic interface{} decode yields a plain, unambiguous Go string instead of a
+// number that could be misread as the wrong unit.
+func TestDurationSpecCBORSelfDescribing(t *testing.T) {
+	spec := duration.MustParse("200ms")
+
+	buf := &bytes.Buffer{}
+	require.NoError(t, cborCodec.Encoder(buf).Encode(spec))
+
+	var decoded duration.Spec
+	require.NoError(t, cborCodec.Decoder(bytes.NewReader(buf.Bytes())).Decode(&decoded))
+	require.Equal(t, spec, decoded)
+
+	var generic interface{}
+	require.NoError(t, cborCodec.Decoder(bytes.NewReader(buf.Bytes())).Decode(&generic))
+	require.Equal(t, "200ms", generic, "a generic decode must yield a plain, unambiguous string")
+}
+
 // TestDurationSpecCBORWrapped verifies the pointer-field shape actually used in production configs (e.g.
 // SrtConnectionConfig.Latency *duration.Spec) round-trips correctly.
 func TestDurationSpecCBORWrapped(t *testing.T) {

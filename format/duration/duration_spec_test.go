@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -81,9 +82,10 @@ func TestParsing(t *testing.T) {
 
 	assert.Equal(t, h+m+s+ms+us+ns, from("1h1m1.001001001s"))
 
-	// ints
-	assert.Equal(t, ns, from("1"))
-	assert.Equal(t, s, from("1000000000"))
+	// bare numbers (no unit) are seconds - the same convention for an integer-looking value as for a float,
+	// regardless of magnitude.
+	assert.Equal(t, s, from("1"))
+	assert.Equal(t, 1_000_000_000*s, from("1000000000"))
 
 	// floats
 	assert.Equal(t, 100*ms, from("0.1"))
@@ -129,11 +131,11 @@ func TestUnmarshalJSON(t *testing.T) {
 		},
 		{
 			text: `"99"`, // integer string (no unit)
-			want: 99 * ns,
+			want: 99 * s,
 		},
 		{
 			text: `99`, // integer number
-			want: 99 * ns,
+			want: 99 * s,
 		},
 		{
 			text:    `{"spec": "15ms"}`,
@@ -158,12 +160,12 @@ func TestUnmarshalJSON(t *testing.T) {
 		{
 			text:    `{"spec": "99"}`, // integer string (no unit)
 			wrapper: true,
-			want:    99 * ns,
+			want:    99 * s,
 		},
 		{
 			text:    `{"spec": 99}`, // integer number
 			wrapper: true,
-			want:    99 * ns,
+			want:    99 * s,
 		},
 	}
 
@@ -208,6 +210,104 @@ func TestWrappedJSON(t *testing.T) {
 	var unmarshalled Wrapper
 	err = json.Unmarshal(b, &unmarshalled)
 	assert.NoError(t, err)
+	assert.Equal(t, wrapper, unmarshalled)
+}
+
+// TestCBOR verifies duration.Spec's MarshalCBOR/UnmarshalCBOR: the wire format is a plain CBOR text string
+// (String()'s output), so a generic (interface{}) decode yields that same string, never a bare number.
+func TestCBOR(t *testing.T) {
+	str := "1h1m1.001001001s"
+	d := from(str)
+
+	b, err := cbor.Marshal(d)
+	assert.NoError(t, err)
+
+	var decodedStr string
+	assert.NoError(t, cbor.Unmarshal(b, &decodedStr))
+	assert.Equal(t, str, decodedStr, "wire format must be a plain CBOR text string")
+
+	var unmarshalled duration.Spec
+	assert.NoError(t, cbor.Unmarshal(b, &unmarshalled))
+	assert.Equal(t, d, unmarshalled)
+
+	var generic interface{}
+	assert.NoError(t, cbor.Unmarshal(b, &generic))
+	assert.Equal(t, str, generic, "a generic decode must yield a plain, unambiguous string")
+}
+
+// TestUnmarshalCBOR covers UnmarshalCBOR's accepted wire shapes: a text string (current format, via FromString)
+// and a bare integer (Spec's original nanosecond format, kept for backward compatibility) - both signs, since CBOR
+// decodes a positive bare integer as uint64 and a negative one as int64, exercising both switch cases in
+// UnmarshalCBOR - plus its error cases.
+func TestUnmarshalCBOR(t *testing.T) {
+	tests := []struct {
+		name      string
+		data      func() []byte
+		want      duration.Spec
+		wantError bool
+	}{
+		{
+			name: "text string with unit",
+			data: func() []byte { b, _ := cbor.Marshal("15ms"); return b },
+			want: 15 * duration.Millisecond,
+		},
+		{
+			name: "text string, bare number (seconds)",
+			data: func() []byte { b, _ := cbor.Marshal("99"); return b },
+			want: 99 * duration.Second,
+		},
+		{
+			name: "legacy bare positive integer (nanoseconds, decodes generically as uint64)",
+			data: func() []byte { b, _ := cbor.Marshal(int64(200 * time.Millisecond)); return b },
+			want: 200 * duration.Millisecond,
+		},
+		{
+			name: "legacy bare negative integer (nanoseconds, decodes generically as int64)",
+			data: func() []byte { b, _ := cbor.Marshal(int64(-200 * time.Millisecond)); return b },
+			want: -200 * duration.Millisecond,
+		},
+		{
+			name:      "invalid string",
+			data:      func() []byte { b, _ := cbor.Marshal("not a duration"); return b },
+			wantError: true,
+		},
+		{
+			name:      "unsupported CBOR type (float)",
+			data:      func() []byte { b, _ := cbor.Marshal(1.5); return b },
+			wantError: true,
+		},
+		{
+			name:      "unsupported CBOR type (bool)",
+			data:      func() []byte { b, _ := cbor.Marshal(true); return b },
+			wantError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var spec duration.Spec
+			err := cbor.Unmarshal(tt.data(), &spec)
+			if tt.wantError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.want, spec)
+			}
+		})
+	}
+}
+
+// TestWrappedCBOR verifies a struct field of type duration.Spec round-trips correctly through CBOR.
+func TestWrappedCBOR(t *testing.T) {
+	str := "1h1m1.001001001s"
+	spec := from(str)
+
+	wrapper := Wrapper{Spec: spec}
+	b, err := cbor.Marshal(wrapper)
+	assert.NoError(t, err)
+
+	var unmarshalled Wrapper
+	assert.NoError(t, cbor.Unmarshal(b, &unmarshalled))
 	assert.Equal(t, wrapper, unmarshalled)
 }
 
