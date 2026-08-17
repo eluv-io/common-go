@@ -95,7 +95,7 @@ func (p *Pool) GetN(count byte) *[]byte {
 // into the pool. The caller should no longer use the buffer after calling.
 // Buffers that have been re-sliced will be ignored.
 func (p *Pool) Put(buf *[]byte) {
-	if buf == nil {
+	if buf == nil || *buf == nil {
 		log.Warn("buffer not released back into pool", "reason", "nil buffer")
 		return
 	} else if cap(*buf) != p.BufSize+1 {

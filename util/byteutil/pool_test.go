@@ -164,6 +164,20 @@ func TestPool(t *testing.T) {
 	require.Equal(t, float64(closeCount), ctx.released.val.Load())
 }
 
+func TestPut_NilSlice(t *testing.T) {
+	p := byteutil.NewPool(64)
+
+	// Putting nil pointer should be safe
+	p.Put(nil)
+
+	// Putting pointer to nil slice should not panic
+	var nilSlice []byte
+	require.NotPanics(t, func() {
+		p.Put(&nilSlice)
+	})
+}
+
+
 // % go test -tags -count=1 -v -bench="Benchmark.*Pool" -run="Benchmark" ./util/byteutil
 // goos: darwin
 // goarch: arm64
