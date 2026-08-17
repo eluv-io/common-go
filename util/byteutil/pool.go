@@ -103,8 +103,7 @@ func (p *Pool) Put(buf *[]byte) {
 		return
 	} else if len(*buf) != p.BufSize {
 		log.Warn("buffer resized and released back into pool", "expected_size", p.BufSize, "actual_size", len(*buf))
-		b := (*buf)[:p.BufSize]
-		buf = &b // Causes an extra allocation
+		*buf = (*buf)[:p.BufSize]
 	}
 	// Decrement buffer's reference counter
 	if p.decrCounter(*buf) {

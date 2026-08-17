@@ -177,6 +177,26 @@ func TestPut_NilSlice(t *testing.T) {
 	})
 }
 
+func TestPut_ReslicedBuffer(t *testing.T) {
+	bufSize := 64
+	p := byteutil.NewPool(bufSize)
+
+	buf := p.Get()
+	require.Equal(t, bufSize, len(*buf))
+
+	// Reslice buffer to a smaller length, retaining capacity
+	*buf = (*buf)[:10]
+	require.Equal(t, 10, len(*buf))
+	require.Equal(t, bufSize+1, cap(*buf))
+
+	// Put resliced buffer back into pool
+	p.Put(buf)
+
+	// In-place reslicing should restore len(*buf) to bufSize on the caller's slice header
+	require.Equal(t, bufSize, len(*buf))
+}
+
+
 
 // % go test -tags -count=1 -v -bench="Benchmark.*Pool" -run="Benchmark" ./util/byteutil
 // goos: darwin
