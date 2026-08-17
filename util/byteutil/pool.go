@@ -3,7 +3,6 @@ package byteutil
 import (
 	"sync"
 
-	"github.com/eluv-io/common-go/util"
 	"github.com/eluv-io/log-go"
 )
 
@@ -40,7 +39,14 @@ func NewPool(bufSize int) *Pool {
 	p := &Pool{}
 	p.BufSize = bufSize
 	p.p = &sync.Pool{New: p.new}
-	p.locker = util.NoopLocker{}
+	p.locker = &sync.Mutex{}
+	return p
+}
+
+// WithLocker sets the locker used for guarding critical sections. May be set to a no-op implementation if external
+// locking is used.
+func (p *Pool) WithLocker(l sync.Locker) *Pool {
+	p.locker = l
 	return p
 }
 
