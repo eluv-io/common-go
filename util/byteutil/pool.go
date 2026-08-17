@@ -145,11 +145,11 @@ func (p *Pool) setCounter(buf []byte, count byte) {
 // the ref count.
 func (p *Pool) decrCounter(buf []byte) bool {
 	buf = buf[:p.BufSize+1]
+	p.locker.Lock()
+	defer p.locker.Unlock()
 	n := buf[p.BufSize]
 	if n > 0 {
-		p.locker.Lock()
 		buf[p.BufSize] = n - 1
-		p.locker.Unlock()
 		if n == 1 {
 			return true
 		}
