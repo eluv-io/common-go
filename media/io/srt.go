@@ -186,20 +186,28 @@ type wrappedConn struct {
 
 // ConnStats implements StatsReporter, exposing the connection's local and remote addresses and SRT
 // protocol stats.
-func (w *wrappedConn) ConnStats(details bool) ConnStats {
-	cs := ConnStats{}
+func (w *wrappedConn) ConnStats(into *ConnStats, details bool) {
+	if into == nil {
+		return
+	}
+	into.RemoteAddr = ""
 	if addr := w.RemoteAddr(); addr != nil {
-		cs.RemoteAddr = addr.String()
+		into.RemoteAddr = addr.String()
 	}
+	into.LocalAddr = ""
 	if addr := w.LocalAddr(); addr != nil {
-		cs.LocalAddr = addr.String()
+		into.LocalAddr = addr.String()
 	}
-	srtStats := &SrtConnStats{Version: w.Version(), Encrypted: w.encrypted}
+	if into.SRT == nil {
+		into.SRT = &SrtConnStats{}
+	}
+	into.SRT.Version = w.Version()
+	into.SRT.Encrypted = w.encrypted
 	if details {
-		w.Stats(&srtStats.Statistics)
+		w.Stats(&into.SRT.Statistics)
+	} else {
+		into.SRT.Statistics = srt.Statistics{}
 	}
-	cs.SRT = srtStats
-	return cs
 }
 
 func newWrappedConn(

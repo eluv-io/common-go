@@ -143,6 +143,20 @@ var cborConverters = []cborConverter{
 
 ////////////////////////////////////////////////////////////////////////////////
 
+// durationSpecRevert undoes bb0f8437's mapping of CBOR tag 45 to *duration.Spec. That mapping fixed a real bug: a
+// generic (interface{}) decode of a tagged value produced a bare int64 of nanoseconds rather than a duration.Spec, and
+// duration.Spec.UnmarshalJSON's old bare-number-as-seconds convention (meant for human-authored config) would silently
+// inflate that value by 1e9x if it were later re-decoded through encoding/json (e.g. 200ms became ~6.3 years) - but it
+// broke API clients that decode CBOR generically and expect that bare-number wire format, giving them a quoted duration
+// string ("200ms") instead.
+//
+// Binding tag 45 to this plain int64 type instead keeps the tag's un/wrap behavior - so already-persisted tagged data
+// and decodes into a typed *duration.Spec still work, see TestDurationSpecCBORRoundTrip - while making a generic decode
+// produce a bare number again, matching pre-bb0f8437 wire compatibility. The original inflation bug this all started
+// from is now fixed independently, in duration.Spec.UnmarshalJSON/parseNum (a bare integer is interpreted as
+// nanoseconds, not seconds), so reverting the generic-decode type here doesn't reopen it.
+type durationSpecRevert int64
+
 func makeCborV2Codec() Codec {
 	var err error
 	tagSet := cbor.NewTagSet()
@@ -160,6 +174,7 @@ func makeCborV2Codec() Codec {
 		{42, reflect.TypeOf((*link.Link)(nil))},
 		{43, reflect.TypeOf((*utc.UTC)(nil))},
 		{44, reflect.TypeOf((*token.Token)(nil))},
+		{45, reflect.TypeOf((*durationSpecRevert)(nil))},
 	}
 
 	for _, tag := range tags {

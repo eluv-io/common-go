@@ -54,7 +54,7 @@ type InStats struct {
 	MinT0 utc.UTC `json:"min_t0"`
 
 	// StreamResets is the number of times the stream has been reset due to a gap.
-	StreamResets int `json:"stream_resets,omitempty"`
+	StreamResets int `json:"stream_resets"`
 
 	// LastStreamReset is the time of the last stream reset.
 	LastStreamReset utc.UTC `json:"last_stream_reset"`

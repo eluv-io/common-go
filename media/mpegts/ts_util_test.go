@@ -1,6 +1,8 @@
 package mpegts
 
 import (
+	"math"
+	"math/big"
 	"testing"
 	"time"
 
@@ -40,6 +42,51 @@ func TestPcrToDuration_RoundTrip(t *testing.T) {
 	})
 }
 
+// TestPcrToDuration_NoOverflow is a regression test for an int64 overflow in PcrToDuration's old implementation
+// (time.Duration(diff) * time.Microsecond / 27), which multiplied before dividing: the intermediate diff*1000
+// overflowed once diff exceeded math.MaxInt64/1000 (~9.22e15 ticks, ~10.8 years of continuous 27MHz PCR ticks) - a
+// bound a long-running live stream's unwrapped (unbounded-across-wraps) PCR clock can reach. Verifies the result
+// stays correct (cross-checked via arbitrary-precision arithmetic) well past that old threshold.
+func TestPcrToDuration_NoOverflow(t *testing.T) {
+	oldOverflowThreshold := uint64(math.MaxInt64 / 1000)
+	tests := []uint64{
+		oldOverflowThreshold,
+		oldOverflowThreshold * 2,
+		oldOverflowThreshold * 10,
+	}
+	for _, diff := range tests {
+		got := PcrToDuration(diff)
+		require.Positive(t, got, "diff=%d", diff)
+
+		// Independent expected value via arbitrary-precision arithmetic: diff * 1000ns / 27, floored.
+		expected := new(big.Int).Mul(new(big.Int).SetUint64(diff), big.NewInt(int64(time.Microsecond)))
+		expected.Div(expected, big.NewInt(27))
+		require.Equal(t, expected.Int64(), int64(got), "diff=%d", diff)
+	}
+}
+
+// TestDurationToPcr_NoOverflow is the mirror-direction regression test: DurationToPcr's old implementation
+// (int64(d)*27/int64(time.Microsecond)) had the same multiply-before-divide overflow hazard, overflowing for a d
+// beyond ~10.8 years - well within time.Duration's own representable range (~292 years), so a legitimate duration
+// value could already trigger it without needing any PCR-specific unwrapping.
+func TestDurationToPcr_NoOverflow(t *testing.T) {
+	oldOverflowThreshold := time.Duration(math.MaxInt64 / 27)
+	tests := []time.Duration{
+		oldOverflowThreshold,
+		oldOverflowThreshold + oldOverflowThreshold/2,
+		time.Duration(math.MaxInt64), // the largest representable time.Duration
+	}
+	for _, d := range tests {
+		got := DurationToPcr(d)
+		require.Positive(t, got, "d=%d", d)
+
+		// Independent expected value via arbitrary-precision arithmetic: d * 27 / 1000ns, floored.
+		expected := new(big.Int).Mul(big.NewInt(int64(d)), big.NewInt(27))
+		expected.Div(expected, big.NewInt(int64(time.Microsecond)))
+		require.Equal(t, expected.Uint64(), got, "d=%d", d)
+	}
+}
+
 func TestPtsToDuration(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -55,6 +102,29 @@ func TestPtsToDuration(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			require.Equal(t, tc.expected, PtsToDuration(tc.ticks))
 		})
+	}
+}
+
+// TestPtsToDuration_NoOverflow is a regression test for an int64 overflow in PtsToDuration's old implementation
+// (time.Duration(diff) * 100 * time.Microsecond / 9), which multiplied before dividing: the intermediate
+// diff*100000 overflowed once diff exceeded math.MaxInt64/100000 (~9.22e13 ticks, ~32.5 years of continuous 90kHz
+// PTS/DTS ticks). Verifies the result stays correct (cross-checked via arbitrary-precision arithmetic) well past
+// that old threshold.
+func TestPtsToDuration_NoOverflow(t *testing.T) {
+	oldOverflowThreshold := uint64(math.MaxInt64 / 100000)
+	tests := []uint64{
+		oldOverflowThreshold,
+		oldOverflowThreshold * 2,
+		oldOverflowThreshold * 9,
+	}
+	for _, diff := range tests {
+		got := PtsToDuration(diff)
+		require.Positive(t, got, "diff=%d", diff)
+
+		// Independent expected value via arbitrary-precision arithmetic: diff * 100 * 1000ns / 9, floored.
+		expected := new(big.Int).Mul(new(big.Int).SetUint64(diff), big.NewInt(100*int64(time.Microsecond)))
+		expected.Div(expected, big.NewInt(9))
+		require.Equal(t, expected.Int64(), int64(got), "diff=%d", diff)
 	}
 }
 

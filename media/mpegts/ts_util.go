@@ -87,17 +87,29 @@ func PcrDiff(p1, p2 uint64) time.Duration {
 
 // PcrToDuration converts the given PCR ticks to a time.Duration.
 // PCR is in 27 mHz units, i.e. 1 tick = 1/27000000 s
+//
+// int64 overflow cap: ~292 years with the q/r split below, ~10.8 years without it.
 func PcrToDuration(diff uint64) time.Duration {
-	return time.Duration(diff) * time.Microsecond / 27
+	q, r := diff/27, diff%27
+	return time.Duration(q)*time.Microsecond + time.Duration(r)*time.Microsecond/27
 }
 
 // DurationToPcr converts a time.Duration to PCR ticks (27 MHz clock).
 // Inverse of PcrToDuration: t = d * 27 / µs.
+//
+// int64 overflow cap: no overflow with the q/r split below (q*27 stays well under int64 max for any representable
+// time.Duration), ~10.8 years without it.
 func DurationToPcr(d time.Duration) uint64 {
-	return uint64(int64(d) * 27 / int64(time.Microsecond))
+	dur := int64(d)
+	q, r := dur/int64(time.Microsecond), dur%int64(time.Microsecond)
+	return uint64(q*27 + r*27/int64(time.Microsecond))
 }
 
+// PtsToDuration converts a PTS/DTS delta (90 kHz clock) to a time.Duration.
+//
+// int64 overflow cap: ~292 years with the q/r split below, ~32.5 years without it.
 func PtsToDuration(diff uint64) time.Duration {
 	// PTS/DTS is in 90 kHz units, i.e. 1 tick = 1/90000 s
-	return time.Duration(diff) * 100 * time.Microsecond / 9
+	q, r := diff/9, diff%9
+	return time.Duration(q)*100*time.Microsecond + time.Duration(r)*100*time.Microsecond/9
 }
