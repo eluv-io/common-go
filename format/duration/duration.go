@@ -10,27 +10,19 @@ import (
 	"github.com/eluv-io/errors-go"
 )
 
-// Spec represents a time duration. It provides marshaling to and from a human readable format, e.g. 1h15m or 200ms.
-// Deprecated - prefer Duration which provides consistent marshaling for JSON and CBOR as string.
-type Spec time.Duration
+// Duration represents a time duration. It provides marshaling to and from a human-readable format, e.g. 1h15m or 200ms.
+//
+// This is a replacement for duration.Spec, which is deprecated due to inconsistent JSON (string) and CBOR (int)
+// marshaling.
+type Duration time.Duration
 
-const (
-	Zero        Spec = 0
-	Nanosecond  Spec = 1
-	Microsecond      = 1000 * Nanosecond
-	Millisecond      = 1000 * Microsecond
-	Second           = 1000 * Millisecond
-	Minute           = 60 * Second
-	Hour             = 60 * Minute
-)
-
-// String returns the duration spec formatted like time.Duration.String(), but
+// String returns the duration formatted like time.Duration.String(), but
 // omits zero values.
 // Examples:
 //
 //	1h0m0s is formatted as 1h
 //	1h0m5s is formatted as 1h5s
-func (s Spec) String() string {
+func (s Duration) String() string {
 	d := s.Duration()
 	f := d.String()
 
@@ -47,13 +39,13 @@ func (s Spec) String() string {
 }
 
 // MarshalText implements custom marshaling using the string representation.
-func (s Spec) MarshalText() ([]byte, error) {
+func (s Duration) MarshalText() ([]byte, error) {
 	return []byte(s.String()), nil
 }
 
 // UnmarshalText implements custom unmarshaling from the string representation.
-func (s *Spec) UnmarshalText(text []byte) error {
-	parsed, err := FromString(string(text))
+func (s *Duration) UnmarshalText(text []byte) error {
+	parsed, err := DurationFromString(string(text))
 	if err != nil {
 		return errors.E("unmarshal duration", errors.K.Invalid, err)
 	}
@@ -65,7 +57,7 @@ func (s *Spec) UnmarshalText(text []byte) error {
 //   - human readable strings with units: "1h15m"
 //   - numeric strings without units, interpreted as seconds: "10.5"
 //   - numeric values, interpreted as seconds: 10.5
-func (s *Spec) UnmarshalJSON(b []byte) error {
+func (s *Duration) UnmarshalJSON(b []byte) error {
 	if len(b) >= 2 && b[0] == '"' {
 		return s.UnmarshalText(b[1 : len(b)-1])
 	}
@@ -74,46 +66,43 @@ func (s *Spec) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return errors.E("unmarshal duration", errors.K.Invalid, err)
 	}
-	*s = Spec(f * float64(Second))
+	*s = Duration(f * float64(Second))
 	return nil
 }
 
-// MarshalCBOR was removed to restore the legacy CBOR wire format (bare integer of the underlying nanosecond value) for
-// backward compatibility with already persisted data. The "correct" implementation is commented out below for
-// reference.
-//
 // MarshalCBOR implements cbor.Marshaler, encoding as a CBOR text string (String()'s output) instead of a bare
 // integer of the underlying nanosecond value - so a generic (interface{}) CBOR decode yields a plain, unambiguous
 // Go string (e.g. "200ms"), mirroring MarshalText/JSON.
-// func (s Spec) MarshalCBOR() ([]byte, error) {
-// 	return cbor.Marshal(s.String())
-// }
+func (s Duration) MarshalCBOR() ([]byte, error) {
+	return cbor.Marshal(s.String())
+}
 
-// UnmarshalCBOR implements cbor.Unmarshaler. Accepts a CBOR text string or a bare CBOR integer (nanoseconds, matching
-// its underlying time.Duration).
-func (s *Spec) UnmarshalCBOR(data []byte) error {
+// UnmarshalCBOR implements cbor.Unmarshaler. Accepts a CBOR text string (the current wire format, via FromString)
+// or a bare CBOR integer (Duration's original wire format - nanoseconds, matching its underlying time.Duration - kept
+// for backward compatibility with data persisted before this method existed).
+func (s *Duration) UnmarshalCBOR(data []byte) error {
 	var v any
 	if err := cbor.Unmarshal(data, &v); err != nil {
 		return errors.E("unmarshal duration", errors.K.Invalid, err)
 	}
 	switch val := v.(type) {
 	case string:
-		parsed, err := FromString(val)
+		parsed, err := DurationFromString(val)
 		if err != nil {
 			return errors.E("unmarshal duration", errors.K.Invalid, err)
 		}
 		*s = parsed
 	case int64:
-		*s = Spec(val)
+		*s = Duration(val)
 	case uint64:
-		*s = Spec(int64(val))
+		*s = Duration(int64(val))
 	default:
 		return errors.E("unmarshal duration", errors.K.Invalid, "reason", "unsupported CBOR type", "type", val)
 	}
 	return nil
 }
 
-func (s Spec) Duration() time.Duration {
+func (s Duration) Duration() time.Duration {
 	return time.Duration(s)
 }
 
@@ -122,7 +111,7 @@ func (s Spec) Duration() time.Duration {
 //   - nanos  are capped if d > 1 millisecond: 1.123444ms -> 1.123ms
 //   - micros are capped if d > 1 second:      1.123555s  -> 1.124s
 //   - millis are capped if d > 1 minute:      1m10s444ms -> 1m10s
-func (s Spec) Round() Spec {
+func (s Duration) Round() Duration {
 	return s.RoundTo(3)
 }
 
@@ -133,7 +122,7 @@ func (s Spec) Round() Spec {
 //   - 1.123444s, 0 decimals:   1s
 //
 // For durations greater than one minute, decimals is ignored and the result is always rounded to the nearest second.
-func (s Spec) RoundTo(decimals int) Spec {
+func (s Duration) RoundTo(decimals int) Duration {
 	if decimals > 3 {
 		decimals = 3
 	}
@@ -145,7 +134,7 @@ func (s Spec) RoundTo(decimals int) Spec {
 	d := time.Duration(s)
 	switch {
 	case d > time.Minute:
-		return Spec(d.Round(time.Second))
+		return Duration(d.Round(time.Second))
 	case d > time.Second:
 		to = time.Millisecond
 	case d > time.Millisecond:
@@ -161,40 +150,39 @@ func (s Spec) RoundTo(decimals int) Spec {
 		factor *= 10
 	}
 
-	return Spec(d.Round(to * factor))
+	return Duration(d.Round(to * factor))
 }
 
-// FromString parses the given duration string into a duration spec.
-func FromString(s string) (Spec, error) {
+// DurationFromString parses the given duration string into a Duration.
+func DurationFromString(s string) (Duration, error) {
 	d, err := time.ParseDuration(s)
 	if err == nil {
-		return Spec(d), nil
+		return Duration(d), nil
 	}
 
 	f, err2 := strconv.ParseFloat(s, 64)
 	if err2 == nil {
-		return Spec(f * float64(Second)), nil
+		return Duration(f * float64(Second)), nil
 	}
 
-	return 0, errors.E("parse", err, "duration_spec", s)
+	return 0, errors.E("parse", err, "duration_Duration", s)
 }
 
-// MustParse parses the given duration string into a duration spec, panicking in
-// case of errors.
-func MustParse(s string) Spec {
-	spec, err := FromString(s)
+// MustParseDuration parses the given duration string into a Duration, panicking in case of errors.
+func MustParseDuration(s string) Duration {
+	dur, err := DurationFromString(s)
 	if err != nil {
 		panic(err)
 	}
-	return spec
+	return dur
 }
 
-// Parse parses the given duration string into a duration spec, returning the
-// parsed default in case of errors. Panics if the default cannot be parsed.
-func Parse(s string, def string) Spec {
-	spec, err := FromString(s)
+// ParseDuration parses the given duration string into a Duration, returning the parsed default in case of errors.
+// Panics if the default cannot be parsed.
+func ParseDuration(s string, def string) Duration {
+	dur, err := DurationFromString(s)
 	if err != nil {
-		return MustParse(def)
+		return MustParseDuration(def)
 	}
-	return spec
+	return dur
 }

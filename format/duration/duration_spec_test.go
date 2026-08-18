@@ -92,6 +92,12 @@ func TestParsing(t *testing.T) {
 	assert.Equal(t, s+222*ms+333*us+444*ns, from("1.222333444"))
 }
 
+func TestParse(t *testing.T) {
+	assert.Equal(t, m, duration.Parse("invalid", "1m"))
+	assert.Equal(t, m, duration.Parse("1m", "2m"))
+	assert.Panics(t, func() { duration.Parse("invalid", "invalid") })
+}
+
 func TestJSON(t *testing.T) {
 	s := "1h1m1.001001001s"
 	d := from(s)
@@ -213,8 +219,8 @@ func TestWrappedJSON(t *testing.T) {
 	assert.Equal(t, wrapper, unmarshalled)
 }
 
-// TestCBOR verifies duration.Spec's MarshalCBOR/UnmarshalCBOR: the wire format is a plain CBOR text string
-// (String()'s output), so a generic (interface{}) decode yields that same string, never a bare number.
+// TestCBOR verifies duration.Spec's MarshalCBOR/UnmarshalCBOR: the wire format is a bare number. Tests that the string
+// format can also be unmarshaled correctly.
 func TestCBOR(t *testing.T) {
 	str := "1h1m1.001001001s"
 	d := from(str)
@@ -222,9 +228,9 @@ func TestCBOR(t *testing.T) {
 	b, err := cbor.Marshal(d)
 	assert.NoError(t, err)
 
-	var decodedStr string
-	assert.NoError(t, cbor.Unmarshal(b, &decodedStr))
-	assert.Equal(t, str, decodedStr, "wire format must be a plain CBOR text string")
+	var decodedUint64 uint64
+	assert.NoError(t, cbor.Unmarshal(b, &decodedUint64))
+	assert.Equal(t, uint64(d), decodedUint64, "wire format must be a plain number")
 
 	var unmarshalled duration.Spec
 	assert.NoError(t, cbor.Unmarshal(b, &unmarshalled))
@@ -232,7 +238,7 @@ func TestCBOR(t *testing.T) {
 
 	var generic interface{}
 	assert.NoError(t, cbor.Unmarshal(b, &generic))
-	assert.Equal(t, str, generic, "a generic decode must yield a plain, unambiguous string")
+	assert.Equal(t, decodedUint64, generic, "a generic decode must yield a plain numer")
 }
 
 // TestUnmarshalCBOR covers UnmarshalCBOR's accepted wire shapes: a text string (current format, via FromString)
@@ -399,4 +405,37 @@ func TestRoundTo(t *testing.T) {
 			require.Equal(t, tt.want, spec.RoundTo(tt.decimals).String())
 		})
 	}
+}
+
+func TestJsonCborRoundtrip(t *testing.T) {
+	d := from("444ms")
+
+	btsCbor, err := cbor.Marshal(d)
+	require.NoError(t, err)
+
+	var anyCbor any
+	err = cbor.Unmarshal(btsCbor, &anyCbor)
+	require.NoError(t, err)
+
+	btsJson, err := json.Marshal(anyCbor)
+	require.NoError(t, err)
+
+	var anyJson any
+	err = json.Unmarshal(btsJson, &anyJson)
+	require.NoError(t, err)
+
+	// roundtrip to 'any' kind of works, except that it unmarshals to float64 instead of (u)int64
+	fmt.Printf("cbor: %v\njson: %v\n", anyCbor, anyJson)
+	require.EqualValues(t, anyJson, anyCbor)
+	require.Equal(t, anyJson, float64(anyCbor.(uint64)))
+
+	// this is the big problem with duration.Spec: if we unmarshal the JSON back into a duration.Spec, it doesn't work!
+	var d2 duration.Spec
+	err = json.Unmarshal(btsJson, &d2)
+	require.NoError(t, err)
+
+	fmt.Printf("org:    %v\nparsed: %v\n", d, d2)
+	require.NotEqual(t, d, d2)
+	// magic multiplication by 10^9 because number is interpreted as "seconds" in JSON unmarshal, but CBOR representation is "nanoseconds"!
+	require.Equal(t, d*1e9, d2)
 }
