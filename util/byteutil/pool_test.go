@@ -82,7 +82,7 @@ func TestPool(t *testing.T) {
 	}
 
 	mu := &sync.Mutex{}
-	p.SetLocker(mu)
+	p.WithLocker(mu)
 	getRefCount := func(buf []byte) byte {
 		mu.Lock()
 		defer mu.Unlock()
@@ -120,13 +120,13 @@ func TestPool(t *testing.T) {
 	// Existing buffer should be re-added to pool
 	// Attempt to retrieve existing buffer from pool; buffer may not necessarily be the first buffer from Get()
 	// Most of the time the buffer is retrieved in a few iterations, but there's
-	// no guarantee and can fail even with as much as 5000 trials. From doc:
+	// no guarantee and can fail even with as many as 5000 trials. From doc:
 	//    Get may choose to ignore the pool and treat it as empty.
 	//    Callers should not assume any relation between values passed to Put and
 	//    the values returned by Get.
-	max := 5000
+	attempts := 5000
 	var buf2 *[]byte
-	for i := 0; i < max; i++ {
+	for i := 0; i < attempts; i++ {
 		buf2 = p.GetN(0)
 		openCount++
 		if (*buf2)[0] == 1 {
@@ -162,6 +162,62 @@ func TestPool(t *testing.T) {
 	require.Equal(t, float64(createCount), ctx.created.val.Load())
 	require.Equal(t, float64(openCount), ctx.retrieved.val.Load())
 	require.Equal(t, float64(closeCount), ctx.released.val.Load())
+}
+
+func TestPut_NilSlice(t *testing.T) {
+	p := byteutil.NewPool(64)
+
+	// Putting nil pointer should be safe
+	p.Put(nil)
+
+	// Putting pointer to nil slice should not panic
+	var nilSlice []byte
+	require.NotPanics(t, func() {
+		p.Put(&nilSlice)
+	})
+}
+
+func TestPut_ReslicedBuffer(t *testing.T) {
+	bufSize := 64
+	p := byteutil.NewPool(bufSize)
+
+	buf := p.Get()
+	require.Equal(t, bufSize, len(*buf))
+
+	// Reslice buffer to a smaller length, retaining capacity
+	*buf = (*buf)[:10]
+	require.Equal(t, 10, len(*buf))
+	require.Equal(t, bufSize+1, cap(*buf))
+
+	// Put resliced buffer back into pool
+	p.Put(buf)
+
+	// In-place reslicing should restore len(*buf) to bufSize on the caller's slice header
+	require.Equal(t, bufSize, len(*buf))
+}
+
+func TestPool_ConcurrentPut_DefaultLocker(t *testing.T) {
+	bufSize := 64
+	p := byteutil.NewPool(bufSize)
+	ctx := &testCtx{}
+	p.SetMetrics(&ctx.created, &ctx.retrieved, &ctx.released)
+
+	refCount := byte(100)
+	buf := p.GetN(refCount)
+
+	var wg sync.WaitGroup
+	for i := 0; i < int(refCount); i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			p.Put(buf)
+		}()
+	}
+	wg.Wait()
+
+	// Since refCount was 100 and Put was called 100 times, the buffer should be released exactly once
+	require.Equal(t, 1.0, ctx.released.val.Load())
+	require.Equal(t, byte(0), (*buf)[:bufSize+1][bufSize])
 }
 
 // % go test -tags -count=1 -v -bench="Benchmark.*Pool" -run="Benchmark" ./util/byteutil
