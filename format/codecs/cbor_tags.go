@@ -6,6 +6,7 @@ import (
 	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/utc-go"
 
+	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/format/hash"
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/link"
@@ -131,6 +132,38 @@ func (x *UTCConverter) UpdateExt(dest interface{}, v interface{}) {
 	default:
 		panic(errors.E("UTCConverter.UpdateExt", errors.K.Invalid,
 			"expected_types", []string{"[]byte"},
+			"actual_type", reflect.ValueOf(t).String()))
+	}
+}
+
+// ===== DurationConverter =====================================================
+
+// DurationConverter marshals/unmarshals a duration.Duration object to/from its human-readable string representation
+// (e.g. "10s"), matching the encoding produced by duration.Duration.MarshalCBOR/MarshalText/MarshalJSON. This makes a
+// generic (interface{}) decode through CborV1Codec come back as a proper duration.Duration value (unlike CborV2Codec,
+// where a generic decode of the same self-describing CBOR string comes back as a plain Go string - see
+// TestDurationCBORSelfDescribing) - both forms marshal to the same JSON string, which is the invariant that matters.
+//
+// NOTE: unlike the other converters in this file, duration.Duration is an int64 kind (not struct/array), so ugorji
+// passes ConvertExt the value itself, not a pointer to it - see InterfaceExt's doc comment.
+type DurationConverter struct{}
+
+func (x *DurationConverter) ConvertExt(v interface{}) interface{} {
+	return v.(duration.Duration).String()
+}
+
+func (x *DurationConverter) UpdateExt(dest interface{}, v interface{}) {
+	dst := dest.(*duration.Duration)
+	switch t := dereference(v).Interface().(type) {
+	case string:
+		parsed, err := duration.DurationFromString(t)
+		if err != nil {
+			panic(errors.E("DurationConverter.UpdateExt", err))
+		}
+		*dst = parsed
+	default:
+		panic(errors.E("DurationConverter.UpdateExt", errors.K.Invalid,
+			"expected_types", []string{"string"},
 			"actual_type", reflect.ValueOf(t).String()))
 	}
 }

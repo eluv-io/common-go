@@ -9,6 +9,7 @@ import (
 	"github.com/fxamacker/cbor/v2"
 	cd "github.com/ugorji/go/codec"
 
+	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/format/hash"
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/link"
@@ -139,6 +140,9 @@ var cborConverters = []cborConverter{
 	{41, reflect.TypeOf((*hash.Hash)(nil)), &HashConverter{}},
 	{42, reflect.TypeOf((*link.Link)(nil)), &LinkConverter{}},
 	{43, reflect.TypeOf((*utc.UTC)(nil)), &UTCConverter{}},
+	// 44 and 45 are deliberately skipped even though this list's tag numbering is independent from
+	// makeCborV2Codec's tags list - they are already claimed there (token.Token, durationSpecRevert).
+	{46, reflect.TypeOf((*duration.Duration)(nil)), &DurationConverter{}},
 }
 
 ////////////////////////////////////////////////////////////////////////////////
