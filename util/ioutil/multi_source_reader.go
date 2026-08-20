@@ -106,8 +106,8 @@ type multiSourceRead struct {
 
 // Add registers another source reader and starts a dedicated goroutine that reads it to completion, streaming chunks
 // into r.reads for Read to consume. It may be called at any time, including concurrently with Read or with other calls
-// to Add or Close (but not concurrently with Read, per the type's contract). If the reader is closed already, reader is
-// closed immediately and otherwise ignored, matching the "no more sources accepted after Close" contract.
+// to Add or Close. If the MultiSourceReader is closed already, the provided reader is not added and closed immediately,
+// matching the "no more sources accepted after Close" contract.
 func (r *MultiSourceReader) Add(reader io.ReadCloser) {
 	if reader == nil {
 		return
@@ -369,9 +369,6 @@ func (r *MultiSourceReader) acquireBuf() *[]byte {
 // doesn't reject it (or reallocate) for having a length other than the pool's configured size.
 func (r *MultiSourceReader) releaseBuf(buf *[]byte) {
 	if buf != nil {
-		if len(*buf) != r.bufPool.BufSize {
-			*buf = (*buf)[:r.bufPool.BufSize]
-		}
 		r.bufPool.Put(buf)
 	}
 }

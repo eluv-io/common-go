@@ -345,6 +345,36 @@ func TestMultiSourceReader_PrematureSourceTruncates(t *testing.T) {
 	require.Equal(t, full[:100], data)
 }
 
+// TestMultiSourceReader_LeftoverExactlyFillsBuffer proves that Read's "drain leftover data left over from a
+// previous call" path (r.read) actually returns when that leftover exactly fills the caller's next buffer and
+// carries no error attached — i.e. that this return is reachable, not dead code.
+func TestMultiSourceReader_LeftoverExactlyFillsBuffer(t *testing.T) {
+	// Two chunks so the first (20 bytes) carries no error when it becomes the leftover; the second chunk (which
+	// carries io.EOF) is irrelevant here and never reached.
+	s := &chunkedReader{
+		chunks: [][]byte{
+			make([]byte, 20),
+			make([]byte, 1),
+		},
+	}
+
+	r := ioutil.NewMultiSourceReader(nil)
+	r.Add(s)
+	defer func() { _ = r.Close() }()
+
+	// First Read only takes 8 of the chunk's 20 bytes, leaving a 12-byte leftover in r.read with no error attached.
+	buf1 := make([]byte, 8)
+	n1, err1 := r.Read(buf1)
+	require.NoError(t, err1)
+	require.Equal(t, 8, n1)
+
+	// Second Read's buffer exactly matches the 12-byte leftover.
+	buf2 := make([]byte, 12)
+	n2, err2 := r.Read(buf2)
+	require.NoError(t, err2)
+	require.Equal(t, 12, n2)
+}
+
 // infiniteSource is an io.ReadCloser that never runs out of data (or errors), always filling p fully. It exists so
 // BenchmarkMultiSourceReader can drive MultiSourceReader.Read directly for b.N iterations without either running
 // out of source data (for however large b.N ends up being) or having to reconstruct/re-add sources partway
