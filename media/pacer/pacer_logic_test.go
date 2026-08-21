@@ -10,13 +10,14 @@ import (
 
 	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/media/pacer"
+	"github.com/eluv-io/common-go/media/rtp"
 	"github.com/eluv-io/log-go"
 	"github.com/eluv-io/utc-go"
 )
 
 // ticksMS converts a number of milliseconds to RTP ticks (90kHz clock).
 func ticksMS(ms int) int64 {
-	return rtpDurationToTicks(time.Duration(ms) * time.Millisecond)
+	return rtp.DurationToTicks(time.Duration(ms) * time.Millisecond)
 }
 
 // newTestPacerLogic creates a PacerLogic for testing. discardPeriod=0 means that discarding is disabled; pass a value >
@@ -34,7 +35,7 @@ func newTestPacerLogic(discardPeriod, delay time.Duration, maxDiscardPeriod ...t
 		DiscardPeriod:    duration.Spec(discardPeriod),
 		MaxDiscardPeriod: duration.Spec(maxDiscard),
 		Delay:            duration.Spec(delay),
-		ToDuration:       rtpToDuration,
+		ToDuration:       rtp.TicksToDuration,
 	}
 
 	p := pacer.NewPacerLogic(conf, stats)
@@ -90,7 +91,7 @@ func TestPacerLogic_TimingBaseline(t *testing.T) {
 }
 
 // TestPacerLogic_TargetTime verifies that subsequent packets compute
-// targetTime = baseTime + rtpToDuration(ts - firstTs).
+// targetTime = baseTime + rtp.TicksToDuration(ts - firstTs).
 func TestPacerLogic_TargetTime(t *testing.T) {
 	const delay = 500 * time.Millisecond
 	p, _ := newTestPacerLogic(0, delay)
@@ -122,7 +123,7 @@ func TestPacerLogic_TargetTime(t *testing.T) {
 		require.False(t, discarded, "ts=%d should not be discarded", tt.ts)
 
 		rtpDelta := tt.ts - ts1
-		wantTarget := baseTime.Add(rtpToDuration(rtpDelta))
+		wantTarget := baseTime.Add(rtp.TicksToDuration(rtpDelta))
 		assert.Equal(t, wantTarget, target, "ts=%d: wrong target time", tt.ts)
 	}
 }
@@ -291,7 +292,7 @@ func newTestPacerLogicFull(conf pacer.PacerLogicConfig) (*pacer.PacerLogic, *pac
 		conf.EventLog = log.Get("/test/pacer")
 	}
 	if conf.ToDuration == nil {
-		conf.ToDuration = rtpToDuration
+		conf.ToDuration = rtp.TicksToDuration
 	}
 	return pacer.NewPacerLogic(conf, stats), stats
 }
@@ -303,7 +304,7 @@ func TestPacerLogic_AdjustTimeDrift_Applied(t *testing.T) {
 	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
 		AdjustTimeDrift: true,
 		Delay:           duration.Spec(delay),
-		ToDuration:      rtpToDuration,
+		ToDuration:      rtp.TicksToDuration,
 	})
 
 	T0 := utc.UnixMilli(10_000)
@@ -326,7 +327,7 @@ func TestPacerLogic_AdjustTimeDrift_Applied(t *testing.T) {
 	require.EqualValues(t, uint64(1), stats.NegDriftApplied.Count, "applied adjustment must be recorded")
 	require.EqualValues(t, 5*time.Millisecond, stats.NegDriftApplied.Sum, "full drift applied (no cap)")
 
-	rtpDelta2 := rtpToDuration(ts2 - ts1)
+	rtpDelta2 := rtp.TicksToDuration(ts2 - ts1)
 	wantUnadjusted := baseTime.Add(rtpDelta2)
 	wantAdjusted := wantUnadjusted.Add(-5 * time.Millisecond)
 	require.Equal(t, wantAdjusted, target2, "target must be 5ms earlier due to time-ref adjustment")
@@ -341,7 +342,7 @@ func TestPacerLogic_AdjustTimeDrift_Cap(t *testing.T) {
 		AdjustTimeDrift:       true,
 		MaxNegDriftCorrection: duration.Spec(capAdj),
 		Delay:                 duration.Spec(delay),
-		ToDuration:            rtpToDuration,
+		ToDuration:            rtp.TicksToDuration,
 	})
 
 	T0 := utc.UnixMilli(10_000)
@@ -365,7 +366,7 @@ func TestPacerLogic_AdjustTimeDrift_Cap(t *testing.T) {
 	require.Equal(t, uint64(1), stats.NegDriftApplied.Count)
 	require.EqualValues(t, capAdj, stats.NegDriftApplied.Sum, "only capped amount must be applied")
 
-	rtpDelta2 := rtpToDuration(ts2 - ts1)
+	rtpDelta2 := rtp.TicksToDuration(ts2 - ts1)
 	wantUnadjusted := baseTime.Add(rtpDelta2)
 	wantAdjusted := wantUnadjusted.Add(-capAdj)
 	require.Equal(t, wantAdjusted, target2, "target must reflect only the capped 3ms correction")
@@ -380,7 +381,7 @@ func TestPacerLogic_SlowDrift_Correction(t *testing.T) {
 		PosDriftPeriod:  duration.Spec(60 * time.Millisecond),
 		DriftThreshold:  duration.Spec(2 * time.Millisecond),
 		Delay:           duration.Spec(delay),
-		ToDuration:      rtpToDuration,
+		ToDuration:      rtp.TicksToDuration,
 	})
 
 	T0 := utc.UnixMilli(10_000)
@@ -414,7 +415,7 @@ func TestPacerLogic_SlowDrift_Correction(t *testing.T) {
 	// The correction is proportional: the full mean drift (6ms, uncapped) is applied, not a fixed step.
 	require.EqualValues(t, 6*time.Millisecond, stats.PosDriftApplied.Sum)
 
-	rtpDelta8 := rtpToDuration(ts - ticksMS(0))
+	rtpDelta8 := rtp.TicksToDuration(ts - ticksMS(0))
 	wantUnadjusted := baseTime.Add(rtpDelta8)
 	require.Equal(t, wantUnadjusted.Add(6*time.Millisecond), target8,
 		"target must be 6ms later due to the proportional slow-drift correction")
@@ -429,7 +430,7 @@ func TestPacerLogic_SlowDrift_BelowThreshold(t *testing.T) {
 		PosDriftPeriod:  duration.Spec(60 * time.Millisecond),
 		DriftThreshold:  duration.Spec(10 * time.Millisecond),
 		Delay:           duration.Spec(delay),
-		ToDuration:      rtpToDuration,
+		ToDuration:      rtp.TicksToDuration,
 	})
 
 	T0 := utc.UnixMilli(10_000)
@@ -460,7 +461,7 @@ func TestPacerLogic_SlowDrift_StatsWithoutCorrection(t *testing.T) {
 		PosDriftPeriod:  duration.Spec(60 * time.Millisecond),
 		DriftThreshold:  duration.Spec(2 * time.Millisecond),
 		Delay:           duration.Spec(delay),
-		ToDuration:      rtpToDuration,
+		ToDuration:      rtp.TicksToDuration,
 	})
 
 	T0 := utc.UnixMilli(10_000)
@@ -490,7 +491,7 @@ func TestPacerLogic_SlowDrift_StatsWithoutCorrection(t *testing.T) {
 	require.EqualValues(t, 6*time.Millisecond, stats.PosDrift.Sum)
 	require.Zero(t, stats.PosDriftApplied.Count, "no correction must be applied when AdjustTimeDrift=false")
 
-	rtpDelta8 := rtpToDuration(ts - ticksMS(0))
+	rtpDelta8 := rtp.TicksToDuration(ts - ticksMS(0))
 	wantUnadjusted := baseTime.Add(rtpDelta8)
 	require.Equal(t, wantUnadjusted, target8, "target must be unadjusted when AdjustTimeDrift=false")
 }
@@ -505,7 +506,7 @@ func TestPacerLogic_StartupJitter(t *testing.T) {
 		DiscardPeriod:    duration.Spec(discardPeriod),
 		MaxDiscardPeriod: duration.Spec(time.Minute),
 		Delay:            duration.Spec(delay),
-		ToDuration:       rtpToDuration,
+		ToDuration:       rtp.TicksToDuration,
 	})
 
 	T_wall := utc.UnixMilli(10_000)
@@ -549,16 +550,17 @@ func TestPacerLogicConfig_Unmarshal(t *testing.T) {
 		require.Equal(t, *new(pacer.PacerLogicConfig).InitDefaults(), cfg)
 	})
 
-	t.Run("InitDefaults", func(t *testing.T) {
+	t.Run("RoundTrip", func(t *testing.T) {
 		cfg := pacer.PacerLogicConfig{
-			DiscardPeriod:         duration.Second,
-			MaxDiscardPeriod:      10 * duration.Second,
-			Delay:                 200 * duration.Millisecond,
-			AdjustTimeDrift:       false,
-			MaxNegDriftCorrection: 100 * duration.Millisecond,
-			PosDriftPeriod:        5 * duration.Minute,
-			DriftThreshold:        5 * duration.Millisecond,
-			MaxPosDriftCorrection: 10 * duration.Millisecond,
+			DiscardPeriod:          duration.Second,
+			MaxDiscardPeriod:       10 * duration.Second,
+			Delay:                  200 * duration.Millisecond,
+			AdjustTimeDrift:        false,
+			MaxNegDriftCorrection:  100 * duration.Millisecond,
+			PosDriftPeriod:         5 * duration.Minute,
+			DriftThreshold:         5 * duration.Millisecond,
+			MaxPosDriftCorrection:  10 * duration.Millisecond,
+			MaxDriftCorrectionStep: duration.Duration(10 * time.Millisecond),
 		}
 
 		marshaled, err := json.Marshal(cfg)
@@ -583,7 +585,7 @@ func TestPacerLogic_PersistentSlowSource_StaysCaughtUp(t *testing.T) {
 		DriftThreshold:  duration.Spec(2 * time.Millisecond),
 		// MaxPosDriftCorrection: 0 -> apply the full mean drift each period (no cap).
 		Delay:      duration.Spec(delay),
-		ToDuration: rtpToDuration,
+		ToDuration: rtp.TicksToDuration,
 	})
 
 	T0 := utc.UnixMilli(10_000)
@@ -621,7 +623,7 @@ func TestPacerLogic_SubThresholdJitter_NotRatcheted(t *testing.T) {
 		PosDriftPeriod:  duration.Spec(60 * time.Millisecond),
 		DriftThreshold:  duration.Spec(2 * time.Millisecond),
 		Delay:           duration.Spec(delay),
-		ToDuration:      rtpToDuration,
+		ToDuration:      rtp.TicksToDuration,
 	})
 
 	T0 := utc.UnixMilli(10_000)
@@ -644,7 +646,7 @@ func TestPacerLogic_SubThresholdJitter_NotRatcheted(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, discarded)
 		// Baseline unchanged => target is exactly baseTime + media delta, no drift correction applied.
-		require.Equal(t, T0.Add(delay).Add(rtpToDuration(ticksMS(mediaMs))), target,
+		require.Equal(t, T0.Add(delay).Add(rtp.TicksToDuration(ticksMS(mediaMs))), target,
 			"packet %d: sub-threshold jitter must not shift the baseline", i)
 	}
 

@@ -40,14 +40,19 @@ type InStats struct {
 	NegDrift statsutil.RawStatistics[duration.Millis] `json:"neg_drift"`
 
 	// NegDriftApplied tracks the actually-applied baseTime corrections for negative drift when AdjustTimeDrift is
-	// enabled. When MaxNegDriftCorrection is set, this may be less than NegDrift (the nominal observed drift).
+	// enabled. When MaxNegDriftCorrection is set, this may be less than NegDrift (the nominal observed drift). Always
+	// one sample per event, applied in a single step - MaxDriftCorrectionStep does not spread negative corrections
+	// (see its doc comment on PacerLogicConfig for why).
 	NegDriftApplied statsutil.RawStatistics[duration.Millis] `json:"neg_drift_applied"`
 
 	// PosDrift records the mean T0 drift for each period in which the mean exceeded DriftThreshold.
 	// Recorded regardless of whether AdjustTimeDrift is enabled.
 	PosDrift statsutil.RawStatistics[duration.Millis] `json:"pos_drift"`
 
-	// PosDriftApplied records each positive baseTime correction applied by the positive-drift compensator.
+	// PosDriftApplied records the baseTime corrections applied by the positive-drift compensator. When
+	// MaxDriftCorrectionStep spreads a correction over several packets, one sample is recorded per packet that
+	// drains part of it, so Count reflects packets drained, not periods corrected; Sum still accumulates to the same
+	// total as before.
 	PosDriftApplied statsutil.RawStatistics[duration.Millis] `json:"pos_drift_applied"`
 
 	// MinT0 is the minimum T0 seen; zero value means not set.
