@@ -9,22 +9,13 @@ import (
 
 	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/media/pacer"
+	"github.com/eluv-io/common-go/media/rtp"
 	"github.com/eluv-io/utc-go"
 )
 
-// rtpToDuration converts RTP 90 kHz ticks to a time.Duration for use in pacer tests.
-func rtpToDuration(ts int64) time.Duration {
-	return time.Duration(ts) * 100 * time.Microsecond / 9
-}
-
-// rtpDurationToTicks converts a time.Duration to RTP 90 kHz ticks for use in pacer tests.
-func rtpDurationToTicks(d time.Duration) int64 {
-	return int64((d*9 + 1) / 100 / time.Microsecond)
-}
-
 func TestDiscardContext_Disabled(t *testing.T) {
 	now := utc.Now()
-	dc := pacer.NewDiscardContext(0, 0, rtpToDuration)
+	dc := pacer.NewDiscardContext(0, 0, rtp.TicksToDuration)
 	discard, err := dc.ShouldDiscard(0, now)
 	require.NoError(t, err)
 	require.False(t, discard)
@@ -40,10 +31,10 @@ func TestDiscardContext_Disabled(t *testing.T) {
 
 func TestDiscardContext_ShouldDiscard(t *testing.T) {
 	now := utc.MustParse("2000-01-01T12:00:00Z")
-	dc := pacer.NewDiscardContext(5*duration.Second, 10*duration.Second, rtpToDuration)
+	dc := pacer.NewDiscardContext(5*duration.Second, 10*duration.Second, rtp.TicksToDuration)
 
 	seq := int64(rand.Int32())
-	t0 := now.Add(-rtpToDuration(seq))
+	t0 := now.Add(-rtp.TicksToDuration(seq))
 
 	for i := 0; i < 10; i++ {
 		discard, err := dc.ShouldDiscard(seq, now)
@@ -64,10 +55,10 @@ func TestDiscardContext_ShouldDiscard(t *testing.T) {
 
 func TestDiscardContext_ShouldDiscardWithAdjustment(t *testing.T) {
 	now := utc.MustParse("2000-01-01T12:00:00Z")
-	dc := pacer.NewDiscardContext(5*duration.Second, 10*duration.Second, rtpToDuration)
+	dc := pacer.NewDiscardContext(5*duration.Second, 10*duration.Second, rtp.TicksToDuration)
 
 	seq := int64(rand.Int32())
-	t0 := now.Add(-rtpToDuration(seq))
+	t0 := now.Add(-rtp.TicksToDuration(seq))
 
 	for i := 0; i < 10; i++ {
 		var jitter time.Duration
@@ -95,7 +86,7 @@ func TestDiscardContext_ShouldDiscardWithAdjustment(t *testing.T) {
 func TestDiscardContext_ResetOnGapDuringDiscardPhase(t *testing.T) {
 	now := utc.MustParse("2000-01-01T12:00:00Z")
 	t0 := now
-	dc := pacer.NewDiscardContext(5*duration.Second, 9*duration.Second, rtpToDuration)
+	dc := pacer.NewDiscardContext(5*duration.Second, 9*duration.Second, rtp.TicksToDuration)
 
 	for j := 0; j < 3; j++ {
 		for i := 0; i < 3; i++ {
@@ -117,7 +108,7 @@ func TestDiscardContext_ResetOnGapDuringDiscardPhase(t *testing.T) {
 func TestDiscardContext_ResetOnGapDuringNormalOperation(t *testing.T) {
 	now := utc.MustParse("2000-01-01T12:00:00Z")
 	t0 := now
-	dc := pacer.NewDiscardContext(5*duration.Second, 9*duration.Second, rtpToDuration)
+	dc := pacer.NewDiscardContext(5*duration.Second, 9*duration.Second, rtp.TicksToDuration)
 
 	for j := 0; j < 3; j++ {
 		for i := 0; i < 5; i++ {
@@ -134,7 +125,7 @@ func TestDiscardContext_ResetOnGapDuringNormalOperation(t *testing.T) {
 }
 
 func assertDiscard(t *testing.T, dc *pacer.DiscardContext, rtpTs time.Duration, now utc.UTC, wantDiscard bool, wantErr bool) {
-	discard, err := dc.ShouldDiscard(rtpDurationToTicks(rtpTs), now)
+	discard, err := dc.ShouldDiscard(rtp.DurationToTicks(rtpTs), now)
 	require.Equal(t, wantDiscard, discard, "discard mismatch")
 	require.Equal(t, wantErr, err != nil, "discard error")
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/media/pacer"
+	"github.com/eluv-io/common-go/media/rtp"
 	"github.com/eluv-io/log-go"
 	"github.com/eluv-io/utc-go"
 )
@@ -20,7 +21,7 @@ func BenchmarkPacerLogic_PacketTs(b *testing.B) {
 		EventLog:        log.Get("/bench/pacer"),
 		Delay:           duration.Spec(50 * time.Millisecond),
 		AdjustTimeDrift: false,
-		ToDuration:      rtpToDuration,
+		ToDuration:      rtp.TicksToDuration,
 	}
 	p := pacer.NewPacerLogic(conf, stats)
 
@@ -29,7 +30,7 @@ func BenchmarkPacerLogic_PacketTs(b *testing.B) {
 	_, _, _ = p.Packet(t0, 0, false)
 
 	step := 10 * time.Millisecond
-	stepTicks := rtpDurationToTicks(step)
+	stepTicks := rtp.DurationToTicks(step)
 	now := t0.Add(step)
 	ts := stepTicks
 

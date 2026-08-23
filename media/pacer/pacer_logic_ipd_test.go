@@ -8,6 +8,7 @@ import (
 
 	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/media/pacer"
+	"github.com/eluv-io/common-go/media/rtp"
 	"github.com/eluv-io/utc-go"
 )
 
@@ -27,7 +28,7 @@ func TestPacerLogic_DriftCorrectionSpread_ConstantPositiveDrift(t *testing.T) {
 		DriftThreshold:         duration.Spec(2 * time.Millisecond),
 		MaxDriftCorrectionStep: duration.Duration(maxStep),
 		Delay:                  duration.Spec(delay),
-		ToDuration:             rtpToDuration,
+		ToDuration:             rtp.TicksToDuration,
 	})
 
 	T0 := utc.UnixMilli(10_000)
@@ -94,7 +95,7 @@ func TestPacerLogic_DriftCorrectionSpread_BackwardTimestampStep(t *testing.T) {
 		DriftThreshold:         duration.Spec(2 * time.Millisecond),
 		MaxDriftCorrectionStep: duration.Duration(maxStep),
 		Delay:                  duration.Spec(delay),
-		ToDuration:             rtpToDuration,
+		ToDuration:             rtp.TicksToDuration,
 	})
 
 	T0 := utc.UnixMilli(10_000)
@@ -183,7 +184,7 @@ func TestPacerLogic_IPDPeak_ForwardTimestampJump_SelfCancels(t *testing.T) {
 		AdjustTimeDrift: true,
 		DriftThreshold:  duration.Spec(2 * time.Millisecond),
 		Delay:           duration.Spec(delay),
-		ToDuration:      rtpToDuration,
+		ToDuration:      rtp.TicksToDuration,
 		// MaxNegDriftCorrection, MaxDriftCorrectionStep and PosDriftPeriod left at zero value; NewPacerLogic applies
 		// the same defaults as InitDefaults() (uncapped negative correction, no per-packet spread cap, 1-minute
 		// positive-drift period - irrelevant here).
@@ -247,7 +248,7 @@ func TestPacerLogic_NegativeDrift_NotSpreadByMaxDriftCorrectionStep(t *testing.T
 		DriftThreshold:         duration.Spec(2 * time.Millisecond),
 		MaxDriftCorrectionStep: duration.Duration(10 * time.Millisecond),
 		Delay:                  duration.Spec(delay),
-		ToDuration:             rtpToDuration,
+		ToDuration:             rtp.TicksToDuration,
 	})
 
 	T0 := utc.UnixMilli(10_000)
@@ -310,7 +311,7 @@ func TestPacerLogic_SpreadDrain_NotFoughtByFrontLoadedPeriod(t *testing.T) {
 		DriftThreshold:         duration.Spec(2 * time.Millisecond),
 		MaxDriftCorrectionStep: duration.Duration(maxStep),
 		Delay:                  duration.Spec(delay),
-		ToDuration:             rtpToDuration,
+		ToDuration:             rtp.TicksToDuration,
 	})
 
 	T0 := utc.UnixMilli(10_000)
@@ -381,7 +382,7 @@ func TestPacerLogic_PersistentSlowSource_StaysCaughtUp_WithSpreading(t *testing.
 		// constraint for this steady drift - it only bounds genuine bursts.
 		MaxDriftCorrectionStep: duration.Duration(2 * time.Millisecond),
 		Delay:                  duration.Spec(delay),
-		ToDuration:             rtpToDuration,
+		ToDuration:             rtp.TicksToDuration,
 	})
 
 	T0 := utc.UnixMilli(10_000)
@@ -440,7 +441,7 @@ func TestPacerLogic_GapDuringSpreadDrain(t *testing.T) {
 		DriftThreshold:         duration.Spec(2 * time.Millisecond),
 		MaxDriftCorrectionStep: duration.Duration(maxStep),
 		Delay:                  duration.Spec(delay),
-		ToDuration:             rtpToDuration,
+		ToDuration:             rtp.TicksToDuration,
 	})
 
 	T0 := utc.UnixMilli(10_000)
@@ -508,7 +509,7 @@ func TestPacerLogic_GapDuringSpreadDrain_WithDiscardPeriod(t *testing.T) {
 		DriftThreshold:         duration.Spec(2 * time.Millisecond),
 		MaxDriftCorrectionStep: duration.Duration(maxStep),
 		Delay:                  duration.Spec(delay),
-		ToDuration:             rtpToDuration,
+		ToDuration:             rtp.TicksToDuration,
 	})
 
 	T0 := utc.UnixMilli(10_000)
