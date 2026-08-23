@@ -3,7 +3,6 @@ package byteutil
 import (
 	"sync"
 
-	"github.com/eluv-io/common-go/util"
 	"github.com/eluv-io/log-go"
 )
 
@@ -40,7 +39,14 @@ func NewPool(bufSize int) *Pool {
 	p := &Pool{}
 	p.BufSize = bufSize
 	p.p = &sync.Pool{New: p.new}
-	p.locker = util.NoopLocker{}
+	p.locker = &sync.Mutex{}
+	return p
+}
+
+// WithLocker sets the locker used for guarding critical sections. May be set to a no-op implementation if external
+// locking is used.
+func (p *Pool) WithLocker(l sync.Locker) *Pool {
+	p.locker = l
 	return p
 }
 
@@ -95,7 +101,7 @@ func (p *Pool) GetN(count byte) *[]byte {
 // into the pool. The caller should no longer use the buffer after calling.
 // Buffers that have been re-sliced will be ignored.
 func (p *Pool) Put(buf *[]byte) {
-	if buf == nil {
+	if buf == nil || *buf == nil {
 		log.Warn("buffer not released back into pool", "reason", "nil buffer")
 		return
 	} else if cap(*buf) != p.BufSize+1 {
@@ -103,8 +109,7 @@ func (p *Pool) Put(buf *[]byte) {
 		return
 	} else if len(*buf) != p.BufSize {
 		log.Warn("buffer resized and released back into pool", "expected_size", p.BufSize, "actual_size", len(*buf))
-		b := (*buf)[:p.BufSize]
-		buf = &b // Causes an extra allocation
+		*buf = (*buf)[:p.BufSize]
 	}
 	// Decrement buffer's reference counter
 	if p.decrCounter(*buf) {
@@ -146,11 +151,11 @@ func (p *Pool) setCounter(buf []byte, count byte) {
 // the ref count.
 func (p *Pool) decrCounter(buf []byte) bool {
 	buf = buf[:p.BufSize+1]
+	p.locker.Lock()
+	defer p.locker.Unlock()
 	n := buf[p.BufSize]
 	if n > 0 {
-		p.locker.Lock()
 		buf[p.BufSize] = n - 1
-		p.locker.Unlock()
 		if n == 1 {
 			return true
 		}
