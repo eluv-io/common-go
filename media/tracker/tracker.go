@@ -281,8 +281,16 @@ func (t *mediaTracker) recordArrival(now utc.UTC, n int) {
 	t.periodPackets++
 	t.periodBytes += uint64(n)
 
+	arrival := now
 	if !t.lastArrival.IsZero() {
-		ipd := now.Sub(t.lastArrival)
+		if arrival.Before(t.lastArrival) {
+			// This packet was delivered out of arrival-time order - e.g. a reorder-correction consumer released an
+			// earlier-arriving packet after a later one. Its true incremental delay relative to delivery order is
+			// undefined, so record it as 0 rather than a negative interval: every packet still contributes exactly
+			// one IPD sample, keeping ipdTotal/ipdHistTotal/etc. in sync with totalPackets/periodPackets above.
+			arrival = t.lastArrival
+		}
+		ipd := arrival.Sub(t.lastArrival)
 		ipdMs := duration.Millis(ipd)
 		t.ipdTotal.Update(now, ipdMs)
 		t.ipdPeriod.Update(now, ipdMs)
@@ -295,7 +303,8 @@ func (t *mediaTracker) recordArrival(now utc.UTC, n int) {
 			t.periodOutageTotal += duration.Millis(ipd)
 		}
 	}
-	t.lastArrival = now
+	// arrival is already clamped above, so this never regresses lastArrival.
+	t.lastArrival = arrival
 }
 
 // scanTsPackets walks the given already-parsed TS packets, extracting PCR values and checking null-packet integrity.

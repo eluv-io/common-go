@@ -63,6 +63,60 @@ func TestMediaTracker_RawTs(t *testing.T) {
 	require.Greater(t, s.Clocks[0].Samples, uint64(0), "PCR samples must be correlated")
 }
 
+// TestMediaTracker_RecordArrival_OutOfOrder verifies that a packet delivered out of arrival-time order - e.g. by a
+// reorder-correction consumer upstream, which changes delivery order without changing each packet's own arrival
+// timestamp - does not produce a negative IPD sample or let lastArrival regress. The out-of-order sample must
+// record as ipd==0 rather than being skipped, so the IPD sample count stays in sync with the packet count, and the
+// next legitimate sample must compute its IPD against the last true (non-regressed) arrival time.
+func TestMediaTracker_RecordArrival_OutOfOrder(t *testing.T) {
+	tr := NewMediaTracker("test", Config{})
+	base := utc.Now()
+	var pcr uint64 = 1_000_000
+
+	push := func(offsetMs int) {
+		dg, _ := tsDatagramWithPCR(pcr)
+		pcr += 1000
+		_ = tr.TrackDatagram(base.Add(time.Duration(offsetMs)*time.Millisecond), dg)
+	}
+
+	push(0)  // first packet: no IPD sample yet
+	push(15) // ipd=15
+	push(5)  // delivered out of order (behind the last arrival): must clamp to ipd=0, not -10
+	push(25) // must compute ipd=10 against the true last arrival (15ms), not the would-be-regressed one (5ms)
+
+	s := tr.Stats()
+	require.EqualValues(t, 4, s.Packets)
+	require.EqualValues(t, 3, s.Ipd.Count, "every packet after the first must still contribute exactly one IPD sample")
+	require.EqualValues(t, 0, s.Ipd.Min, "the out-of-order sample must clamp to 0, not go negative")
+	require.EqualValues(t, duration.Millis(15*time.Millisecond), s.Ipd.Max)
+	require.InDelta(t, float64(25)/3, s.Ipd.Mean.AsFloat(), 0.001, "mean must reflect 15, 0, 10 - not 15, 0, 20")
+}
+
+// TestMediaTracker_RecordArrival_LegitimateZeroIPD verifies that two packets genuinely arriving at the same
+// timestamp (e.g. coalesced at the network layer, no reordering involved) record ipd==0 the same way
+// TestMediaTracker_RecordArrival_OutOfOrder's out-of-order sample does - the two cases are indistinguishable in
+// the stats by design, since 0 is a legitimate IPD value on its own.
+func TestMediaTracker_RecordArrival_LegitimateZeroIPD(t *testing.T) {
+	tr := NewMediaTracker("test", Config{})
+	base := utc.Now()
+	var pcr uint64 = 1_000_000
+
+	push := func(offsetMs int) {
+		dg, _ := tsDatagramWithPCR(pcr)
+		pcr += 1000
+		_ = tr.TrackDatagram(base.Add(time.Duration(offsetMs)*time.Millisecond), dg)
+	}
+
+	push(0)  // first packet: no IPD sample yet
+	push(0)  // back-to-back, same timestamp: legitimate ipd=0
+	push(10) // ipd=10
+
+	s := tr.Stats()
+	require.EqualValues(t, 2, s.Ipd.Count)
+	require.EqualValues(t, 0, s.Ipd.Min)
+	require.EqualValues(t, duration.Millis(10*time.Millisecond), s.Ipd.Max)
+}
+
 // TestMediaTracker_RTP drives an RTP-wrapped MPEG-TS source and verifies that both the RTP-timestamp and PCR clocks
 // are correlated.
 func TestMediaTracker_RTP(t *testing.T) {
