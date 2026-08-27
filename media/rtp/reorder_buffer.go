@@ -27,6 +27,8 @@ type ReorderStats struct {
 	// LateDropped is the number of packets that arrived already behind nextExpected - too late to place in order,
 	// because their gap had already timed out (or been resynced past) by the time they showed up.
 	LateDropped uint64 `json:"late_dropped"`
+	// Duplicate is the number of packets rejected because an item for that exact sequence number was already held.
+	Duplicate uint64 `json:"duplicate"`
 	// Resyncs is the number of discontinuities that forced nextExpected to be re-based directly to an arriving
 	// sequence number (see NewReorderBuffer's doc on MaxJump).
 	Resyncs uint64 `json:"resyncs"`
@@ -167,9 +169,10 @@ func (b *ReorderBuffer[T]) MaxWindow() int {
 // now (re)establishes the gap deadline reported by Deadline. Supply real wall-clock time for that to behave sensibly. A
 // fixed or synthetic clock is fine, and useful in tests.
 //
-// dropped reports whether the item was ignored because it arrived too late (sequence number < nextExpected). A dropped
-// item is not appended to out and is not held in the buffer for later release either. If the dropped item is a pooled
-// resource, for example, the caller may dispose of it.
+// dropped reports whether the item was ignored, either because it arrived too late (sequence number < nextExpected) or
+// because an item for that exact sequence number was already held. A dropped item is not appended to out and is not
+// held in the buffer for later release either. If the dropped item is a pooled resource, for example, the caller may
+// dispose of it.
 func (b *ReorderBuffer[T]) Push(now time.Time, seq uint16, item T, out []T) (_ []T, dropped bool) {
 	if !b.hasNext {
 		b.hasNext = true
@@ -235,6 +238,14 @@ func (b *ReorderBuffer[T]) Push(now time.Time, seq uint16, item T, out []T) (_ [
 			b.updateDeadline(now)
 			return out, true
 		}
+	}
+
+	if _, exists := b.slots[seq]; exists {
+		// An item for this exact sequence number is already held. Reject the newcomer instead of silently
+		// overwriting the held one, which would leak it: nothing else in Push or Expire ever notices an
+		// overwritten slot, so this is the only chance to tell the caller item itself is the one to dispose of.
+		b.stats.Duplicate++
+		return out, true
 	}
 
 	wasEmpty := len(b.slots) == 0

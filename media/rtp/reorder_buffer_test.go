@@ -184,6 +184,34 @@ func TestReorderBuffer_LateDropped(t *testing.T) {
 	require.False(t, dropped)
 }
 
+// TestReorderBuffer_DuplicateHeldItem_Rejected verifies that a second item arriving for a sequence number already held
+// is rejected, not silently overwritten - an overwrite would leak the first item, since nothing else in Push or Expire
+// ever notices a held slot changed underneath it.
+func TestReorderBuffer_DuplicateHeldItem_Rejected(t *testing.T) {
+	b := NewReorderBuffer[string](0, time.Hour, 0)
+
+	out, dropped := b.Push(at(0), 1, "one", nil) // expected becomes 2
+	require.Equal(t, []string{"one"}, out)
+	require.False(t, dropped)
+
+	out, dropped = b.Push(at(1), 3, "three-a", nil) // held, waiting on 2
+	require.Empty(t, out)
+	require.False(t, dropped)
+	require.EqualValues(t, 1, b.Stats().CurrentOccupancy)
+
+	// A second, distinct item for the same sequence number arrives. It must be rejected, not swapped in.
+	out, dropped = b.Push(at(2), 3, "three-b", nil)
+	require.Empty(t, out)
+	require.True(t, dropped, "the duplicate itself must be reported dropped")
+	require.EqualValues(t, 1, b.Stats().Duplicate)
+	require.EqualValues(t, 1, b.Stats().CurrentOccupancy, "the held item must be untouched, not replaced")
+
+	// 2 fills the gap: the cascade must release the first three, proving it - not the duplicate - was kept.
+	out, dropped = b.Push(at(3), 2, "two", nil)
+	require.Equal(t, []string{"two", "three-a"}, out)
+	require.False(t, dropped)
+}
+
 // TestReorderBuffer_FlushMidWindow verifies Flush drains every held item in ascending order, with none left behind
 // and none duplicated, and does not touch the Reordered counter (a flush is a drain, not a correction).
 func TestReorderBuffer_FlushMidWindow(t *testing.T) {
