@@ -19,19 +19,19 @@ const (
 // ReorderStats holds ReorderBuffer's cumulative counters, plus a point-in-time gauge (CurrentOccupancy).
 type ReorderStats struct {
 	// Reordered is the number of packets released out of network-arrival order - i.e. a real reorder was corrected.
-	Reordered uint64
+	Reordered uint64 `json:"reordered"`
 	// MaxReorderDelta is the largest |seq-nextExpected| ever observed at admission time.
-	MaxReorderDelta int64
+	MaxReorderDelta int64 `json:"max_reorder_delta"`
 	// LostAfterTimeout is the number of sequence numbers skipped because their gap's MaxWait elapsed with no fill.
-	LostAfterTimeout uint64
+	LostAfterTimeout uint64 `json:"lost_after_timeout"`
 	// LateDropped is the number of packets that arrived already behind nextExpected - too late to place in order,
 	// because their gap had already timed out (or been resynced past) by the time they showed up.
-	LateDropped uint64
+	LateDropped uint64 `json:"late_dropped"`
 	// Resyncs is the number of discontinuities that forced nextExpected to be re-based directly to an arriving
 	// sequence number (see NewReorderBuffer's doc on MaxJump).
-	Resyncs uint64
+	Resyncs uint64 `json:"resyncs"`
 	// CurrentOccupancy is the number of packets currently held in the window (a gauge, not cumulative).
-	CurrentOccupancy int
+	CurrentOccupancy int `json:"current_occupancy"`
 }
 
 // ReorderBuffer corrects short-range reordering of items (network packets) keyed by a 16-bit RTP-style sequence number,
