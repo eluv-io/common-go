@@ -22,7 +22,7 @@ func ExampleReorderBuffer() {
 	now := time.Now()
 	var deadline time.Time
 	push := func(seq uint16, payload string) {
-		released := b.Push(now, seq, payload, nil)
+		released, _ := b.Push(now, seq, payload, nil)
 		// Re-arm (or disarm) the timer after every Push, exactly as a real caller would.
 		var ok bool
 		deadline, ok = b.Deadline()

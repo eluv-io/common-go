@@ -159,16 +159,22 @@ func (b *ReorderBuffer[T]) MaxWindow() int {
 	return b.maxWindow
 }
 
-// Push admits one arriving item carrying the given sequence number. Items that become releasable - immediately, or
-// via a cascade of already-held successors, or because a discontinuity forced a resync - are appended to out (which
-// may be nil, or a caller-owned slice reused across calls, e.g. out[:0]) and returned in ascending sequence order.
-// now is used to (re)establish the gap deadline reported by Deadline; the caller must supply real wall-clock time
-// for that to behave sensibly (a fixed/synthetic clock is fine, and useful, in tests).
-func (b *ReorderBuffer[T]) Push(now time.Time, seq uint16, item T, out []T) []T {
+// Push admits one arriving item carrying the given sequence number. An item becomes releasable immediately, via a
+// cascade of already-held successors, or because a discontinuity forced a resync. Each releasable item is appended to
+// out and returned in ascending sequence order. out may be nil, or a caller-owned slice reused across calls, e.g.
+// out[:0].
+//
+// now (re)establishes the gap deadline reported by Deadline. Supply real wall-clock time for that to behave sensibly. A
+// fixed or synthetic clock is fine, and useful in tests.
+//
+// dropped reports whether the item was ignored because it arrived too late (sequence number < nextExpected). A dropped
+// item is not appended to out and is not held in the buffer for later release either. If the dropped item is a pooled
+// resource, for example, the caller may dispose of it.
+func (b *ReorderBuffer[T]) Push(now time.Time, seq uint16, item T, out []T) (_ []T, dropped bool) {
 	if !b.hasNext {
 		b.hasNext = true
 		b.nextExpected = seq + 1
-		return append(out, item)
+		return append(out, item), false
 	}
 
 	delta := int(int16(seq - b.nextExpected)) // same arithmetic trick as in SequenceUnwrapper to handle wrap-around
@@ -188,13 +194,13 @@ func (b *ReorderBuffer[T]) Push(now time.Time, seq uint16, item T, out []T) []T 
 		b.nextExpected = seq + 1
 		out = append(out, item)
 		b.updateDeadline(now)
-		return out
+		return out, false
 	}
 
 	if delta < 0 {
 		// Already behind nextExpected: its gap either timed out or was resynced past. Too late to place in order.
 		b.stats.LateDropped++
-		return out
+		return out, true
 	}
 
 	if delta == 0 {
@@ -205,7 +211,7 @@ func (b *ReorderBuffer[T]) Push(now time.Time, seq uint16, item T, out []T) []T 
 			out = b.cascade(out)
 			b.updateDeadline(now)
 		}
-		return out
+		return out, false
 	}
 
 	// delta > 0: a gap relative to nextExpected. If admitting it would make the held span exceed maxWindow, the
@@ -222,12 +228,12 @@ func (b *ReorderBuffer[T]) Push(now time.Time, seq uint16, item T, out []T) []T 
 			b.nextExpected++
 			out = b.cascade(out)
 			b.updateDeadline(now)
-			return out
+			return out, false
 		}
 		if delta < 0 {
 			b.stats.LateDropped++
 			b.updateDeadline(now)
-			return out
+			return out, true
 		}
 	}
 
@@ -242,7 +248,7 @@ func (b *ReorderBuffer[T]) Push(now time.Time, seq uint16, item T, out []T) []T 
 		// head of the window, not extended by activity behind it.
 		b.gapDeadline = now.Add(b.maxWait)
 	}
-	return out
+	return out, false
 }
 
 // Expire applies the timeout rule: if the head-of-window's deadline (see Deadline) has elapsed, every sequence

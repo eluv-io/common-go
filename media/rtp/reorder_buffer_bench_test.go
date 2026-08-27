@@ -19,7 +19,7 @@ func BenchmarkReorderBuffer_InOrder(b *testing.B) {
 
 	seq := uint16(0)
 	for b.Loop() {
-		out = buf.Push(now, seq, int(seq), out[:0])
+		out, _ = buf.Push(now, seq, int(seq), out[:0])
 		seq++
 	}
 }
@@ -38,8 +38,8 @@ func BenchmarkReorderBuffer_OutOfOrderRecovery(b *testing.B) {
 	for b.Loop() {
 		// Push seq+1 first (held), then seq (fills the gap and cascades seq+1 out) - one corrected swap per
 		// iteration.
-		out = buf.Push(now, seq+1, int(seq+1), out[:0])
-		out = buf.Push(now, seq, int(seq), out[:0])
+		out, _ = buf.Push(now, seq+1, int(seq+1), out[:0])
+		out, _ = buf.Push(now, seq, int(seq), out[:0])
 		seq += 2
 	}
 }

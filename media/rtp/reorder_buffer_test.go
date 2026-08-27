@@ -20,14 +20,14 @@ func at(ms int) time.Time {
 func TestReorderBuffer_SingleSwappedPair(t *testing.T) {
 	b := NewReorderBuffer[int](0, 0, 0)
 
-	out := b.Push(at(0), 5, 500, nil)
+	out, _ := b.Push(at(0), 5, 500, nil)
 	require.Equal(t, []int{500}, out, "the first packet ever is released immediately")
 
-	out = b.Push(at(1), 7, 700, nil)
+	out, _ = b.Push(at(1), 7, 700, nil)
 	require.Empty(t, out, "7 arrives ahead of expected 6 - held, not released yet")
 	require.EqualValues(t, 1, b.Stats().CurrentOccupancy)
 
-	out = b.Push(at(2), 6, 600, nil)
+	out, _ = b.Push(at(2), 6, 600, nil)
 	require.Equal(t, []int{600, 700}, out, "6 fills the gap and cascades straight into the held 7")
 	require.EqualValues(t, 1, b.Stats().Reordered)
 	require.Zero(t, b.Stats().CurrentOccupancy)
@@ -40,10 +40,10 @@ func TestReorderBuffer_BurstReorder(t *testing.T) {
 	b := NewReorderBuffer[int](0, 0, 0)
 
 	var out []int
-	out = b.Push(at(0), 10, 10, out)
+	out, _ = b.Push(at(0), 10, 10, out)
 	// Arrival order: 10, 13, 11, 15, 12, 14 - a scrambled run of 10..15.
 	for i, seq := range []uint16{13, 11, 15, 12, 14} {
-		out = b.Push(at(i+1), seq, int(seq), out)
+		out, _ = b.Push(at(i+1), seq, int(seq), out)
 	}
 	require.Equal(t, []int{10, 11, 12, 13, 14, 15}, out, "the whole run must emerge in strictly ascending order")
 	// 11, 12 and 14 each arrive exactly when they're the awaited packet, so they release directly; 13 and 15 each
@@ -60,10 +60,10 @@ func TestReorderBuffer_GenuineLossTimesOut(t *testing.T) {
 	maxWait := 20 * time.Millisecond
 	b := NewReorderBuffer[int](0, maxWait, 0)
 
-	out := b.Push(at(0), 1, 1, nil)
+	out, _ := b.Push(at(0), 1, 1, nil)
 	require.Equal(t, []int{1}, out)
 
-	out = b.Push(at(1), 3, 3, nil)
+	out, _ = b.Push(at(1), 3, 3, nil)
 	require.Empty(t, out, "2 is missing - 3 is held")
 	deadline, ok := b.Deadline()
 	require.True(t, ok)
@@ -89,14 +89,14 @@ func TestReorderBuffer_MixedReorderAndLoss(t *testing.T) {
 	maxWait := 20 * time.Millisecond
 	b := NewReorderBuffer[int](0, maxWait, 0)
 
-	out := b.Push(at(0), 1, 1, nil) // expected becomes 2
+	out, _ := b.Push(at(0), 1, 1, nil) // expected becomes 2
 	require.Equal(t, []int{1}, out)
 
-	out = b.Push(at(1), 4, 4, nil) // gap: 2,3 missing; deadline anchored at at(1)+maxWait
+	out, _ = b.Push(at(1), 4, 4, nil) // gap: 2,3 missing; deadline anchored at at(1)+maxWait
 	require.Empty(t, out)
 	deadline, _ := b.Deadline()
 
-	out = b.Push(at(2), 3, 3, nil) // 3 present but still can't release (2 still missing)
+	out, _ = b.Push(at(2), 3, 3, nil) // 3 present but still can't release (2 still missing)
 	require.Empty(t, out)
 	// deadline must be unchanged: 3's arrival doesn't touch the head-of-window gap's budget
 	d2, ok := b.Deadline()
@@ -116,15 +116,15 @@ func TestReorderBuffer_MixedReorderAndLoss(t *testing.T) {
 func TestReorderBuffer_Wraparound(t *testing.T) {
 	b := NewReorderBuffer[int](0, 0, 0)
 
-	out := b.Push(at(0), 65534, 1, nil)
+	out, _ := b.Push(at(0), 65534, 1, nil)
 	require.Equal(t, []int{1}, out)
 
 	// Out of order across the wrap: 0 arrives before 65535.
-	out = b.Push(at(1), 0, 3, nil)
+	out, _ = b.Push(at(1), 0, 3, nil)
 	require.Empty(t, out, "0 is ahead of expected 65535 (a normal +1 gap, not a huge jump)")
 	require.Zero(t, b.Stats().Resyncs)
 
-	out = b.Push(at(2), 65535, 2, nil)
+	out, _ = b.Push(at(2), 65535, 2, nil)
 	require.Equal(t, []int{2, 3}, out, "65535 fills the gap and cascades into the held wrapped 0")
 	require.Zero(t, b.Stats().Resyncs)
 	require.Zero(t, b.Stats().LostAfterTimeout)
@@ -136,13 +136,13 @@ func TestReorderBuffer_Wraparound(t *testing.T) {
 func TestReorderBuffer_WindowFullForcesEarlyTimeout(t *testing.T) {
 	b := NewReorderBuffer[int](4, time.Hour, 0) // maxWait large so only window-fullness forces this, not the timer
 
-	out := b.Push(at(0), 0, 0, nil) // expected becomes 1
+	out, _ := b.Push(at(0), 0, 0, nil) // expected becomes 1
 	require.Equal(t, []int{0}, out)
 
 	// Arrives at distance 6 from expected(1) -> exceeds maxWindow(4), forcing 1,2 to be skipped (lost) before 7 can
 	// be admitted (expected becomes 3, distance 7-3=4 == maxWindow, fits: maxWindow bounds how far ahead the buffer
 	// will hold an item *inclusive* of maxWindow itself - only strictly farther forces expiry).
-	out = b.Push(at(1), 7, 7, nil)
+	out, _ = b.Push(at(1), 7, 7, nil)
 	require.Empty(t, out, "7 itself is buffered, not released - the gap 3..6 is still open")
 	stats := b.Stats()
 	require.EqualValues(t, 2, stats.LostAfterTimeout, "1 and 2 were forced out to make room")
@@ -151,32 +151,37 @@ func TestReorderBuffer_WindowFullForcesEarlyTimeout(t *testing.T) {
 		"must reflect the true arrival distance (6), not the distance left over after the window-full loop shrank it")
 
 	// Filling 3,4,5,6 must cascade 7 out too.
-	out = b.Push(at(2), 3, 3, nil)
-	out = b.Push(at(2), 4, 4, out)
-	out = b.Push(at(2), 5, 5, out)
-	out = b.Push(at(2), 6, 6, out)
+	out, _ = b.Push(at(2), 3, 3, nil)
+	out, _ = b.Push(at(2), 4, 4, out)
+	out, _ = b.Push(at(2), 5, 5, out)
+	out, _ = b.Push(at(2), 6, 6, out)
 	require.Equal(t, []int{3, 4, 5, 6, 7}, out)
 	require.Zero(t, b.Stats().CurrentOccupancy)
 }
 
 // TestReorderBuffer_LateDropped verifies that a packet arriving behind nextExpected (its gap already resolved one
-// way or another) is dropped, not re-released or double-counted, and does not panic.
+// way or another) is dropped, not re-released or double-counted, and does not panic. It also verifies dropped is
+// reported directly through Push's own return value, not just through the LateDropped stat.
 func TestReorderBuffer_LateDropped(t *testing.T) {
 	b := NewReorderBuffer[int](0, 0, 0)
 
-	out := b.Push(at(0), 5, 5, nil)
+	out, dropped := b.Push(at(0), 5, 5, nil)
 	require.Equal(t, []int{5}, out)
-	out = b.Push(at(1), 6, 6, nil)
+	require.False(t, dropped)
+	out, dropped = b.Push(at(1), 6, 6, nil)
 	require.Equal(t, []int{6}, out)
+	require.False(t, dropped)
 
 	// 5 shows up again (duplicate/straggler), already behind expected(7).
-	out = b.Push(at(2), 5, 555, nil)
+	out, dropped = b.Push(at(2), 5, 555, nil)
 	require.Empty(t, out)
+	require.True(t, dropped, "the dropped item itself must be reported, not just counted in stats")
 	require.EqualValues(t, 1, b.Stats().LateDropped)
 
 	// Normal operation continues unaffected.
-	out = b.Push(at(3), 7, 7, nil)
+	out, dropped = b.Push(at(3), 7, 7, nil)
 	require.Equal(t, []int{7}, out)
+	require.False(t, dropped)
 }
 
 // TestReorderBuffer_FlushMidWindow verifies Flush drains every held item in ascending order, with none left behind
@@ -184,11 +189,11 @@ func TestReorderBuffer_LateDropped(t *testing.T) {
 func TestReorderBuffer_FlushMidWindow(t *testing.T) {
 	b := NewReorderBuffer[int](0, 0, 0)
 
-	out := b.Push(at(0), 10, 10, nil) // expected becomes 11
+	out, _ := b.Push(at(0), 10, 10, nil) // expected becomes 11
 	require.Equal(t, []int{10}, out)
-	out = b.Push(at(1), 13, 13, nil)
+	out, _ = b.Push(at(1), 13, 13, nil)
 	require.Empty(t, out)
-	out = b.Push(at(1), 12, 12, nil)
+	out, _ = b.Push(at(1), 12, 12, nil)
 	require.Empty(t, out)
 
 	flushed := b.Flush(nil)
@@ -200,7 +205,7 @@ func TestReorderBuffer_FlushMidWindow(t *testing.T) {
 
 	// Buffer is usable afterward: the next Push re-seeds from scratch relative to whatever arrives (nextExpected is
 	// unchanged by Flush, so 11 is still expected).
-	out = b.Push(at(2), 11, 11, nil)
+	out, _ = b.Push(at(2), 11, 11, nil)
 	require.Equal(t, []int{11}, out)
 }
 
@@ -216,30 +221,30 @@ func TestReorderBuffer_ReconnectResync(t *testing.T) {
 
 	// Stable run: 100, 101, 102 - each released immediately.
 	var out []int
-	out = b.Push(at(0), 100, 100, out)
-	out = b.Push(at(1), 101, 101, out)
-	out = b.Push(at(2), 102, 102, out)
+	out, _ = b.Push(at(0), 100, 100, out)
+	out, _ = b.Push(at(1), 101, 101, out)
+	out, _ = b.Push(at(2), 102, 102, out)
 	require.Equal(t, []int{100, 101, 102}, out)
 	require.Zero(t, b.Stats().Resyncs)
 
 	// Hold one packet ahead so the flush-on-resync path has something to drain.
-	out = b.Push(at(3), 105, 105, nil)
+	out, _ = b.Push(at(3), 105, 105, nil)
 	require.Empty(t, out)
 	require.EqualValues(t, 1, b.Stats().CurrentOccupancy)
 
 	// Reconnect: the far end restarts at sequence 10 - far below nextExpected(103), well beyond maxJump(32).
-	out = b.Push(at(4), 10, 10, nil)
+	out, _ = b.Push(at(4), 10, 10, nil)
 	require.Equal(t, []int{105, 10}, out, "the stale held packet flushes first, then the resync packet itself releases")
 	stats := b.Stats()
 	require.EqualValues(t, 1, stats.Resyncs)
 	require.Zero(t, stats.CurrentOccupancy)
 
 	// Normal run resumes from the new base.
-	out = b.Push(at(5), 11, 11, nil)
+	out, _ = b.Push(at(5), 11, 11, nil)
 	require.Equal(t, []int{11}, out)
-	out = b.Push(at(6), 13, 13, nil)
+	out, _ = b.Push(at(6), 13, 13, nil)
 	require.Empty(t, out)
-	out = b.Push(at(7), 12, 12, nil)
+	out, _ = b.Push(at(7), 12, 12, nil)
 	require.Equal(t, []int{12, 13}, out, "reordering correction works normally again after the resync")
 }
 
@@ -250,16 +255,19 @@ func TestReorderBuffer_ReconnectResync(t *testing.T) {
 func TestReorderBuffer_WithoutResync_WouldWedge(t *testing.T) {
 	b := NewReorderBuffer[int](8, time.Hour, 60000) // maxJump so large it never fires for this scenario
 
-	out := b.Push(at(0), 100, 100, nil)
+	out, dropped := b.Push(at(0), 100, 100, nil)
 	require.Equal(t, []int{100}, out)
+	require.False(t, dropped)
 
-	out = b.Push(at(1), 10, 10, nil) // far below nextExpected(101), but within the (huge) maxJump
+	out, dropped = b.Push(at(1), 10, 10, nil) // far below nextExpected(101), but within the (huge) maxJump
 	require.Empty(t, out, "without resync, this reads as a late/behind packet, not a discontinuity")
+	require.True(t, dropped)
 	require.EqualValues(t, 1, b.Stats().LateDropped)
 	require.Zero(t, b.Stats().Resyncs)
 
-	out = b.Push(at(2), 11, 11, nil)
+	out, dropped = b.Push(at(2), 11, 11, nil)
 	require.Empty(t, out, "still behind nextExpected(101) - wedged")
+	require.True(t, dropped)
 	require.EqualValues(t, 2, b.Stats().LateDropped)
 }
 
@@ -270,10 +278,10 @@ func TestReorderBuffer_Expire_MultiPacketLoss(t *testing.T) {
 	maxWait := 20 * time.Millisecond
 	b := NewReorderBuffer[int](0, maxWait, 0)
 
-	out := b.Push(at(0), 1, 1, nil) // expected becomes 2
+	out, _ := b.Push(at(0), 1, 1, nil) // expected becomes 2
 	require.Equal(t, []int{1}, out)
 
-	out = b.Push(at(1), 5, 5, nil) // 2, 3 and 4 are all missing; 5 is held
+	out, _ = b.Push(at(1), 5, 5, nil) // 2, 3 and 4 are all missing; 5 is held
 	require.Empty(t, out)
 	deadline, ok := b.Deadline()
 	require.True(t, ok)
@@ -293,12 +301,12 @@ func TestReorderBuffer_Expire_MultiPacketLoss(t *testing.T) {
 func TestReorderBuffer_MaxJumpBelowMaxWindow_Corrected(t *testing.T) {
 	b := NewReorderBuffer[int](32, time.Hour, 16) // maxJump(16) <= maxWindow(32): must be corrected to 4*32=128
 
-	out := b.Push(at(0), 0, 0, nil) // expected becomes 1
+	out, _ := b.Push(at(0), 0, 0, nil) // expected becomes 1
 	require.Equal(t, []int{0}, out)
 
 	// Distance 19 from expected(1): well within maxWindow(32), and would have exceeded the misconfigured
 	// maxJump(16) had it not been corrected.
-	out = b.Push(at(1), 20, 20, nil)
+	out, _ = b.Push(at(1), 20, 20, nil)
 	require.Empty(t, out, "held as a normal gap, not resynced")
 	require.Zero(t, b.Stats().Resyncs)
 	require.EqualValues(t, 1, b.Stats().CurrentOccupancy)
@@ -309,13 +317,13 @@ func TestReorderBuffer_MaxJumpBelowMaxWindow_Corrected(t *testing.T) {
 func TestReorderBuffer_MaxJumpCapped(t *testing.T) {
 	b := NewReorderBuffer[int](8, time.Hour, 1_000_000) // must be clamped to maxSequenceJump (32768)
 
-	out := b.Push(at(0), 100, 100, nil) // expected becomes 101
+	out, _ := b.Push(at(0), 100, 100, nil) // expected becomes 101
 	require.Equal(t, []int{100}, out)
 
 	// Sequence distance exactly maxSequenceJump (32768) from expected(101) - the largest distance abs(delta) can
 	// ever produce, and thus the largest value a resync can ever actually trigger on. If the cap were ineffective
 	// (still 1,000,000), this would instead grind through the window-full forced-expiry path.
-	out = b.Push(at(1), 101+32768, 99999, nil)
+	out, _ = b.Push(at(1), 101+32768, 99999, nil)
 	require.Equal(t, []int{99999}, out, "must resync immediately, not fall through to forced expiry")
 	require.EqualValues(t, 1, b.Stats().Resyncs)
 }
@@ -327,18 +335,18 @@ func TestReorderBuffer_ForwardJumpResync(t *testing.T) {
 	maxWindow := 8
 	b := NewReorderBuffer[int](maxWindow, time.Hour, 4*maxWindow) // maxJump=32
 
-	out := b.Push(at(0), 100, 100, nil) // expected becomes 101
+	out, _ := b.Push(at(0), 100, 100, nil) // expected becomes 101
 	require.Equal(t, []int{100}, out)
 
 	// Far ahead of expected(101) - well beyond maxJump(32) - not just outside maxWindow(8).
-	out = b.Push(at(1), 50000, 50000, nil)
+	out, _ = b.Push(at(1), 50000, 50000, nil)
 	require.Equal(t, []int{50000}, out, "must resync immediately, not iterate through forced expiry")
 	stats := b.Stats()
 	require.EqualValues(t, 1, stats.Resyncs)
 	require.Zero(t, stats.LostAfterTimeout, "resync doesn't count each skipped position as a timeout loss")
 
 	// Normal operation resumes from the new base.
-	out = b.Push(at(2), 50001, 50001, nil)
+	out, _ = b.Push(at(2), 50001, 50001, nil)
 	require.Equal(t, []int{50001}, out)
 }
 
@@ -347,10 +355,10 @@ func TestReorderBuffer_ForwardJumpResync(t *testing.T) {
 func TestReorderBuffer_FirstPacketWraparound(t *testing.T) {
 	b := NewReorderBuffer[int](0, 0, 0)
 
-	out := b.Push(at(0), 65535, 1, nil)
+	out, _ := b.Push(at(0), 65535, 1, nil)
 	require.Equal(t, []int{1}, out)
 
-	out = b.Push(at(1), 0, 2, nil)
+	out, _ = b.Push(at(1), 0, 2, nil)
 	require.Equal(t, []int{2}, out, "0 is exactly the wrapped successor of 65535")
 }
 
@@ -360,16 +368,16 @@ func TestReorderBuffer_FirstPacketWraparound(t *testing.T) {
 func TestReorderBuffer_MaxWindowOne_HoldsSwappedPair(t *testing.T) {
 	b := NewReorderBuffer[int](1, time.Hour, 0) // maxWait large: only window-fullness matters here
 
-	out := b.Push(at(0), 5, 5, nil) // expected becomes 6
+	out, _ := b.Push(at(0), 5, 5, nil) // expected becomes 6
 	require.Equal(t, []int{5}, out)
 
-	out = b.Push(at(1), 7, 7, nil) // distance 1 from expected(6) == maxWindow(1): must fit, not force-expire
+	out, _ = b.Push(at(1), 7, 7, nil) // distance 1 from expected(6) == maxWindow(1): must fit, not force-expire
 	require.Empty(t, out, "7 must be held, not released or force-expired")
 	stats := b.Stats()
 	require.EqualValues(t, 1, stats.CurrentOccupancy)
 	require.Zero(t, stats.LostAfterTimeout, "nothing should have been force-expired to admit this")
 
-	out = b.Push(at(2), 6, 6, nil) // fills the gap
+	out, _ = b.Push(at(2), 6, 6, nil) // fills the gap
 	require.Equal(t, []int{6, 7}, out, "6 fills the gap and cascades the held 7 out")
 }
 
@@ -382,11 +390,11 @@ func TestReorderBuffer_ForcedExpiry_RearmsDeadlineForNewGap(t *testing.T) {
 	maxWait := 20 * time.Millisecond
 	b := NewReorderBuffer[int](4, maxWait, 0) // maxWindow=4
 
-	out := b.Push(at(0), 1, 1, nil) // expected becomes 2
+	out, _ := b.Push(at(0), 1, 1, nil) // expected becomes 2
 	require.Equal(t, []int{1}, out)
 
 	// 6 is held directly: distance 4 from expected(2) == maxWindow(4), fits.
-	out = b.Push(at(1), 6, 6, nil)
+	out, _ = b.Push(at(1), 6, 6, nil)
 	require.Empty(t, out)
 	require.EqualValues(t, 1, b.Stats().CurrentOccupancy)
 	oldDeadline, ok := b.Deadline()
@@ -397,7 +405,7 @@ func TestReorderBuffer_ForcedExpiry_RearmsDeadlineForNewGap(t *testing.T) {
 	// held 6 survives - slots stays non-empty throughout, which is exactly the case the old wasEmpty-only check
 	// missed.
 	later := oldDeadline.Add(-time.Microsecond)
-	out = b.Push(later, 8, 8, nil)
+	out, _ = b.Push(later, 8, 8, nil)
 	require.Empty(t, out, "8 itself is buffered too - the gap at the new expected(4) is still open")
 	require.EqualValues(t, 2, b.Stats().CurrentOccupancy, "6 must have survived the forced-expiry walk")
 
@@ -422,15 +430,15 @@ func TestReorderBuffer_MaxWindowClamped(t *testing.T) {
 	require.EqualValues(t, maxSequenceWindow, b.maxWindow, "maxWindow must be clamped to its reachable ceiling")
 	require.EqualValues(t, maxSequenceJump, b.maxJump, "maxJump must be a sane, positive, reachable value")
 
-	out := b.Push(at(0), 100, 100, nil)
+	out, _ := b.Push(at(0), 100, 100, nil)
 	require.Equal(t, []int{100}, out)
 
 	// An ordinary out-of-order pair must still be corrected, not misread as a resync - which an unclamped,
 	// overflowed-to-negative maxJump would have caused for every single packet.
-	out = b.Push(at(1), 102, 102, nil)
+	out, _ = b.Push(at(1), 102, 102, nil)
 	require.Empty(t, out, "held, not resynced")
 	require.Zero(t, b.Stats().Resyncs)
 
-	out = b.Push(at(2), 101, 101, nil)
+	out, _ = b.Push(at(2), 101, 101, nil)
 	require.Equal(t, []int{101, 102}, out, "reordering still works correctly with the clamped values")
 }
