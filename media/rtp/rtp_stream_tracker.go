@@ -3,6 +3,8 @@ package rtp
 import (
 	"time"
 
+	"github.com/pion/rtp"
+
 	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/common-go/util/timeutil"
@@ -18,6 +20,10 @@ type StreamTracker interface {
 	// will validate the packet and aggregate any errors. The method returns the payload and the adjusted wall clock
 	// timestamp if the header is well-formatted, nil otherwise, and a list of errors if any.
 	Track(bts []byte) (payload []byte, timestamp utc.UTC, errList error)
+	// TrackPacket feeds an already-parsed RTP packet to the tracker, e.g. one decoded via pktpool.Packet.Rtp().Packet().
+	// It performs the same validation and statistics aggregation as Track, without re-parsing the RTP header from
+	// bytes.
+	TrackPacket(pkt *rtp.Packet) (payload []byte, timestamp utc.UTC, errList error)
 	// Stats returns RTP statistics
 	Stats() *Stats
 	// Reset resets the tracker state, clearing all statistics and errors.
@@ -50,29 +56,28 @@ type rtpStreamTracker struct {
 }
 
 func (t *rtpStreamTracker) Track(bts []byte) (payload []byte, timestamp utc.UTC, errList error) {
-
-	defer func() {
-		t.statsLogger.Do(func() {
-			statsLog.Info("ts-stream-tracker", "stream", t.streamId, "stats", jsonutil.Stringer(t.Stats()))
-		})
-	}()
-
-	appendErr := func(err error) {
-		errList = errors.Append(errList, err)
+	pkt, err := ParsePacket(bts)
+	if err != nil {
+		defer t.logStatsPeriodically()
+		t.stats.PacketCount++
 		t.stats.ErrorCount++
+		return nil, utc.Zero, err
 	}
+	return t.TrackPacket(pkt)
+}
+
+// TrackPacket feeds an already-parsed RTP packet to the tracker, e.g. one decoded via pktpool.Packet.Rtp().Packet().
+// It performs the same validation and statistics aggregation as Track, without re-parsing the RTP header from bytes -
+// letting a caller that already holds a parsed packet (such as a pooled, lazily-decoded one) avoid a second parse.
+func (t *rtpStreamTracker) TrackPacket(pkt *rtp.Packet) (payload []byte, timestamp utc.UTC, errList error) {
+	defer t.logStatsPeriodically()
 
 	t.stats.PacketCount++
 
-	pkt, err := ParsePacket(bts)
-	if err != nil {
-		appendErr(err)
-		return nil, utc.Zero, errList
-	}
-
 	seq, ts, err := t.detector.Detect(pkt.SequenceNumber, pkt.Timestamp)
 	if err != nil {
-		appendErr(err)
+		errList = errors.Append(errList, err)
+		t.stats.ErrorCount++
 		t.stats.Gaps = append(t.stats.Gaps, Gap{
 			PacketNum: t.stats.PacketCount,
 			Seq:       seq,
@@ -92,6 +97,12 @@ func (t *rtpStreamTracker) Track(bts []byte) (payload []byte, timestamp utc.UTC,
 	t.stats.EndTs = ts
 
 	return pkt.Payload, t.toWallClockTS(ts), errList
+}
+
+func (t *rtpStreamTracker) logStatsPeriodically() {
+	t.statsLogger.Do(func() {
+		statsLog.Info("ts-stream-tracker", "stream", t.streamId, "stats", jsonutil.Stringer(t.Stats()))
+	})
 }
 
 func (t *rtpStreamTracker) Stats() *Stats {
@@ -130,6 +141,10 @@ func (t *rtpStreamTracker) toWallClockTS(rtpTS int64) utc.UTC {
 type NoopTracker struct{}
 
 func (n NoopTracker) Track(bts []byte) ([]byte, utc.UTC, error) {
+	return nil, utc.Zero, nil
+}
+
+func (n NoopTracker) TrackPacket(pkt *rtp.Packet) ([]byte, utc.UTC, error) {
 	return nil, utc.Zero, nil
 }
 

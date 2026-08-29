@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/eluv-io/common-go/format/duration"
-	"github.com/eluv-io/common-go/media/pacer"
+	mediapacer "github.com/eluv-io/common-go/media/pacer"
 	"github.com/eluv-io/common-go/media/rtp"
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/common-go/util/timeutil"
@@ -30,7 +30,7 @@ func newTestDisruptorPacer(
 		EventLog:     log.Get("/test/rtp/disruptor"),
 		SeqThreshold: 1,
 		TsThreshold:  duration.Spec(time.Second),
-		Logic: pacer.PacerLogicConfig{
+		Logic: mediapacer.PacerLogicConfig{
 			DiscardPeriod:    duration.Spec(discardPeriod),
 			MaxDiscardPeriod: duration.Spec(max(discardPeriod*10, time.Second)),
 			Delay:            duration.Spec(delay),
@@ -49,9 +49,7 @@ func newTestDisruptorPacer(
 func startDisruptorConsumer(pacer *rtp.DisruptorPacer) func() [][]byte {
 	ch := make(chan []byte, 10_000)
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		_ = pacer.Run(func(pkt []byte, _ utc.UTC) error {
 			cp := make([]byte, len(pkt))
 			copy(cp, pkt)
@@ -59,7 +57,7 @@ func startDisruptorConsumer(pacer *rtp.DisruptorPacer) func() [][]byte {
 			return nil
 		})
 		close(ch)
-	}()
+	})
 	return func() [][]byte {
 		wg.Wait()
 		var packets [][]byte
@@ -74,7 +72,7 @@ func startDisruptorConsumer(pacer *rtp.DisruptorPacer) func() [][]byte {
 // to the next power of 2 rather than being rejected.
 func TestDisruptorPacer_NonPowerOfTwoCapacity(t *testing.T) {
 	pacer, err := rtp.NewDisruptorPacer(rtp.DisruptorPacerConfig{
-		Logic:          pacer.PacerLogicConfig{EventLog: log.Get("/test")},
+		Logic:          mediapacer.PacerLogicConfig{EventLog: log.Get("/test")},
 		SeqThreshold:   1,
 		TsThreshold:    duration.Spec(time.Second),
 		BufferCapacity: 1000, // rounds up to 1024
@@ -129,10 +127,8 @@ func TestDisruptorPacer_PacedDelivery(t *testing.T) {
 
 	offCount := atomic.Int32{}
 	var wg sync.WaitGroup
-	wg.Add(1)
 
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		received := 0
 		remaining := n
 		var lastTs utc.UTC
@@ -157,7 +153,7 @@ func TestDisruptorPacer_PacedDelivery(t *testing.T) {
 			}
 			return nil
 		})
-	}()
+	})
 
 	watch := timeutil.StartWatch()
 
@@ -187,9 +183,7 @@ func TestDisruptorPacer_Delay(t *testing.T) {
 
 	delivered := make(chan time.Time, 1)
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		_ = pacer.Run(func(_ []byte, _ utc.UTC) error {
 			select {
 			case delivered <- time.Now():
@@ -197,7 +191,7 @@ func TestDisruptorPacer_Delay(t *testing.T) {
 			}
 			return nil
 		})
-	}()
+	})
 
 	pushTime := time.Now()
 	require.NoError(t, pacer.Push(pack(t, 0, 0)))
@@ -307,14 +301,12 @@ func TestDisruptorPacer_DelayContinuous(t *testing.T) {
 	delivered := 0
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		_ = pacer.Run(func(_ []byte, _ utc.UTC) error {
 			delivered++
 			return nil
 		})
-	}()
+	})
 
 	ticker := time.NewTicker(ipd)
 	for i := 1; i <= packets; i++ {
@@ -363,7 +355,7 @@ func TestDisruptorPacerConfig_Unmarshal(t *testing.T) {
 
 	t.Run("InitDefaults", func(t *testing.T) {
 		cfg := rtp.DisruptorPacerConfig{
-			Logic:             *new(pacer.PacerLogicConfig).InitDefaults(),
+			Logic:             *new(mediapacer.PacerLogicConfig).InitDefaults(),
 			SeqThreshold:      5,
 			TsThreshold:       duration.Minute,
 			BufferCapacity:    1024,

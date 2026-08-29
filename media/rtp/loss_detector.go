@@ -12,9 +12,23 @@ type LossDetector struct {
 	lastSeq uint16
 }
 
+// Next checks the sequence number of the next RTP packet. Returns an error if the sequence number is not contiguous
+// with respect to the last received packet.
 func (l *LossDetector) Next(packet *rtp.Packet) error {
+	return l.NextSequence(packet.SequenceNumber)
+}
+
+// NextPacket checks the sequence number of the next RTP packet. Returns an error if the sequence number is not
+// contiguous with respect to the last received packet.
+func (l *LossDetector) NextPacket(packet *rtp.Packet) error {
+	return l.Next(packet)
+}
+
+// NextSequence checks the RTP sequence number. Returns an error if the sequence number is not contiguous
+// with respect to the last received sequence number.
+func (l *LossDetector) NextSequence(seq uint16) error {
 	defer func() {
-		l.lastSeq = packet.SequenceNumber
+		l.lastSeq = seq
 	}()
 
 	if !l.hasSeq {
@@ -22,12 +36,12 @@ func (l *LossDetector) Next(packet *rtp.Packet) error {
 		return nil
 	}
 	expectedSequenceNumber := l.lastSeq + 1
-	if packet.SequenceNumber != expectedSequenceNumber {
+	if seq != expectedSequenceNumber {
 		return errors.NoTrace("LossDetector.Next", errors.K.Invalid,
 			"reason", "packet loss detected",
 			"expected_seq", expectedSequenceNumber,
-			"new_seq", packet.SequenceNumber,
-			"lost_packets", packet.SequenceNumber-expectedSequenceNumber)
+			"new_seq", seq,
+			"lost_packets", seq-expectedSequenceNumber)
 	}
 	return nil
 }

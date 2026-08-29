@@ -41,14 +41,14 @@ type InStats struct {
 
 	// NegDriftApplied tracks the actually-applied baseTime corrections for negative drift when AdjustTimeDrift is
 	// enabled. When MaxNegDriftCorrection is set, this may be less than NegDrift (the nominal observed drift).
-	NegDriftApplied statsutil.RawStatistics[duration.Millis] `json:"neg_drift_applied,omitempty"`
+	NegDriftApplied statsutil.RawStatistics[duration.Millis] `json:"neg_drift_applied"`
 
 	// PosDrift records the mean T0 drift for each period in which the mean exceeded DriftThreshold.
 	// Recorded regardless of whether AdjustTimeDrift is enabled.
-	PosDrift statsutil.RawStatistics[duration.Millis] `json:"pos_drift,omitempty"`
+	PosDrift statsutil.RawStatistics[duration.Millis] `json:"pos_drift"`
 
 	// PosDriftApplied records each positive baseTime correction applied by the positive-drift compensator.
-	PosDriftApplied statsutil.RawStatistics[duration.Millis] `json:"pos_drift_applied,omitempty"`
+	PosDriftApplied statsutil.RawStatistics[duration.Millis] `json:"pos_drift_applied"`
 
 	// MinT0 is the minimum T0 seen; zero value means not set.
 	MinT0 utc.UTC `json:"min_t0"`
