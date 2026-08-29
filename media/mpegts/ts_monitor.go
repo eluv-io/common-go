@@ -114,8 +114,8 @@ func (s *stats) Fields() []any {
 	durLast := now.Sub(s.Last)
 	return []any{
 		"stream", s.Stream,
-		"dur", duration.Spec(durStart).RoundTo(2),
-		"ipd", duration.Spec(durLast).RoundTo(2),
+		"dur", duration.Duration(durStart).RoundTo(2),
+		"ipd", duration.Duration(durLast).RoundTo(2),
 		"packets", humanize.SI(float64(s.Packets), "P"),
 		"bytes", humanize.Bytes(s.Bytes),
 		"bytes_avg", humanize.SIWithDigits(float64(s.Bytes)/durStart.Seconds(), 2, "B/s"),

@@ -80,7 +80,7 @@ func DurationQuery(query url.Values, name string, unit duration.Spec, defaultVal
 	if !exist || len(values) == 0 {
 		return defaultValue
 	}
-	return structured.Wrap(values[0]).Duration(unit, defaultValue)
+	return structured.Wrap(values[0]).DurationSpec(unit, defaultValue)
 }
 
 // UintPtrQuery returns a pointer to a uint for the given query parameter. Returns nil if the parameter does not exist

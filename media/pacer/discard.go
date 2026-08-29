@@ -12,8 +12,8 @@ import (
 // DiscardContext tracks early packet discard state for RTP streams. This is used during startup to wait for a stable
 // RTP stream before establishing timing baselines.
 type DiscardContext struct {
-	DiscardPeriod    duration.Spec // How long to wait after baseline update
-	MaxDiscardPeriod duration.Spec // Max time to wait after baseline update
+	DiscardPeriod    duration.Duration // How long to wait after baseline update
+	MaxDiscardPeriod duration.Duration // Max time to wait after baseline update
 
 	DiscardComplete     bool                                     // True once discard phase is over
 	FirstPacketTime     utc.UTC                                  // Timestamp of the first received packet
@@ -28,7 +28,7 @@ type DiscardContext struct {
 // unwrapped timestamps to time.Duration; if omitted or nil, TicksToDuration (90 kHz RTP clock) is used.
 // NewDiscardContext creates a new discard context with the specified period. toDuration converts unwrapped timestamps to
 // time.Duration and must not be nil.
-func NewDiscardContext(discardPeriod, maxDiscardPeriod duration.Spec, toDuration func(int64) time.Duration) *DiscardContext {
+func NewDiscardContext(discardPeriod, maxDiscardPeriod duration.Duration, toDuration func(int64) time.Duration) *DiscardContext {
 	if toDuration == nil {
 		panic("pacer: toDuration must not be nil")
 	}

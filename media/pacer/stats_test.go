@@ -119,7 +119,7 @@ func TestInStats_Marshal(t *testing.T) {
 
 func TestOutStats_switchPeriod(t *testing.T) {
 	now := utc.Now()
-	s := newOutStats(duration.Spec(time.Second))
+	s := newOutStats(duration.S)
 
 	// Add one observation to each collector
 	s.wait.UpdateNow(now, duration.Millis(10*time.Millisecond))

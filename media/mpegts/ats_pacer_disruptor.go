@@ -12,7 +12,7 @@ import (
 
 // DefaultAtsGapThreshold is the default AtsDisruptorPacerConfig.GapThreshold: the maximum jump between consecutive
 // arrival timestamps before a stream reset (baseline re-establishment) is triggered.
-const DefaultAtsGapThreshold = duration.Second
+const DefaultAtsGapThreshold = duration.S
 
 // AtsDisruptorPacerConfig holds configuration for an AtsDisruptorPacer.
 type AtsDisruptorPacerConfig struct {
@@ -27,21 +27,21 @@ type AtsDisruptorPacerConfig struct {
 	// GapThreshold is the maximum jump between consecutive arrival timestamps before a stream reset is triggered.
 	// Defaults to DefaultAtsGapThreshold when zero; a negative value disables gap detection (arrival gaps of any size
 	// are then reproduced faithfully).
-	GapThreshold duration.Spec `json:"gap_threshold"`
+	GapThreshold duration.Duration `json:"gap_threshold"`
 
-	BufferCapacity    int           `json:"buffer_capacity"`     // ring buffer capacity (rounded up to next power of 2; 0 → pacer.DefaultDisruptorCapacity)
-	MinSleepThreshold duration.Spec `json:"min_sleep_threshold"` // sleep durations shorter than this are skipped (0 → pacer.DefaultMinSleepThreshold)
-	TickerPeriod      duration.Spec `json:"ticker_period"`       // ticker period for scheduling delivery (0 → pacer.DefaultTickerPeriod)
-	OversleepMargin   duration.Spec `json:"oversleep_margin"`    // jitter tolerated above TickerPeriod before a wake is counted as an oversleep (0 → pacer.DefaultOversleepMargin)
-	StatsInterval     duration.Spec `json:"stats_interval"`      // interval for periodic stats logging (0 → pacer.DefaultStatsInterval, -1 → disabled)
+	BufferCapacity    int               `json:"buffer_capacity"`     // ring buffer capacity (rounded up to next power of 2; 0 → pacer.DefaultDisruptorCapacity)
+	MinSleepThreshold duration.Duration `json:"min_sleep_threshold"` // sleep durations shorter than this are skipped (0 → pacer.DefaultMinSleepThreshold)
+	TickerPeriod      duration.Duration `json:"ticker_period"`       // ticker period for scheduling delivery (0 → pacer.DefaultTickerPeriod)
+	OversleepMargin   duration.Duration `json:"oversleep_margin"`    // jitter tolerated above TickerPeriod before a wake is counted as an oversleep (0 → pacer.DefaultOversleepMargin)
+	StatsInterval     duration.Duration `json:"stats_interval"`      // interval for periodic stats logging (0 → pacer.DefaultStatsInterval, -1 → disabled)
 
 	// SendAhead is how early the consumer dispatches a packet before its target time. 0 = dispatch at targetTs.
-	SendAhead duration.Spec `json:"send_ahead"`
+	SendAhead duration.Duration `json:"send_ahead"`
 
 	// DeliveryMargin is the minimum lead time guaranteed to the "deliver" callback:
 	//   sendAt = max(targetTs, now + DeliveryMargin)
 	// Should be ≤ SendAhead so the floor is reliably reachable under normal conditions. 0 = disabled.
-	DeliveryMargin duration.Spec `json:"delivery_margin"`
+	DeliveryMargin duration.Duration `json:"delivery_margin"`
 }
 
 func (c *AtsDisruptorPacerConfig) InitDefaults() *AtsDisruptorPacerConfig {
@@ -172,8 +172,8 @@ func (s *atsScheduler) Schedule(now utc.UTC, bts []byte) (utc.UTC, []byte, bool,
 				"stream", s.stream,
 				"prev_ns", s.lastArrival,
 				"curr_ns", arrival,
-				"diff", duration.Spec(time.Duration(arrival-s.lastArrival)),
-				"threshold", duration.Spec(time.Duration(s.gapThreshold)))
+				"diff", duration.Duration(arrival-s.lastArrival),
+				"threshold", duration.Duration(s.gapThreshold))
 		}
 	}
 	s.lastArrival = arrival

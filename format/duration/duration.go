@@ -16,6 +16,20 @@ import (
 // marshaling.
 type Duration time.Duration
 
+// Duration-typed unit constants, mirroring time.ParseDuration's own unit suffixes (ns/us/ms/s/m/h). Named separately
+// from Spec's own Nanosecond/Microsecond/Millisecond/Second/Minute/Hour constants, which already occupy those names in
+// this package. Min is an alias for M, for call sites where the bare single letter reads ambiguously (M can mean
+// Mega/Million).
+const (
+	NS  Duration = 1
+	US           = 1000 * NS
+	MS           = 1000 * US
+	S            = 1000 * MS
+	M            = 60 * S
+	H            = 60 * M
+	Min          = M
+)
+
 // String returns the duration formatted like time.Duration.String(), but
 // omits zero values.
 // Examples:
