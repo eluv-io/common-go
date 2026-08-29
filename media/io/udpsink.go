@@ -98,13 +98,17 @@ type udpConn struct {
 	*net.UDPConn
 }
 
-func (c udpConn) ConnStats(bool) ConnStats {
-	cs := ConnStats{}
+func (c udpConn) ConnStats(into *ConnStats, _ bool) {
+	if into == nil {
+		return
+	}
+	into.RemoteAddr = ""
 	if addr := c.RemoteAddr(); addr != nil {
-		cs.RemoteAddr = addr.String()
+		into.RemoteAddr = addr.String()
 	}
+	into.LocalAddr = ""
 	if addr := c.LocalAddr(); addr != nil {
-		cs.LocalAddr = addr.String()
+		into.LocalAddr = addr.String()
 	}
-	return cs
+	into.SRT = nil
 }

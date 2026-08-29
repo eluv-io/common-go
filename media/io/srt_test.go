@@ -83,7 +83,8 @@ func testSourceSinkUrl(t *testing.T, src, snk string) {
 	for name, rc := range map[string]any{"source": reader, "sink": writer} {
 		sr, ok := rc.(StatsReporter)
 		require.True(t, ok, "%s does not implement StatsReporter", name)
-		stats := sr.ConnStats(true)
+		var stats ConnStats
+		sr.ConnStats(&stats, true)
 		// the local address is always known once connected; the source listens on it and the sink
 		// binds a local socket to it
 		require.NotEmpty(t, stats.LocalAddr, "%s local address", name)

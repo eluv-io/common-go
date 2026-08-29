@@ -63,7 +63,10 @@ func NewPacket(wrapCap, cap int) *Packet {
 type Packet struct {
 	Data []byte // the full packet data (a slice of buf): buf[off:off+len]
 
-	// ReceivedAt records when the packet was received, for timestamp tracking. Reset on borrow.
+	// ReceivedAt records when the packet was received, for timestamp tracking. Reset on borrow, and by From/FromReader
+	// as part of loading new data. FromReader re-stamps it itself (as of its Read call), since it performs the read.
+	// From does not read from the network itself, so callers loading a datagram already read elsewhere must set
+	// ReceivedAt explicitly after calling From (see e.g. mpegtsInputHandler.Read in avpipe).
 	ReceivedAt time.Time
 
 	buf        []byte // the internal buffer. Immutable (is never re-assigned to a subslice).
@@ -137,7 +140,7 @@ func (p *Packet) setExtent(length int) {
 	p.decLen = p.len
 }
 
-// FromReader fills the packet from a single Read of the given reader.
+// FromReader fills the packet from a single Read of the given reader and sets its ReceivedAt timestamp.
 //
 // It performs exactly one Read into the buffer's remaining capacity (len(buf)-off) and treats whatever that single
 // Read returns as one complete packet. This makes it suitable only for message-oriented readers that preserve packet
@@ -155,6 +158,7 @@ func (p *Packet) FromReader(reader io.Reader) error {
 	n, err := reader.Read(p.buf[p.off:])
 	if n > 0 {
 		p.setExtent(n)
+		p.ReceivedAt = time.Now()
 	}
 	return err
 }
@@ -164,6 +168,8 @@ func (p *Packet) FromReader(reader io.Reader) error {
 //
 // From is self-contained: it resets the packet's load position and decode state first, so it is safe to reuse a packet
 // (including one previously modified by WrapTlv) without going back through the pool.
+//
+// Note: From does not set the packet's ReceivedAt timestamp - set it outside if needed!
 func (p *Packet) From(bts []byte) error {
 	p.resetForLoad()
 	if len(bts) > len(p.buf)-p.off {

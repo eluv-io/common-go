@@ -662,7 +662,14 @@ func (v *Value) DurationErr(unit duration.Spec, def ...duration.Spec) (duration.
 	case time.Duration:
 		return duration.Spec(t), nil
 	case string:
-		d, err := duration.FromString(t) // also parses time.Duration correctly
+		// A pure numeric string ("1", "1.5") is interpreted as a multiple of unit, consistent with a non-string
+		// numeric value - checked before duration.FromString, since that treats a bare number as a duration.Spec in
+		// its own right (int64 nanoseconds vs. float seconds - see duration.Spec.parseNum), which has nothing to do
+		// with the unit the caller passed in here.
+		if f, ferr := numberutil.AsFloat64Err(t); ferr == nil {
+			return duration.Spec(f * float64(unit)), nil
+		}
+		d, err := duration.FromString(t) // human-readable strings with units, e.g. "1h15m", "200ms"
 		if err == nil {
 			return d, nil
 		}

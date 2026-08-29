@@ -18,6 +18,7 @@ func TestCleanup(t *testing.T) {
 		wg.Add(1)
 		ctx := Current().Ctx()
 		go func() {
+			defer wg.Done()
 			defer Current().Push(ctx)()
 			span := Current().StartSpan("s1")
 			span.Attribute("attr", "blub")
@@ -26,7 +27,6 @@ func TestCleanup(t *testing.T) {
 			span2.End()
 
 			span.End()
-			wg.Done()
 		}()
 	}
 

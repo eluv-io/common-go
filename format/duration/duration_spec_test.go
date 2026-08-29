@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -81,11 +82,20 @@ func TestParsing(t *testing.T) {
 
 	assert.Equal(t, h+m+s+ms+us+ns, from("1h1m1.001001001s"))
 
-	// no units
+	// bare numbers (no unit) are seconds - the same convention for an integer-looking value as for a float,
+	// regardless of magnitude.
 	assert.Equal(t, s, from("1"))
-	assert.Equal(t, 10*s, from("10"))
+	assert.Equal(t, 1_000_000_000*s, from("1000000000"))
+
+	// floats
 	assert.Equal(t, 100*ms, from("0.1"))
 	assert.Equal(t, s+222*ms+333*us+444*ns, from("1.222333444"))
+}
+
+func TestParse(t *testing.T) {
+	assert.Equal(t, m, duration.Parse("invalid", "1m"))
+	assert.Equal(t, m, duration.Parse("1m", "2m"))
+	assert.Panics(t, func() { duration.Parse("invalid", "invalid") })
 }
 
 func TestJSON(t *testing.T) {
@@ -126,6 +136,14 @@ func TestUnmarshalJSON(t *testing.T) {
 			want: 99*duration.Second + 500*duration.Millisecond,
 		},
 		{
+			text: `"99"`, // integer string (no unit)
+			want: 99 * s,
+		},
+		{
+			text: `99`, // integer number
+			want: 99 * s,
+		},
+		{
 			text:    `{"spec": "15ms"}`,
 			wrapper: true,
 			want:    15 * duration.Millisecond,
@@ -144,6 +162,16 @@ func TestUnmarshalJSON(t *testing.T) {
 			text:    `{"spec": 99.5}`, // number
 			wrapper: true,
 			want:    99*duration.Second + 500*duration.Millisecond,
+		},
+		{
+			text:    `{"spec": "99"}`, // integer string (no unit)
+			wrapper: true,
+			want:    99 * s,
+		},
+		{
+			text:    `{"spec": 99}`, // integer number
+			wrapper: true,
+			want:    99 * s,
 		},
 	}
 
@@ -188,6 +216,104 @@ func TestWrappedJSON(t *testing.T) {
 	var unmarshalled Wrapper
 	err = json.Unmarshal(b, &unmarshalled)
 	assert.NoError(t, err)
+	assert.Equal(t, wrapper, unmarshalled)
+}
+
+// TestCBOR verifies duration.Spec's MarshalCBOR/UnmarshalCBOR: the wire format is a bare number. Tests that the string
+// format can also be unmarshaled correctly.
+func TestCBOR(t *testing.T) {
+	str := "1h1m1.001001001s"
+	d := from(str)
+
+	b, err := cbor.Marshal(d)
+	assert.NoError(t, err)
+
+	var decodedUint64 uint64
+	assert.NoError(t, cbor.Unmarshal(b, &decodedUint64))
+	assert.Equal(t, uint64(d), decodedUint64, "wire format must be a plain number")
+
+	var unmarshalled duration.Spec
+	assert.NoError(t, cbor.Unmarshal(b, &unmarshalled))
+	assert.Equal(t, d, unmarshalled)
+
+	var generic interface{}
+	assert.NoError(t, cbor.Unmarshal(b, &generic))
+	assert.Equal(t, decodedUint64, generic, "a generic decode must yield a plain numer")
+}
+
+// TestUnmarshalCBOR covers UnmarshalCBOR's accepted wire shapes: a text string (current format, via FromString)
+// and a bare integer (Spec's original nanosecond format, kept for backward compatibility) - both signs, since CBOR
+// decodes a positive bare integer as uint64 and a negative one as int64, exercising both switch cases in
+// UnmarshalCBOR - plus its error cases.
+func TestUnmarshalCBOR(t *testing.T) {
+	tests := []struct {
+		name      string
+		data      func() []byte
+		want      duration.Spec
+		wantError bool
+	}{
+		{
+			name: "text string with unit",
+			data: func() []byte { b, _ := cbor.Marshal("15ms"); return b },
+			want: 15 * duration.Millisecond,
+		},
+		{
+			name: "text string, bare number (seconds)",
+			data: func() []byte { b, _ := cbor.Marshal("99"); return b },
+			want: 99 * duration.Second,
+		},
+		{
+			name: "legacy bare positive integer (nanoseconds, decodes generically as uint64)",
+			data: func() []byte { b, _ := cbor.Marshal(int64(200 * time.Millisecond)); return b },
+			want: 200 * duration.Millisecond,
+		},
+		{
+			name: "legacy bare negative integer (nanoseconds, decodes generically as int64)",
+			data: func() []byte { b, _ := cbor.Marshal(int64(-200 * time.Millisecond)); return b },
+			want: -200 * duration.Millisecond,
+		},
+		{
+			name:      "invalid string",
+			data:      func() []byte { b, _ := cbor.Marshal("not a duration"); return b },
+			wantError: true,
+		},
+		{
+			name:      "unsupported CBOR type (float)",
+			data:      func() []byte { b, _ := cbor.Marshal(1.5); return b },
+			wantError: true,
+		},
+		{
+			name:      "unsupported CBOR type (bool)",
+			data:      func() []byte { b, _ := cbor.Marshal(true); return b },
+			wantError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var spec duration.Spec
+			err := cbor.Unmarshal(tt.data(), &spec)
+			if tt.wantError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.want, spec)
+			}
+		})
+	}
+}
+
+// TestWrappedCBOR verifies a struct field of type duration.Spec round-trips correctly through CBOR.
+func TestWrappedCBOR(t *testing.T) {
+	str := "1h1m1.001001001s"
+	spec := from(str)
+
+	wrapper := Wrapper{Spec: spec}
+	b, err := cbor.Marshal(wrapper)
+	assert.NoError(t, err)
+
+	var unmarshalled Wrapper
+	assert.NoError(t, cbor.Unmarshal(b, &unmarshalled))
 	assert.Equal(t, wrapper, unmarshalled)
 }
 
@@ -279,4 +405,37 @@ func TestRoundTo(t *testing.T) {
 			require.Equal(t, tt.want, spec.RoundTo(tt.decimals).String())
 		})
 	}
+}
+
+func TestJsonCborRoundtrip(t *testing.T) {
+	d := from("444ms")
+
+	btsCbor, err := cbor.Marshal(d)
+	require.NoError(t, err)
+
+	var anyCbor any
+	err = cbor.Unmarshal(btsCbor, &anyCbor)
+	require.NoError(t, err)
+
+	btsJson, err := json.Marshal(anyCbor)
+	require.NoError(t, err)
+
+	var anyJson any
+	err = json.Unmarshal(btsJson, &anyJson)
+	require.NoError(t, err)
+
+	// roundtrip to 'any' kind of works, except that it unmarshals to float64 instead of (u)int64
+	fmt.Printf("cbor: %v\njson: %v\n", anyCbor, anyJson)
+	require.EqualValues(t, anyJson, anyCbor)
+	require.Equal(t, anyJson, float64(anyCbor.(uint64)))
+
+	// this is the big problem with duration.Spec: if we unmarshal the JSON back into a duration.Spec, it doesn't work!
+	var d2 duration.Spec
+	err = json.Unmarshal(btsJson, &d2)
+	require.NoError(t, err)
+
+	fmt.Printf("org:    %v\nparsed: %v\n", d, d2)
+	require.NotEqual(t, d, d2)
+	// magic multiplication by 10^9 because number is interpreted as "seconds" in JSON unmarshal, but CBOR representation is "nanoseconds"!
+	require.Equal(t, d*1e9, d2)
 }
