@@ -88,13 +88,15 @@ func (d *DiscardContext) ShouldDiscard(rtpTimestamp int64, now utc.UTC) (bool, e
 	// If this packet's T0 is earlier than stored T0, update baseline
 	if t0.Before(d.T0) {
 		adjustment := d.T0.Sub(t0)
+		prevSum := d.StartupT0Correction.Sum
 		d.StartupT0Correction.Update(now, duration.Millis(adjustment))
-		log.Debug("discard: T0 adjusted, updating baseline",
-			"rtp_ts", rtpTimestamp,
-			"old_t0", d.T0,
-			"new_t0", t0,
-			"delta", adjustment,
-			"total_adj_ms", float64(d.StartupT0Correction.Sum)/1e6)
+		// Periodic log during discard period
+		if d.StartupT0Correction.Sum/duration.Millis(time.Second) != prevSum/duration.Millis(time.Second) {
+			log.Debug("discard: converging on live edge",
+				"t0", t0,
+				"total_adj", d.StartupT0Correction.Sum,
+				"adjustments", d.StartupT0Correction.Count)
+		}
 		d.T0 = t0
 		d.T0UpdatedAt = now
 		return true, nil // discard - baseline was just updated
@@ -111,7 +113,10 @@ func (d *DiscardContext) ShouldDiscard(rtpTimestamp int64, now utc.UTC) (bool, e
 	log.Debug("discard: period complete, starting normal operation",
 		"rtp_ts", rtpTimestamp,
 		"t0", d.T0,
-		"elapsed", elapsed)
+		"elapsed", elapsed,
+		"adjustments", d.StartupT0Correction.Count,
+		"total_adj", d.StartupT0Correction.Sum,
+		"max_adj", d.StartupT0Correction.Max)
 	return false, nil
 }
 
