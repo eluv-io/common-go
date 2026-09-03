@@ -154,6 +154,14 @@ var _ pacer.PacketScheduler = (*atsScheduler)(nil)
 
 func (s *atsScheduler) InStats() *pacer.InStats { return s.stats }
 
+// ResetSource drops the timing baseline and the previous source's last arrival timestamp, so the first packet of the
+// new source is not measured as a gap against it.
+func (s *atsScheduler) ResetSource() {
+	s.logic.ResetSource()
+	s.lastArrival = 0
+	s.haveLast = false
+}
+
 func (s *atsScheduler) Schedule(now utc.UTC, bts []byte) (utc.UTC, []byte, bool, error) {
 	arrival, payload, err := ParseAtsTs(bts)
 	if err != nil {

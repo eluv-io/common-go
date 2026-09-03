@@ -184,6 +184,20 @@ var _ pacer.PacketScheduler = (*pcrScheduler)(nil)
 
 func (s *pcrScheduler) InStats() *pacer.InStats { return s.stats }
 
+// ResetSource drops every piece of state pinned to the previous source. Most importantly pcrPid: it is pinned to the
+// first PID a PCR is seen on and never re-pinned, so a new source carrying PCR on a different PID would find no PCR at
+// all and be paced off the previous source's lastTarget.
+func (s *pcrScheduler) ResetSource() {
+	s.logic.ResetSource()
+	s.pcrPid = pcrPidUnset
+	s.gapDet.Unwrapper = PcrUnwrapper{}
+	s.lastTarget = utc.Zero
+	s.lastPcrArrival = utc.Zero
+	s.lastPcrUnwrapped = 0
+	s.estimatedPcrPerBatch = 0
+	s.noPcrBatchCount = 0
+}
+
 func (s *pcrScheduler) Schedule(now utc.UTC, bts []byte) (utc.UTC, []byte, bool, error) {
 	if s.stripRtp {
 		stripped, err := rtp.StripHeader(bts)

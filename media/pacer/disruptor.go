@@ -59,6 +59,16 @@ type PacketScheduler interface {
 	// input-stats lock for periodic logging and Stats() snapshots. The pointer must be stable for the scheduler's
 	// lifetime, and the scheduler must mutate it only from within Schedule (which the engine calls under the lock).
 	InStats() *InStats
+
+	// ResetSource discards every piece of state tied to the stream being paced, so the next packet is treated as the
+	// start of a new one: timing baseline, gap detection and any clock identity pinned from the first packets. The
+	// engine calls it under its input-stats lock, from DisruptorEngine.ResetSource.
+	//
+	// This is for a caller that knowingly switches source, which gap detection cannot infer reliably: two sources may
+	// differ by less than the gap threshold, or by so much that the difference reads as a clock wraparound. Unlike a
+	// gap reset the next packet is delivered rather than starting a new discard period, so the output continues
+	// seamlessly across the switch.
+	ResetSource()
 }
 
 // DisruptorEngineConfig holds the protocol-independent configuration of a DisruptorEngine.
@@ -82,6 +92,17 @@ type DisruptorEngineConfig struct {
 	// Packets that cannot satisfy this floor (targetTs already too close to now) are tracked as lateness. Should be ≤
 	// SendAhead so the floor is reliably reachable under normal conditions. 0 = disabled.
 	DeliveryMargin duration.Spec `json:"delivery_margin"`
+
+	// MaxBlock bounds how long Push waits for a free ring buffer slot before dropping the packet.
+	//
+	// A full ring does not free one slot at a time. The consumer is handed every packet committed since its last pass
+	// and publishes its position only after pacing through all of them, so a producer that fills the ring waits for
+	// the ring's entire contents to play out - seconds, at a high bitrate with a large capacity.
+	//
+	// 0, the default, waits indefinitely, which is the right choice when the producer can be slowed down: it becomes
+	// backpressure. Set it for a producer that cannot, where falling permanently behind is worse than a gap in the
+	// output. Either way the stall is counted and reported.
+	MaxBlock duration.Spec `json:"max_block"`
 }
 
 // InitDefaults sets all fields to their default values.
@@ -123,6 +144,9 @@ func (c *DisruptorEngineConfig) normalize() error {
 	}
 	if c.DeliveryMargin < 0 {
 		c.DeliveryMargin = DefaultDeliveryMargin
+	}
+	if c.MaxBlock < 0 {
+		c.MaxBlock = 0
 	}
 	if c.StatsLog == nil {
 		c.StatsLog = elog.Noop
@@ -256,10 +280,17 @@ func (e *DisruptorEngine) Push(bts []byte) error {
 	return nil
 }
 
-// enqueue reserves a ring buffer slot and copies the payload into it. It blocks (spin-waits) if the ring buffer is
-// full.
+// enqueue reserves a ring buffer slot and copies the payload into it. A packet dropped because the ring buffer stayed
+// full for MaxBlock is counted and reported, not returned as an error: the caller cannot act on it, and treating it as
+// a failure would tear down a stream that is otherwise healthy.
 func (e *DisruptorEngine) enqueue(now, target utc.UTC, payload []byte) {
-	seq := e.dis.Reserve(1)
+	seq := e.dis.TryReserve(1)
+	if seq < 0 {
+		var ok bool
+		if seq, ok = e.waitForSlot(now); !ok {
+			return
+		}
+	}
 	entry := &e.ringBuffer[seq&e.bufferMask]
 	entry.targetTs = target
 	entry.inTs = now
@@ -273,6 +304,53 @@ func (e *DisruptorEngine) enqueue(now, target utc.UTC, payload []byte) {
 	copy(entry.pkt, payload)
 	e.outStats.IncrBuffered()
 	e.dis.Commit(seq, seq)
+}
+
+// waitForSlot polls for a free ring buffer slot until one appears, the engine shuts down, or MaxBlock elapses. It
+// reports false when no slot was obtained and the packet must be dropped.
+//
+// It polls rather than using the disruptor's own blocking Reserve, whose wait strategy spins on a 1ns sleep and so
+// burns a core for the whole stall. A slot can only appear when the consumer finishes pacing its current batch, so
+// polling at the consumer's own scheduling granularity is as responsive as spinning, at no cost.
+func (e *DisruptorEngine) waitForSlot(start utc.UTC) (seq int64, ok bool) {
+	// A quarter of the consumer's ticker period, so a freed slot is picked up well within one of its wake-ups without
+	// polling so often that the wait costs anything. Bounded below so a tiny TickerPeriod cannot turn this into a spin.
+	poll := max(e.conf.TickerPeriod.Duration()/4, 100*time.Microsecond)
+	maxBlock := e.conf.MaxBlock.Duration()
+	for {
+		if e.ctx.Err() != nil {
+			return 0, false
+		}
+		time.Sleep(poll)
+		if seq = e.dis.TryReserve(1); seq >= 0 {
+			e.reportStall(start, false)
+			return seq, true
+		}
+		if maxBlock > 0 && utc.Now().Sub(start) >= maxBlock {
+			e.reportStall(start, true)
+			return 0, false
+		}
+	}
+}
+
+// reportStall records how long the producer waited for a free slot, and whether the packet was ultimately dropped. The
+// log line is throttled: an overflow that persists produces one stall per packet, and the counters carry the volume.
+func (e *DisruptorEngine) reportStall(start utc.UTC, dropped bool) {
+	now := utc.Now()
+	blocked := now.Sub(start)
+
+	e.outStatsMu.Lock()
+	e.outStats.UpdateBlocked(now, duration.Millis(blocked))
+	if dropped {
+		e.outStats.AddDropped(1)
+	}
+	e.outStatsMu.Unlock()
+
+	e.conf.EventLog.Throttle("pacer-buffer-full").Warn("pacer buffer full",
+		"stream", e.conf.Stream,
+		"blocked", duration.Spec(blocked).RoundTo(2),
+		"dropped", dropped,
+		"buffer_capacity", e.conf.BufferCapacity)
 }
 
 // Run starts the consumer loop and calls deliver for each packet at its scheduled time. It blocks until the engine is
@@ -304,6 +382,17 @@ func (e *DisruptorEngine) Shutdown(err ...error) {
 		))
 		_ = e.dis.Close()
 	})
+}
+
+// ResetSource tells the scheduler that subsequent packets come from a different source, so state tied to the previous
+// one is dropped instead of being carried across the switch. See PacketScheduler.ResetSource.
+//
+// It must be called from the same goroutine as Push. It takes the input-stats lock, which is what makes it safe
+// against a concurrent logStats()/Stats() snapshot.
+func (e *DisruptorEngine) ResetSource() {
+	e.inStatsMu.Lock()
+	defer e.inStatsMu.Unlock()
+	e.sched.ResetSource()
 }
 
 // BufferCap returns the actual ring buffer capacity, which is the configured capacity rounded up to the next power of 2.

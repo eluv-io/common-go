@@ -159,6 +159,14 @@ var _ pacer.PacketScheduler = (*rtpScheduler)(nil)
 
 func (s *rtpScheduler) InStats() *pacer.InStats { return s.stats }
 
+// ResetSource drops the timing baseline and the gap detector's unwrapping state, whose sequence numbers and timestamps
+// belong to the previous source and would otherwise be extended by the new source's values.
+func (s *rtpScheduler) ResetSource() {
+	s.logic.ResetSource()
+	s.gapDetector.Sequence = SequenceUnwrapper{}
+	s.gapDetector.Timestamp = TimestampUnwrapper{}
+}
+
 func (s *rtpScheduler) Schedule(now utc.UTC, bts []byte) (utc.UTC, []byte, bool, error) {
 	// Use a stack-local Packet so escape analysis keeps it off the heap. ParsePacket returns *rtp.Packet, which forces
 	// a heap allocation on every call; inlining the unmarshal here eliminates that alloc in the steady-state path.

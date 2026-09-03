@@ -14,6 +14,11 @@ import (
 const (
 	DefaultDriftThreshold = 2 * time.Millisecond
 	DefaultPosDriftPeriod = time.Minute
+
+	// DefaultDiscardT0Threshold is the default PacerLogicConfig.DiscardT0Threshold: the T0 improvement required to
+	// restart the discard period. Large enough that ordinary arrival jitter does not keep the window open, small
+	// enough to still catch the real convergence steps of a stream being read faster than real time.
+	DefaultDiscardT0Threshold = 50 * time.Millisecond
 )
 
 // PacerLogicConfig holds the configuration for PacerLogic.
@@ -27,8 +32,31 @@ type PacerLogicConfig struct {
 	// DiscardPeriod is the period for determining T0 during which all packets are discarded
 	DiscardPeriod duration.Spec `json:"discard_period"`
 
-	// MaxDiscardPeriod is the maximum period for discarding packets.
+	// MaxDiscardPeriod caps the discard phase. It is measured from the first packet of the stream, while DiscardPeriod
+	// is measured from the last time the baseline improved, so it must be comfortably larger than DiscardPeriod:
+	// reaching a live edge takes as long as it takes to read the backlog, and every improvement restarts DiscardPeriod.
+	// On expiry the phase completes with the best baseline found so far, rather than failing the stream.
 	MaxDiscardPeriod duration.Spec `json:"max_discard_period"`
+
+	// SourceChangeDiscardPeriod is DiscardPeriod for a deliberate switch to a different source (see
+	// DiscardContext.ResetForSourceChange), where the pacer is already running and its output is being consumed.
+	//
+	// The new source still has to be located in time, so the phase cannot be skipped, but its cost is different from
+	// startup: no client is waiting at startup, whereas during a switch every connected client sees the window as a
+	// gap. Keep it well below the receiver's idle timeout - an SRT peer defaults to dropping the connection after 2s
+	// of silence. 0 falls back to DiscardPeriod.
+	SourceChangeDiscardPeriod duration.Spec `json:"source_change_discard_period"`
+
+	// MaxSourceChangeDiscardPeriod caps the source-change discard phase, as MaxDiscardPeriod does for startup. 0 falls
+	// back to MaxDiscardPeriod.
+	MaxSourceChangeDiscardPeriod duration.Spec `json:"max_source_change_discard_period"`
+
+	// DiscardT0Threshold is the improvement in T0 required to restart the discard period. Without it any improvement
+	// at all, down to a nanosecond, restarts the window: the running minimum of a jittery signal keeps creeping down,
+	// so the phase would routinely run to MaxDiscardPeriod instead of completing. The baseline still takes every
+	// improvement - this only governs whether the clock is restarted. Distinct from DriftThreshold, which is a
+	// steady-state dead-band an order of magnitude smaller than the convergence steps seen here. Default: 50ms.
+	DiscardT0Threshold duration.Spec `json:"discard_t0_threshold"`
 
 	// Delay is the size of the de-jitter buffer
 	Delay duration.Spec `json:"delay"`
@@ -92,6 +120,9 @@ func (c *PacerLogicConfig) InitDefaults() *PacerLogicConfig {
 	c.DriftThreshold = duration.Spec(DefaultDriftThreshold)
 	c.MaxPosDriftCorrection = 0
 	c.MaxDriftCorrectionStep = 0
+	c.SourceChangeDiscardPeriod = 0
+	c.MaxSourceChangeDiscardPeriod = 0
+	c.DiscardT0Threshold = duration.Spec(DefaultDiscardT0Threshold)
 	return c
 }
 
@@ -137,6 +168,9 @@ func NewPacerLogic(
 		driftThreshold:  driftThreshold,
 		posDriftTracker: statsutil.Periodic[time.Duration]{Period: duration.Spec(posDriftPeriod)},
 	}
+	p.discard.SourceChangePeriod = conf.SourceChangeDiscardPeriod
+	p.discard.MaxSourceChangePeriod = conf.MaxSourceChangeDiscardPeriod
+	p.discard.T0Threshold = conf.DiscardT0Threshold
 	p.reset()
 	return p
 }
@@ -153,9 +187,20 @@ func (p *PacerLogic) reset() {
 	// gap detector is already updated by the last Detect() call, so no need to reset
 }
 
+// ResetSource prepares the logic for a deliberate switch to a different source: the next packet re-establishes the
+// timing baseline and is delivered, rather than starting a new discard period (see DiscardContext.ResetForSourceChange).
+//
+// stats.Reset() also clears MinT0, which matters: a MinT0 carried over from the previous source would make the new
+// source's first T0 look like a large negative drift and trigger a full-size baseline correction on the spot.
+func (p *PacerLogic) ResetSource() {
+	p.reset()
+	p.discard.ResetForSourceChange()
+}
+
 // Packet computes the target delivery time for a pre-unwrapped timestamp. If gap is true, the pacer resets its internal
 // state (discard phase restart, baseline re-establishment) before computing the target time. This is the clock-agnostic
-// core; Packet() calls it after RTP-specific gap detection and unwrapping.
+// core: each PacketScheduler calls it after its own gap detection and unwrapping, whether the clock is an RTP
+// timestamp, an MPEG-TS PCR or an ATS arrival timestamp.
 func (p *PacerLogic) Packet(now utc.UTC, tsUnwrapped int64, gap bool) (target utc.UTC, discard bool, err error) {
 	if gap {
 		p.reset()

@@ -106,9 +106,11 @@ type OutStatsPeriod struct {
 	SendAhead  statsutil.RawStatistics[duration.Millis] `json:"send_ahead"` // send-ahead stats for last period
 	OverSleeps statsutil.RawStatistics[duration.Millis] `json:"oversleeps"` // oversleep stats for last period
 	BufFill    statsutil.RawStatistics[int32]           `json:"buf"`        // buffer occupancy stats for last period
+	Blocked    statsutil.RawStatistics[duration.Millis] `json:"blocked"`    // producer stalls waiting for a free slot, for last period
 
 	BufferedPackets int32 `json:"buffered"` // snapshot of packets in the buffer at last period boundary
 	Sleeps          int   `json:"sleeps"`   // number of ticker ticks consumed while waiting
+	Dropped         int   `json:"dropped"`  // packets dropped because the buffer stayed full, for last period
 }
 
 // OutStats is a pure collector for pacer output statistics. At each period boundary, SwitchPeriod constructs and
@@ -122,9 +124,15 @@ type OutStats struct {
 	sendAhead  statsutil.Periodic[duration.Millis] // collector for send-ahead (sendAt - now)
 	oversleeps statsutil.Periodic[duration.Millis] // collector for oversleeping (actualSleep - expectedSleep)
 	bufFill    statsutil.Periodic[int32]           // collector for buffer occupancy
+	blocked    statsutil.Periodic[duration.Millis] // collector for producer stalls waiting for a free slot
 
 	// per-period counters; reset by SwitchPeriod
-	sleeps int
+	sleeps  int
+	dropped int
+
+	// cumulative since startup; unlike the per-period counters this is never reset, so Total reports how many packets
+	// the pacer has ever dropped
+	droppedTotal int
 
 	buffered   atomic.Int32 // current count of packets in channel
 	lastPacket utc.UTC      // wall clock time when the last packet was popped
@@ -146,6 +154,7 @@ func newOutStats(period duration.Spec) OutStats {
 		sendAhead:  statsutil.Periodic[duration.Millis]{ManualSwitch: true, Period: period},
 		oversleeps: statsutil.Periodic[duration.Millis]{ManualSwitch: true, Period: period},
 		bufFill:    statsutil.Periodic[int32]{ManualSwitch: true, Period: period},
+		blocked:    statsutil.Periodic[duration.Millis]{ManualSwitch: true, Period: period},
 	}
 }
 
@@ -197,6 +206,15 @@ func (s *OutStats) UpdateWait(now utc.UTC, v duration.Millis) { s.wait.UpdateNow
 // AddSleeps increments the per-period sleep counter. Must be called under outStatsMu.
 func (s *OutStats) AddSleeps(n int) { s.sleeps += n }
 
+// UpdateBlocked records how long a producer waited for a free buffer slot. Must be called under outStatsMu.
+func (s *OutStats) UpdateBlocked(now utc.UTC, v duration.Millis) { s.blocked.UpdateNow(now, v) }
+
+// AddDropped increments the dropped-packet counters, per period and cumulative. Must be called under outStatsMu.
+func (s *OutStats) AddDropped(n int) {
+	s.dropped += n
+	s.droppedTotal += n
+}
+
 // switchPeriod closes the current period, resets per-period counters, and returns the completed period's snapshot.
 // It must be called under outStatsMu. With ManualSwitch: true on all Periodic fields, every Switch call here is
 // explicit — UpdateNow in Handle() never auto-switches.
@@ -208,6 +226,7 @@ func (s *OutStats) switchPeriod(now utc.UTC) *OutStatsPeriod {
 	s.sendAhead.Switch(now)
 	s.oversleeps.Switch(now)
 	s.bufFill.Switch(now)
+	s.blocked.Switch(now)
 
 	p := &OutStatsPeriod{
 		Wait:            s.wait.Previous.Raw(),
@@ -217,15 +236,18 @@ func (s *OutStats) switchPeriod(now utc.UTC) *OutStatsPeriod {
 		SendAhead:       s.sendAhead.Previous.Raw(),
 		OverSleeps:      s.oversleeps.Previous.Raw(),
 		BufFill:         s.bufFill.Previous.Raw(),
+		Blocked:         s.blocked.Previous.Raw(),
 		BufferedPackets: s.buffered.Load(),
 		Sleeps:          s.sleeps,
+		Dropped:         s.dropped,
 	}
 	s.sleeps = 0
+	s.dropped = 0
 	return p
 }
 
 // total returns a snapshot of the total statistics since startup. It must be called under outStatsMu. BufferedPackets
-// and Sleeps will be uninitialized.
+// and Sleeps will be uninitialized; Dropped is cumulative rather than per-period.
 func (s *OutStats) total() *OutStatsPeriod {
 	p := &OutStatsPeriod{
 		Wait:       s.wait.Total.Raw(),
@@ -235,6 +257,8 @@ func (s *OutStats) total() *OutStatsPeriod {
 		SendAhead:  s.sendAhead.Total.Raw(),
 		OverSleeps: s.oversleeps.Total.Raw(),
 		BufFill:    s.bufFill.Total.Raw(),
+		Blocked:    s.blocked.Total.Raw(),
+		Dropped:    s.droppedTotal,
 	}
 	return p
 }
