@@ -65,9 +65,11 @@ type PacketScheduler interface {
 	// engine calls it under its input-stats lock, from DisruptorEngine.ResetSource.
 	//
 	// This is for a caller that knowingly switches source, which gap detection cannot infer reliably: two sources may
-	// differ by less than the gap threshold, or by so much that the difference reads as a clock wraparound. Unlike a
-	// gap reset the next packet is delivered rather than starting a new discard period, so the output continues
-	// seamlessly across the switch.
+	// differ by less than the gap threshold, or by so much that the difference reads as a clock wraparound.
+	//
+	// The new source still has to be located in time, so a discard phase runs and packets are withheld for its
+	// duration - a visible gap, since output is already flowing. It runs on the shorter source-change periods where
+	// those are configured, falling back to the startup ones otherwise. See PacerLogic.ResetSource.
 	ResetSource()
 }
 
@@ -286,8 +288,11 @@ func (e *DisruptorEngine) Push(bts []byte) error {
 func (e *DisruptorEngine) enqueue(now, target utc.UTC, payload []byte) {
 	seq := e.dis.TryReserve(1)
 	if seq < 0 {
+		// The stall is timed from here rather than from the packet's arrival: everything up to this point is
+		// scheduling work, and charging it to MaxBlock would let a slow scheduler drop a packet that never actually
+		// waited for a slot. It would overstate the reported Blocked time by the same amount.
 		var ok bool
-		if seq, ok = e.waitForSlot(now); !ok {
+		if seq, ok = e.waitForSlot(utc.Now()); !ok {
 			return
 		}
 	}

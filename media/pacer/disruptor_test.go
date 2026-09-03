@@ -37,6 +37,18 @@ func (s *pacedScheduler) ResetSource() {
 	s.n = 0
 }
 
+// slowScheduler makes Schedule cost measurable time, the way parsing, PCR extraction and lock contention do on a real
+// scheduler. delay is set between pushes on the producer goroutine, so it needs no synchronization.
+type slowScheduler struct {
+	pacedScheduler
+	delay time.Duration
+}
+
+func (s *slowScheduler) Schedule(now utc.UTC, bts []byte) (utc.UTC, []byte, bool, error) {
+	time.Sleep(s.delay)
+	return s.pacedScheduler.Schedule(now, bts)
+}
+
 // newTestEngine builds an engine whose consumer is not yet running, returning it plus a func that starts the consumer
 // and a func that stops the engine.
 //
@@ -160,6 +172,38 @@ func TestDisruptorEngine_MaxBlockShorterThanPollInterval(t *testing.T) {
 
 	require.Less(t, blocked, 150*time.Millisecond, "the wait must be clamped to MaxBlock, not to the poll interval")
 	require.Equal(t, 1, e.Stats().Out.Dropped)
+}
+
+// TestDisruptorEngine_MaxBlockExcludesSchedulingTime checks that the block budget is spent waiting for a slot rather
+// than on the scheduler. Timing the stall from the packet's arrival would let a scheduler slower than MaxBlock drop a
+// packet that never waited at all, and would overstate the reported Blocked time by the same amount.
+func TestDisruptorEngine_MaxBlockExcludesSchedulingTime(t *testing.T) {
+	var conf DisruptorEngineConfig
+	conf.InitDefaults()
+	conf.BufferCapacity = 8
+	conf.TickerPeriod = duration.Spec(2 * time.Millisecond)
+	conf.MaxBlock = duration.Spec(40 * time.Millisecond)
+	conf.StatsInterval = -1
+
+	sched := &slowScheduler{pacedScheduler: pacedScheduler{interval: 10 * time.Millisecond}}
+	e, err := NewDisruptorEngine(conf, sched)
+	require.NoError(t, err)
+	defer e.Shutdown()
+
+	fill(t, e) // still fast - the scheduler is only slowed down below
+
+	// Slower than the entire budget. The consumer is never started, so the packet is dropped either way; what matters
+	// is that the budget went on waiting for a slot and not on Schedule.
+	sched.delay = 60 * time.Millisecond
+
+	start := time.Now()
+	require.NoError(t, e.Push([]byte("overflow")), "a dropped packet is not an error")
+	elapsed := time.Since(start)
+
+	require.Equal(t, 1, e.Stats().Out.Dropped)
+	require.Greater(t, elapsed, 90*time.Millisecond, "the packet must still wait its full budget after scheduling")
+	require.Less(t, time.Duration(e.Stats().Out.Blocked.Sum), 55*time.Millisecond,
+		"Blocked must measure the wait for a slot, not the scheduling that preceded it")
 }
 
 // TestDisruptorEngine_NoStallWhenBufferHasRoom guards the fast path: pushes that fit must not touch the wait path, and
