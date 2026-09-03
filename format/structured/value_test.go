@@ -705,146 +705,146 @@ func TestUTCErr(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestDurationErr(t *testing.T) {
+func TestDurErr(t *testing.T) {
 	theErr := errors.Str("test error")
 
 	// success: duration.Duration value
-	res, err := structured.Wrap(duration.H).DurationErr(duration.NS)
+	res, err := structured.Wrap(duration.H).DurErr(duration.NS)
 	require.NoError(t, err)
 	require.Equal(t, duration.H, res)
 
 	// success: legacy duration.Spec value (backward compat - wrapped data typed as the older Spec still converts)
-	res, err = structured.Wrap(duration.Hour).DurationErr(duration.NS)
+	res, err = structured.Wrap(duration.Hour).DurErr(duration.NS)
 	require.NoError(t, err)
 	require.Equal(t, duration.H, res)
 
 	// success: numeric value scaled by unit
-	res, err = structured.Wrap(1).DurationErr(duration.S)
+	res, err = structured.Wrap(1).DurErr(duration.S)
 	require.NoError(t, err)
 	require.Equal(t, duration.S, res)
 
 	// success: string value
-	res, err = structured.Wrap("3m").DurationErr(duration.S)
+	res, err = structured.Wrap("3m").DurErr(duration.S)
 	require.NoError(t, err)
 	require.Equal(t, 3*duration.M, res)
 
 	// nil data, no default → NotExist
-	_, err = structured.Wrap(nil).DurationErr(duration.S)
+	_, err = structured.Wrap(nil).DurErr(duration.S)
 	require.True(t, errors.IsNotExist(err))
 
 	// nil data, with default → (default, nil)
-	res, err = structured.Wrap(nil).DurationErr(duration.S, duration.H)
+	res, err = structured.Wrap(nil).DurErr(duration.S, duration.H)
 	require.NoError(t, err)
 	require.Equal(t, duration.H, res)
 
 	// stored error, with default → (default, err)
-	res, err = structured.Wrap(nil, theErr).DurationErr(duration.S, duration.H)
+	res, err = structured.Wrap(nil, theErr).DurErr(duration.S, duration.H)
 	require.ErrorIs(t, err, theErr)
 	require.Equal(t, duration.H, res)
 
 	// invalid string conversion
-	_, err = structured.Wrap("an invalid string").DurationErr(duration.S)
+	_, err = structured.Wrap("an invalid string").DurErr(duration.S)
 	require.Error(t, err)
 
 	// invalid string, with default → (default, err)
-	res, err = structured.Wrap("an invalid string").DurationErr(duration.S, duration.H)
+	res, err = structured.Wrap("an invalid string").DurErr(duration.S, duration.H)
 	require.Error(t, err)
 	require.Equal(t, duration.H, res)
 }
 
-func TestValue_Duration(t *testing.T) {
+func TestValue_Dur(t *testing.T) {
 	// invalid conversions
-	require.Equal(t, duration.Duration(0), structured.Wrap(nil).Duration(duration.S))
-	require.Equal(t, duration.Duration(0), structured.Wrap(nil, errors.Str("an error")).Duration(duration.S))
-	require.Equal(t, duration.Duration(0), structured.Wrap("an invalid string").Duration(duration.S))
+	require.Equal(t, duration.Duration(0), structured.Wrap(nil).Dur(duration.S))
+	require.Equal(t, duration.Duration(0), structured.Wrap(nil, errors.Str("an error")).Dur(duration.S))
+	require.Equal(t, duration.Duration(0), structured.Wrap("an invalid string").Dur(duration.S))
 	// invalid conversions, return default value
-	require.Equal(t, duration.H, structured.Wrap(nil).Duration(duration.S, duration.H))
-	require.Equal(t, duration.H, structured.Wrap(nil, errors.Str("an error")).Duration(duration.S, duration.H))
-	require.Equal(t, duration.H, structured.Wrap("an invalid string").Duration(duration.S, duration.H))
+	require.Equal(t, duration.H, structured.Wrap(nil).Dur(duration.S, duration.H))
+	require.Equal(t, duration.H, structured.Wrap(nil, errors.Str("an error")).Dur(duration.S, duration.H))
+	require.Equal(t, duration.H, structured.Wrap("an invalid string").Dur(duration.S, duration.H))
 
-	require.Equal(t, duration.Duration(0), structured.Wrap(0).Duration(duration.S))
-	require.Equal(t, duration.Duration(0), structured.Wrap("0").Duration(duration.S))
-	require.Equal(t, duration.Duration(0), structured.Wrap("").Duration(duration.S))
+	require.Equal(t, duration.Duration(0), structured.Wrap(0).Dur(duration.S))
+	require.Equal(t, duration.Duration(0), structured.Wrap("0").Dur(duration.S))
+	require.Equal(t, duration.Duration(0), structured.Wrap("").Dur(duration.S))
 
-	require.Equal(t, duration.H, structured.Wrap(duration.H).Duration(duration.NS))
-	require.Equal(t, duration.H, structured.Wrap(duration.Hour).Duration(duration.NS))
-	require.Equal(t, duration.S, structured.Wrap(1).Duration(duration.S))
-	require.Equal(t, duration.S, structured.Wrap("1").Duration(duration.S))
-	require.Equal(t, 99*duration.S, structured.Wrap(99.0).Duration(duration.S))
-	require.Equal(t, 3*duration.M, structured.Wrap("3m").Duration(duration.S))
-	require.Equal(t, 90*duration.S, structured.Wrap(json.Number("1.5")).Duration(duration.M))
-	require.Equal(t, 90*duration.S, structured.Wrap(1.5).Duration(duration.M))
-	require.Equal(t, 90*duration.S, structured.Wrap(big.NewRat(3, 2)).Duration(duration.M))
+	require.Equal(t, duration.H, structured.Wrap(duration.H).Dur(duration.NS))
+	require.Equal(t, duration.H, structured.Wrap(duration.Hour).Dur(duration.NS))
+	require.Equal(t, duration.S, structured.Wrap(1).Dur(duration.S))
+	require.Equal(t, duration.S, structured.Wrap("1").Dur(duration.S))
+	require.Equal(t, 99*duration.S, structured.Wrap(99.0).Dur(duration.S))
+	require.Equal(t, 3*duration.M, structured.Wrap("3m").Dur(duration.S))
+	require.Equal(t, 90*duration.S, structured.Wrap(json.Number("1.5")).Dur(duration.M))
+	require.Equal(t, 90*duration.S, structured.Wrap(1.5).Dur(duration.M))
+	require.Equal(t, 90*duration.S, structured.Wrap(big.NewRat(3, 2)).Dur(duration.M))
 }
 
-func TestDurationSpecErr(t *testing.T) {
+func TestDurationErr(t *testing.T) {
 	theErr := errors.Str("test error")
 
 	// success: duration.Spec value
-	res, err := structured.Wrap(duration.Hour).DurationSpecErr(duration.Nanosecond)
+	res, err := structured.Wrap(duration.Hour).DurationErr(duration.Nanosecond)
 	require.NoError(t, err)
 	require.Equal(t, duration.Hour, res)
 
 	// success: duration.Duration value (converts down to Spec)
-	res, err = structured.Wrap(duration.H).DurationSpecErr(duration.Nanosecond)
+	res, err = structured.Wrap(duration.H).DurationErr(duration.Nanosecond)
 	require.NoError(t, err)
 	require.Equal(t, duration.Hour, res)
 
 	// success: numeric value scaled by unit
-	res, err = structured.Wrap(1).DurationSpecErr(duration.Second)
+	res, err = structured.Wrap(1).DurationErr(duration.Second)
 	require.NoError(t, err)
 	require.Equal(t, duration.Second, res)
 
 	// success: string value
-	res, err = structured.Wrap("3m").DurationSpecErr(duration.Second)
+	res, err = structured.Wrap("3m").DurationErr(duration.Second)
 	require.NoError(t, err)
 	require.Equal(t, 3*duration.Minute, res)
 
 	// nil data, no default → NotExist
-	_, err = structured.Wrap(nil).DurationSpecErr(duration.Second)
+	_, err = structured.Wrap(nil).DurationErr(duration.Second)
 	require.True(t, errors.IsNotExist(err))
 
 	// nil data, with default → (default, nil)
-	res, err = structured.Wrap(nil).DurationSpecErr(duration.Second, duration.Hour)
+	res, err = structured.Wrap(nil).DurationErr(duration.Second, duration.Hour)
 	require.NoError(t, err)
 	require.Equal(t, duration.Hour, res)
 
 	// stored error, with default → (default, err)
-	res, err = structured.Wrap(nil, theErr).DurationSpecErr(duration.Second, duration.Hour)
+	res, err = structured.Wrap(nil, theErr).DurationErr(duration.Second, duration.Hour)
 	require.ErrorIs(t, err, theErr)
 	require.Equal(t, duration.Hour, res)
 
 	// invalid string conversion
-	_, err = structured.Wrap("an invalid string").DurationSpecErr(duration.Second)
+	_, err = structured.Wrap("an invalid string").DurationErr(duration.Second)
 	require.Error(t, err)
 
 	// invalid string, with default → (default, err)
-	res, err = structured.Wrap("an invalid string").DurationSpecErr(duration.Second, duration.Hour)
+	res, err = structured.Wrap("an invalid string").DurationErr(duration.Second, duration.Hour)
 	require.Error(t, err)
 	require.Equal(t, duration.Hour, res)
 }
 
-func TestValue_DurationSpec(t *testing.T) {
+func TestValue_Duration(t *testing.T) {
 	// invalid conversions
-	require.Equal(t, duration.Spec(0), structured.Wrap(nil).DurationSpec(duration.Second))
-	require.Equal(t, duration.Spec(0), structured.Wrap(nil, errors.Str("an error")).DurationSpec(duration.Second))
-	require.Equal(t, duration.Spec(0), structured.Wrap("an invalid string").DurationSpec(duration.Second))
+	require.Equal(t, duration.Spec(0), structured.Wrap(nil).Duration(duration.Second))
+	require.Equal(t, duration.Spec(0), structured.Wrap(nil, errors.Str("an error")).Duration(duration.Second))
+	require.Equal(t, duration.Spec(0), structured.Wrap("an invalid string").Duration(duration.Second))
 	// invalid conversions, return default value
-	require.Equal(t, duration.Hour, structured.Wrap(nil).DurationSpec(duration.Second, duration.Hour))
-	require.Equal(t, duration.Hour, structured.Wrap(nil, errors.Str("an error")).DurationSpec(duration.Second, duration.Hour))
-	require.Equal(t, duration.Hour, structured.Wrap("an invalid string").DurationSpec(duration.Second, duration.Hour))
+	require.Equal(t, duration.Hour, structured.Wrap(nil).Duration(duration.Second, duration.Hour))
+	require.Equal(t, duration.Hour, structured.Wrap(nil, errors.Str("an error")).Duration(duration.Second, duration.Hour))
+	require.Equal(t, duration.Hour, structured.Wrap("an invalid string").Duration(duration.Second, duration.Hour))
 
-	require.Equal(t, duration.Spec(0), structured.Wrap(0).DurationSpec(duration.Second))
-	require.Equal(t, duration.Spec(0), structured.Wrap("0").DurationSpec(duration.Second))
-	require.Equal(t, duration.Spec(0), structured.Wrap("").DurationSpec(duration.Second))
+	require.Equal(t, duration.Spec(0), structured.Wrap(0).Duration(duration.Second))
+	require.Equal(t, duration.Spec(0), structured.Wrap("0").Duration(duration.Second))
+	require.Equal(t, duration.Spec(0), structured.Wrap("").Duration(duration.Second))
 
-	require.Equal(t, duration.Hour, structured.Wrap(duration.Hour).DurationSpec(duration.Nanosecond))
-	require.Equal(t, duration.Hour, structured.Wrap(duration.H).DurationSpec(duration.Nanosecond))
-	require.Equal(t, duration.Second, structured.Wrap(1).DurationSpec(duration.Second))
-	require.Equal(t, duration.Second, structured.Wrap("1").DurationSpec(duration.Second))
-	require.Equal(t, 99*duration.Second, structured.Wrap(99.0).DurationSpec(duration.Second))
-	require.Equal(t, 3*duration.Minute, structured.Wrap("3m").DurationSpec(duration.Second))
-	require.Equal(t, 90*duration.Second, structured.Wrap(json.Number("1.5")).DurationSpec(duration.Minute))
-	require.Equal(t, 90*duration.Second, structured.Wrap(1.5).DurationSpec(duration.Minute))
-	require.Equal(t, 90*duration.Second, structured.Wrap(big.NewRat(3, 2)).DurationSpec(duration.Minute))
+	require.Equal(t, duration.Hour, structured.Wrap(duration.Hour).Duration(duration.Nanosecond))
+	require.Equal(t, duration.Hour, structured.Wrap(duration.H).Duration(duration.Nanosecond))
+	require.Equal(t, duration.Second, structured.Wrap(1).Duration(duration.Second))
+	require.Equal(t, duration.Second, structured.Wrap("1").Duration(duration.Second))
+	require.Equal(t, 99*duration.Second, structured.Wrap(99.0).Duration(duration.Second))
+	require.Equal(t, 3*duration.Minute, structured.Wrap("3m").Duration(duration.Second))
+	require.Equal(t, 90*duration.Second, structured.Wrap(json.Number("1.5")).Duration(duration.Minute))
+	require.Equal(t, 90*duration.Second, structured.Wrap(1.5).Duration(duration.Minute))
+	require.Equal(t, 90*duration.Second, structured.Wrap(big.NewRat(3, 2)).Duration(duration.Minute))
 }

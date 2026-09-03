@@ -117,7 +117,7 @@ func TestDurationCBORSelfDescribing(t *testing.T) {
 // TestDurationCBORRoundTripV1 verifies duration.Duration round-trips through CborV1Codec, which is built on
 // github.com/ugorji/go/codec - a different CBOR library from github.com/fxamacker/cbor/v2 that has no knowledge of
 // duration.Duration's own MarshalCBOR/UnmarshalCBOR methods. Without the DurationConverter registered in
-// cborConverters (tag 44), a generic (interface{}) decode would reflect over the underlying int64 and yield a bare
+// cborConverters (tag 46), a generic (interface{}) decode would reflect over the underlying int64 and yield a bare
 // CBOR/JSON number of nanoseconds instead of the intended string - which, if that JSON were later unmarshaled into a
 // typed duration.Duration field, would hit UnmarshalJSON's numeric branch (bare number = seconds) and inflate the
 // value by 1e9x.

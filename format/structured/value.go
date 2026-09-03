@@ -639,10 +639,13 @@ func (v *Value) ID(code id.Code, def ...id.ID) (id.ID, error) {
 	return ret, nil
 }
 
-// DurationErr converts this value to a duration and returns it along with any error. If the value is numeric,
-// it is interpreted as a multiple of the provided unit. If the value wraps an error, the error is returned. If the
-// value is absent (nil), the default def is returned if provided, otherwise errors.K.NotExist is returned.
-func (v *Value) DurationErr(unit duration.Duration, def ...duration.Duration) (duration.Duration, error) {
+// DurErr converts this value to a duration.Duration and returns it along with any error. If the value is numeric, it
+// is interpreted as a multiple of the provided unit. If the value wraps an error, the error is returned. If the value
+// is absent (nil), the default def is returned if provided, otherwise errors.K.NotExist is returned.
+//
+// Prefer Dur/DurErr in new code: duration.Duration is the self-describing successor of duration.Spec. Duration and
+// DurationErr keep the legacy duration.Spec type for existing callers.
+func (v *Value) DurErr(unit duration.Duration, def ...duration.Duration) (duration.Duration, error) {
 	if v.err != nil {
 		if len(def) > 0 {
 			return def[0], v.err
@@ -653,7 +656,7 @@ func (v *Value) DurationErr(unit duration.Duration, def ...duration.Duration) (d
 		if len(def) > 0 {
 			return def[0], nil
 		}
-		return 0, errors.NoTrace("Duration", errors.K.NotExist)
+		return 0, errors.NoTrace("Dur", errors.K.NotExist)
 	}
 	data := v.Unwrap()
 	switch t := data.(type) {
@@ -687,20 +690,19 @@ func (v *Value) DurationErr(unit duration.Duration, def ...duration.Duration) (d
 	return 0, err
 }
 
-// Duration converts this value to a duration. If the value is numeric, it is interpreted as a multiple of the
-// provided unit. Returns the default value or 0 if the value is absent or the conversion fails.
-func (v *Value) Duration(unit duration.Duration, def ...duration.Duration) duration.Duration {
-	res, _ := v.DurationErr(unit, def...)
+// Dur converts this value to a duration.Duration. If the value is numeric, it is interpreted as a multiple of the
+// provided unit. Returns the default value or 0 if the value is absent or the conversion fails. See DurErr.
+func (v *Value) Dur(unit duration.Duration, def ...duration.Duration) duration.Duration {
+	res, _ := v.DurErr(unit, def...)
 	return res
 }
 
-// DurationSpecErr converts this value to a duration spec and returns it along with any error. If the value is
-// numeric, it is interpreted as a multiple of the provided unit. If the value wraps an error, the error is returned.
-// If the value is absent (nil), the default def is returned if provided, otherwise errors.K.NotExist is returned.
+// DurationErr converts this value to a duration spec and returns it along with any error. If the value is numeric,
+// it is interpreted as a multiple of the provided unit. If the value wraps an error, the error is returned. If the
+// value is absent (nil), the default def is returned if provided, otherwise errors.K.NotExist is returned.
 //
-// This is the duration.Spec-typed counterpart of DurationErr, kept for callers whose own public API still exposes
-// duration.Spec. Prefer DurationErr in new code.
-func (v *Value) DurationSpecErr(unit duration.Spec, def ...duration.Spec) (duration.Spec, error) {
+// This is the legacy duration.Spec-typed accessor, retained unchanged for existing callers. Prefer DurErr in new code.
+func (v *Value) DurationErr(unit duration.Spec, def ...duration.Spec) (duration.Spec, error) {
 	if v.err != nil {
 		if len(def) > 0 {
 			return def[0], v.err
@@ -745,12 +747,11 @@ func (v *Value) DurationSpecErr(unit duration.Spec, def ...duration.Spec) (durat
 	return 0, err
 }
 
-// DurationSpec converts this value to a duration spec. If the value is numeric, it is interpreted as a multiple of
-// the provided unit. Returns the default value or 0 if the value is absent or the conversion fails.
+// Duration converts this value to a duration spec. If the value is numeric, it is interpreted as a multiple of the
+// provided unit. Returns the default value or 0 if the value is absent or the conversion fails.
 //
-// This is the duration.Spec-typed counterpart of Duration, kept for callers whose own public API still exposes
-// duration.Spec. Prefer Duration in new code.
-func (v *Value) DurationSpec(unit duration.Spec, def ...duration.Spec) duration.Spec {
-	res, _ := v.DurationSpecErr(unit, def...)
+// This is the legacy duration.Spec-typed accessor, retained unchanged for existing callers. Prefer Dur in new code.
+func (v *Value) Duration(unit duration.Spec, def ...duration.Spec) duration.Spec {
+	res, _ := v.DurationErr(unit, def...)
 	return res
 }

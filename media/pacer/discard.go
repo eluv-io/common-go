@@ -24,10 +24,8 @@ type DiscardContext struct {
 	toDuration func(int64) time.Duration // converts a timestamp (clock units) to a duration; defaults to TicksToDuration
 }
 
-// NewDiscardContext creates a new discard context with the specified period. The optional toDuration parameter converts
-// unwrapped timestamps to time.Duration; if omitted or nil, TicksToDuration (90 kHz RTP clock) is used.
-// NewDiscardContext creates a new discard context with the specified period. toDuration converts unwrapped timestamps to
-// time.Duration and must not be nil.
+// NewDiscardContext creates a new discard context with the specified period. toDuration is used to convert unwrapped
+// timestamps to time.Duration and must not be nil.
 func NewDiscardContext(discardPeriod, maxDiscardPeriod duration.Duration, toDuration func(int64) time.Duration) *DiscardContext {
 	if toDuration == nil {
 		panic("pacer: toDuration must not be nil")
