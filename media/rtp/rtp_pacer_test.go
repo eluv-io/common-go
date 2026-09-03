@@ -284,8 +284,8 @@ func collectPackets(pacer *rtp2.RtpPacer) func() ([]*pionrtp.Packet, error) {
 				// throttler.Do(func() {
 				log.Info("received", "seq", pkt.SequenceNumber,
 					"ts", pkt.Timestamp,
-					"ipd", duration.Spec(now.Sub(lastPktTs)).Round(),
-					"max_ipd", duration.Spec(maxIpd).Round())
+					"ipd", duration.Duration(now.Sub(lastPktTs)).Round(),
+					"max_ipd", duration.Duration(maxIpd).Round())
 				// })
 			}
 			lastPkt = pkt
@@ -354,8 +354,8 @@ func writePackets(pacer *rtp2.RtpPacer, writer io.Writer, stripRtp bool, initial
 				throttler.Do(func() {
 					log.Info("received", "seq", pkt.SequenceNumber,
 						"ts", pkt.Timestamp,
-						"ipd", duration.Spec(now.Sub(lastPktTs)).Round(),
-						"max_ipd", duration.Spec(maxIpd).Round())
+						"ipd", duration.Duration(now.Sub(lastPktTs)).Round(),
+						"max_ipd", duration.Duration(maxIpd).Round())
 				})
 			}
 			lastPkt = pkt

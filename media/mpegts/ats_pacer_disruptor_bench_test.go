@@ -22,8 +22,8 @@ func BenchmarkAtsDisruptorPacer_Push(b *testing.B) {
 		EventLog:      elog.Noop,
 		StatsInterval: -1,
 		Logic: pacer.PacerLogicConfig{
-			DiscardPeriod:    duration.Hour,
-			MaxDiscardPeriod: duration.Spec(0), // disabled: never time out of the discard phase
+			DiscardPeriod:    duration.H,
+			MaxDiscardPeriod: 0, // disabled: never time out of the discard phase
 		},
 	}
 	p, err := NewAtsDisruptorPacer(conf)

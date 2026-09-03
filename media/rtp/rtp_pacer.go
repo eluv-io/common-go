@@ -159,7 +159,7 @@ func (p *RtpPacer) calculateWait(now utc.UTC, rtpSequence uint16, rtpTimestamp u
 	}
 
 	defer func() {
-		newPeriod := p.stats.ipd.UpdateNow(now, duration.Spec(now.Sub(p.last)))
+		newPeriod := p.stats.ipd.UpdateNow(now, duration.Duration(now.Sub(p.last)))
 		if newPeriod {
 			p.stats.IPDLast = p.stats.ipd.Previous
 			log.Debug("rtpPacer: statistics", "stream", p.stream, "stats", jsonutil.Stringer(p.stats))
@@ -185,7 +185,7 @@ func (p *RtpPacer) calculateWait(now utc.UTC, rtpSequence uint16, rtpTimestamp u
 		} else {
 			// actual time diff is smaller than the time difference based on the RTP timestamps
 			p.stats.RefTimeChanges++
-			p.stats.RefTimeDiff += duration.Spec(tsDiff)
+			p.stats.RefTimeDiff += duration.Duration(tsDiff)
 		}
 
 		log.Throttle("pacer").Info("rtpPacer: adjusting time reference",
@@ -227,10 +227,10 @@ func (p *RtpPacer) calculateWait(now utc.UTC, rtpSequence uint16, rtpTimestamp u
 	} else if wait > 20*time.Millisecond {
 		p.stats.EarlyPackets++
 	}
-	p.stats.MinWait = min(p.stats.MinWait, duration.Spec(wait))
-	p.stats.MaxWait = max(p.stats.MaxWait, duration.Spec(wait))
-	p.stats.waitSum += duration.Spec(wait)
-	p.stats.AvgWait = p.stats.waitSum / duration.Spec(p.stats.TotalPackets)
+	p.stats.MinWait = min(p.stats.MinWait, duration.Duration(wait))
+	p.stats.MaxWait = max(p.stats.MaxWait, duration.Duration(wait))
+	p.stats.waitSum += duration.Duration(wait)
+	p.stats.AvgWait = p.stats.waitSum / duration.Duration(p.stats.TotalPackets)
 
 	return wait, false
 }
@@ -242,37 +242,37 @@ type timeref struct {
 }
 
 type stats struct {
-	TotalPackets    int                                 `json:"total"`
-	DelayedPackets  int                                 `json:"delayed"`          // packets delayed by more than 20ms
-	EarlyPackets    int                                 `json:"early"`            // packets early by more than 20ms
-	RtpSeq          int64                               `json:"rtp_seq"`          // current RTP sequence number
-	RtpTs           int64                               `json:"rtp_ts"`           // current RTP timestamp
-	MinWait         duration.Spec                       `json:"min_wait"`         // minimum wait time - negative for delayed packets
-	MaxWait         duration.Spec                       `json:"max_wait"`         // maximum wait time
-	AvgWait         duration.Spec                       `json:"avg_wait"`         // average wait time
-	Discontinuities int                                 `json:"discontinuities"`  // number of times the stream was reset
-	RefTimeChanges  int                                 `json:"ref_time_changes"` // number of times the reference time was adapted
-	RefTimeDiff     duration.Spec                       `json:"ref_time_diff"`    // total time difference of all reference time adaptations
-	IPDLast         statsutil.Statistics[duration.Spec] `json:"ipd"`              // inter-packet delay statistics for last period
-	ipd             statsutil.Periodic[duration.Spec]   // inter-packet delay statistics
-	waitSum         duration.Spec                       // sum of all wait times
+	TotalPackets    int                                     `json:"total"`
+	DelayedPackets  int                                     `json:"delayed"`          // packets delayed by more than 20ms
+	EarlyPackets    int                                     `json:"early"`            // packets early by more than 20ms
+	RtpSeq          int64                                   `json:"rtp_seq"`          // current RTP sequence number
+	RtpTs           int64                                   `json:"rtp_ts"`           // current RTP timestamp
+	MinWait         duration.Duration                       `json:"min_wait"`         // minimum wait time - negative for delayed packets
+	MaxWait         duration.Duration                       `json:"max_wait"`         // maximum wait time
+	AvgWait         duration.Duration                       `json:"avg_wait"`         // average wait time
+	Discontinuities int                                     `json:"discontinuities"`  // number of times the stream was reset
+	RefTimeChanges  int                                     `json:"ref_time_changes"` // number of times the reference time was adapted
+	RefTimeDiff     duration.Duration                       `json:"ref_time_diff"`    // total time difference of all reference time adaptations
+	IPDLast         statsutil.Statistics[duration.Duration] `json:"ipd"`              // inter-packet delay statistics for last period
+	ipd             statsutil.Periodic[duration.Duration]   // inter-packet delay statistics
+	waitSum         duration.Duration                       // sum of all wait times
 }
 
 type outStats struct {
-	WaitLast        statsutil.Statistics[duration.Spec] `json:"wait"`          // wait time statistics for last period
-	IPDLast         statsutil.Statistics[duration.Spec] `json:"ipd"`           // inter-packet delay statistics for last period
-	CHDLast         statsutil.Statistics[duration.Spec] `json:"chd"`           // channel delay statistics for last period
-	BufferedPackets int32                               `json:"buffered"`      // number of packets currently in the channel
-	DelayedPackets  int                                 `json:"delayed"`       // number of packets that were popped from the channel after their nominal sending time
-	Sleeps          int                                 `json:"sleeps"`        // number of times the pacer had to wait before sending a packet
-	Overslept       int                                 `json:"overslept"`     // number of times sleep was more than 5ms longer than expected
-	MaxOverslept    duration.Spec                       `json:"max_overslept"` // the maximum amount of time that a sleep was longer than expected
+	WaitLast        statsutil.Statistics[duration.Duration] `json:"wait"`          // wait time statistics for last period
+	IPDLast         statsutil.Statistics[duration.Duration] `json:"ipd"`           // inter-packet delay statistics for last period
+	CHDLast         statsutil.Statistics[duration.Duration] `json:"chd"`           // channel delay statistics for last period
+	BufferedPackets int32                                   `json:"buffered"`      // number of packets currently in the channel
+	DelayedPackets  int                                     `json:"delayed"`       // number of packets that were popped from the channel after their nominal sending time
+	Sleeps          int                                     `json:"sleeps"`        // number of times the pacer had to wait before sending a packet
+	Overslept       int                                     `json:"overslept"`     // number of times sleep was more than 5ms longer than expected
+	MaxOverslept    duration.Duration                       `json:"max_overslept"` // the maximum amount of time that a sleep was longer than expected
 
-	wait       statsutil.Periodic[duration.Spec] // collector for wait times
-	ipd        statsutil.Periodic[duration.Spec] // collector for inter-packet delays
-	chd        statsutil.Periodic[duration.Spec] // collector for channel delays
-	buffered   atomic.Int32                      // current count of packets in channel
-	lastPacket utc.UTC                           // wall clock time when the last packet was popped
+	wait       statsutil.Periodic[duration.Duration] // collector for wait times
+	ipd        statsutil.Periodic[duration.Duration] // collector for inter-packet delays
+	chd        statsutil.Periodic[duration.Duration] // collector for channel delays
+	buffered   atomic.Int32                          // current count of packets in channel
+	lastPacket utc.UTC                               // wall clock time when the last packet was popped
 }
 
 type NoopPeriodic struct{}

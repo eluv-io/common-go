@@ -65,7 +65,7 @@ func (r *GapDetector) Detect(seq uint16, ts uint32) (seqUnwrapped, tsUnwrapped i
 					"previous", previous,
 					"current", current,
 					"diff", diff,
-					"dur", duration.Spec(TicksToDuration(diff)).Round(),
+					"dur", duration.Duration(TicksToDuration(diff)).Round(),
 					"threshold", r.TimestampThreshold,
 				),
 			)

@@ -19,7 +19,7 @@ func BenchmarkPacerLogic_PacketTs(b *testing.B) {
 	conf := pacer.PacerLogicConfig{
 		Stream:          "bench",
 		EventLog:        log.Get("/bench/pacer"),
-		Delay:           duration.Spec(50 * time.Millisecond),
+		Delay:           duration.Duration(50 * time.Millisecond),
 		AdjustTimeDrift: false,
 		ToDuration:      rtp.TicksToDuration,
 	}

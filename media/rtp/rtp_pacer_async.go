@@ -58,8 +58,8 @@ func (p *RtpPacer) newPacerPacket(bts []byte, now, targetTs utc.UTC, pkt *rtp.Pa
 
 func (p *RtpPacer) Pop() (bts []byte, err error) {
 	trackOversleep := func(pkt *pacerPacket) {
-		overslept := duration.Spec(utc.Now().Sub(pkt.targetTs))
-		if overslept > 5*duration.Millisecond {
+		overslept := duration.Duration(utc.Now().Sub(pkt.targetTs))
+		if overslept > 5*duration.MS {
 			p.outStats.Overslept++
 			if p.outStats.MaxOverslept < overslept {
 				p.outStats.MaxOverslept = overslept
@@ -94,15 +94,15 @@ func (p *RtpPacer) Pop() (bts []byte, err error) {
 		if !p.outStats.lastPacket.IsZero() {
 			// we ignore the first wait value with the above if statement, but it is always "initiaDelay" anyway
 
-			newWait := p.outStats.wait.UpdateNow(now, duration.Spec(wait))
+			newWait := p.outStats.wait.UpdateNow(now, duration.Duration(wait))
 			if newWait {
 				p.outStats.WaitLast = p.outStats.wait.Previous
 			}
-			newIPD := p.outStats.ipd.UpdateNow(now, duration.Spec(now.Sub(p.outStats.lastPacket)))
+			newIPD := p.outStats.ipd.UpdateNow(now, duration.Duration(now.Sub(p.outStats.lastPacket)))
 			if newIPD {
 				p.outStats.IPDLast = p.outStats.ipd.Previous
 			}
-			newCHD := p.outStats.chd.UpdateNow(now, duration.Spec(now.Sub(pkt.inTs)))
+			newCHD := p.outStats.chd.UpdateNow(now, duration.Duration(now.Sub(pkt.inTs)))
 			if newCHD {
 				p.outStats.CHDLast = p.outStats.chd.Previous
 			}

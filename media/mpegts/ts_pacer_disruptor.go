@@ -13,7 +13,7 @@ import (
 	"github.com/eluv-io/utc-go"
 )
 
-const DefaultPcrGapThreshold = duration.Second
+const DefaultPcrGapThreshold = duration.S
 
 // pcrPidUnset marks that no PCR PID has been pinned yet (see pcrScheduler.pcrPid). Valid PIDs are 0..8191, so -1 is an
 // unambiguous sentinel.
@@ -31,21 +31,21 @@ type TsDisruptorPacerConfig struct {
 
 	// PcrGapThreshold is the maximum PCR jump between consecutive PCR-bearing packets before a stream reset is
 	// triggered. Defaults to 1 second when zero.
-	PcrGapThreshold duration.Spec `json:"pcr_gap_threshold"`
+	PcrGapThreshold duration.Duration `json:"pcr_gap_threshold"`
 
-	BufferCapacity    int           `json:"buffer_capacity"`     // ring buffer capacity (rounded up to next power of 2; 0 → pacer.DefaultDisruptorCapacity)
-	MinSleepThreshold duration.Spec `json:"min_sleep_threshold"` // sleep durations shorter than this are skipped (0 → pacer.DefaultMinSleepThreshold)
-	TickerPeriod      duration.Spec `json:"ticker_period"`       // ticker period for scheduling delivery (0 → pacer.DefaultTickerPeriod)
-	OversleepMargin   duration.Spec `json:"oversleep_margin"`    // jitter tolerated above TickerPeriod before a wake is counted as an oversleep (0 → pacer.DefaultOversleepMargin)
-	StatsInterval     duration.Spec `json:"stats_interval"`      // interval for periodic stats logging (0 → pacer.DefaultStatsInterval, -1 → disabled)
+	BufferCapacity    int               `json:"buffer_capacity"`     // ring buffer capacity (rounded up to next power of 2; 0 → pacer.DefaultDisruptorCapacity)
+	MinSleepThreshold duration.Duration `json:"min_sleep_threshold"` // sleep durations shorter than this are skipped (0 → pacer.DefaultMinSleepThreshold)
+	TickerPeriod      duration.Duration `json:"ticker_period"`       // ticker period for scheduling delivery (0 → pacer.DefaultTickerPeriod)
+	OversleepMargin   duration.Duration `json:"oversleep_margin"`    // jitter tolerated above TickerPeriod before a wake is counted as an oversleep (0 → pacer.DefaultOversleepMargin)
+	StatsInterval     duration.Duration `json:"stats_interval"`      // interval for periodic stats logging (0 → pacer.DefaultStatsInterval, -1 → disabled)
 
 	// SendAhead is how early the consumer dispatches a packet before its target time. 0 = dispatch at targetTs.
-	SendAhead duration.Spec `json:"send_ahead"`
+	SendAhead duration.Duration `json:"send_ahead"`
 
 	// DeliveryMargin is the minimum lead time guaranteed to the "deliver" callback:
 	//   sendAt = max(targetTs, now + DeliveryMargin)
 	// Should be ≤ SendAhead so the floor is reliably reachable under normal conditions. 0 = disabled.
-	DeliveryMargin duration.Spec `json:"delivery_margin"`
+	DeliveryMargin duration.Duration `json:"delivery_margin"`
 
 	// EstimatePcrRate, when true, schedules no-PCR batches using a PCR-tick rate estimated from consecutive
 	// PCR-bearing batches instead of raw arrival time. This smooths input jitter for fixed-bandwidth streams where
@@ -175,7 +175,7 @@ type pcrScheduler struct {
 
 	estimatePcrRate bool
 	stripRtp        bool
-	pcrGapThreshold duration.Spec
+	pcrGapThreshold duration.Duration
 	eventLog        elog.ILog
 	stream          string
 }

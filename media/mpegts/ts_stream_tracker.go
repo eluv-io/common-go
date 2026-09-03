@@ -360,7 +360,7 @@ func (t *tsStreamTracker) Stats() *Stats {
 // full/reuse contract.
 func (t *tsStreamTracker) Snapshot(snap *Stats, full bool) *Stats {
 	snap.Start = t.start
-	snap.Duration = duration.Spec(utc.Since(t.start)).RoundTo(2)
+	snap.Duration = duration.Duration(utc.Since(t.start)).RoundTo(2)
 	snap.ErrorCount = t.errCount
 	snap.CcErrors = t.totalCcErrors
 
@@ -391,7 +391,7 @@ func (t *tsStreamTracker) Snapshot(snap *Stats, full bool) *Stats {
 		s.Cc = stream.cc
 		s.CcErrors = stream.ccErrors
 		s.Pcr = stream.pcr
-		s.Jitter = duration.Spec(stream.jitter).RoundTo(2)
+		s.Jitter = duration.Duration(stream.jitter).RoundTo(2)
 		s.Info = ""
 		if stream.pcr0 != utc.Zero {
 			s.Pcr0 = &stream.pcr0
@@ -472,10 +472,10 @@ func (n NoopTracker) Reset() {}
 // ---------------------------------------------------------------------------------------------------------------------
 
 type Stats struct {
-	Start       utc.UTC       `json:"start"`
-	Duration    duration.Spec `json:"duration"`
-	PacketCount int           `json:"packet_count"`
-	ErrorCount  int           `json:"error_count"`
+	Start       utc.UTC           `json:"start"`
+	Duration    duration.Duration `json:"duration"`
+	PacketCount int               `json:"packet_count"`
+	ErrorCount  int               `json:"error_count"`
 	// CcErrors is the sum of every stream's continuity-counter error count - available cheaply (from an
 	// incrementally-maintained running total) even when Streams itself is empty (see Snapshot's full=false case).
 	CcErrors int            `json:"cc_errors"`
@@ -583,7 +583,7 @@ type StreamStats struct {
 	CcErrors         int               `json:"cc_errors"`                        // cumulated continuity counter errors
 	Pcr              uint64            `json:"pcr,omitempty"`                    // program clock reference 33+9 bits
 	Pcr0             *utc.UTC          `json:"pcr_0,omitempty"`                  // time corresponding to PCR 0
-	Jitter           duration.Spec     `json:"jitter,omitempty"`                 // jitter between PCR and system time
+	Jitter           duration.Duration `json:"jitter,omitempty"`                 // jitter between PCR and system time
 	JitterMillisHist *HistogramCapture `json:"jitter_abs_millis_hist,omitempty"` // jitter histogram in absolute millis
 	Info             string            `json:"info,omitempty"`                   // stream info
 }

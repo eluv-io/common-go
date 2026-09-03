@@ -25,13 +25,13 @@ type PacerLogicConfig struct {
 	EventLog elog.ILog `json:"-"`
 
 	// DiscardPeriod is the period for determining T0 during which all packets are discarded
-	DiscardPeriod duration.Spec `json:"discard_period"`
+	DiscardPeriod duration.Duration `json:"discard_period"`
 
 	// MaxDiscardPeriod is the maximum period for discarding packets.
-	MaxDiscardPeriod duration.Spec `json:"max_discard_period"`
+	MaxDiscardPeriod duration.Duration `json:"max_discard_period"`
 
 	// Delay is the size of the de-jitter buffer
-	Delay duration.Spec `json:"delay"`
+	Delay duration.Duration `json:"delay"`
 
 	// AdjustTimeDrift enables continuous drift correction: negative drift (T0 drifts backward, stream running fast)
 	// shifts baseTime earlier; positive drift (T0 drifts forward, stream running slow) shifts baseTime later.
@@ -39,22 +39,22 @@ type PacerLogicConfig struct {
 
 	// MaxNegDriftCorrection caps the per-packet baseTime correction applied for negative drift when AdjustTimeDrift is
 	// true. Zero means no cap: the full observed drift is applied immediately.
-	MaxNegDriftCorrection duration.Spec `json:"max_neg_drift_correction"`
+	MaxNegDriftCorrection duration.Duration `json:"max_neg_drift_correction"`
 
 	// PosDriftPeriod is the window over which T0 drift is averaged for positive-drift detection.
 	// Default: 1 minute when zero.
-	PosDriftPeriod duration.Spec `json:"pos_drift_period"`
+	PosDriftPeriod duration.Duration `json:"pos_drift_period"`
 
 	// DriftThreshold is the drift dead-band applied in both directions: positive drift is only acted on once its mean
 	// over PosDriftPeriod exceeds this, and a single early packet is only treated as negative drift once it exceeds it.
 	// This keeps normal jitter from re-anchoring the timing baseline. Applies to drift detection regardless of
 	// AdjustTimeDrift (which only gates whether a detected drift also corrects baseTime). Default: 2ms when zero.
-	DriftThreshold duration.Spec `json:"drift_threshold"`
+	DriftThreshold duration.Duration `json:"drift_threshold"`
 
 	// MaxPosDriftCorrection caps the per-period baseTime advance applied for positive drift when AdjustTimeDrift is
 	// true. Zero means no cap: the full mean drift over the period is applied at once (so a large accumulated backlog
 	// is re-anchored in a single step). A non-zero cap makes recovery gradual (at most this much per PosDriftPeriod).
-	MaxPosDriftCorrection duration.Spec `json:"max_pos_drift_correction"`
+	MaxPosDriftCorrection duration.Duration `json:"max_pos_drift_correction"`
 
 	// MaxDriftCorrectionStep caps how much of a detected positive-drift correction (after any MaxPosDriftCorrection
 	// capping) is applied to baseTime on any single packet. The remainder is queued and drained on subsequent packets,
@@ -85,11 +85,11 @@ type PacerLogicConfig struct {
 func (c *PacerLogicConfig) InitDefaults() *PacerLogicConfig {
 	c.DiscardPeriod = 0
 	c.MaxDiscardPeriod = 0
-	c.Delay = duration.Second
+	c.Delay = duration.S
 	c.AdjustTimeDrift = true
 	c.MaxNegDriftCorrection = 0
-	c.PosDriftPeriod = duration.Spec(DefaultPosDriftPeriod)
-	c.DriftThreshold = duration.Spec(DefaultDriftThreshold)
+	c.PosDriftPeriod = duration.Duration(DefaultPosDriftPeriod)
+	c.DriftThreshold = duration.Duration(DefaultDriftThreshold)
 	c.MaxPosDriftCorrection = 0
 	c.MaxDriftCorrectionStep = 0
 	return c

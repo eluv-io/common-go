@@ -21,8 +21,8 @@ func BenchmarkTsDisruptorPacer_Push(b *testing.B) {
 		EventLog:      elog.Noop,
 		StatsInterval: -1,
 		Logic: pacer.PacerLogicConfig{
-			DiscardPeriod:    duration.Spec(0),
-			MaxDiscardPeriod: duration.Spec(0),
+			DiscardPeriod:    duration.Duration(0),
+			MaxDiscardPeriod: duration.Duration(0),
 		},
 	}
 	p, err := NewTsDisruptorPacer(conf)
