@@ -317,18 +317,33 @@ func (e *DisruptorEngine) waitForSlot(start utc.UTC) (seq int64, ok bool) {
 	// polling so often that the wait costs anything. Bounded below so a tiny TickerPeriod cannot turn this into a spin.
 	poll := max(e.conf.TickerPeriod.Duration()/4, 100*time.Microsecond)
 	maxBlock := e.conf.MaxBlock.Duration()
+
+	timer := time.NewTimer(poll)
+	defer timer.Stop()
 	for {
-		if e.ctx.Err() != nil {
-			return 0, false
+		// Each wait is clamped to what is left of the budget, so a poll interval longer than MaxBlock cannot overshoot
+		// it - a large TickerPeriod with a small MaxBlock would otherwise blow the cap on the very first sleep.
+		wait := poll
+		if maxBlock > 0 {
+			remaining := maxBlock - utc.Now().Sub(start)
+			if remaining <= 0 {
+				e.reportStall(start, true)
+				return 0, false
+			}
+			wait = min(wait, remaining)
 		}
-		time.Sleep(poll)
+
+		// Waiting on the timer rather than sleeping, so shutdown is not held up for the rest of the interval.
+		timer.Reset(wait)
+		select {
+		case <-e.ctx.Done():
+			return 0, false
+		case <-timer.C:
+		}
+
 		if seq = e.dis.TryReserve(1); seq >= 0 {
 			e.reportStall(start, false)
 			return seq, true
-		}
-		if maxBlock > 0 && utc.Now().Sub(start) >= maxBlock {
-			e.reportStall(start, true)
-			return 0, false
 		}
 	}
 }

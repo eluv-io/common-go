@@ -48,15 +48,15 @@ func (d *DiscardContext) period() duration.Spec {
 	return d.DiscardPeriod
 }
 
-// maxPeriod returns the cap in force for the current phase, never below that phase's own period.
+// maxPeriod returns the cap in force for the current phase, never below that phase's own period. Comparing against
+// period() rather than the raw SourceChangePeriod matters when the latter is zero: the phase then runs on
+// DiscardPeriod, and a shorter MaxSourceChangePeriod must not cap it below that.
 func (d *DiscardContext) maxPeriod() duration.Spec {
+	maxPeriod := d.MaxDiscardPeriod
 	if d.sourceChange && d.MaxSourceChangePeriod > 0 {
-		return max(d.SourceChangePeriod, d.MaxSourceChangePeriod)
+		maxPeriod = d.MaxSourceChangePeriod
 	}
-	if d.sourceChange && d.SourceChangePeriod > 0 {
-		return max(d.SourceChangePeriod, d.MaxDiscardPeriod)
-	}
-	return d.MaxDiscardPeriod
+	return max(d.period(), maxPeriod)
 }
 
 // NewDiscardContext creates a new discard context with the specified period. toDuration is used to convert unwrapped
@@ -81,7 +81,7 @@ func NewDiscardContext(discardPeriod, maxDiscardPeriod duration.Spec, toDuration
 // and it needs no knowledge of the stream's bitrate.
 //
 //  1. First packet since a reset: establish the baseline and discard
-//  2. T0 improves by more than T0Threshold: take it, restart the period, and discard
+//  2. T0 improves by more than T0Threshold: take it, restart the period, and keep discarding
 //  3. T0 improves by less: take it, but leave the period running - see T0Threshold
 //  4. Period elapses with no significant improvement: the edge has been found, stop discarding for good
 //  5. The cap elapses first: give up and continue with the best baseline seen, rather than failing the stream
@@ -122,23 +122,14 @@ func (d *DiscardContext) ShouldDiscard(tsUnwrapped int64, now utc.UTC) (bool, er
 		return true, nil
 	}
 
-	// Give up on convergence once the cap elapses and continue with the best baseline found. Checked before the
-	// improvement branch below, because a stream whose T0 never stops improving is exactly the case the cap is for:
-	// checked after, it could never fire for one. Failing here instead of completing would take down a stream that is
-	// merely jittery.
-	if maxPeriod := d.maxPeriod(); maxPeriod != 0 && now.Sub(d.FirstPacketTime) > maxPeriod.Duration() {
-		d.DiscardComplete = true
-		log.Warn("discard: max period exceeded, continuing with the current baseline", nil,
-			"ts", tsUnwrapped,
-			"t0", d.T0,
-			"max_period", maxPeriod,
-			"elapsed", now.Sub(d.FirstPacketTime))
-		return false, nil
-	}
-
 	// Take any improvement to the baseline, but only restart the period for one large enough to mean the reader is
 	// still catching up. Restarting on every improvement lets ordinary jitter hold the phase open indefinitely, since
 	// the running minimum of a jittery signal keeps creeping down.
+	//
+	// Neither case returns here. A sub-threshold improvement must not keep the phase alive by itself, so it has to
+	// reach the elapsed-period check below - that is the whole point of the dead-band. A super-threshold one has just
+	// set T0UpdatedAt to now, so the same check keeps discarding anyway, and falling through means the cap below is
+	// still evaluated for a stream whose T0 never stops improving, which is exactly the case the cap exists for.
 	if t0.Before(d.T0) {
 		adjustment := d.T0.Sub(t0)
 		d.StartupT0Correction.Update(now, duration.Millis(adjustment))
@@ -152,10 +143,22 @@ func (d *DiscardContext) ShouldDiscard(tsUnwrapped int64, now utc.UTC) (bool, er
 			"delta", adjustment,
 			"restarted_period", adjustment > d.T0Threshold.Duration(),
 			"total_adj_ms", float64(d.StartupT0Correction.Sum)/1e6)
-		return true, nil // discard - baseline was just updated
 	}
 
-	// T0 is not earlier - check if discard period has elapsed
+	// Give up on convergence once the cap elapses and continue with the best baseline found - including whatever this
+	// packet just contributed above. Failing here instead of completing would take down a stream that is merely
+	// jittery.
+	if maxPeriod := d.maxPeriod(); maxPeriod != 0 && now.Sub(d.FirstPacketTime) > maxPeriod.Duration() {
+		d.DiscardComplete = true
+		log.Warn("discard: max period exceeded, continuing with the current baseline",
+			"ts", tsUnwrapped,
+			"t0", d.T0,
+			"max_period", maxPeriod,
+			"elapsed", now.Sub(d.FirstPacketTime))
+		return false, nil
+	}
+
+	// No significant improvement outstanding - check if the discard period has elapsed
 	elapsed := now.Sub(d.T0UpdatedAt)
 	if elapsed < period.Duration() {
 		return true, nil // still in discard period

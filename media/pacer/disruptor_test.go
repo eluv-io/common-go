@@ -138,6 +138,30 @@ func TestDisruptorEngine_MaxBlockDropsInsteadOfStalling(t *testing.T) {
 	require.Positive(t, stats.Blocked.Count, "the stall must be recorded")
 }
 
+// TestDisruptorEngine_MaxBlockShorterThanPollInterval covers a MaxBlock smaller than the poll interval derived from
+// TickerPeriod. The wait has to be clamped to what is left of the budget, or the very first sleep overshoots the cap
+// by the whole interval.
+func TestDisruptorEngine_MaxBlockShorterThanPollInterval(t *testing.T) {
+	var conf DisruptorEngineConfig
+	conf.InitDefaults()
+	conf.BufferCapacity = 8
+	conf.TickerPeriod = duration.Spec(time.Second) // poll interval would be 250ms
+	conf.MaxBlock = duration.Spec(20 * time.Millisecond)
+
+	// The consumer is never started, so no slot can ever free up and the push runs the budget down.
+	e, _, stop := newTestEngine(t, conf, 10*time.Second)
+	defer stop()
+
+	fill(t, e)
+
+	start := time.Now()
+	require.NoError(t, e.Push([]byte("overflow")), "a dropped packet is not an error")
+	blocked := time.Since(start)
+
+	require.Less(t, blocked, 150*time.Millisecond, "the wait must be clamped to MaxBlock, not to the poll interval")
+	require.Equal(t, 1, e.Stats().Out.Dropped)
+}
+
 // TestDisruptorEngine_NoStallWhenBufferHasRoom guards the fast path: pushes that fit must not touch the wait path, and
 // must not record a stall.
 func TestDisruptorEngine_NoStallWhenBufferHasRoom(t *testing.T) {

@@ -174,6 +174,76 @@ func TestDiscardContext_T0Threshold(t *testing.T) {
 	require.False(t, dc.DiscardComplete)
 }
 
+// TestDiscardContext_T0ThresholdCompletesWhileStillImproving covers the case the dead-band actually exists for: a
+// jittery stream whose running-minimum T0 keeps creeping down, so *every* packet is an improvement. Sub-threshold
+// improvements must not be able to hold the phase open between them - the period has to elapse from the last
+// significant improvement and complete the phase, well before the cap.
+func TestDiscardContext_T0ThresholdCompletesWhileStillImproving(t *testing.T) {
+	now := utc.MustParse("2000-01-01T12:00:00Z")
+	dc := pacer.NewDiscardContext(duration.Spec(time.Second), duration.Spec(time.Minute), rtp.TicksToDuration)
+	dc.T0Threshold = duration.Spec(50 * time.Millisecond)
+
+	assertDiscard(t, dc, 0, now, true, false)
+
+	// Stream time runs 101ms per 100ms of wall time, so every packet improves T0 by 1ms - always sub-threshold, and
+	// never stopping. The phase must still complete once the period has elapsed.
+	var rtpTs time.Duration
+	completedAt := -1
+	for i := range 30 {
+		now = now.Add(100 * time.Millisecond)
+		rtpTs += 101 * time.Millisecond
+		discard, err := dc.ShouldDiscard(rtp.DurationToTicks(rtpTs), now)
+		require.NoError(t, err)
+		if !discard {
+			completedAt = i
+			break
+		}
+	}
+
+	require.True(t, dc.DiscardComplete, "a continuously improving sub-threshold stream must not run to the cap")
+	// The period is 1s and packets arrive every 100ms, so completion is due on the 10th packet after the baseline.
+	require.Equal(t, 9, completedAt, "phase must complete one period after the last significant improvement")
+	require.Less(t, now.Sub(dc.FirstPacketTime), time.Minute, "must complete well inside the cap")
+}
+
+// TestDiscardContext_MaxSourceChangePeriodNeverCapsBelowPeriod covers the fallback interaction: with no
+// SourceChangePeriod configured the phase runs on DiscardPeriod, and a shorter MaxSourceChangePeriod must not cap it
+// below that.
+func TestDiscardContext_MaxSourceChangePeriodNeverCapsBelowPeriod(t *testing.T) {
+	now := utc.MustParse("2000-01-01T12:00:00Z")
+	dc := pacer.NewDiscardContext(duration.Spec(5*time.Second), duration.Spec(30*time.Second), rtp.TicksToDuration)
+	dc.MaxSourceChangePeriod = duration.Spec(2 * time.Second) // shorter than the 5s period the phase will run on
+	dc.ResetForSourceChange()
+
+	assertDiscard(t, dc, 0, now, true, false)
+
+	// Past the 2s cap but inside the 5s period, with no improvement to extend anything: the cap must not have fired.
+	now = now.Add(3 * time.Second)
+	assertDiscard(t, dc, 3*time.Second, now, true, false)
+	require.False(t, dc.DiscardComplete, "the cap must not fall below the period in force")
+
+	// Past the period, so the phase completes normally rather than via the cap.
+	now = now.Add(2100 * time.Millisecond)
+	assertDiscard(t, dc, 5100*time.Millisecond, now, false, false)
+	require.True(t, dc.DiscardComplete)
+}
+
+// TestDiscardContext_CapKeepsFinalImprovement checks that the packet on which the cap fires still contributes its
+// baseline improvement, rather than the phase completing on the previous, worse T0.
+func TestDiscardContext_CapKeepsFinalImprovement(t *testing.T) {
+	now := utc.MustParse("2000-01-01T12:00:00Z")
+	dc := pacer.NewDiscardContext(duration.Spec(time.Second), duration.Spec(2*time.Second), rtp.TicksToDuration)
+
+	assertDiscard(t, dc, 0, now, true, false)
+	baseT0 := dc.T0
+
+	// Past the cap, on a packet that is 500ms early - a real improvement the completed phase should keep.
+	now = now.Add(2500 * time.Millisecond)
+	assertDiscard(t, dc, 3*time.Second, now, false, false)
+	require.True(t, dc.DiscardComplete)
+	require.Equal(t, baseT0.Add(-500*time.Millisecond), dc.T0, "the cap must complete on the best baseline seen")
+}
+
 func assertDiscard(t *testing.T, dc *pacer.DiscardContext, rtpTs time.Duration, now utc.UTC, wantDiscard bool, wantErr bool) {
 	discard, err := dc.ShouldDiscard(rtp.DurationToTicks(rtpTs), now)
 	require.Equal(t, wantDiscard, discard, "discard mismatch")

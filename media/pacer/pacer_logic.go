@@ -159,6 +159,13 @@ func NewPacerLogic(
 	if toDuration == nil {
 		panic("pacer: PacerLogicConfig.ToDuration must not be nil")
 	}
+	discardT0Threshold := conf.DiscardT0Threshold.Duration()
+	if discardT0Threshold == 0 {
+		// Normalized here as well as in InitDefaults, since a caller that builds the config as a struct literal would
+		// otherwise get a zero dead-band, which restarts the discard period on every improvement and so holds the
+		// phase open until the cap - the very thing the threshold exists to prevent.
+		discardT0Threshold = DefaultDiscardT0Threshold
+	}
 	p := &PacerLogic{
 		conf:            conf,
 		log:             conf.EventLog,
@@ -170,7 +177,7 @@ func NewPacerLogic(
 	}
 	p.discard.SourceChangePeriod = conf.SourceChangeDiscardPeriod
 	p.discard.MaxSourceChangePeriod = conf.MaxSourceChangeDiscardPeriod
-	p.discard.T0Threshold = conf.DiscardT0Threshold
+	p.discard.T0Threshold = duration.Spec(discardT0Threshold)
 	p.reset()
 	return p
 }
@@ -187,8 +194,10 @@ func (p *PacerLogic) reset() {
 	// gap detector is already updated by the last Detect() call, so no need to reset
 }
 
-// ResetSource prepares the logic for a deliberate switch to a different source: the next packet re-establishes the
-// timing baseline and is delivered, rather than starting a new discard period (see DiscardContext.ResetForSourceChange).
+// ResetSource prepares the logic for a deliberate switch to a different source. The next packet re-establishes the
+// timing baseline and starts a fresh discard phase, run on the shorter source-change periods rather than the startup
+// ones (see DiscardContext.ResetForSourceChange). Packets are therefore withheld for the length of that phase, which
+// is a visible gap to consumers already being served - keep it short.
 //
 // stats.Reset() also clears MinT0, which matters: a MinT0 carried over from the previous source would make the new
 // source's first T0 look like a large negative drift and trigger a full-size baseline correction on the spot.
