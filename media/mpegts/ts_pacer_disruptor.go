@@ -55,6 +55,10 @@ type TsDisruptorPacerConfig struct {
 
 	// StripRtp, when true, strips the RTP header from each incoming byte slice before extracting PCR.
 	StripRtp bool `json:"strip_rtp"`
+
+	// MaxBlock caps how long a Push may block on a full ring buffer before the packet is dropped instead. See
+	// pacer.DisruptorEngineConfig.MaxBlock. 0, the default, waits indefinitely.
+	MaxBlock duration.Spec `json:"max_block"`
 }
 
 func (c *TsDisruptorPacerConfig) InitDefaults() *TsDisruptorPacerConfig {
@@ -68,6 +72,7 @@ func (c *TsDisruptorPacerConfig) InitDefaults() *TsDisruptorPacerConfig {
 	c.SendAhead = 0
 	c.DeliveryMargin = 0
 	c.StripRtp = true
+	c.MaxBlock = 0
 	return c
 }
 
@@ -84,6 +89,7 @@ func (c *TsDisruptorPacerConfig) engineConfig() pacer.DisruptorEngineConfig {
 		StatsInterval:     c.StatsInterval,
 		SendAhead:         c.SendAhead,
 		DeliveryMargin:    c.DeliveryMargin,
+		MaxBlock:          c.MaxBlock,
 	}
 }
 
