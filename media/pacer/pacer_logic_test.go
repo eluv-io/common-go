@@ -263,7 +263,16 @@ func TestPacerLogic_T0Adjustments(t *testing.T) {
 // baseline is first established.
 func TestPacerLogic_StartupT0Adjustment(t *testing.T) {
 	const delay = 500 * time.Millisecond
-	p, stats := newTestPacerLogic(5*time.Millisecond, delay, time.Minute)
+	// An explicit dead-band, since this test turns on a 10ms improvement restarting the discard period. The 50ms
+	// default NewPacerLogic would otherwise install is larger than both that improvement and the 5ms period itself,
+	// which is coherent for the 1s period shipped in production but not at this scale.
+	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
+		Stream:             "test-stream",
+		DiscardPeriod:      duration.Spec(5 * time.Millisecond),
+		MaxDiscardPeriod:   duration.Spec(time.Minute),
+		DiscardT0Threshold: duration.Spec(time.Millisecond),
+		Delay:              duration.Spec(delay),
+	})
 
 	T0 := utc.UnixMilli(10_000)
 

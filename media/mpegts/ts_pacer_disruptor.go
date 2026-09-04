@@ -55,6 +55,10 @@ type TsDisruptorPacerConfig struct {
 
 	// StripRtp, when true, strips the RTP header from each incoming byte slice before extracting PCR.
 	StripRtp bool `json:"strip_rtp"`
+
+	// MaxBlock caps how long a Push may block on a full ring buffer before the packet is dropped instead. See
+	// pacer.DisruptorEngineConfig.MaxBlock. 0, the default, waits indefinitely.
+	MaxBlock duration.Spec `json:"max_block"`
 }
 
 func (c *TsDisruptorPacerConfig) InitDefaults() *TsDisruptorPacerConfig {
@@ -68,6 +72,7 @@ func (c *TsDisruptorPacerConfig) InitDefaults() *TsDisruptorPacerConfig {
 	c.SendAhead = 0
 	c.DeliveryMargin = 0
 	c.StripRtp = true
+	c.MaxBlock = 0
 	return c
 }
 
@@ -84,6 +89,7 @@ func (c *TsDisruptorPacerConfig) engineConfig() pacer.DisruptorEngineConfig {
 		StatsInterval:     c.StatsInterval,
 		SendAhead:         c.SendAhead,
 		DeliveryMargin:    c.DeliveryMargin,
+		MaxBlock:          c.MaxBlock,
 	}
 }
 
@@ -183,6 +189,20 @@ type pcrScheduler struct {
 var _ pacer.PacketScheduler = (*pcrScheduler)(nil)
 
 func (s *pcrScheduler) InStats() *pacer.InStats { return s.stats }
+
+// ResetSource drops every piece of state pinned to the previous source. Most importantly pcrPid: it is pinned to the
+// first PID a PCR is seen on and never re-pinned, so a new source carrying PCR on a different PID would find no PCR at
+// all and be paced off the previous source's lastTarget.
+func (s *pcrScheduler) ResetSource() {
+	s.logic.ResetSource()
+	s.pcrPid = pcrPidUnset
+	s.gapDet.Unwrapper = PcrUnwrapper{}
+	s.lastTarget = utc.Zero
+	s.lastPcrArrival = utc.Zero
+	s.lastPcrUnwrapped = 0
+	s.estimatedPcrPerBatch = 0
+	s.noPcrBatchCount = 0
+}
 
 func (s *pcrScheduler) Schedule(now utc.UTC, bts []byte) (utc.UTC, []byte, bool, error) {
 	if s.stripRtp {

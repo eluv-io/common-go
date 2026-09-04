@@ -499,3 +499,81 @@ func TestTsDisruptorPacer_NonPowerOfTwoCapacity(t *testing.T) {
 	require.Equal(t, 128, pacer.BufferCap())
 	pacer.Shutdown()
 }
+
+// TestTsDisruptorPacer_ResetSourceRepinsPcrPid covers a failover swap to a source that carries PCR on a different PID.
+//
+// pcrPid is pinned to the first PID a PCR is seen on and is never re-pinned, so without ResetSource the new source's
+// PCRs are ignored entirely: Schedule finds no PCR, falls back to pacing off the previous source's lastTarget, and the
+// PID reported in the stats stays that of the source that is no longer playing.
+func TestTsDisruptorPacer_ResetSourceRepinsPcrPid(t *testing.T) {
+	const (
+		oldPid = 0x100
+		newPid = 0x200
+	)
+
+	p, err := NewTsDisruptorPacer(defaultTestConfig(0))
+	require.NoError(t, err)
+	delivered, done := runPacer(t, p)
+	defer func() {
+		p.Shutdown()
+		<-done
+	}()
+
+	require.NoError(t, p.Push(makeTsBatch(oldPid, 27_000_000, 4)))
+	waitDelivered(t, delivered, 1, 2*time.Second)
+	require.Equal(t, oldPid, p.Stats().In.Ts.PID, "the first PCR PID must be pinned")
+
+	// Same pacer, different source: an unrelated PCR clock on a different PID.
+	p.ResetSource()
+	require.NoError(t, p.Push(makeTsBatch(newPid, 9_000_000_000, 4)))
+	waitDelivered(t, delivered, 1, 2*time.Second)
+
+	stats := p.Stats().In
+	require.Equal(t, newPid, stats.Ts.PID, "ResetSource must let the new source's PCR PID be pinned")
+	require.EqualValues(t, 9_000_000_000, stats.Ts.PCR, "the new source's PCR must be the one tracked")
+}
+
+// TestTsDisruptorPacer_ResetSourceUsesShorterDiscardPeriod checks that a source change still runs a discard phase - the
+// new source has to be located in time exactly as the first one did - but runs it on the shorter source-change period,
+// so a swap costs a brief gap rather than a full startup window.
+func TestTsDisruptorPacer_ResetSourceUsesShorterDiscardPeriod(t *testing.T) {
+	conf := defaultTestConfig(time.Hour) // a startup window long enough to never elapse on its own
+	conf.Logic.SourceChangeDiscardPeriod = duration.Spec(100 * time.Millisecond)
+	conf.Logic.MaxSourceChangeDiscardPeriod = duration.Spec(2 * time.Second)
+
+	p, err := NewTsDisruptorPacer(conf)
+	require.NoError(t, err)
+	delivered, done := runPacer(t, p)
+	defer func() {
+		p.Shutdown()
+		<-done
+	}()
+
+	// The startup discard phase swallows the first source's batches, as configured.
+	require.NoError(t, p.Push(makeTsBatch(0x100, 27_000_000, 4)))
+	require.NoError(t, p.Push(makeTsBatch(0x100, 27_090_000, 4)))
+	select {
+	case <-delivered:
+		t.Fatal("expected the discard phase to withhold the first source's packets")
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	// After a source change the phase restarts on the shorter period, so the new source starts flowing once it has
+	// settled - well inside the startup window, which is still running.
+	p.ResetSource()
+	start := time.Now()
+	pcr := uint64(9_000_000_000)
+	require.Eventually(t, func() bool {
+		pcr += 90_000 // ~3.3ms of PCR per batch, so the baseline settles rather than improving forever
+		if err := p.Push(makeTsBatch(0x200, pcr, 4)); err != nil {
+			return false
+		}
+		select {
+		case <-delivered:
+			return true
+		default:
+			return false
+		}
+	}, 2*time.Second, 10*time.Millisecond, "source-change discard phase never completed")
+	require.Less(t, time.Since(start), time.Second, "must use the source-change period, not the startup one")
+}

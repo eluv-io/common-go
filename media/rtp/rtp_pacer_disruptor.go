@@ -49,6 +49,10 @@ type DisruptorPacerConfig struct {
 	// Packets that cannot satisfy this floor (targetTs already too close to now) are tracked as LateSends.
 	// Should be ≤ SendAhead so the floor is reliably reachable under normal conditions. 0 = disabled.
 	DeliveryMargin duration.Spec `json:"delivery_margin"`
+
+	// MaxBlock caps how long a Push may block on a full ring buffer before the packet is dropped instead. See
+	// pacer.DisruptorEngineConfig.MaxBlock. 0, the default, waits indefinitely.
+	MaxBlock duration.Spec `json:"max_block"`
 }
 
 func (c *DisruptorPacerConfig) InitDefaults() *DisruptorPacerConfig {
@@ -62,6 +66,7 @@ func (c *DisruptorPacerConfig) InitDefaults() *DisruptorPacerConfig {
 	c.StatsInterval = DefaultStatsInterval
 	c.SendAhead = 0
 	c.DeliveryMargin = DefaultDeliveryMargin
+	c.MaxBlock = 0
 	return c
 }
 
@@ -78,6 +83,7 @@ func (c *DisruptorPacerConfig) engineConfig() pacer.DisruptorEngineConfig {
 		StatsInterval:     c.StatsInterval,
 		SendAhead:         c.SendAhead,
 		DeliveryMargin:    c.DeliveryMargin,
+		MaxBlock:          c.MaxBlock,
 	}
 }
 
@@ -158,6 +164,14 @@ type rtpScheduler struct {
 var _ pacer.PacketScheduler = (*rtpScheduler)(nil)
 
 func (s *rtpScheduler) InStats() *pacer.InStats { return s.stats }
+
+// ResetSource drops the timing baseline and the gap detector's unwrapping state, whose sequence numbers and timestamps
+// belong to the previous source and would otherwise be extended by the new source's values.
+func (s *rtpScheduler) ResetSource() {
+	s.logic.ResetSource()
+	s.gapDetector.Sequence = SequenceUnwrapper{}
+	s.gapDetector.Timestamp = TimestampUnwrapper{}
+}
 
 func (s *rtpScheduler) Schedule(now utc.UTC, bts []byte) (utc.UTC, []byte, bool, error) {
 	// Use a stack-local Packet so escape analysis keeps it off the heap. ParsePacket returns *rtp.Packet, which forces

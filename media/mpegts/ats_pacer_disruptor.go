@@ -42,6 +42,10 @@ type AtsDisruptorPacerConfig struct {
 	//   sendAt = max(targetTs, now + DeliveryMargin)
 	// Should be ≤ SendAhead so the floor is reliably reachable under normal conditions. 0 = disabled.
 	DeliveryMargin duration.Spec `json:"delivery_margin"`
+
+	// MaxBlock caps how long a Push may block on a full ring buffer before the packet is dropped instead. See
+	// pacer.DisruptorEngineConfig.MaxBlock. 0, the default, waits indefinitely.
+	MaxBlock duration.Spec `json:"max_block"`
 }
 
 func (c *AtsDisruptorPacerConfig) InitDefaults() *AtsDisruptorPacerConfig {
@@ -54,6 +58,7 @@ func (c *AtsDisruptorPacerConfig) InitDefaults() *AtsDisruptorPacerConfig {
 	c.StatsInterval = pacer.DefaultStatsInterval
 	c.SendAhead = 0
 	c.DeliveryMargin = 0
+	c.MaxBlock = 0
 	return c
 }
 
@@ -70,6 +75,7 @@ func (c *AtsDisruptorPacerConfig) engineConfig() pacer.DisruptorEngineConfig {
 		StatsInterval:     c.StatsInterval,
 		SendAhead:         c.SendAhead,
 		DeliveryMargin:    c.DeliveryMargin,
+		MaxBlock:          c.MaxBlock,
 	}
 }
 
@@ -153,6 +159,14 @@ type atsScheduler struct {
 var _ pacer.PacketScheduler = (*atsScheduler)(nil)
 
 func (s *atsScheduler) InStats() *pacer.InStats { return s.stats }
+
+// ResetSource drops the timing baseline and the previous source's last arrival timestamp, so the first packet of the
+// new source is not measured as a gap against it.
+func (s *atsScheduler) ResetSource() {
+	s.logic.ResetSource()
+	s.lastArrival = 0
+	s.haveLast = false
+}
 
 func (s *atsScheduler) Schedule(now utc.UTC, bts []byte) (utc.UTC, []byte, bool, error) {
 	arrival, payload, err := ParseAtsTs(bts)
