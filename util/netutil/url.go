@@ -5,6 +5,7 @@ import (
 	"net"
 	url "net/url"
 	"strconv"
+	"strings"
 
 	"github.com/eluv-io/errors-go"
 )
@@ -61,4 +62,26 @@ func ExtractHostAndPort(fromUrl string) (host string, port int, err error) {
 func ExtractPort(fromUrl string) (port int, err error) {
 	_, port, err = ExtractHostAndPort(fromUrl)
 	return
+}
+
+// Join joins any number of path elements into a single path, separating them with slashes. Empty elements are ignored.
+// Unlike path.Join(), the result is NOT Cleaned. However, if the argument list is empty or all its elements are empty,
+// Join returns an empty string.
+func Join(elem ...string) string {
+	sb := strings.Builder{}
+	hasEndingSlash := false
+	for _, e := range elem {
+		if e == "" {
+			continue
+		}
+		if e[0] != '/' && sb.Len() > 0 && !hasEndingSlash {
+			sb.WriteByte('/')
+		} else if e[0] == '/' && hasEndingSlash {
+			// collapse double slashes: "a/" + "/b" -> "a/b"
+			e = e[1:]
+		}
+		hasEndingSlash = e[len(e)-1] == '/'
+		sb.WriteString(e)
+	}
+	return sb.String()
 }

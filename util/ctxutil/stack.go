@@ -172,19 +172,24 @@ func (c *contextStack) Go(fn func()) {
 }
 
 func (c *contextStack) InitTracing(spanName string, slowOnly bool) trace.Span {
+	ctx := c.Ctx()
+
 	var sp trace.Span
-	var ctx context.Context
 	if slowOnly {
-		ctx, sp = trace.StartSlowSpan(c.Ctx(), spanName)
+		_, sp = trace.StartSlowSpan(ctx, spanName) // ignore the returned context, we will bind the wrapped span below
 	} else {
-		ctx, sp = trace.StartRootSpan(c.Ctx(), spanName)
+		_, sp = trace.StartRootSpan(ctx, spanName) // ignore the returned context, we will bind the wrapped span below
 	}
-	release := c.Push(ctx)
-	return &span{
-		gid:     goutil.GoID(),
-		Span:    sp,
-		release: release,
+
+	wrappedSpan := &span{
+		gid:  goutil.GoID(),
+		Span: sp,
 	}
+	// Bind the wrapped span, so that contextStack.Span() returns it instead of the plain span we wrap. This ensures
+	// that c.Span().End() actually pops the context stack.
+	ctx = trace.ContextWithSpan(ctx, wrappedSpan)
+	wrappedSpan.release = c.Push(ctx)
+	return wrappedSpan
 }
 
 func (c *contextStack) StartSpan(spanName string) trace.Span {
@@ -194,13 +199,16 @@ func (c *contextStack) StartSpan(spanName string) trace.Span {
 		// fast path if tracing is disabled: no need to start a (noop) span and push its dummy ctx onto the stack...
 		return trace.NoopSpan{}
 	}
-	ctx, sp := parentSpan.Start(ctx, spanName)
-	release := c.Push(ctx)
-	return &span{
-		gid:     goutil.GoID(),
-		Span:    sp,
-		release: release,
+	_, sp := parentSpan.Start(ctx, spanName) // ignore the returned context, we will bind the wrapped span below
+	wrappedSpan := &span{
+		gid:  goutil.GoID(),
+		Span: sp,
 	}
+	// Bind the wrapped span, so that contextStack.Span() returns it instead of the plain span we wrap. This ensures
+	// that c.Span().End() actually pops the context stack.
+	ctx = trace.ContextWithSpan(ctx, wrappedSpan)
+	wrappedSpan.release = c.Push(ctx)
+	return wrappedSpan
 }
 
 func (c *contextStack) SubSpan(parent trace.Span, spanName string) (release func()) {

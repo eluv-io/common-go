@@ -35,15 +35,12 @@ func SortedStringKeys(m interface{}) []string {
 func SortedKeys[Map ~map[K]V, K constraints.Ordered, V any](m Map) []K {
 	keys := make([]K, len(m))
 	i := 0
-	for key, _ := range m {
+	for key := range m {
 		keys[i] = key
 		i++
 	}
 	sort.Slice(keys, func(i, j int) bool {
-		if keys[i] < keys[j] {
-			return true
-		}
-		return false
+		return keys[i] < keys[j]
 	})
 	return keys
 }
@@ -59,10 +56,7 @@ func SortedValues[Map ~map[K]V, K comparable, V constraints.Ordered](m Map) []V 
 		i++
 	}
 	sort.Slice(values, func(i, j int) bool {
-		if values[i] < values[j] {
-			return true
-		}
-		return false
+		return values[i] < values[j]
 	})
 	return values
 }
@@ -86,10 +80,7 @@ func SortedPairs[Map ~map[K]V, K constraints.Ordered, V any](m Map) []KV[K, V] {
 		pairs = append(pairs, KV[K, V]{Key: key, Val: val})
 	}
 	sort.Slice(pairs, func(i, j int) bool {
-		if pairs[i].Key < pairs[j].Key {
-			return true
-		}
-		return false
+		return pairs[i].Key < pairs[j].Key
 	})
 	return pairs
 }
@@ -124,7 +115,7 @@ func FromJsonStruct(i interface{}) (m interface{}, err error) {
 // all name value pairs to it. Panics if the "names" are not of type K. Assigns the zero value if values are not of type
 // V. If there is an odd number of nameValuePairs, the last one is ignored.
 func Add[Map ~map[K]V, K comparable, V any](m Map, nameValuePairs ...interface{}) Map {
-	if len(nameValuePairs)/2 == 0 {
+	if len(nameValuePairs) < 2 {
 		return m
 	}
 	if m == nil {
@@ -142,7 +133,7 @@ func Add[Map ~map[K]V, K comparable, V any](m Map, nameValuePairs ...interface{}
 }
 
 // Copy creates a shallow copy of the given map.
-func Copy[Map ~map[K]V, K constraints.Ordered, V any](m Map) Map {
+func Copy[Map ~map[K]V, K comparable, V any](m Map) Map {
 	if m == nil {
 		return nil
 	}
@@ -164,7 +155,7 @@ func CopyMSI(m interface{}) map[string]interface{} {
 	}
 
 	kvs := mv.MapKeys()
-	ret := make(map[string]interface{})
+	ret := make(map[string]interface{}, len(kvs))
 	for _, kv := range kvs {
 		i := mv.MapIndex(kv)
 		ret[stringutil.ToString(kv.Interface())] = i.Interface()
@@ -173,8 +164,8 @@ func CopyMSI(m interface{}) map[string]interface{} {
 }
 
 // Clear clears the given map
-func Clear[Map ~map[K]V, K constraints.Ordered, V any](m Map) {
-	for k, _ := range m {
+func Clear[Map ~map[K]V, K comparable, V any](m Map) {
+	for k := range m {
 		delete(m, k)
 	}
 }

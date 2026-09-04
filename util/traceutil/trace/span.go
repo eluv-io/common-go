@@ -23,6 +23,8 @@ type Span interface {
 	End()
 
 	// Attribute sets an arbitrary attribute.
+	// Note that explicitly-typed Attribute methods are additionally provided in ExtendedSpan in order to avoid extra
+	// allocations associated with interface{} conversions. When possible, it is preferable to use those methods instead.
 	Attribute(name string, val interface{})
 
 	// Event adds an event with the given name and attributes.
@@ -85,6 +87,30 @@ type ExtendedSpan interface {
 	// FindAncestorByAttr returns the ancestor span (or self) that contains the given attribute. Returns a noop span if
 	// not found.
 	FindAncestorByAttr(name string, value any) Span
+
+	// Attribute sets a boolean attribute.
+	AttributeBool(name string, val bool)
+
+	// Attribute sets a duration attribute.
+	AttributeDuration(name string, val time.Duration)
+
+	// Attribute sets an error attribute.
+	AttributeError(name string, val error)
+
+	// Attribute sets a float attribute.
+	AttributeFloat(name string, val float64)
+
+	// Attribute sets a (signed) integer attribute.
+	AttributeInt(name string, val int64)
+
+	// Attribute sets a string attribute.
+	AttributeString(name string, val string)
+
+	// Attribute sets a time attribute.
+	AttributeTime(name string, val utc.UTC)
+
+	// Attribute sets an unsigned integer attribute.
+	AttributeUint(name string, val uint64)
 }
 
 type Event struct {
@@ -101,25 +127,33 @@ func (n NoopSpan) Start(ctx context.Context, _ string) (context.Context, Span) {
 	return ctx, n
 }
 
-func (n NoopSpan) End()                                     {}
-func (n NoopSpan) Attribute(_ string, _ interface{})        {}
-func (n NoopSpan) Event(_ string, _ map[string]interface{}) {}
-func (n NoopSpan) IsRecording() bool                        { return false }
-func (n NoopSpan) SlowOnly() bool                           { return false }
-func (n NoopSpan) Json() string                             { return "" }
-func (n NoopSpan) Attributes() map[string]interface{}       { return nil }
-func (n NoopSpan) Events() []*Event                         { return nil }
-func (n NoopSpan) FindByName(string) Span                   { return nil }
-func (n NoopSpan) StartTime() utc.UTC                       { return utc.Zero }
-func (n NoopSpan) EndTime() utc.UTC                         { return utc.Zero }
-func (n NoopSpan) Duration() time.Duration                  { return 0 }
-func (n NoopSpan) MaxDuration() time.Duration               { return 0 }
-func (n NoopSpan) MarshalExtended() bool                    { return false }
-func (n NoopSpan) SetMarshalExtended()                      {}
-func (n NoopSpan) SlowCutoff() time.Duration                { return 0 }
-func (n NoopSpan) SetSlowCutoff(_ time.Duration)            {}
-func (n NoopSpan) MarshalSlowOnly() ([]byte, error, bool)   { return nil, nil, false }
-func (n NoopSpan) FindAncestorByAttr(_ string, _ any) Span  { return n }
+func (n NoopSpan) End()                                        {}
+func (n NoopSpan) Attribute(_ string, _ interface{})           {}
+func (n NoopSpan) Event(_ string, _ map[string]interface{})    {}
+func (n NoopSpan) IsRecording() bool                           { return false }
+func (n NoopSpan) SlowOnly() bool                              { return false }
+func (n NoopSpan) Json() string                                { return "" }
+func (n NoopSpan) Attributes() map[string]interface{}          { return nil }
+func (n NoopSpan) Events() []*Event                            { return nil }
+func (n NoopSpan) FindByName(string) Span                      { return nil }
+func (n NoopSpan) StartTime() utc.UTC                          { return utc.Zero }
+func (n NoopSpan) EndTime() utc.UTC                            { return utc.Zero }
+func (n NoopSpan) Duration() time.Duration                     { return 0 }
+func (n NoopSpan) MaxDuration() time.Duration                  { return 0 }
+func (n NoopSpan) MarshalExtended() bool                       { return false }
+func (n NoopSpan) SetMarshalExtended()                         {}
+func (n NoopSpan) SlowCutoff() time.Duration                   { return 0 }
+func (n NoopSpan) SetSlowCutoff(_ time.Duration)               {}
+func (n NoopSpan) MarshalSlowOnly() ([]byte, error, bool)      { return nil, nil, false }
+func (n NoopSpan) FindAncestorByAttr(_ string, _ any) Span     { return n }
+func (n NoopSpan) AttributeBool(_ string, _ bool)              {}
+func (n NoopSpan) AttributeDuration(_ string, _ time.Duration) {}
+func (n NoopSpan) AttributeError(_ string, _ error)            {}
+func (n NoopSpan) AttributeFloat(_ string, _ float64)          {}
+func (n NoopSpan) AttributeInt(_ string, _ int64)              {}
+func (n NoopSpan) AttributeString(_ string, _ string)          {}
+func (n NoopSpan) AttributeTime(_ string, _ utc.UTC)           {}
+func (n NoopSpan) AttributeUint(_ string, _ uint64)            {}
 
 // ---------------------------------------------------------------------------------------------------------------------
 
@@ -416,4 +450,36 @@ func (s *RecordingSpan) attr(name string, a *RecordingSpan) (any, bool) {
 	defer s.mutex.Unlock()
 	v, ok := a.Data.Attr[name]
 	return v, ok
+}
+
+func (s *RecordingSpan) AttributeBool(name string, val bool) {
+	s.Attribute(name, val)
+}
+
+func (s *RecordingSpan) AttributeDuration(name string, val time.Duration) {
+	s.Attribute(name, val)
+}
+
+func (s *RecordingSpan) AttributeError(name string, val error) {
+	s.Attribute(name, val)
+}
+
+func (s *RecordingSpan) AttributeFloat(name string, val float64) {
+	s.Attribute(name, val)
+}
+
+func (s *RecordingSpan) AttributeInt(name string, val int64) {
+	s.Attribute(name, val)
+}
+
+func (s *RecordingSpan) AttributeString(name string, val string) {
+	s.Attribute(name, val)
+}
+
+func (s *RecordingSpan) AttributeTime(name string, val utc.UTC) {
+	s.Attribute(name, val)
+}
+
+func (s *RecordingSpan) AttributeUint(name string, val uint64) {
+	s.Attribute(name, val)
 }

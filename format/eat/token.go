@@ -29,7 +29,10 @@ import (
 	"github.com/eluv-io/utc-go"
 )
 
-const prefixLen = 6 // length of entire prefix including type, sig-type and format
+const (
+	prefixLen       = 6 // length of entire prefix including type, sig-type and format
+	ElvDelegationId = "elv:delegation-id"
+)
 
 // Token is an auth token, defined by it's type, format, and token data.
 type Token struct {
@@ -449,6 +452,9 @@ func (t *Token) Validate() (err error) {
 		return e.IfNotNil(validator.err)
 
 	case Types.ClientSigned():
+		if len(t.Ctx) > 0 && t.Ctx[ElvDelegationId] != nil {
+			validator.refuse("ctx/delegation_id", t.Ctx[ElvDelegationId])
+		}
 		// PENDING(LUK): add additional validations for ClientSigned tokens!
 		return e.IfNotNil(validator.err)
 
@@ -465,6 +471,16 @@ func (t *Token) Validate() (err error) {
 
 		validator.require("issued at", t.IssuedAt)
 		validator.require("expires", t.Expires)
+		return e.IfNotNil(validator.err)
+
+	case Types.Node():
+		validator.refuse("subject", t.Subject)
+		validator.refuse("grant", t.Grant)
+		validator.refuse("ctx", t.Ctx)
+		validator.refuse("tx-hash", t.EthTxHash)
+		if t.QPHash.IsNil() && t.Expires.IsZero() {
+			validator.errorReason("one of 'qp-hash' or 'expires' is required")
+		}
 		return e.IfNotNil(validator.err)
 	}
 
@@ -500,11 +516,6 @@ func (t *Token) Validate() (err error) {
 		validator.refuse("tx-hash", t.EthTxHash)
 		validator.refuse("qp-hash", t.QPHash)
 		validator.refuse("address", t.EthAddr)
-	case Types.Node():
-		// require
-		validator.require("qp-hash", t.QPHash)
-		// refuse
-		validator.refuse("tx-hash", t.EthTxHash)
 	}
 
 	return e.IfNotNil(validator.err)

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/mitchellh/mapstructure"
 	"github.com/stretchr/testify/require"
 
 	"github.com/eluv-io/common-go/format/codecs"
@@ -16,6 +15,7 @@ import (
 	"github.com/eluv-io/common-go/format/link"
 	"github.com/eluv-io/common-go/util/timeutil"
 	"github.com/eluv-io/log-go"
+	"github.com/eluv-io/mapstructure"
 )
 
 func TestBlobLinks(t *testing.T) {

@@ -5,11 +5,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fxamacker/cbor/v2"
+
 	"github.com/eluv-io/errors-go"
 )
 
-// Spec represents a time duration. It provides marshaling to and from
-// a human readable format, e.g. 1h15m or 200ms
+// Spec represents a time duration. It provides marshaling to and from a human readable format, e.g. 1h15m or 200ms.
+// Deprecated - prefer Duration which provides consistent marshaling for JSON and CBOR as string.
 type Spec time.Duration
 
 const (
@@ -68,8 +70,7 @@ func (s *Spec) UnmarshalJSON(b []byte) error {
 		return s.UnmarshalText(b[1 : len(b)-1])
 	}
 
-	str := string(b)
-	f, err := strconv.ParseFloat(str, 64)
+	f, err := strconv.ParseFloat(string(b), 64)
 	if err != nil {
 		return errors.E("unmarshal duration", errors.K.Invalid, err)
 	}
@@ -77,11 +78,46 @@ func (s *Spec) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// MarshalCBOR was removed to restore the legacy CBOR wire format (bare integer of the underlying nanosecond value) for
+// backward compatibility with already persisted data. The "correct" implementation is commented out below for
+// reference.
+//
+// MarshalCBOR implements cbor.Marshaler, encoding as a CBOR text string (String()'s output) instead of a bare
+// integer of the underlying nanosecond value - so a generic (interface{}) CBOR decode yields a plain, unambiguous
+// Go string (e.g. "200ms"), mirroring MarshalText/JSON.
+// func (s Spec) MarshalCBOR() ([]byte, error) {
+// 	return cbor.Marshal(s.String())
+// }
+
+// UnmarshalCBOR implements cbor.Unmarshaler. Accepts a CBOR text string or a bare CBOR integer (nanoseconds, matching
+// its underlying time.Duration).
+func (s *Spec) UnmarshalCBOR(data []byte) error {
+	var v any
+	if err := cbor.Unmarshal(data, &v); err != nil {
+		return errors.E("unmarshal duration", errors.K.Invalid, err)
+	}
+	switch val := v.(type) {
+	case string:
+		parsed, err := FromString(val)
+		if err != nil {
+			return errors.E("unmarshal duration", errors.K.Invalid, err)
+		}
+		*s = parsed
+	case int64:
+		*s = Spec(val)
+	case uint64:
+		*s = Spec(int64(val))
+	default:
+		return errors.E("unmarshal duration", errors.K.Invalid, "reason", "unsupported CBOR type", "type", val)
+	}
+	return nil
+}
+
 func (s Spec) Duration() time.Duration {
 	return time.Duration(s)
 }
 
-// Round rounds the duration to a value that produces a sensitive and human
+// Round rounds the duration to a value that produces a sensible and human
 // readable form that removes insignificant information with theses rules:
 //   - nanos  are capped if d > 1 millisecond: 1.123444ms -> 1.123ms
 //   - micros are capped if d > 1 second:      1.123555s  -> 1.124s
@@ -95,6 +131,8 @@ func (s Spec) Round() Spec {
 //   - 766.123µs, 2 decimals: 766.12µs
 //   - 1.123444ms, 1 decimal:   1.1ms
 //   - 1.123444s, 0 decimals:   1s
+//
+// For durations greater than one minute, decimals is ignored and the result is always rounded to the nearest second.
 func (s Spec) RoundTo(decimals int) Spec {
 	if decimals > 3 {
 		decimals = 3

@@ -104,8 +104,8 @@ func FirstNonZero[T comparable](ts ...T) T {
 	return zero
 }
 
-// FirstOrDefault returns the first non-zero element from the given slice or the provided default value otherwise.
-// Useful for initializing optional function parameters with a default value:
+// FirstOrDefault returns the first element (independent whether it is zero or not) from the given slice or the provided
+// default value otherwise. Useful for initializing optional function parameters with a default value:
 //
 //	func Foo(optInclude ...bool) {
 //		include = FirstOrDefault(optInclude, false)
@@ -113,9 +113,7 @@ func FirstNonZero[T comparable](ts ...T) T {
 //	}
 func FirstOrDefault[T any](opts []T, defaultValue T) T {
 	for _, t := range opts {
-		if !IsZero(t) {
-			return t
-		}
+		return t
 	}
 	return defaultValue
 }

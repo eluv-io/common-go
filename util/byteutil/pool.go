@@ -3,7 +3,6 @@ package byteutil
 import (
 	"sync"
 
-	"github.com/eluv-io/common-go/util"
 	"github.com/eluv-io/log-go"
 )
 
@@ -23,14 +22,16 @@ type Counter interface {
 // additional, last element of each buffer. Callers of Pool are expected not to
 // alter this reference counter in any way or to attempt to release a buffer
 // that has been re-sliced. Pool is designed to be a drop-in replacement for
-// sync.Pool, without having to cast interface{} as []byte.
+// sync.Pool, without having to cast interface{} as *[]byte.
+// Note: Pool methods act on *[]byte mainly to avoid unnecessary allocations;
+// see https://github.com/golang/go/blob/9c8bf0e7/src/sync/example_pool_test.go#L17-L19
 type Pool struct {
-	BufSize  int         // Size of buffers
-	p        *sync.Pool  // Backing pool
-	q        chan []byte // Queue of released buffers
-	created  Counter     // Metric for created buffers
-	released Counter     // Metrics for released buffers
-	locker   sync.Locker // usually a noop locker (a real locker is only used in tests)
+	BufSize   int         // Size of buffers
+	p         *sync.Pool  // Backing pool
+	created   Counter     // Metric for created buffers
+	retrieved Counter     // Metric for retrieved buffers
+	released  Counter     // Metric for released buffers
+	locker    sync.Locker // usually a noop locker (a real locker is only used in tests)
 }
 
 // NewPool creates a new buffer pool to service buffers of size bufSize
@@ -38,42 +39,60 @@ func NewPool(bufSize int) *Pool {
 	p := &Pool{}
 	p.BufSize = bufSize
 	p.p = &sync.Pool{New: p.new}
-	p.q = make(chan []byte)
-	p.locker = util.NoopLocker{}
-
-	// Process buffers to be released sequentially in background
-	go func() {
-		for buf := range p.q {
-			// Decrement buffer's reference counter
-			if p.decrCounter(buf) {
-				// Release buffer back into pool
-				p.p.Put(buf)
-				if p.released != nil {
-					p.released.Add(1)
-				}
-			}
-		}
-	}()
-
+	p.locker = &sync.Mutex{}
 	return p
 }
 
-// New force creates a new buffer. Optionally, count specifies the reference
-// counter to be set for the buffer; if ommitted, count defaults to 1. Only the
-// first specified count is used.
-func (p *Pool) New(count ...byte) []byte {
-	buf := p.new().([]byte)
-	p.setCounter(buf, count)
+// WithLocker sets the locker used for guarding critical sections. May be set to a no-op implementation if external
+// locking is used.
+func (p *Pool) WithLocker(l sync.Locker) *Pool {
+	p.locker = l
+	return p
+}
+
+// New force creates a new buffer. The reference counter to be set for the
+// buffer defaults to 1.
+func (p *Pool) New() *[]byte {
+	buf := p.new().(*[]byte)
+	p.setCounter(*buf, 1)
+	if p.retrieved != nil {
+		p.retrieved.Add(1)
+	}
+	return buf
+}
+
+// NewN force creates a new buffer. count specifies the reference counter to be
+// set for the buffer.
+func (p *Pool) NewN(count byte) *[]byte {
+	buf := p.new().(*[]byte)
+	p.setCounter(*buf, count)
+	if p.retrieved != nil {
+		p.retrieved.Add(1)
+	}
 	return buf
 }
 
 // Get retrieves a buffer from the pool; if no previous buffers are available,
-// a new buffer is automatically created. Optionally, count specifies the
-// reference counter to be set for the buffer; if ommitted, count defaults to 1.
-// Only the first specified count is used.
-func (p *Pool) Get(count ...byte) []byte {
-	buf := p.p.Get().([]byte)
-	p.setCounter(buf, count)
+// a new buffer is automatically created. The reference counter to be set for
+// the buffer defaults to 1.
+func (p *Pool) Get() *[]byte {
+	buf := p.p.Get().(*[]byte)
+	p.setCounter(*buf, 1)
+	if p.retrieved != nil {
+		p.retrieved.Add(1)
+	}
+	return buf
+}
+
+// GetN retrieves a buffer from the pool; if no previous buffers are available,
+// a new buffer is automatically created. count specifies the reference counter
+// to be set for the buffer.
+func (p *Pool) GetN(count byte) *[]byte {
+	buf := p.p.Get().(*[]byte)
+	p.setCounter(*buf, count)
+	if p.retrieved != nil {
+		p.retrieved.Add(1)
+	}
 	return buf
 }
 
@@ -81,26 +100,30 @@ func (p *Pool) Get(count ...byte) []byte {
 // reference counter. If the counter reaches 0, the buffer is released back
 // into the pool. The caller should no longer use the buffer after calling.
 // Buffers that have been re-sliced will be ignored.
-func (p *Pool) Put(buf []byte) {
-	if p.q != nil && cap(buf) == p.BufSize+1 {
-		// Add buffer to queue, to be released sequentially in background
-		p.q <- buf[:p.BufSize]
-	} else if buf != nil {
-		log.Debug("buffer not released back into pool", "expected_size", p.BufSize+1, "actual_size", cap(buf))
+func (p *Pool) Put(buf *[]byte) {
+	if buf == nil || *buf == nil {
+		log.Warn("buffer not released back into pool", "reason", "nil buffer")
+		return
+	} else if cap(*buf) != p.BufSize+1 {
+		log.Warn("buffer not released back into pool", "expected_size", p.BufSize+1, "actual_size", cap(*buf))
+		return
+	} else if len(*buf) != p.BufSize {
+		log.Warn("buffer resized and released back into pool", "expected_size", p.BufSize, "actual_size", len(*buf))
+		*buf = (*buf)[:p.BufSize]
+	}
+	// Decrement buffer's reference counter
+	if p.decrCounter(*buf) {
+		// Release buffer back into pool
+		p.p.Put(buf)
+		if p.released != nil {
+			p.released.Add(1)
+		}
 	}
 }
 
-// Close closes the pool. A closed pool will still service buffers, but buffers
-// will not be re-added to the pool for re-use.
-// Caveat: Close currently must not be executed concurrently with any Put calls
-func (p *Pool) Close() error {
-	close(p.q)
-	p.q = nil
-	return nil
-}
-
-func (p *Pool) SetMetrics(created, released Counter) {
+func (p *Pool) SetMetrics(created, retrieved, released Counter) {
 	p.created = created
+	p.retrieved = retrieved
 	p.released = released
 }
 
@@ -110,17 +133,13 @@ func (p *Pool) new() interface{} {
 	if p.created != nil {
 		p.created.Add(1)
 	}
-	return buf
+	return &buf
 }
 
 // Sets the buffer's reference counter. Only the first count is used, if
 // specified. Count is by default 1.
-func (p *Pool) setCounter(buf []byte, count []byte) {
-	n := byte(1)
-	if len(count) > 0 {
-		n = count[0]
-	}
-	buf[:p.BufSize+1][p.BufSize] = n
+func (p *Pool) setCounter(buf []byte, count byte) {
+	buf[:p.BufSize+1][p.BufSize] = count
 }
 
 // decrCounter decrements the buffer's reference counter by 1; returns true if
@@ -132,11 +151,11 @@ func (p *Pool) setCounter(buf []byte, count []byte) {
 // the ref count.
 func (p *Pool) decrCounter(buf []byte) bool {
 	buf = buf[:p.BufSize+1]
+	p.locker.Lock()
+	defer p.locker.Unlock()
 	n := buf[p.BufSize]
 	if n > 0 {
-		p.locker.Lock()
 		buf[p.BufSize] = n - 1
-		p.locker.Unlock()
 		if n == 1 {
 			return true
 		}

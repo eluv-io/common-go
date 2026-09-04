@@ -120,6 +120,21 @@ func TestContextStackReleaseReordering(t *testing.T) {
 
 }
 
+func TestContextStackSpanWrapping(t *testing.T) {
+	rootSpan := traceutil.InitTracing("test-span", false)
+
+	span := traceutil.Span()
+	require.Equal(t, rootSpan, span) // this would fail with previous version of contextStack.InitTracing()
+
+	sub := traceutil.StartSpan("sub-span")
+	require.Equal(t, sub, traceutil.Span()) // this would fail with previous version of contextStack.StartSpan()
+	sub.End()
+
+	span.End()
+
+	require.Equal(t, trace.NoopSpan{}, traceutil.Span())
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 
 type anObject struct {

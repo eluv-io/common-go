@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/eluv-io/common-go/util/jsonutil"
+	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/utc-go"
 
 	"github.com/eluv-io/common-go/util/traceutil"
@@ -278,4 +279,65 @@ func livePlayout(sleep time.Duration) {
 	if sleep > 0 {
 		time.Sleep(sleep)
 	}
+}
+
+// % go test -tags -count=1 -v -bench="BenchmarkSpan" -run="Benchmark" ./util/traceutil
+// goos: darwin
+// goarch: arm64
+// pkg: github.com/eluv-io/common-go/util/traceutil
+// cpu: Apple M4 Max
+// BenchmarkSpanAttribute
+// BenchmarkSpanAttribute-16                 	 5188246	       231.7 ns/op	      88 B/op	       5 allocs/op
+// BenchmarkSpanAttributeNoAllocations
+// BenchmarkSpanAttributeNoAllocations-16    	 6057345	       197.8 ns/op	       0 B/op	       0 allocs/op
+// PASS
+// ok  	github.com/eluv-io/common-go/util/traceutil	2.991s
+
+var (
+	attrBool  = true
+	attrDur   = time.Minute
+	attrErr   = errors.E("invalid")
+	attrFloat = float64(3.14)
+	attrInt   = int64(-128)
+	attrStr   = "helloworld"
+	attrTime  = utc.Now()
+	attrUint  = uint64(128)
+)
+
+func BenchmarkSpanAttribute(b *testing.B) {
+	b.ReportAllocs()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			span := traceutil.StartSpan("test")
+			span.Attribute("bool", attrBool)
+			span.Attribute("dur", attrDur)
+			span.Attribute("err", attrErr)
+			span.Attribute("float", attrFloat)
+			span.Attribute("int", attrInt)
+			span.Attribute("str", attrStr)
+			span.Attribute("time", attrTime)
+			span.Attribute("uint", attrUint)
+			span.End()
+		}
+	})
+}
+
+func BenchmarkSpanAttributeNoAllocations(b *testing.B) {
+	b.ReportAllocs()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			span := traceutil.StartSpan("test")
+			span.AttributeBool("bool", attrBool)
+			span.AttributeDuration("dur", attrDur)
+			span.AttributeError("err", attrErr)
+			span.AttributeFloat("float", attrFloat)
+			span.AttributeInt("int", attrInt)
+			span.AttributeString("str", attrStr)
+			span.AttributeTime("time", attrTime)
+			span.AttributeUint("uint", attrUint)
+			span.End()
+		}
+	})
 }

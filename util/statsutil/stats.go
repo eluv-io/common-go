@@ -1,0 +1,153 @@
+package statsutil
+
+import (
+	"encoding/json"
+
+	"golang.org/x/exp/constraints"
+
+	"github.com/eluv-io/common-go/collections/slidingwindow"
+	"github.com/eluv-io/common-go/format/duration"
+	"github.com/eluv-io/utc-go"
+)
+
+type Number interface {
+	constraints.Integer | constraints.Float
+}
+
+// Periodic is a utility for collecting periodic statistics. It keeps a statistics struct for the Current period, the
+// Previous period, and the Total. Per default, the period is 1 second, and at the end of the period, the Current period
+// statistics are copied to Previous and a new Current period is started. If ManualSwitch is true, the period will not
+// switch automatically on Update, but must be switched manually by calling Switch().
+type Periodic[T Number] struct {
+	Period   duration.Spec `json:"period"`   // period - defaults to 1s
+	Total    Statistics[T] `json:"total"`    // the running total of all values
+	Current  Statistics[T] `json:"current"`  // the running (incomplete) statistics for the current period
+	Previous Statistics[T] `json:"previous"` // the complete statistics for the previous period
+
+	// options
+
+	// if true, the period will not switch automatically on Update
+	ManualSwitch bool `json:"-"`
+	// if false, the Duration is set to Period, otherwise to the duration between the first and last update in the period.
+	ActualDuration bool `json:"-"`
+}
+
+// Update updates the statistics with a new value and returns true if the last period has elapsed.
+func (p *Periodic[T]) Update(val T) bool {
+	return p.UpdateNow(utc.Now(), val)
+}
+
+// UpdateNow updates the statistics with a new value and returns true if the last period has elapsed. Now is the time
+// when the value was recorded. If ManualSwitch is false, the period will switch automatically if the last period has
+// elapsed. Otherwise, call Switch() manually to switch to a new period.
+func (p *Periodic[T]) UpdateNow(now utc.UTC, val T) bool {
+	if p.Period == 0 {
+		p.Period = duration.Second
+	}
+	p.Total.Update(now, val)
+
+	periodElapsed := !p.Current.Start.IsZero() && now.Sub(p.Current.Start) > p.Period.Duration()
+	if periodElapsed && !p.ManualSwitch {
+		p.Switch(now)
+	}
+
+	p.Current.Update(now, val)
+	return periodElapsed
+}
+
+// Switch switches to a new period by finalizing the previous period and starting a new one.
+func (p *Periodic[T]) Switch(now utc.UTC) {
+	// finalize previous period
+	p.Previous = p.Current
+	if !p.ActualDuration {
+		p.Previous.Duration = p.Period
+	}
+	// start new period
+	p.Current = Statistics[T]{Start: now}
+}
+
+// Statistics is a utility for collecting statistics of a given measurement. It calculates and updates its members
+// Count, Min, Max, Sum, Mean on every call to Update. In addition, it can calculate the Variance with a separate call
+// to CalcVariance.
+type Statistics[T Number] struct {
+	Start    utc.UTC       `json:"start"`
+	Duration duration.Spec `json:"duration"`
+	Count    uint64        `json:"count"`
+	Min      T             `json:"min"`
+	Max      T             `json:"max"`
+	Sum      T             `json:"sum"`
+	Mean     T             `json:"mean"`
+	Variance float64       `json:"variance,omitempty"`
+	mean     float64       // running mean in float64 to avoid integer-rounding drift; exported Mean is derived from it
+	m2       float64       // used for variance calculation
+	updated  bool          // set to true on first Update to initialize Min and Max correctly
+}
+
+// Update updates the statistics with a new value.
+func (p *Statistics[T]) Update(now utc.UTC, val T) {
+	if !p.updated {
+		p.updated = true
+		if p.Start.IsZero() {
+			p.Start = now
+		}
+		p.Min = val
+		p.Max = val
+	}
+	p.Duration = duration.Spec(now.Sub(p.Start))
+	p.Count++
+	p.Sum += val
+	if val < p.Min {
+		p.Min = val
+	} else if val > p.Max {
+		p.Max = val
+	}
+
+	// Update the running mean and m2 using Welford's method. The mean is accumulated in float64 (p.mean) to avoid the
+	// rounding drift that an integer T would introduce on every step; the exported Mean is derived from it. Using the
+	// float mean here also keeps the m2 (and hence variance) calculation accurate.
+	vf64 := float64(val)
+	if p.Count == 1 {
+		p.mean = vf64
+		p.m2 = 0.0
+	} else {
+		delta := vf64 - p.mean
+		p.mean += delta / float64(p.Count)
+		p.m2 += delta * (vf64 - p.mean)
+	}
+	p.Mean = T(p.mean)
+}
+
+func (p *Statistics[T]) CalcVariance(useSampleVariance bool) {
+	p.Variance = slidingwindow.Variance(useSampleVariance, p.m2, int(p.Count))
+}
+
+// Raw returns a RawStatistics view of this Statistics, which marshals only the value fields (Count, Min, Max, Sum,
+// Mean, Variance), omitting Start and Duration.
+func (p Statistics[T]) Raw() RawStatistics[T] {
+	return RawStatistics[T]{p}
+}
+
+// RawStatistics is a variant of Statistics[T] that marshals only the value fields (Count, Min, Max, Sum, Mean,
+// Variance), omitting Start and Duration. Use it when the period boundaries are tracked externally (e.g. logged at a
+// fixed interval) and the timestamp metadata would be noise in the output.
+type RawStatistics[T Number] struct {
+	Statistics[T]
+}
+
+func (s RawStatistics[T]) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Count    uint64  `json:"count"`
+		Min      T       `json:"min"`
+		Max      T       `json:"max"`
+		Sum      T       `json:"sum"`
+		Mean     T       `json:"mean"`
+		Variance float64 `json:"variance,omitempty"`
+	}{
+		Count:    s.Count,
+		Min:      s.Min,
+		Max:      s.Max,
+		Sum:      s.Sum,
+		Mean:     s.Mean,
+		Variance: s.Variance,
+	})
+}

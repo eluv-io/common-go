@@ -1,6 +1,8 @@
 package structured_test
 
 import (
+	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -108,8 +110,8 @@ func TestCopy(t *testing.T) {
 			},
 			wantFn: func(res interface{}) {
 				val := structured.Wrap(res)
-				require.NotSame(t, testStruct, val.GetP("struct").Data)
-				require.NotSame(t, testStruct, val.GetP("array/4").Data)
+				requireNotSame(t, testStruct, val.GetP("struct").Data)
+				requireNotSame(t, testStruct, val.GetP("array/4").Data)
 			},
 		},
 	}
@@ -121,10 +123,36 @@ func TestCopy(t *testing.T) {
 
 			if tt.wantFn == nil {
 				require.Equal(t, tt.want, res)
-				require.NotSame(t, tt.src, res)
+				requireNotSame(t, tt.src, res)
 			} else {
 				tt.wantFn(res)
 			}
 		})
 	}
+}
+
+// requireNotSame is the same as a previous version of require.NotSame. Since 1.10.0, require.NotSame checks that both
+// arguments are actually pointers and otherwise fails. That's not what we want here.
+func requireNotSame(t *testing.T, expected, actual interface{}, msgAndArgs ...interface{}) {
+	samePointers := func(first, second interface{}) bool {
+		firstPtr, secondPtr := reflect.ValueOf(first), reflect.ValueOf(second)
+		if firstPtr.Kind() != reflect.Ptr || secondPtr.Kind() != reflect.Ptr {
+			return false // not both are pointers
+		}
+
+		firstType, secondType := reflect.TypeOf(first), reflect.TypeOf(second)
+		if firstType != secondType {
+			return false // both are pointers, but of different types
+		}
+
+		// compare pointer addresses
+		return first == second
+	}
+
+	if samePointers(expected, actual) {
+		require.Fail(t, fmt.Sprintf(
+			"Expected and actual point to the same object: %p %#[1]v",
+			expected), msgAndArgs...)
+	}
+
 }

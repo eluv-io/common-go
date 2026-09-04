@@ -1,6 +1,7 @@
 package ioutil_test
 
 import (
+	"fmt"
 	"io"
 	"math/rand"
 	"testing"
@@ -60,7 +61,6 @@ func (r *testReader) ReadAt(p []byte, off int64) (n int, err error) {
 }
 
 func TestReadAtAtFull(t *testing.T) {
-
 	// first test regular reading of our test class
 	rd := newTestReader(12, -1)
 	bb := make([]byte, 100)
@@ -121,4 +121,54 @@ func TestReadAtAtFull(t *testing.T) {
 	n, err = ioutil.ReadAtFull(rd, 8, bb)
 	require.Error(t, err)
 
+}
+
+func TestMultiReadCloser(t *testing.T) {
+	var actual []string
+	expected := []string{"read_0", "read_0", "close_0", "read_1", "close_1", "close_2", "close_3"}
+
+	readclosers := make([]io.ReadCloser, 4)
+	for i := range readclosers {
+		readclosers[i] = &testReadCloser{n: i, cap: 5, report: func(s string) {
+			actual = append(actual, s)
+		}}
+	}
+
+	r := ioutil.MultiReadCloser(readclosers...)
+	n, err := r.Read(make([]byte, 4))
+	require.Equal(t, 4, n)
+	require.NoError(t, err)
+	n, err = r.Read(make([]byte, 4))
+	require.Equal(t, 1, n)
+	require.NoError(t, err)
+	n, err = r.Read(make([]byte, 4))
+	require.Equal(t, 4, n)
+	require.NoError(t, err)
+	err = r.Close()
+	require.NoError(t, err)
+
+	require.Equal(t, expected, actual)
+}
+
+type testReadCloser struct {
+	n      int
+	cap    int
+	report func(string)
+}
+
+func (r *testReadCloser) Read(p []byte) (int, error) {
+	r.report(fmt.Sprintf("read_%d", r.n))
+	if r.cap > len(p) {
+		r.cap -= len(p)
+		return len(p), nil
+	} else {
+		n := r.cap
+		r.cap = 0
+		return n, io.EOF
+	}
+}
+
+func (r *testReadCloser) Close() error {
+	r.report(fmt.Sprintf("close_%d", r.n))
+	return nil
 }

@@ -13,22 +13,24 @@ import (
 //	access, because the cache updating this information should already be
 //	properly synchronized.
 type Metrics struct {
-	Name    string        // name of the cache
-	Config  config        // static configuration
-	Hits    *atomic.Int64 // Number of cache hits
-	Misses  *atomic.Int64 // Number of cache misses
-	Errors  *atomic.Int64 // Number of errors when trying to load/create a cache entry
-	Added   *atomic.Int64 // Added - Removed = Current Size
-	Removed *atomic.Int64 // see Added
+	Name      string        // name of the cache
+	Config    config        // static configuration
+	Hits      *atomic.Int64 // Number of cache hits
+	StaleHits *atomic.Int64 // Number of stale entries returned (expiring cache only)
+	Misses    *atomic.Int64 // Number of cache misses
+	Errors    *atomic.Int64 // Number of errors when trying to load/create a cache entry
+	Added     *atomic.Int64 // Added - Removed = Current Size
+	Removed   *atomic.Int64 // see Added
 }
 
 func MakeMetrics() Metrics {
 	return Metrics{
-		Hits:    &atomic.Int64{},
-		Misses:  &atomic.Int64{},
-		Errors:  &atomic.Int64{},
-		Added:   &atomic.Int64{},
-		Removed: &atomic.Int64{},
+		Hits:      &atomic.Int64{},
+		Misses:    &atomic.Int64{},
+		StaleHits: &atomic.Int64{},
+		Errors:    &atomic.Int64{},
+		Added:     &atomic.Int64{},
+		Removed:   &atomic.Int64{},
 	}
 }
 
@@ -49,6 +51,7 @@ func (c *Metrics) Copy() Metrics {
 	}
 	ret.Hits.Store(c.Hits.Load())
 	ret.Misses.Store(c.Misses.Load())
+	ret.StaleHits.Store(c.StaleHits.Load())
 	ret.Errors.Store(c.Errors.Load())
 	ret.Added.Store(c.Added.Load())
 	ret.Removed.Store(c.Removed.Load())
@@ -64,6 +67,12 @@ func (c *Metrics) Hit() {
 // Miss increments the Misses count.
 func (c *Metrics) Miss() {
 	c.Misses.Add(1)
+}
+
+// StaleHit marks a hit as stale by incrementing the StaleHits count and decrementing the Hits count.
+func (c *Metrics) StaleHit() {
+	c.StaleHits.Add(1)
+	c.Hits.Add(-1)
 }
 
 // UnMiss decrements the Misses count.
@@ -100,12 +109,13 @@ func (c *Metrics) MarshalGeneric() interface{} {
 		"max_items": c.Config.MaxItems,
 	}
 	m := map[string]interface{}{
-		"config":  conf,
-		"hits":    c.Hits.Load(),
-		"misses":  c.Misses.Load(),
-		"errors":  c.Errors.Load(),
-		"added":   c.Added.Load(),
-		"removed": c.Removed.Load(),
+		"config":     conf,
+		"hits":       c.Hits.Load(),
+		"stale_hits": c.StaleHits.Load(),
+		"misses":     c.Misses.Load(),
+		"errors":     c.Errors.Load(),
+		"added":      c.Added.Load(),
+		"removed":    c.Removed.Load(),
 	}
 	if c.Config.Mode != "" {
 		conf["mode"] = c.Config.Mode

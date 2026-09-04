@@ -247,3 +247,60 @@ func (br *byteReaderWrapper) ReadByte() (byte, error) {
 	}
 	return br.buf[0], nil
 }
+
+// MultiReadCloser returns a io.ReadCloser that's the logical concatenation of the provided input ReadClosers.
+// They're read sequentially. Once all inputs have returned EOF, Read will return EOF. If any of the inputs return a
+// non-nil, non-EOF error (from reading or closing), Read will return that error. Each input will be closed immediately
+// once the input is fully read (e.g. EOF returned). Close will close any inputs that have not yet been closed; if more
+// than one error occurs when closing inputs, only the first error encountered will be returned.
+func MultiReadCloser(readclosers ...io.ReadCloser) io.ReadCloser {
+	readers := make([]io.Reader, len(readclosers))
+	closers := make([]io.Closer, len(readclosers))
+	for i, readcloser := range readclosers {
+		rc := &singleReadCloser{r: readcloser, c: readcloser}
+		readers[i] = rc
+		closers[i] = rc
+	}
+	return &multiReadCloser{Reader: io.MultiReader(readers...), closers: closers}
+}
+
+type multiReadCloser struct {
+	io.Reader
+	closers []io.Closer
+}
+
+func (r *multiReadCloser) Close() error {
+	var err error
+	for _, c := range r.closers {
+		err2 := c.Close()
+		if err2 != nil && err == nil {
+			err = err2
+		}
+	}
+	return err
+}
+
+type singleReadCloser struct {
+	r io.Reader
+	c io.Closer
+}
+
+func (r *singleReadCloser) Read(p []byte) (int, error) {
+	n, err := r.r.Read(p)
+	if err == io.EOF {
+		err2 := r.Close()
+		if err2 != nil {
+			err = err2
+		}
+	}
+	return n, err
+}
+
+func (r *singleReadCloser) Close() error {
+	var err error
+	if r.c != nil {
+		err = r.c.Close()
+		r.c = nil
+	}
+	return err
+}
