@@ -132,17 +132,23 @@ func (d *DiscardContext) ShouldDiscard(tsUnwrapped int64, now utc.UTC) (bool, er
 	// still evaluated for a stream whose T0 never stops improving, which is exactly the case the cap exists for.
 	if t0.Before(d.T0) {
 		adjustment := d.T0.Sub(t0)
+		prevSum := d.StartupT0Correction.Sum
 		d.StartupT0Correction.Update(now, duration.Millis(adjustment))
 		d.T0 = t0
 		if adjustment > d.T0Threshold.Duration() {
 			d.T0UpdatedAt = now
 		}
-		log.Debug("discard: T0 adjusted, updating baseline",
-			"ts", tsUnwrapped,
-			"new_t0", t0,
-			"delta", adjustment,
-			"restarted_period", adjustment > d.T0Threshold.Duration(),
-			"total_adj_ms", float64(d.StartupT0Correction.Sum)/1e6)
+		// Periodic log during discard period
+		if d.StartupT0Correction.Sum/duration.Millis(time.Second) != prevSum/duration.Millis(time.Second) {
+			log.Debug("discard: converging on live edge",
+				"ts", tsUnwrapped,
+				"t0", t0,
+				"elapsed", now.Sub(d.FirstPacketTime),
+				"adjustments", d.StartupT0Correction.Count,
+				"total_adj", d.StartupT0Correction.Sum,
+				"max_adj", d.StartupT0Correction.Max,
+			)
+		}
 	}
 
 	// Give up on convergence once the cap elapses and continue with the best baseline found - including whatever this
@@ -154,7 +160,10 @@ func (d *DiscardContext) ShouldDiscard(tsUnwrapped int64, now utc.UTC) (bool, er
 			"ts", tsUnwrapped,
 			"t0", d.T0,
 			"max_period", maxPeriod,
-			"elapsed", now.Sub(d.FirstPacketTime))
+			"elapsed", now.Sub(d.FirstPacketTime),
+			"adjustments", d.StartupT0Correction.Count,
+			"total_adj", d.StartupT0Correction.Sum,
+			"max_adj", d.StartupT0Correction.Max)
 		return false, nil
 	}
 
@@ -169,7 +178,10 @@ func (d *DiscardContext) ShouldDiscard(tsUnwrapped int64, now utc.UTC) (bool, er
 	log.Debug("discard: period complete, starting normal operation",
 		"ts", tsUnwrapped,
 		"t0", d.T0,
-		"elapsed", elapsed)
+		"elapsed", elapsed,
+		"adjustments", d.StartupT0Correction.Count,
+		"total_adj", d.StartupT0Correction.Sum,
+		"max_adj", d.StartupT0Correction.Max)
 	return false, nil
 }
 
