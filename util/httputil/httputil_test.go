@@ -314,34 +314,55 @@ func TestClientIP(t *testing.T) {
 			Header:     header,
 		}
 	}
+	// trustedProxies builds an isTrustedProxy predicate that only trusts the
+	// given, explicit set of IPs - unlike a blanket true/false, this lets tests
+	// exercise the per-hop chain walk realistically.
+	trustedProxies := func(ips ...string) func(string) bool {
+		set := make(map[string]bool, len(ips))
+		for _, ip := range ips {
+			set[ip] = true
+		}
+		return func(ip string) bool { return set[ip] }
+	}
 	var tests = []struct {
-		r      *http.Request
-		accept string
-		want   string
+		r       *http.Request
+		mode    string // "" -> call with no predicate arg, "nil" -> explicit nil, "trust" -> use trustedProxies(trusted...)
+		trusted []string
+		want    string
 	}{
 		// RemoteAddr is "" for reverse proxy using unix domain socket file
-		{r: req("", "X-Real-IP", "2.2.2.2"), accept: "y", want: "2.2.2.2"},
+		{r: req("", "X-Real-IP", "2.2.2.2"), mode: "trust", trusted: []string{""}, want: "2.2.2.2"},
 		{r: req(""), want: ""},
-		{r: req("", "X-Forwarded-For", "2.2.2.2"), accept: "", want: "2.2.2.2"},
-		{r: req("", "X-Forwarded-For", "2.2.2.2"), accept: "nil", want: "2.2.2.2"},
-		{r: req("", "X-Forwarded-For", "2.2.2.2"), accept: "n", want: ""},
-		{r: req("", "X-Forwarded-For", "2.2.2.2"), accept: "y", want: "2.2.2.2"},
-		{r: req("", "X-Real-IP", "2.2.2.2"), accept: "y", want: "2.2.2.2"},
-		{r: req("", "X-Forwarded-For", "2.2.2.2", "X-Real-IP", "3.3.3.3"), accept: "y", want: "2.2.2.2"},
+		{r: req("", "X-Forwarded-For", "2.2.2.2"), mode: "", want: "2.2.2.2"},
+		{r: req("", "X-Forwarded-For", "2.2.2.2"), mode: "nil", want: "2.2.2.2"},
+		{r: req("", "X-Forwarded-For", "2.2.2.2"), mode: "trust", want: ""},
+		{r: req("", "X-Forwarded-For", "2.2.2.2"), mode: "trust", trusted: []string{""}, want: "2.2.2.2"},
+		{r: req("", "X-Real-IP", "2.2.2.2"), mode: "trust", trusted: []string{""}, want: "2.2.2.2"},
+		{r: req("", "X-Forwarded-For", "2.2.2.2", "X-Real-IP", "3.3.3.3"), mode: "trust", trusted: []string{""}, want: "2.2.2.2"},
 		{r: req("1.1.1.1:80"), want: "1.1.1.1"},
-		{r: req("1.1.1.1:80", "X-Forwarded-For", "2.2.2.2"), accept: "n", want: "1.1.1.1"},
-		{r: req("1.1.1.1:80", "X-Forwarded-For", "2.2.2.2"), accept: "y", want: "2.2.2.2"},
-		{r: req("1.1.1.1:80", "X-Forwarded-For", "  3.3.3.3, 2.2.2.2"), accept: "y", want: "2.2.2.2"},
+		{r: req("1.1.1.1:80", "X-Forwarded-For", "2.2.2.2"), mode: "trust", want: "1.1.1.1"},
+		{r: req("1.1.1.1:80", "X-Forwarded-For", "2.2.2.2"), mode: "trust", trusted: []string{"1.1.1.1"}, want: "2.2.2.2"},
+		// single trusted hop (nginx=1.1.1.1) in front: 3.3.3.3 was whatever the client
+		// originally claimed and is untrustworthy: the real client is the entry our
+		// trusted hop itself is attesting to (2.2.2.2), i.e. the last one
+		{r: req("1.1.1.1:80", "X-Forwarded-For", "  3.3.3.3, 2.2.2.2"), mode: "trust", trusted: []string{"1.1.1.1"}, want: "2.2.2.2"},
+		// two chained trusted hops (nginx=9.9.9.9, load balancer=8.8.8.8): naively
+		// taking the last entry would wrongly return the LB's own address (8.8.8.8);
+		// the real client (7.7.7.7) is recovered by peeling back both trusted hops
+		{r: req("9.9.9.9:80", "X-Forwarded-For", "7.7.7.7, 8.8.8.8"), mode: "trust", trusted: []string{"9.9.9.9", "8.8.8.8"}, want: "7.7.7.7"},
+		// every entry in the chain happens to be a trusted proxy (no client entry was
+		// ever recorded) - falls back to the leftmost (oldest) entry as best effort
+		{r: req("9.9.9.9:80", "X-Forwarded-For", "8.8.8.8, 9.9.9.9"), mode: "trust", trusted: []string{"9.9.9.9", "8.8.8.8"}, want: "8.8.8.8"},
 	}
 	for _, test := range tests {
-		t.Run(fmt.Sprintf("[%v] %v %v", test.r.RemoteAddr, test.accept, test.r.Header), func(t *testing.T) {
-			switch test.accept {
+		t.Run(fmt.Sprintf("[%v] %v %v", test.r.RemoteAddr, test.mode, test.r.Header), func(t *testing.T) {
+			switch test.mode {
 			case "":
 				require.Equal(t, test.want, httputil.ClientIP(test.r))
 			case "nil":
 				require.Equal(t, test.want, httputil.ClientIP(test.r, nil))
-			default:
-				require.Equal(t, test.want, httputil.ClientIP(test.r, func(string) bool { return test.accept == "y" }))
+			case "trust":
+				require.Equal(t, test.want, httputil.ClientIP(test.r, trustedProxies(test.trusted...)))
 			}
 		})
 	}
