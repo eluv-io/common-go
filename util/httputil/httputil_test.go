@@ -268,7 +268,7 @@ func TestClientIP(t *testing.T) {
 		{r: req("1.1.1.1:80"), want: "1.1.1.1"},
 		{r: req("1.1.1.1:80", "X-Forwarded-For", "2.2.2.2"), accept: "n", want: "1.1.1.1"},
 		{r: req("1.1.1.1:80", "X-Forwarded-For", "2.2.2.2"), accept: "y", want: "2.2.2.2"},
-		{r: req("1.1.1.1:80", "X-Forwarded-For", "  3.3.3.3, 2.2.2.2"), accept: "y", want: "3.3.3.3"},
+		{r: req("1.1.1.1:80", "X-Forwarded-For", "  3.3.3.3, 2.2.2.2"), accept: "y", want: "2.2.2.2"},
 	}
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("[%v] %v %v", test.r.RemoteAddr, test.accept, test.r.Header), func(t *testing.T) {

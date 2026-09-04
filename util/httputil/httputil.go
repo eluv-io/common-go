@@ -495,11 +495,9 @@ func ClientIP(r *http.Request, acceptHeadersFrom ...func(remoteAddr string) bool
 		if header == "" {
 			continue
 		}
-		// header may have multiple values separated by comma
 		// -> https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-For
-		vals := strings.SplitN(header, ",", 2)
-		// client IP is the first value
-		return strings.TrimSpace(vals[0])
+		vals := strings.Split(header, ",")
+		return strings.TrimSpace(vals[len(vals)-1])
 	}
 	return strings.Split(r.RemoteAddr, ":")[0]
 }
