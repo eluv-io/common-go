@@ -616,14 +616,20 @@ func ClientIP(r *http.Request, isTrustedProxy ...func(ip string) bool) string {
 	}
 
 	for _, headerName := range []string{"X-Forwarded-For", "X-Real-IP"} {
-		header := r.Header.Get(headerName)
-		if header == "" {
+		// a header name may legally appear as several separate header lines
+		// rather than one comma-joined line - http.Header.Get only returns the
+		// first of those and silently drops the rest, so all lines must be
+		// joined into one ordered list before splitting on commas.
+		// -> https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-For
+		lines := r.Header.Values(headerName)
+		if len(lines) == 0 {
 			continue
 		}
-		// -> https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-For
-		vals := strings.Split(header, ",")
-		for i := range vals {
-			vals[i] = strings.TrimSpace(vals[i])
+		var vals []string
+		for _, line := range lines {
+			for _, v := range strings.Split(line, ",") {
+				vals = append(vals, strings.TrimSpace(v))
+			}
 		}
 		if trusted == nil {
 			return vals[len(vals)-1]

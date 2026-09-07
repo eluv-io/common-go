@@ -353,6 +353,10 @@ func TestClientIP(t *testing.T) {
 		// every entry in the chain happens to be a trusted proxy (no client entry was
 		// ever recorded) - falls back to the leftmost (oldest) entry as best effort
 		{r: req("9.9.9.9:80", "X-Forwarded-For", "8.8.8.8, 9.9.9.9"), mode: "trust", trusted: []string{"9.9.9.9", "8.8.8.8"}, want: "8.8.8.8"},
+		// X-Forwarded-For may legally appear as several separate header lines instead
+		// of one comma-joined line - all lines must be joined into a single ordered
+		// list, not just the first line taken (which would silently drop 2.2.2.2 here)
+		{r: req("1.1.1.1:80", "X-Forwarded-For", "9.9.9.9", "X-Forwarded-For", "2.2.2.2"), mode: "trust", trusted: []string{"1.1.1.1"}, want: "2.2.2.2"},
 	}
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("[%v] %v %v", test.r.RemoteAddr, test.mode, test.r.Header), func(t *testing.T) {
