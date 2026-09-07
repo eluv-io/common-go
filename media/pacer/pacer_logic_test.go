@@ -32,9 +32,9 @@ func newTestPacerLogic(discardPeriod, delay time.Duration, maxDiscardPeriod ...t
 	conf := pacer.PacerLogicConfig{
 		Stream:           "test-stream",
 		EventLog:         log.Get("/test/pacer"),
-		DiscardPeriod:    duration.Spec(discardPeriod),
-		MaxDiscardPeriod: duration.Spec(maxDiscard),
-		Delay:            duration.Spec(delay),
+		DiscardPeriod:    duration.Duration(discardPeriod),
+		MaxDiscardPeriod: duration.Duration(maxDiscard),
+		Delay:            duration.Duration(delay),
 		ToDuration:       rtp.TicksToDuration,
 	}
 
@@ -263,7 +263,16 @@ func TestPacerLogic_T0Adjustments(t *testing.T) {
 // baseline is first established.
 func TestPacerLogic_StartupT0Adjustment(t *testing.T) {
 	const delay = 500 * time.Millisecond
-	p, stats := newTestPacerLogic(5*time.Millisecond, delay, time.Minute)
+	// An explicit dead-band, since this test turns on a 10ms improvement restarting the discard period. The 50ms
+	// default NewPacerLogic would otherwise install is larger than both that improvement and the 5ms period itself,
+	// which is coherent for the 1s period shipped in production but not at this scale.
+	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
+		Stream:             "test-stream",
+		DiscardPeriod:      duration.Duration(5 * time.Millisecond),
+		MaxDiscardPeriod:   duration.Duration(time.Minute),
+		DiscardT0Threshold: duration.Duration(time.Millisecond),
+		Delay:              duration.Duration(delay),
+	})
 
 	T0 := utc.UnixMilli(10_000)
 
@@ -303,7 +312,7 @@ func TestPacerLogic_AdjustTimeDrift_Applied(t *testing.T) {
 	const delay = 500 * time.Millisecond
 	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
 		AdjustTimeDrift: true,
-		Delay:           duration.Spec(delay),
+		Delay:           duration.Duration(delay),
 		ToDuration:      rtp.TicksToDuration,
 	})
 
@@ -340,8 +349,8 @@ func TestPacerLogic_AdjustTimeDrift_Cap(t *testing.T) {
 	const capAdj = 3 * time.Millisecond
 	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
 		AdjustTimeDrift:       true,
-		MaxNegDriftCorrection: duration.Spec(capAdj),
-		Delay:                 duration.Spec(delay),
+		MaxNegDriftCorrection: duration.Duration(capAdj),
+		Delay:                 duration.Duration(delay),
 		ToDuration:            rtp.TicksToDuration,
 	})
 
@@ -378,9 +387,9 @@ func TestPacerLogic_SlowDrift_Correction(t *testing.T) {
 	const delay = 500 * time.Millisecond
 	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
 		AdjustTimeDrift: true,
-		PosDriftPeriod:  duration.Spec(60 * time.Millisecond),
-		DriftThreshold:  duration.Spec(2 * time.Millisecond),
-		Delay:           duration.Spec(delay),
+		PosDriftPeriod:  duration.Duration(60 * time.Millisecond),
+		DriftThreshold:  duration.Duration(2 * time.Millisecond),
+		Delay:           duration.Duration(delay),
 		ToDuration:      rtp.TicksToDuration,
 	})
 
@@ -427,9 +436,9 @@ func TestPacerLogic_SlowDrift_BelowThreshold(t *testing.T) {
 	const delay = 500 * time.Millisecond
 	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
 		AdjustTimeDrift: true,
-		PosDriftPeriod:  duration.Spec(60 * time.Millisecond),
-		DriftThreshold:  duration.Spec(10 * time.Millisecond),
-		Delay:           duration.Spec(delay),
+		PosDriftPeriod:  duration.Duration(60 * time.Millisecond),
+		DriftThreshold:  duration.Duration(10 * time.Millisecond),
+		Delay:           duration.Duration(delay),
 		ToDuration:      rtp.TicksToDuration,
 	})
 
@@ -458,9 +467,9 @@ func TestPacerLogic_SlowDrift_StatsWithoutCorrection(t *testing.T) {
 	const delay = 500 * time.Millisecond
 	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
 		AdjustTimeDrift: false,
-		PosDriftPeriod:  duration.Spec(60 * time.Millisecond),
-		DriftThreshold:  duration.Spec(2 * time.Millisecond),
-		Delay:           duration.Spec(delay),
+		PosDriftPeriod:  duration.Duration(60 * time.Millisecond),
+		DriftThreshold:  duration.Duration(2 * time.Millisecond),
+		Delay:           duration.Duration(delay),
 		ToDuration:      rtp.TicksToDuration,
 	})
 
@@ -503,9 +512,9 @@ func TestPacerLogic_StartupJitter(t *testing.T) {
 	const discardPeriod = 15 * time.Millisecond
 	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
 		AdjustTimeDrift:  false,
-		DiscardPeriod:    duration.Spec(discardPeriod),
-		MaxDiscardPeriod: duration.Spec(time.Minute),
-		Delay:            duration.Spec(delay),
+		DiscardPeriod:    duration.Duration(discardPeriod),
+		MaxDiscardPeriod: duration.Duration(time.Minute),
+		Delay:            duration.Duration(delay),
 		ToDuration:       rtp.TicksToDuration,
 	})
 
@@ -552,14 +561,14 @@ func TestPacerLogicConfig_Unmarshal(t *testing.T) {
 
 	t.Run("RoundTrip", func(t *testing.T) {
 		cfg := pacer.PacerLogicConfig{
-			DiscardPeriod:          duration.Second,
-			MaxDiscardPeriod:       10 * duration.Second,
-			Delay:                  200 * duration.Millisecond,
+			DiscardPeriod:          duration.S,
+			MaxDiscardPeriod:       10 * duration.S,
+			Delay:                  200 * duration.MS,
 			AdjustTimeDrift:        false,
-			MaxNegDriftCorrection:  100 * duration.Millisecond,
-			PosDriftPeriod:         5 * duration.Minute,
-			DriftThreshold:         5 * duration.Millisecond,
-			MaxPosDriftCorrection:  10 * duration.Millisecond,
+			MaxNegDriftCorrection:  100 * duration.MS,
+			PosDriftPeriod:         5 * duration.M,
+			DriftThreshold:         5 * duration.MS,
+			MaxPosDriftCorrection:  10 * duration.MS,
 			MaxDriftCorrectionStep: duration.Duration(10 * time.Millisecond),
 		}
 
@@ -581,10 +590,10 @@ func TestPacerLogic_PersistentSlowSource_StaysCaughtUp(t *testing.T) {
 	const delay = 100 * time.Millisecond
 	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
 		AdjustTimeDrift: true,
-		PosDriftPeriod:  duration.Spec(60 * time.Millisecond),
-		DriftThreshold:  duration.Spec(2 * time.Millisecond),
+		PosDriftPeriod:  duration.Duration(60 * time.Millisecond),
+		DriftThreshold:  duration.Duration(2 * time.Millisecond),
 		// MaxPosDriftCorrection: 0 -> apply the full mean drift each period (no cap).
-		Delay:      duration.Spec(delay),
+		Delay:      duration.Duration(delay),
 		ToDuration: rtp.TicksToDuration,
 	})
 
@@ -620,9 +629,9 @@ func TestPacerLogic_SubThresholdJitter_NotRatcheted(t *testing.T) {
 	const delay = 100 * time.Millisecond
 	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
 		AdjustTimeDrift: true,
-		PosDriftPeriod:  duration.Spec(60 * time.Millisecond),
-		DriftThreshold:  duration.Spec(2 * time.Millisecond),
-		Delay:           duration.Spec(delay),
+		PosDriftPeriod:  duration.Duration(60 * time.Millisecond),
+		DriftThreshold:  duration.Duration(2 * time.Millisecond),
+		Delay:           duration.Duration(delay),
 		ToDuration:      rtp.TicksToDuration,
 	})
 

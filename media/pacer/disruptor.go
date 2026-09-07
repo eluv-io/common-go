@@ -28,21 +28,21 @@ const (
 	DefaultDeliveryMargin = 0
 
 	// DefaultMinSleepThreshold is the default minimum sleep threshold. Sleep durations shorter than this are skipped.
-	DefaultMinSleepThreshold = 5 * duration.Millisecond
+	DefaultMinSleepThreshold = 5 * duration.MS
 
 	// DefaultTickerPeriod is the default ticker period used to schedule packet delivery. A ticker avoids the
 	// per-packet timer allocation of time.After and supports prompt Shutdown interruption.
-	DefaultTickerPeriod = 5 * duration.Millisecond
+	DefaultTickerPeriod = 5 * duration.MS
 
 	// DefaultStatsInterval is the default interval for periodic stats logging.
-	DefaultStatsInterval = 5 * duration.Second
+	DefaultStatsInterval = 5 * duration.S
 
 	// DefaultOversleepMargin is the default DisruptorEngineConfig.OversleepMargin: the scheduling jitter tolerated on
 	// top of the unavoidable ticker quantization before a wake-up is recorded as an oversleep. The effective oversleep
 	// threshold is TickerPeriod + OversleepMargin: because the consumer wakes on ticker ticks, a wake can legitimately
 	// land up to one TickerPeriod past its target without any real scheduling overrun, so that quantization must not be
 	// counted as an oversleep.
-	DefaultOversleepMargin = 5 * duration.Millisecond
+	DefaultOversleepMargin = 5 * duration.MS
 )
 
 // PacketScheduler converts a raw packet into a scheduling decision. Implementations hold the protocol-specific timing
@@ -59,6 +59,18 @@ type PacketScheduler interface {
 	// input-stats lock for periodic logging and Stats() snapshots. The pointer must be stable for the scheduler's
 	// lifetime, and the scheduler must mutate it only from within Schedule (which the engine calls under the lock).
 	InStats() *InStats
+
+	// ResetSource discards every piece of state tied to the stream being paced, so the next packet is treated as the
+	// start of a new one: timing baseline, gap detection and any clock identity pinned from the first packets. The
+	// engine calls it under its input-stats lock, from DisruptorEngine.ResetSource.
+	//
+	// This is for a caller that knowingly switches source, which gap detection cannot infer reliably: two sources may
+	// differ by less than the gap threshold, or by so much that the difference reads as a clock wraparound.
+	//
+	// The new source still has to be located in time, so a discard phase runs and packets are withheld for its
+	// duration - a visible gap, since output is already flowing. It runs on the shorter source-change periods where
+	// those are configured, falling back to the startup ones otherwise. See PacerLogic.ResetSource.
+	ResetSource()
 }
 
 // DisruptorEngineConfig holds the protocol-independent configuration of a DisruptorEngine.
@@ -67,21 +79,32 @@ type DisruptorEngineConfig struct {
 	StatsLog elog.ILog `json:"-"` // StatsLog is the logger to use for stats logging. If nil, stats are not logged.
 	EventLog elog.ILog `json:"-"` // EventLog is the logger to use for event logging. If nil, events are not logged.
 
-	BufferCapacity    int           `json:"buffer_capacity"`     // ring buffer capacity (rounded up to next power of 2; 0 → DefaultDisruptorCapacity)
-	MinSleepThreshold duration.Spec `json:"min_sleep_threshold"` // sleep durations shorter than this are skipped (0 → DefaultMinSleepThreshold)
-	TickerPeriod      duration.Spec `json:"ticker_period"`       // ticker period for scheduling delivery (0 → DefaultTickerPeriod)
-	OversleepMargin   duration.Spec `json:"oversleep_margin"`    // jitter tolerated above TickerPeriod before a wake is counted as an oversleep (0 → DefaultOversleepMargin)
-	StatsInterval     duration.Spec `json:"stats_interval"`      // interval for periodic stats logging (0 → DefaultStatsInterval, -1 → disabled)
+	BufferCapacity    int               `json:"buffer_capacity"`     // ring buffer capacity (rounded up to next power of 2; 0 → DefaultDisruptorCapacity)
+	MinSleepThreshold duration.Duration `json:"min_sleep_threshold"` // sleep durations shorter than this are skipped (0 → DefaultMinSleepThreshold)
+	TickerPeriod      duration.Duration `json:"ticker_period"`       // ticker period for scheduling delivery (0 → DefaultTickerPeriod)
+	OversleepMargin   duration.Duration `json:"oversleep_margin"`    // jitter tolerated above TickerPeriod before a wake is counted as an oversleep (0 → DefaultOversleepMargin)
+	StatsInterval     duration.Duration `json:"stats_interval"`      // interval for periodic stats logging (0 → DefaultStatsInterval, -1 → disabled)
 
 	// SendAhead is how early the consumer dispatches a packet before its target time. The ticker loop wakes up when
 	// now >= targetTs - SendAhead, giving the "deliver" callback a lead-time window. 0 = dispatch at targetTs.
-	SendAhead duration.Spec `json:"send_ahead"`
+	SendAhead duration.Duration `json:"send_ahead"`
 
 	// DeliveryMargin is the minimum lead time guaranteed to the "deliver" callback:
 	//   sendAt = max(targetTs, now + DeliveryMargin)
 	// Packets that cannot satisfy this floor (targetTs already too close to now) are tracked as lateness. Should be ≤
 	// SendAhead so the floor is reliably reachable under normal conditions. 0 = disabled.
-	DeliveryMargin duration.Spec `json:"delivery_margin"`
+	DeliveryMargin duration.Duration `json:"delivery_margin"`
+
+	// MaxBlock bounds how long Push waits for a free ring buffer slot before dropping the packet.
+	//
+	// A full ring does not free one slot at a time. The consumer is handed every packet committed since its last pass
+	// and publishes its position only after pacing through all of them, so a producer that fills the ring waits for
+	// the ring's entire contents to play out - seconds, at a high bitrate with a large capacity.
+	//
+	// 0, the default, waits indefinitely, which is the right choice when the producer can be slowed down: it becomes
+	// backpressure. Set it for a producer that cannot, where falling permanently behind is worse than a gap in the
+	// output. Either way the stall is counted and reported.
+	MaxBlock duration.Duration `json:"max_block"`
 }
 
 // InitDefaults sets all fields to their default values.
@@ -123,6 +146,9 @@ func (c *DisruptorEngineConfig) normalize() error {
 	}
 	if c.DeliveryMargin < 0 {
 		c.DeliveryMargin = DefaultDeliveryMargin
+	}
+	if c.MaxBlock < 0 {
+		c.MaxBlock = 0
 	}
 	if c.StatsLog == nil {
 		c.StatsLog = elog.Noop
@@ -256,10 +282,20 @@ func (e *DisruptorEngine) Push(bts []byte) error {
 	return nil
 }
 
-// enqueue reserves a ring buffer slot and copies the payload into it. It blocks (spin-waits) if the ring buffer is
-// full.
+// enqueue reserves a ring buffer slot and copies the payload into it. A packet dropped because the ring buffer stayed
+// full for MaxBlock is counted and reported, not returned as an error: the caller cannot act on it, and treating it as
+// a failure would tear down a stream that is otherwise healthy.
 func (e *DisruptorEngine) enqueue(now, target utc.UTC, payload []byte) {
-	seq := e.dis.Reserve(1)
+	seq := e.dis.TryReserve(1)
+	if seq < 0 {
+		// The stall is timed from here rather than from the packet's arrival: everything up to this point is
+		// scheduling work, and charging it to MaxBlock would let a slow scheduler drop a packet that never actually
+		// waited for a slot. It would overstate the reported Blocked time by the same amount.
+		var ok bool
+		if seq, ok = e.waitForSlot(utc.Now()); !ok {
+			return
+		}
+	}
 	entry := &e.ringBuffer[seq&e.bufferMask]
 	entry.targetTs = target
 	entry.inTs = now
@@ -273,6 +309,68 @@ func (e *DisruptorEngine) enqueue(now, target utc.UTC, payload []byte) {
 	copy(entry.pkt, payload)
 	e.outStats.IncrBuffered()
 	e.dis.Commit(seq, seq)
+}
+
+// waitForSlot polls for a free ring buffer slot until one appears, the engine shuts down, or MaxBlock elapses. It
+// reports false when no slot was obtained and the packet must be dropped.
+//
+// It polls rather than using the disruptor's own blocking Reserve, whose wait strategy spins on a 1ns sleep and so
+// burns a core for the whole stall. A slot can only appear when the consumer finishes pacing its current batch, so
+// polling at the consumer's own scheduling granularity is as responsive as spinning, at no cost.
+func (e *DisruptorEngine) waitForSlot(start utc.UTC) (seq int64, ok bool) {
+	// A quarter of the consumer's ticker period, so a freed slot is picked up well within one of its wake-ups without
+	// polling so often that the wait costs anything. Bounded below so a tiny TickerPeriod cannot turn this into a spin.
+	poll := max(e.conf.TickerPeriod.Duration()/4, 100*time.Microsecond)
+	maxBlock := e.conf.MaxBlock.Duration()
+
+	timer := time.NewTimer(poll)
+	defer timer.Stop()
+	for {
+		// Each wait is clamped to what is left of the budget, so a poll interval longer than MaxBlock cannot overshoot
+		// it - a large TickerPeriod with a small MaxBlock would otherwise blow the cap on the very first sleep.
+		wait := poll
+		if maxBlock > 0 {
+			remaining := maxBlock - utc.Now().Sub(start)
+			if remaining <= 0 {
+				e.reportStall(start, true)
+				return 0, false
+			}
+			wait = min(wait, remaining)
+		}
+
+		// Waiting on the timer rather than sleeping, so shutdown is not held up for the rest of the interval.
+		timer.Reset(wait)
+		select {
+		case <-e.ctx.Done():
+			return 0, false
+		case <-timer.C:
+		}
+
+		if seq = e.dis.TryReserve(1); seq >= 0 {
+			e.reportStall(start, false)
+			return seq, true
+		}
+	}
+}
+
+// reportStall records how long the producer waited for a free slot, and whether the packet was ultimately dropped. The
+// log line is throttled: an overflow that persists produces one stall per packet, and the counters carry the volume.
+func (e *DisruptorEngine) reportStall(start utc.UTC, dropped bool) {
+	now := utc.Now()
+	blocked := now.Sub(start)
+
+	e.outStatsMu.Lock()
+	e.outStats.UpdateBlocked(now, duration.Millis(blocked))
+	if dropped {
+		e.outStats.AddDropped(1)
+	}
+	e.outStatsMu.Unlock()
+
+	e.conf.EventLog.Throttle("pacer-buffer-full").Warn("pacer buffer full",
+		"stream", e.conf.Stream,
+		"blocked", duration.Spec(blocked).RoundTo(2),
+		"dropped", dropped,
+		"buffer_capacity", e.conf.BufferCapacity)
 }
 
 // Run starts the consumer loop and calls deliver for each packet at its scheduled time. It blocks until the engine is
@@ -304,6 +402,17 @@ func (e *DisruptorEngine) Shutdown(err ...error) {
 		))
 		_ = e.dis.Close()
 	})
+}
+
+// ResetSource tells the scheduler that subsequent packets come from a different source, so state tied to the previous
+// one is dropped instead of being carried across the switch. See PacketScheduler.ResetSource.
+//
+// It must be called from the same goroutine as Push. It takes the input-stats lock, which is what makes it safe
+// against a concurrent logStats()/Stats() snapshot.
+func (e *DisruptorEngine) ResetSource() {
+	e.inStatsMu.Lock()
+	defer e.inStatsMu.Unlock()
+	e.sched.ResetSource()
 }
 
 // BufferCap returns the actual ring buffer capacity, which is the configured capacity rounded up to the next power of 2.
@@ -426,7 +535,7 @@ func (h *disruptorHandler) Handle(lower, upper int64) {
 		e.outStatsMu.Lock()
 		{
 			os.UpdateBufFill(now, bufFill)
-			if duration.Spec(overslept) > e.conf.TickerPeriod+e.conf.OversleepMargin {
+			if duration.Duration(overslept) > e.conf.TickerPeriod+e.conf.OversleepMargin {
 				os.UpdateOversleeps(now, overslept)
 			}
 			if lateness > 0 {
