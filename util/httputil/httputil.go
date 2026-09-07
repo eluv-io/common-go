@@ -576,33 +576,7 @@ func GetSetContentDisposition(header http.Header, query url.Values, def string) 
 // this is the IP address portion of the request's RemoteAddr (ip:port). If the
 // request contains X-Forwarded-For or X-Real-IP headers (usually set by a
 // reverse-proxy in front of the HTTP server, e.g. nginx), then the client IP is
-// extracted from those headers.
-//
-// X-Forwarded-For may carry a comma-separated chain "client, proxy1, proxy2,
-// ...", built by each hop appending the address of its own immediate peer.
-// Naively trusting the first entry is wrong (the original client can set it to
-// anything), and naively trusting the last entry is only right when there is
-// exactly one proxy directly in front of this server - with two or more
-// chained proxies (e.g. CDN -> load balancer -> nginx), the last entry is just
-// the nearest internal hop's own address, not the client.
-//
-// isTrustedProxy, if provided, reports whether the given IP address
-// is a trusted proxy:
-//   - if the request's immediate peer (RemoteAddr) is not a trusted proxy, the
-//     forwarding headers are ignored entirely and RemoteAddr is returned - an
-//     untrusted direct caller cannot spoof these headers.
-//   - otherwise, the X-Forwarded-For chain is walked from right to left,
-//     skipping entries that are themselves trusted proxies, and the first
-//     entry that is not a trusted proxy is returned as the client IP. If every
-//     entry turns out to be a trusted proxy, the leftmost (oldest) entry is
-//     returned as a best effort.
-//
-// If isTrustedProxy is not provided (or nil), the headers are trusted
-// unconditionally and the last entry is used, matching the common
-// single-proxy deployment. This is inherently spoofable by any caller able to
-// reach this server directly, and wrong for multi-hop proxy chains - callers
-// that use the result for access decisions (e.g. geo-fencing) MUST supply
-// isTrustedProxy.
+// extracted from those headers based on isTrustedProxy.
 func ClientIP(r *http.Request, isTrustedProxy ...func(ip string) bool) string {
 	peerIP := strings.Split(r.RemoteAddr, ":")[0]
 
