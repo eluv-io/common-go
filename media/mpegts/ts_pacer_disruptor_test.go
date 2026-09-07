@@ -72,11 +72,11 @@ func defaultTestConfig(discardPeriod time.Duration) TsDisruptorPacerConfig {
 		EventLog:          elog.Noop,
 		StatsInterval:     -1, // disable stats logging in tests
 		BufferCapacity:    64,
-		MinSleepThreshold: duration.Spec(time.Millisecond),
-		TickerPeriod:      duration.Spec(time.Millisecond),
+		MinSleepThreshold: duration.Duration(time.Millisecond),
+		TickerPeriod:      duration.Duration(time.Millisecond),
 		Logic: pacer.PacerLogicConfig{
-			DiscardPeriod:    duration.Spec(discardPeriod),
-			MaxDiscardPeriod: duration.Spec(discardPeriod * 10),
+			DiscardPeriod:    duration.Duration(discardPeriod),
+			MaxDiscardPeriod: duration.Duration(discardPeriod * 10),
 		},
 	}
 }
@@ -156,7 +156,7 @@ func TestTsDisruptorPacer_PacedDelivery(t *testing.T) {
 	pcrPerBatch := DurationToPcr(batchInterval)
 
 	conf := defaultTestConfig(0)
-	conf.Logic.Delay = duration.Spec(50 * time.Millisecond) // 50ms jitter buffer
+	conf.Logic.Delay = duration.Duration(50 * time.Millisecond) // 50ms jitter buffer
 	pacer, err := NewTsDisruptorPacer(conf)
 	require.NoError(t, err)
 
@@ -207,7 +207,7 @@ func TestTsDisruptorPacer_Delay(t *testing.T) {
 	const tolerance = 15 * time.Millisecond
 
 	conf := defaultTestConfig(0)
-	conf.Logic.Delay = duration.Spec(delay)
+	conf.Logic.Delay = duration.Duration(delay)
 	pacer, err := NewTsDisruptorPacer(conf)
 	require.NoError(t, err)
 
@@ -234,7 +234,7 @@ func TestTsDisruptorPacer_ShutdownInterruptsSleep(t *testing.T) {
 	const pid = 100
 
 	conf := defaultTestConfig(0)
-	conf.Logic.Delay = duration.Spec(30 * time.Second) // very long delay so consumer will be sleeping
+	conf.Logic.Delay = duration.Duration(30 * time.Second) // very long delay so consumer will be sleeping
 	pacer, err := NewTsDisruptorPacer(conf)
 	require.NoError(t, err)
 
@@ -328,7 +328,7 @@ func TestTsDisruptorPacer_NoPCRBatch(t *testing.T) {
 	const tolerance = 12 * time.Millisecond
 
 	conf := defaultTestConfig(0)
-	conf.Logic.Delay = duration.Spec(delay)
+	conf.Logic.Delay = duration.Duration(delay)
 	pacer, err := NewTsDisruptorPacer(conf)
 	require.NoError(t, err)
 
@@ -440,7 +440,7 @@ func TestTsDisruptorPacer_EstimatePcrRate(t *testing.T) {
 	pcrPerBatch := DurationToPcr(10 * time.Millisecond)
 
 	conf := defaultTestConfig(0)
-	conf.Logic.Delay = duration.Spec(delay)
+	conf.Logic.Delay = duration.Duration(delay)
 	conf.EstimatePcrRate = true
 	pacer, err := NewTsDisruptorPacer(conf)
 	require.NoError(t, err)
@@ -538,8 +538,8 @@ func TestTsDisruptorPacer_ResetSourceRepinsPcrPid(t *testing.T) {
 // so a swap costs a brief gap rather than a full startup window.
 func TestTsDisruptorPacer_ResetSourceUsesShorterDiscardPeriod(t *testing.T) {
 	conf := defaultTestConfig(time.Hour) // a startup window long enough to never elapse on its own
-	conf.Logic.SourceChangeDiscardPeriod = duration.Spec(100 * time.Millisecond)
-	conf.Logic.MaxSourceChangeDiscardPeriod = duration.Spec(2 * time.Second)
+	conf.Logic.SourceChangeDiscardPeriod = duration.Duration(100 * time.Millisecond)
+	conf.Logic.MaxSourceChangeDiscardPeriod = duration.Duration(2 * time.Second)
 
 	p, err := NewTsDisruptorPacer(conf)
 	require.NoError(t, err)

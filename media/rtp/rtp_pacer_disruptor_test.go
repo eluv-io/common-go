@@ -29,11 +29,11 @@ func newTestDisruptorPacer(
 		StatsLog:     log.Get("/test/rtp/disruptor"),
 		EventLog:     log.Get("/test/rtp/disruptor"),
 		SeqThreshold: 1,
-		TsThreshold:  duration.Spec(time.Second),
+		TsThreshold:  duration.Duration(time.Second),
 		Logic: mediapacer.PacerLogicConfig{
-			DiscardPeriod:    duration.Spec(discardPeriod),
-			MaxDiscardPeriod: duration.Spec(max(discardPeriod*10, time.Second)),
-			Delay:            duration.Spec(delay),
+			DiscardPeriod:    duration.Duration(discardPeriod),
+			MaxDiscardPeriod: duration.Duration(max(discardPeriod*10, time.Second)),
+			Delay:            duration.Duration(delay),
 		},
 	}
 	if len(adapt) > 0 {
@@ -74,7 +74,7 @@ func TestDisruptorPacer_NonPowerOfTwoCapacity(t *testing.T) {
 	pacer, err := rtp.NewDisruptorPacer(rtp.DisruptorPacerConfig{
 		Logic:          mediapacer.PacerLogicConfig{EventLog: log.Get("/test")},
 		SeqThreshold:   1,
-		TsThreshold:    duration.Spec(time.Second),
+		TsThreshold:    duration.Duration(time.Second),
 		BufferCapacity: 1000, // rounds up to 1024
 	})
 	require.NoError(t, err)
@@ -119,9 +119,9 @@ func TestDisruptorPacer_PacedDelivery(t *testing.T) {
 	const sendAhead = 100 * time.Millisecond
 
 	pacer := newTestDisruptorPacer(t, 0, delay, func(config rtp.DisruptorPacerConfig) rtp.DisruptorPacerConfig {
-		config.MinSleepThreshold = duration.Millisecond
-		config.SendAhead = duration.Spec(sendAhead)
-		config.DeliveryMargin = 20 * duration.Millisecond
+		config.MinSleepThreshold = duration.MS
+		config.SendAhead = duration.Duration(sendAhead)
+		config.DeliveryMargin = 20 * duration.MS
 		return config
 	})
 
@@ -287,13 +287,13 @@ func TestDisruptorPacer_DelayContinuous(t *testing.T) {
 	}
 	const (
 		delay     = time.Second
-		sendAhead = 120 * duration.Millisecond
+		sendAhead = 120 * duration.MS
 		ipd       = 10 * time.Millisecond
 		packets   = 300
 	)
 
 	pacer := newTestDisruptorPacer(t, 0, delay, func(config rtp.DisruptorPacerConfig) rtp.DisruptorPacerConfig {
-		config.StatsInterval = duration.Second
+		config.StatsInterval = duration.S
 		config.SendAhead = sendAhead
 		return config
 	})
@@ -357,13 +357,13 @@ func TestDisruptorPacerConfig_Unmarshal(t *testing.T) {
 		cfg := rtp.DisruptorPacerConfig{
 			Logic:             *new(mediapacer.PacerLogicConfig).InitDefaults(),
 			SeqThreshold:      5,
-			TsThreshold:       duration.Minute,
+			TsThreshold:       duration.M,
 			BufferCapacity:    1024,
-			MinSleepThreshold: duration.Millisecond,
-			TickerPeriod:      duration.Millisecond,
-			StatsInterval:     duration.Minute,
-			SendAhead:         50 * duration.Millisecond,
-			DeliveryMargin:    25 * duration.Millisecond,
+			MinSleepThreshold: duration.MS,
+			TickerPeriod:      duration.MS,
+			StatsInterval:     duration.M,
+			SendAhead:         50 * duration.MS,
+			DeliveryMargin:    25 * duration.MS,
 		}
 
 		marshaled, err := json.Marshal(cfg)

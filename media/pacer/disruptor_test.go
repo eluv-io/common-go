@@ -102,7 +102,7 @@ func TestDisruptorEngine_FullBufferBlocksUntilDrained(t *testing.T) {
 	var conf DisruptorEngineConfig
 	conf.InitDefaults()
 	conf.BufferCapacity = 8
-	conf.TickerPeriod = duration.Spec(2 * time.Millisecond)
+	conf.TickerPeriod = duration.Duration(2 * time.Millisecond)
 
 	// 20ms per packet: draining all 8 slots takes ~140ms, far more than one slot's worth.
 	e, startConsumer, stop := newTestEngine(t, conf, 20*time.Millisecond)
@@ -129,8 +129,8 @@ func TestDisruptorEngine_MaxBlockDropsInsteadOfStalling(t *testing.T) {
 	var conf DisruptorEngineConfig
 	conf.InitDefaults()
 	conf.BufferCapacity = 8
-	conf.TickerPeriod = duration.Spec(2 * time.Millisecond)
-	conf.MaxBlock = duration.Spec(20 * time.Millisecond)
+	conf.TickerPeriod = duration.Duration(2 * time.Millisecond)
+	conf.MaxBlock = duration.Duration(20 * time.Millisecond)
 
 	// Same 20ms per packet as above, so without MaxBlock this would stall for ~140ms.
 	e, startConsumer, stop := newTestEngine(t, conf, 20*time.Millisecond)
@@ -157,8 +157,8 @@ func TestDisruptorEngine_MaxBlockShorterThanPollInterval(t *testing.T) {
 	var conf DisruptorEngineConfig
 	conf.InitDefaults()
 	conf.BufferCapacity = 8
-	conf.TickerPeriod = duration.Spec(time.Second) // poll interval would be 250ms
-	conf.MaxBlock = duration.Spec(20 * time.Millisecond)
+	conf.TickerPeriod = duration.Duration(time.Second) // poll interval would be 250ms
+	conf.MaxBlock = duration.Duration(20 * time.Millisecond)
 
 	// The consumer is never started, so no slot can ever free up and the push runs the budget down.
 	e, _, stop := newTestEngine(t, conf, 10*time.Second)
@@ -181,8 +181,8 @@ func TestDisruptorEngine_MaxBlockExcludesSchedulingTime(t *testing.T) {
 	var conf DisruptorEngineConfig
 	conf.InitDefaults()
 	conf.BufferCapacity = 8
-	conf.TickerPeriod = duration.Spec(2 * time.Millisecond)
-	conf.MaxBlock = duration.Spec(40 * time.Millisecond)
+	conf.TickerPeriod = duration.Duration(2 * time.Millisecond)
+	conf.MaxBlock = duration.Duration(40 * time.Millisecond)
 	conf.StatsInterval = -1
 
 	sched := &slowScheduler{pacedScheduler: pacedScheduler{interval: 10 * time.Millisecond}}
@@ -212,7 +212,7 @@ func TestDisruptorEngine_NoStallWhenBufferHasRoom(t *testing.T) {
 	var conf DisruptorEngineConfig
 	conf.InitDefaults()
 	conf.BufferCapacity = 64
-	conf.MaxBlock = duration.Spec(time.Millisecond)
+	conf.MaxBlock = duration.Duration(time.Millisecond)
 
 	e, startConsumer, stop := newTestEngine(t, conf, 0) // all due immediately
 	defer stop()
@@ -235,7 +235,7 @@ func TestDisruptorEngine_ShutdownReleasesBlockedPush(t *testing.T) {
 	var conf DisruptorEngineConfig
 	conf.InitDefaults()
 	conf.BufferCapacity = 8
-	conf.TickerPeriod = duration.Spec(2 * time.Millisecond)
+	conf.TickerPeriod = duration.Duration(2 * time.Millisecond)
 
 	// The consumer is never started, so the buffer never drains and the push waits until shutdown.
 	e, _, stop := newTestEngine(t, conf, 10*time.Second)

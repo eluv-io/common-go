@@ -15,17 +15,17 @@ import (
 // See ShouldDiscard for the detailed discard logic, and ResetOnGap and ResetForSourceChange for how to restart the
 // phase.
 type DiscardContext struct {
-	DiscardPeriod    duration.Spec // How long to wait after baseline update
-	MaxDiscardPeriod duration.Spec // Max time to wait after baseline update
+	DiscardPeriod    duration.Duration // How long to wait after baseline update
+	MaxDiscardPeriod duration.Duration // Max time to wait after baseline update
 
 	// Periods used in place of the two above while the current phase was started by ResetForSourceChange. Each falls
 	// back to its startup counterpart when zero. See PacerLogicConfig.SourceChangeDiscardPeriod.
-	SourceChangePeriod    duration.Spec // How long to wait after baseline update (on ResetForSourceChange)
-	MaxSourceChangePeriod duration.Spec // Max time to wait after baseline update (on ResetForSourceChange)
+	SourceChangePeriod    duration.Duration // How long to wait after baseline update (on ResetForSourceChange)
+	MaxSourceChangePeriod duration.Duration // Max time to wait after baseline update (on ResetForSourceChange)
 
 	// T0Threshold is the improvement in T0 required to restart the discard period. Smaller improvements still refine
 	// the baseline, they just do not hold the phase open. See PacerLogicConfig.DiscardT0Threshold.
-	T0Threshold duration.Spec
+	T0Threshold duration.Duration
 
 	DiscardComplete     bool                                     // True once discard phase is over
 	FirstPacketTime     utc.UTC                                  // Timestamp of the first received packet
@@ -41,7 +41,7 @@ type DiscardContext struct {
 }
 
 // period returns the discard period in force for the current phase.
-func (d *DiscardContext) period() duration.Spec {
+func (d *DiscardContext) period() duration.Duration {
 	if d.sourceChange && d.SourceChangePeriod > 0 {
 		return d.SourceChangePeriod
 	}
@@ -51,7 +51,7 @@ func (d *DiscardContext) period() duration.Spec {
 // maxPeriod returns the cap in force for the current phase, never below that phase's own period. Comparing against
 // period() rather than the raw SourceChangePeriod matters when the latter is zero: the phase then runs on
 // DiscardPeriod, and a shorter MaxSourceChangePeriod must not cap it below that.
-func (d *DiscardContext) maxPeriod() duration.Spec {
+func (d *DiscardContext) maxPeriod() duration.Duration {
 	maxPeriod := d.MaxDiscardPeriod
 	if d.sourceChange && d.MaxSourceChangePeriod > 0 {
 		maxPeriod = d.MaxSourceChangePeriod
@@ -61,7 +61,7 @@ func (d *DiscardContext) maxPeriod() duration.Spec {
 
 // NewDiscardContext creates a new discard context with the specified period. toDuration is used to convert unwrapped
 // timestamps to time.Duration and must not be nil.
-func NewDiscardContext(discardPeriod, maxDiscardPeriod duration.Spec, toDuration func(int64) time.Duration) *DiscardContext {
+func NewDiscardContext(discardPeriod, maxDiscardPeriod duration.Duration, toDuration func(int64) time.Duration) *DiscardContext {
 	if toDuration == nil {
 		panic("pacer: toDuration must not be nil")
 	}

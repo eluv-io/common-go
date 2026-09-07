@@ -31,7 +31,7 @@ func TestDiscardContext_Disabled(t *testing.T) {
 
 func TestDiscardContext_ShouldDiscard(t *testing.T) {
 	now := utc.MustParse("2000-01-01T12:00:00Z")
-	dc := pacer.NewDiscardContext(5*duration.Second, 10*duration.Second, rtp.TicksToDuration)
+	dc := pacer.NewDiscardContext(5*duration.S, 10*duration.S, rtp.TicksToDuration)
 
 	seq := int64(rand.Int32())
 	t0 := now.Add(-rtp.TicksToDuration(seq))
@@ -55,7 +55,7 @@ func TestDiscardContext_ShouldDiscard(t *testing.T) {
 
 func TestDiscardContext_ShouldDiscardWithAdjustment(t *testing.T) {
 	now := utc.MustParse("2000-01-01T12:00:00Z")
-	dc := pacer.NewDiscardContext(5*duration.Second, 10*duration.Second, rtp.TicksToDuration)
+	dc := pacer.NewDiscardContext(5*duration.S, 10*duration.S, rtp.TicksToDuration)
 
 	seq := int64(rand.Int32())
 	t0 := now.Add(-rtp.TicksToDuration(seq))
@@ -86,7 +86,7 @@ func TestDiscardContext_ShouldDiscardWithAdjustment(t *testing.T) {
 func TestDiscardContext_ResetOnGapDuringDiscardPhase(t *testing.T) {
 	now := utc.MustParse("2000-01-01T12:00:00Z")
 	t0 := now
-	dc := pacer.NewDiscardContext(5*duration.Second, 9*duration.Second, rtp.TicksToDuration)
+	dc := pacer.NewDiscardContext(5*duration.S, 9*duration.S, rtp.TicksToDuration)
 
 	for j := 0; j < 3; j++ {
 		for i := 0; i < 3; i++ {
@@ -111,7 +111,7 @@ func TestDiscardContext_ResetOnGapDuringDiscardPhase(t *testing.T) {
 func TestDiscardContext_ResetOnGapDuringNormalOperation(t *testing.T) {
 	now := utc.MustParse("2000-01-01T12:00:00Z")
 	t0 := now
-	dc := pacer.NewDiscardContext(5*duration.Second, 9*duration.Second, rtp.TicksToDuration)
+	dc := pacer.NewDiscardContext(5*duration.S, 9*duration.S, rtp.TicksToDuration)
 
 	for j := 0; j < 3; j++ {
 		for i := 0; i < 5; i++ {
@@ -132,8 +132,8 @@ func TestDiscardContext_ResetOnGapDuringNormalOperation(t *testing.T) {
 // minimum of a jittery stream keeps creeping down and holds the phase open until the cap.
 func TestDiscardContext_T0Threshold(t *testing.T) {
 	now := utc.MustParse("2000-01-01T12:00:00Z")
-	dc := pacer.NewDiscardContext(duration.Spec(time.Second), duration.Spec(time.Minute), rtp.TicksToDuration)
-	dc.T0Threshold = duration.Spec(50 * time.Millisecond)
+	dc := pacer.NewDiscardContext(duration.Duration(time.Second), duration.Duration(time.Minute), rtp.TicksToDuration)
+	dc.T0Threshold = duration.Duration(50 * time.Millisecond)
 
 	// A packet whose timestamp matches its arrival puts T0 at the stream's start; keep that as the reference.
 	assertDiscard(t, dc, 0, now, true, false)
@@ -158,8 +158,8 @@ func TestDiscardContext_T0Threshold(t *testing.T) {
 	require.True(t, dc.DiscardComplete, "sub-threshold improvements must not hold the phase open")
 
 	// A super-threshold improvement, by contrast, restarts the period.
-	dc = pacer.NewDiscardContext(duration.Spec(time.Second), duration.Spec(time.Minute), rtp.TicksToDuration)
-	dc.T0Threshold = duration.Spec(50 * time.Millisecond)
+	dc = pacer.NewDiscardContext(duration.Duration(time.Second), duration.Duration(time.Minute), rtp.TicksToDuration)
+	dc.T0Threshold = duration.Duration(50 * time.Millisecond)
 	now = utc.MustParse("2000-01-01T12:00:00Z")
 	assertDiscard(t, dc, 0, now, true, false)
 
@@ -180,8 +180,8 @@ func TestDiscardContext_T0Threshold(t *testing.T) {
 // significant improvement and complete the phase, well before the cap.
 func TestDiscardContext_T0ThresholdCompletesWhileStillImproving(t *testing.T) {
 	now := utc.MustParse("2000-01-01T12:00:00Z")
-	dc := pacer.NewDiscardContext(duration.Spec(time.Second), duration.Spec(time.Minute), rtp.TicksToDuration)
-	dc.T0Threshold = duration.Spec(50 * time.Millisecond)
+	dc := pacer.NewDiscardContext(duration.Duration(time.Second), duration.Duration(time.Minute), rtp.TicksToDuration)
+	dc.T0Threshold = duration.Duration(50 * time.Millisecond)
 
 	assertDiscard(t, dc, 0, now, true, false)
 
@@ -211,8 +211,8 @@ func TestDiscardContext_T0ThresholdCompletesWhileStillImproving(t *testing.T) {
 // below that.
 func TestDiscardContext_MaxSourceChangePeriodNeverCapsBelowPeriod(t *testing.T) {
 	now := utc.MustParse("2000-01-01T12:00:00Z")
-	dc := pacer.NewDiscardContext(duration.Spec(5*time.Second), duration.Spec(30*time.Second), rtp.TicksToDuration)
-	dc.MaxSourceChangePeriod = duration.Spec(2 * time.Second) // shorter than the 5s period the phase will run on
+	dc := pacer.NewDiscardContext(duration.Duration(5*time.Second), duration.Duration(30*time.Second), rtp.TicksToDuration)
+	dc.MaxSourceChangePeriod = duration.Duration(2 * time.Second) // shorter than the 5s period the phase will run on
 	dc.ResetForSourceChange()
 
 	assertDiscard(t, dc, 0, now, true, false)
@@ -232,7 +232,7 @@ func TestDiscardContext_MaxSourceChangePeriodNeverCapsBelowPeriod(t *testing.T) 
 // baseline improvement, rather than the phase completing on the previous, worse T0.
 func TestDiscardContext_CapKeepsFinalImprovement(t *testing.T) {
 	now := utc.MustParse("2000-01-01T12:00:00Z")
-	dc := pacer.NewDiscardContext(duration.Spec(time.Second), duration.Spec(2*time.Second), rtp.TicksToDuration)
+	dc := pacer.NewDiscardContext(duration.Duration(time.Second), duration.Duration(2*time.Second), rtp.TicksToDuration)
 
 	assertDiscard(t, dc, 0, now, true, false)
 	baseT0 := dc.T0

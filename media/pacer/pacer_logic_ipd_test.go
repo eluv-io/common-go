@@ -24,10 +24,10 @@ func TestPacerLogic_DriftCorrectionSpread_ConstantPositiveDrift(t *testing.T) {
 	const maxStep = 3 * time.Millisecond
 	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
 		AdjustTimeDrift:        true,
-		PosDriftPeriod:         duration.Spec(60 * time.Millisecond),
-		DriftThreshold:         duration.Spec(2 * time.Millisecond),
+		PosDriftPeriod:         duration.Duration(60 * time.Millisecond),
+		DriftThreshold:         duration.Duration(2 * time.Millisecond),
 		MaxDriftCorrectionStep: duration.Duration(maxStep),
-		Delay:                  duration.Spec(delay),
+		Delay:                  duration.Duration(delay),
 		ToDuration:             rtp.TicksToDuration,
 	})
 
@@ -91,10 +91,10 @@ func TestPacerLogic_DriftCorrectionSpread_BackwardTimestampStep(t *testing.T) {
 	const maxStep = 3 * time.Millisecond
 	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
 		AdjustTimeDrift:        true,
-		PosDriftPeriod:         duration.Spec(60 * time.Millisecond),
-		DriftThreshold:         duration.Spec(2 * time.Millisecond),
+		PosDriftPeriod:         duration.Duration(60 * time.Millisecond),
+		DriftThreshold:         duration.Duration(2 * time.Millisecond),
 		MaxDriftCorrectionStep: duration.Duration(maxStep),
-		Delay:                  duration.Spec(delay),
+		Delay:                  duration.Duration(delay),
 		ToDuration:             rtp.TicksToDuration,
 	})
 
@@ -182,8 +182,8 @@ func TestPacerLogic_IPDPeak_ForwardTimestampJump_SelfCancels(t *testing.T) {
 	const nominalIPD = 10 * time.Millisecond
 	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
 		AdjustTimeDrift: true,
-		DriftThreshold:  duration.Spec(2 * time.Millisecond),
-		Delay:           duration.Spec(delay),
+		DriftThreshold:  duration.Duration(2 * time.Millisecond),
+		Delay:           duration.Duration(delay),
 		ToDuration:      rtp.TicksToDuration,
 		// MaxNegDriftCorrection, MaxDriftCorrectionStep and PosDriftPeriod left at zero value; NewPacerLogic applies
 		// the same defaults as InitDefaults() (uncapped negative correction, no per-packet spread cap, 1-minute
@@ -245,9 +245,9 @@ func TestPacerLogic_NegativeDrift_NotSpreadByMaxDriftCorrectionStep(t *testing.T
 	const nominalIPD = 10 * time.Millisecond
 	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
 		AdjustTimeDrift:        true,
-		DriftThreshold:         duration.Spec(2 * time.Millisecond),
+		DriftThreshold:         duration.Duration(2 * time.Millisecond),
 		MaxDriftCorrectionStep: duration.Duration(10 * time.Millisecond),
-		Delay:                  duration.Spec(delay),
+		Delay:                  duration.Duration(delay),
 		ToDuration:             rtp.TicksToDuration,
 	})
 
@@ -307,10 +307,10 @@ func TestPacerLogic_SpreadDrain_NotFoughtByFrontLoadedPeriod(t *testing.T) {
 	const maxStep = 2 * time.Millisecond
 	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
 		AdjustTimeDrift:        true,
-		PosDriftPeriod:         duration.Spec(60 * time.Millisecond),
-		DriftThreshold:         duration.Spec(2 * time.Millisecond),
+		PosDriftPeriod:         duration.Duration(60 * time.Millisecond),
+		DriftThreshold:         duration.Duration(2 * time.Millisecond),
 		MaxDriftCorrectionStep: duration.Duration(maxStep),
-		Delay:                  duration.Spec(delay),
+		Delay:                  duration.Duration(delay),
 		ToDuration:             rtp.TicksToDuration,
 	})
 
@@ -375,13 +375,13 @@ func TestPacerLogic_PersistentSlowSource_StaysCaughtUp_WithSpreading(t *testing.
 	const delay = 100 * time.Millisecond
 	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
 		AdjustTimeDrift: true,
-		PosDriftPeriod:  duration.Spec(60 * time.Millisecond),
-		DriftThreshold:  duration.Spec(2 * time.Millisecond),
+		PosDriftPeriod:  duration.Duration(60 * time.Millisecond),
+		DriftThreshold:  duration.Duration(2 * time.Millisecond),
 		// A 2ms step is far above the ~1ms/packet sustained injection rate this source requires (mean drift ~7ms per
 		// 6-packet period, see TestPacerLogic_PersistentSlowSource_StaysCaughtUp), so it never becomes the binding
 		// constraint for this steady drift - it only bounds genuine bursts.
 		MaxDriftCorrectionStep: duration.Duration(2 * time.Millisecond),
-		Delay:                  duration.Spec(delay),
+		Delay:                  duration.Duration(delay),
 		ToDuration:             rtp.TicksToDuration,
 	})
 
@@ -437,10 +437,10 @@ func TestPacerLogic_GapDuringSpreadDrain(t *testing.T) {
 	const maxStep = 3 * time.Millisecond
 	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
 		AdjustTimeDrift:        true,
-		PosDriftPeriod:         duration.Spec(60 * time.Millisecond),
-		DriftThreshold:         duration.Spec(2 * time.Millisecond),
+		PosDriftPeriod:         duration.Duration(60 * time.Millisecond),
+		DriftThreshold:         duration.Duration(2 * time.Millisecond),
 		MaxDriftCorrectionStep: duration.Duration(maxStep),
-		Delay:                  duration.Spec(delay),
+		Delay:                  duration.Duration(delay),
 		ToDuration:             rtp.TicksToDuration,
 	})
 
@@ -503,12 +503,12 @@ func TestPacerLogic_GapDuringSpreadDrain_WithDiscardPeriod(t *testing.T) {
 	const maxStep = 3 * time.Millisecond
 	p, stats := newTestPacerLogicFull(pacer.PacerLogicConfig{
 		AdjustTimeDrift:        true,
-		DiscardPeriod:          duration.Spec(15 * time.Millisecond),
-		MaxDiscardPeriod:       duration.Spec(100 * time.Millisecond),
-		PosDriftPeriod:         duration.Spec(30 * time.Millisecond),
-		DriftThreshold:         duration.Spec(2 * time.Millisecond),
+		DiscardPeriod:          duration.Duration(15 * time.Millisecond),
+		MaxDiscardPeriod:       duration.Duration(100 * time.Millisecond),
+		PosDriftPeriod:         duration.Duration(30 * time.Millisecond),
+		DriftThreshold:         duration.Duration(2 * time.Millisecond),
 		MaxDriftCorrectionStep: duration.Duration(maxStep),
-		Delay:                  duration.Spec(delay),
+		Delay:                  duration.Duration(delay),
 		ToDuration:             rtp.TicksToDuration,
 	})
 

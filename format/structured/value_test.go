@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/utc-go"
 	. "github.com/smartystreets/goconvey/convey"
 	"github.com/stretchr/testify/require"
-	"github.com/eluv-io/utc-go"
 
 	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/format/structured"
@@ -705,11 +705,88 @@ func TestUTCErr(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestDurErr(t *testing.T) {
+	theErr := errors.Str("test error")
+
+	// success: duration.Duration value
+	res, err := structured.Wrap(duration.H).DurErr(duration.NS)
+	require.NoError(t, err)
+	require.Equal(t, duration.H, res)
+
+	// success: legacy duration.Spec value (backward compat - wrapped data typed as the older Spec still converts)
+	res, err = structured.Wrap(duration.Hour).DurErr(duration.NS)
+	require.NoError(t, err)
+	require.Equal(t, duration.H, res)
+
+	// success: numeric value scaled by unit
+	res, err = structured.Wrap(1).DurErr(duration.S)
+	require.NoError(t, err)
+	require.Equal(t, duration.S, res)
+
+	// success: string value
+	res, err = structured.Wrap("3m").DurErr(duration.S)
+	require.NoError(t, err)
+	require.Equal(t, 3*duration.M, res)
+
+	// nil data, no default → NotExist
+	_, err = structured.Wrap(nil).DurErr(duration.S)
+	require.True(t, errors.IsNotExist(err))
+
+	// nil data, with default → (default, nil)
+	res, err = structured.Wrap(nil).DurErr(duration.S, duration.H)
+	require.NoError(t, err)
+	require.Equal(t, duration.H, res)
+
+	// stored error, with default → (default, err)
+	res, err = structured.Wrap(nil, theErr).DurErr(duration.S, duration.H)
+	require.ErrorIs(t, err, theErr)
+	require.Equal(t, duration.H, res)
+
+	// invalid string conversion
+	_, err = structured.Wrap("an invalid string").DurErr(duration.S)
+	require.Error(t, err)
+
+	// invalid string, with default → (default, err)
+	res, err = structured.Wrap("an invalid string").DurErr(duration.S, duration.H)
+	require.Error(t, err)
+	require.Equal(t, duration.H, res)
+}
+
+func TestValue_Dur(t *testing.T) {
+	// invalid conversions
+	require.Equal(t, duration.Duration(0), structured.Wrap(nil).Dur(duration.S))
+	require.Equal(t, duration.Duration(0), structured.Wrap(nil, errors.Str("an error")).Dur(duration.S))
+	require.Equal(t, duration.Duration(0), structured.Wrap("an invalid string").Dur(duration.S))
+	// invalid conversions, return default value
+	require.Equal(t, duration.H, structured.Wrap(nil).Dur(duration.S, duration.H))
+	require.Equal(t, duration.H, structured.Wrap(nil, errors.Str("an error")).Dur(duration.S, duration.H))
+	require.Equal(t, duration.H, structured.Wrap("an invalid string").Dur(duration.S, duration.H))
+
+	require.Equal(t, duration.Duration(0), structured.Wrap(0).Dur(duration.S))
+	require.Equal(t, duration.Duration(0), structured.Wrap("0").Dur(duration.S))
+	require.Equal(t, duration.Duration(0), structured.Wrap("").Dur(duration.S))
+
+	require.Equal(t, duration.H, structured.Wrap(duration.H).Dur(duration.NS))
+	require.Equal(t, duration.H, structured.Wrap(duration.Hour).Dur(duration.NS))
+	require.Equal(t, duration.S, structured.Wrap(1).Dur(duration.S))
+	require.Equal(t, duration.S, structured.Wrap("1").Dur(duration.S))
+	require.Equal(t, 99*duration.S, structured.Wrap(99.0).Dur(duration.S))
+	require.Equal(t, 3*duration.M, structured.Wrap("3m").Dur(duration.S))
+	require.Equal(t, 90*duration.S, structured.Wrap(json.Number("1.5")).Dur(duration.M))
+	require.Equal(t, 90*duration.S, structured.Wrap(1.5).Dur(duration.M))
+	require.Equal(t, 90*duration.S, structured.Wrap(big.NewRat(3, 2)).Dur(duration.M))
+}
+
 func TestDurationErr(t *testing.T) {
 	theErr := errors.Str("test error")
 
 	// success: duration.Spec value
 	res, err := structured.Wrap(duration.Hour).DurationErr(duration.Nanosecond)
+	require.NoError(t, err)
+	require.Equal(t, duration.Hour, res)
+
+	// success: duration.Duration value (converts down to Spec)
+	res, err = structured.Wrap(duration.H).DurationErr(duration.Nanosecond)
 	require.NoError(t, err)
 	require.Equal(t, duration.Hour, res)
 
@@ -749,19 +826,20 @@ func TestDurationErr(t *testing.T) {
 
 func TestValue_Duration(t *testing.T) {
 	// invalid conversions
-	require.Equal(t, duration.Zero, structured.Wrap(nil).Duration(duration.Second))
-	require.Equal(t, duration.Zero, structured.Wrap(nil, errors.Str("an error")).Duration(duration.Second))
-	require.Equal(t, duration.Zero, structured.Wrap("an invalid string").Duration(duration.Second))
+	require.Equal(t, duration.Spec(0), structured.Wrap(nil).Duration(duration.Second))
+	require.Equal(t, duration.Spec(0), structured.Wrap(nil, errors.Str("an error")).Duration(duration.Second))
+	require.Equal(t, duration.Spec(0), structured.Wrap("an invalid string").Duration(duration.Second))
 	// invalid conversions, return default value
 	require.Equal(t, duration.Hour, structured.Wrap(nil).Duration(duration.Second, duration.Hour))
 	require.Equal(t, duration.Hour, structured.Wrap(nil, errors.Str("an error")).Duration(duration.Second, duration.Hour))
 	require.Equal(t, duration.Hour, structured.Wrap("an invalid string").Duration(duration.Second, duration.Hour))
 
-	require.Equal(t, duration.Zero, structured.Wrap(0).Duration(duration.Second))
-	require.Equal(t, duration.Zero, structured.Wrap("0").Duration(duration.Second))
-	require.Equal(t, duration.Zero, structured.Wrap("").Duration(duration.Second))
+	require.Equal(t, duration.Spec(0), structured.Wrap(0).Duration(duration.Second))
+	require.Equal(t, duration.Spec(0), structured.Wrap("0").Duration(duration.Second))
+	require.Equal(t, duration.Spec(0), structured.Wrap("").Duration(duration.Second))
 
 	require.Equal(t, duration.Hour, structured.Wrap(duration.Hour).Duration(duration.Nanosecond))
+	require.Equal(t, duration.Hour, structured.Wrap(duration.H).Duration(duration.Nanosecond))
 	require.Equal(t, duration.Second, structured.Wrap(1).Duration(duration.Second))
 	require.Equal(t, duration.Second, structured.Wrap("1").Duration(duration.Second))
 	require.Equal(t, 99*duration.Second, structured.Wrap(99.0).Duration(duration.Second))
