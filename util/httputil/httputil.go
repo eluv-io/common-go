@@ -590,7 +590,7 @@ func ClientIP(r *http.Request, isTrustedProxy ...func(ip string) bool) string {
 	}
 
 	for _, headerName := range []string{"X-Forwarded-For", "X-Real-IP"} {
-		// a header may appear as several separate header lines rather than one comma-joined line
+		// a header may appear as several separate header lines
 		// -> https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-For
 		lines := r.Header.Values(headerName)
 		if len(lines) == 0 {
@@ -598,6 +598,7 @@ func ClientIP(r *http.Request, isTrustedProxy ...func(ip string) bool) string {
 		}
 		var vals []string
 		for _, line := range lines {
+			// header may have multiple values separated by comma
 			for _, v := range strings.Split(line, ",") {
 				vals = append(vals, strings.TrimSpace(v))
 			}
