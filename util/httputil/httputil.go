@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -576,27 +577,53 @@ func GetSetContentDisposition(header http.Header, query url.Values, def string) 
 // this is the IP address portion of the request's RemoteAddr (ip:port). If the
 // request contains X-Forwarded-For or X-Real-IP headers (usually set by a
 // reverse-proxy in front of the HTTP server, e.g. nginx), then the client IP is
-// extracted from those headers.
-//
-// If an optional acceptHeadersFrom function is provided and refuses the
-// RemoteAddr, then the above headers are ignored and the IP address from
-// RemoteAddr is returned.
-func ClientIP(r *http.Request, acceptHeadersFrom ...func(remoteAddr string) bool) string {
-	if len(acceptHeadersFrom) > 0 && acceptHeadersFrom[0] != nil && !acceptHeadersFrom[0](r.RemoteAddr) {
-		return strings.Split(r.RemoteAddr, ":")[0]
+// extracted from those headers based on isTrustedProxy.
+// If isTrustedProxy is omitted, these headers are trusted unconditionally -- do
+// not omit it for any security-sensitive use.
+func ClientIP(r *http.Request, isTrustedProxy ...func(ip string) bool) string {
+	peerIP := hostFromAddr(r.RemoteAddr)
+
+	var trusted func(ip string) bool
+	if len(isTrustedProxy) > 0 {
+		trusted = isTrustedProxy[0]
 	}
+
+	if trusted != nil && !trusted(peerIP) {
+		return peerIP
+	}
+
 	for _, headerName := range []string{"X-Forwarded-For", "X-Real-IP"} {
-		header := r.Header.Get(headerName)
-		if header == "" {
+		// a header may appear as several separate header lines
+		// -> https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-For
+		lines := r.Header.Values(headerName)
+		if len(lines) == 0 {
 			continue
 		}
-		// header may have multiple values separated by comma
-		// -> https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-For
-		vals := strings.SplitN(header, ",", 2)
-		// client IP is the first value
-		return strings.TrimSpace(vals[0])
+		var vals []string
+		for _, line := range lines {
+			// header may have multiple values separated by comma
+			for _, v := range strings.Split(line, ",") {
+				vals = append(vals, strings.TrimSpace(v))
+			}
+		}
+		if trusted == nil {
+			return vals[len(vals)-1]
+		}
+		i := len(vals) - 1
+		for i > 0 && trusted(vals[i]) {
+			i--
+		}
+		return vals[i]
 	}
-	return strings.Split(r.RemoteAddr, ":")[0]
+	return peerIP
+}
+
+func hostFromAddr(addr string) string {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return addr
+	}
+	return host
 }
 
 // ParseServerError tries parsing an error response from a fabric API call and
