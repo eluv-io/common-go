@@ -323,7 +323,7 @@ func TestClientIP(t *testing.T) {
 	}
 	var tests = []struct {
 		r       *http.Request
-		mode    string // "" -> call with no predicate arg, "nil" -> explicit nil, "trust" -> use trustedProxies(trusted...)
+		mode    string // "" -> use trustedProxies(trusted...)
 		trusted []string
 		want    string
 	}{
