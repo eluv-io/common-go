@@ -314,9 +314,6 @@ func TestClientIP(t *testing.T) {
 			Header:     header,
 		}
 	}
-	// trustedProxies builds an isTrustedProxy predicate that only trusts the
-	// given, explicit set of IPs - unlike a blanket true/false, this lets tests
-	// exercise the per-hop chain walk realistically.
 	trustedProxies := func(ips ...string) func(string) bool {
 		set := make(map[string]bool, len(ips))
 		for _, ip := range ips {
