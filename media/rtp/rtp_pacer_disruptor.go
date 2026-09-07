@@ -32,29 +32,29 @@ type DisruptorPacerConfig struct {
 
 	Logic             pacer.PacerLogicConfig `json:"logic"`               // timing logic configuration
 	SeqThreshold      int64                  `json:"seq_threshold"`       // sequence number gap threshold (0 → 1)
-	TsThreshold       duration.Spec          `json:"ts_threshold"`        // RTP timestamp gap threshold (0 → 1 second)
+	TsThreshold       duration.Duration      `json:"ts_threshold"`        // RTP timestamp gap threshold (0 → 1 second)
 	BufferCapacity    int                    `json:"buffer_capacity"`     // ring buffer capacity (is rounded up to the next power of 2; 0 → DefaultDisruptorCapacity)
-	MinSleepThreshold duration.Spec          `json:"min_sleep_threshold"` // sleep durations shorter than this are skipped (0 → DefaultMinSleepThreshold)
-	TickerPeriod      duration.Spec          `json:"ticker_period"`       // ticker period for scheduling delivery (0 → DefaultTickerPeriod)
-	OversleepMargin   duration.Spec          `json:"oversleep_margin"`    // jitter tolerated above TickerPeriod before a wake is counted as an oversleep (0 → DefaultOversleepMargin)
-	StatsInterval     duration.Spec          `json:"stats_interval"`      // interval for periodic stats logging (0 → DefaultStatsInterval, -1 → disabled)
+	MinSleepThreshold duration.Duration      `json:"min_sleep_threshold"` // sleep durations shorter than this are skipped (0 → DefaultMinSleepThreshold)
+	TickerPeriod      duration.Duration      `json:"ticker_period"`       // ticker period for scheduling delivery (0 → DefaultTickerPeriod)
+	OversleepMargin   duration.Duration      `json:"oversleep_margin"`    // jitter tolerated above TickerPeriod before a wake is counted as an oversleep (0 → DefaultOversleepMargin)
+	StatsInterval     duration.Duration      `json:"stats_interval"`      // interval for periodic stats logging (0 → DefaultStatsInterval, -1 → disabled)
 
 	// SendAhead is how early the consumer dispatches a packet before its target time. The ticker loop wakes up when
 	// now >= targetTs - SendAhead, giving the "deliver" callback a lead-time window.
 	// 0 = dispatch at targetTs.
-	SendAhead duration.Spec `json:"send_ahead"`
+	SendAhead duration.Duration `json:"send_ahead"`
 
 	// DeliveryMargin is the minimum lead time guaranteed to the "deliver" callback:
 	//   sendAt = max(targetTs, now + DeliveryMargin)
 	// Packets that cannot satisfy this floor (targetTs already too close to now) are tracked as LateSends.
 	// Should be ≤ SendAhead so the floor is reliably reachable under normal conditions. 0 = disabled.
-	DeliveryMargin duration.Spec `json:"delivery_margin"`
+	DeliveryMargin duration.Duration `json:"delivery_margin"`
 }
 
 func (c *DisruptorPacerConfig) InitDefaults() *DisruptorPacerConfig {
 	c.Logic.InitDefaults()
 	c.SeqThreshold = 1
-	c.TsThreshold = duration.Second
+	c.TsThreshold = duration.S
 	c.BufferCapacity = DefaultDisruptorCapacity
 	c.MinSleepThreshold = DefaultMinSleepThreshold
 	c.TickerPeriod = DefaultTickerPeriod

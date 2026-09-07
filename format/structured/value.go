@@ -639,9 +639,69 @@ func (v *Value) ID(code id.Code, def ...id.ID) (id.ID, error) {
 	return ret, nil
 }
 
+// DurErr converts this value to a duration.Duration and returns it along with any error. If the value is numeric, it
+// is interpreted as a multiple of the provided unit. If the value wraps an error, the error is returned. If the value
+// is absent (nil), the default def is returned if provided, otherwise errors.K.NotExist is returned.
+//
+// Prefer Dur/DurErr in new code: duration.Duration is the self-describing successor of duration.Spec. Duration and
+// DurationErr keep the legacy duration.Spec type for existing callers.
+func (v *Value) DurErr(unit duration.Duration, def ...duration.Duration) (duration.Duration, error) {
+	if v.err != nil {
+		if len(def) > 0 {
+			return def[0], v.err
+		}
+		return 0, v.err
+	}
+	if v.Data == nil {
+		if len(def) > 0 {
+			return def[0], nil
+		}
+		return 0, errors.NoTrace("Dur", errors.K.NotExist)
+	}
+	data := v.Unwrap()
+	switch t := data.(type) {
+	case duration.Duration:
+		return t, nil
+	case duration.Spec:
+		return duration.Duration(t), nil
+	case time.Duration:
+		return duration.Duration(t), nil
+	case string:
+		// A pure numeric string ("1", "1.5") is interpreted as a multiple of unit, consistent with a non-string
+		// numeric value - checked before duration.DurationFromString, since that treats a bare number as a
+		// duration.Duration in its own right (int64 nanoseconds vs. float seconds), which has nothing to do with
+		// the unit the caller passed in here.
+		if f, ferr := numberutil.AsFloat64Err(t); ferr == nil {
+			return duration.Duration(f * float64(unit)), nil
+		}
+		d, err := duration.DurationFromString(t) // human-readable strings with units, e.g. "1h15m", "200ms"
+		if err == nil {
+			return d, nil
+		}
+		// otherwise try to parse as numeric value below
+	}
+	f, err := numberutil.AsFloat64Err(data)
+	if err == nil {
+		return duration.Duration(f * float64(unit)), nil
+	}
+	if len(def) > 0 {
+		return def[0], err
+	}
+	return 0, err
+}
+
+// Dur converts this value to a duration.Duration. If the value is numeric, it is interpreted as a multiple of the
+// provided unit. Returns the default value or 0 if the value is absent or the conversion fails. See DurErr.
+func (v *Value) Dur(unit duration.Duration, def ...duration.Duration) duration.Duration {
+	res, _ := v.DurErr(unit, def...)
+	return res
+}
+
 // DurationErr converts this value to a duration spec and returns it along with any error. If the value is numeric,
 // it is interpreted as a multiple of the provided unit. If the value wraps an error, the error is returned. If the
 // value is absent (nil), the default def is returned if provided, otherwise errors.K.NotExist is returned.
+//
+// This is the legacy duration.Spec-typed accessor, retained unchanged for existing callers. Prefer DurErr in new code.
 func (v *Value) DurationErr(unit duration.Spec, def ...duration.Spec) (duration.Spec, error) {
 	if v.err != nil {
 		if len(def) > 0 {
@@ -659,6 +719,8 @@ func (v *Value) DurationErr(unit duration.Spec, def ...duration.Spec) (duration.
 	switch t := data.(type) {
 	case duration.Spec:
 		return t, nil
+	case duration.Duration:
+		return duration.Spec(t), nil
 	case time.Duration:
 		return duration.Spec(t), nil
 	case string:
@@ -687,6 +749,8 @@ func (v *Value) DurationErr(unit duration.Spec, def ...duration.Spec) (duration.
 
 // Duration converts this value to a duration spec. If the value is numeric, it is interpreted as a multiple of the
 // provided unit. Returns the default value or 0 if the value is absent or the conversion fails.
+//
+// This is the legacy duration.Spec-typed accessor, retained unchanged for existing callers. Prefer Dur in new code.
 func (v *Value) Duration(unit duration.Spec, def ...duration.Spec) duration.Spec {
 	res, _ := v.DurationErr(unit, def...)
 	return res

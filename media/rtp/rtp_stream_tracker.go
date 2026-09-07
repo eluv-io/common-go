@@ -107,8 +107,8 @@ func (t *rtpStreamTracker) logStatsPeriodically() {
 
 func (t *rtpStreamTracker) Stats() *Stats {
 	res := t.stats
-	res.Duration = duration.Spec(utc.Since(t.stats.Start)).Round()
-	res.RtpDuration = duration.Spec(TicksToDuration(t.stats.EndTs - t.stats.StartTs)).Round()
+	res.Duration = duration.Duration(utc.Since(t.stats.Start)).Round()
+	res.RtpDuration = duration.Duration(TicksToDuration(t.stats.EndTs - t.stats.StartTs)).Round()
 	return &res
 }
 
@@ -131,7 +131,7 @@ func (t *rtpStreamTracker) toWallClockTS(rtpTS int64) utc.UTC {
 	} else if t0.Before(t.currT0) {
 		t.currT0 = t0
 		t.stats.TsAdjCount++
-		t.stats.TsAdjDuration = duration.Spec(t.origT0.Sub(t.currT0))
+		t.stats.TsAdjDuration = duration.Duration(t.origT0.Sub(t.currT0))
 	}
 	return t.currT0.Add(rtpDur)
 }
@@ -157,18 +157,18 @@ func (n NoopTracker) Reset() {}
 // ---------------------------------------------------------------------------------------------------------------------
 
 type Stats struct {
-	Start         utc.UTC       `json:"start"`
-	Duration      duration.Spec `json:"duration"`
-	PacketCount   int           `json:"packet_count"`
-	ErrorCount    int           `json:"error_count"`
-	StartSeq      int64         `json:"start_seq"`
-	EndSeq        int64         `json:"end_seq"`
-	StartTs       int64         `json:"start_ts"`
-	EndTs         int64         `json:"end_ts"`
-	RtpDuration   duration.Spec `json:"rtp_duration"`
-	TsAdjCount    int           `json:"ts_adj_count"`
-	TsAdjDuration duration.Spec `json:"ts_adj_duration"`
-	Gaps          []Gap         `json:"gaps"`
+	Start         utc.UTC           `json:"start"`
+	Duration      duration.Duration `json:"duration"`
+	PacketCount   int               `json:"packet_count"`
+	ErrorCount    int               `json:"error_count"`
+	StartSeq      int64             `json:"start_seq"`
+	EndSeq        int64             `json:"end_seq"`
+	StartTs       int64             `json:"start_ts"`
+	EndTs         int64             `json:"end_ts"`
+	RtpDuration   duration.Duration `json:"rtp_duration"`
+	TsAdjCount    int               `json:"ts_adj_count"`
+	TsAdjDuration duration.Duration `json:"ts_adj_duration"`
+	Gaps          []Gap             `json:"gaps"`
 }
 
 // ---------------------------------------------------------------------------------------------------------------------

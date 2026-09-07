@@ -31,7 +31,7 @@ func TestDiscardContext_Disabled(t *testing.T) {
 
 func TestDiscardContext_ShouldDiscard(t *testing.T) {
 	now := utc.MustParse("2000-01-01T12:00:00Z")
-	dc := pacer.NewDiscardContext(5*duration.Second, 10*duration.Second, rtp.TicksToDuration)
+	dc := pacer.NewDiscardContext(5*duration.S, 10*duration.S, rtp.TicksToDuration)
 
 	seq := int64(rand.Int32())
 	t0 := now.Add(-rtp.TicksToDuration(seq))
@@ -55,7 +55,7 @@ func TestDiscardContext_ShouldDiscard(t *testing.T) {
 
 func TestDiscardContext_ShouldDiscardWithAdjustment(t *testing.T) {
 	now := utc.MustParse("2000-01-01T12:00:00Z")
-	dc := pacer.NewDiscardContext(5*duration.Second, 10*duration.Second, rtp.TicksToDuration)
+	dc := pacer.NewDiscardContext(5*duration.S, 10*duration.S, rtp.TicksToDuration)
 
 	seq := int64(rand.Int32())
 	t0 := now.Add(-rtp.TicksToDuration(seq))
@@ -86,7 +86,7 @@ func TestDiscardContext_ShouldDiscardWithAdjustment(t *testing.T) {
 func TestDiscardContext_ResetOnGapDuringDiscardPhase(t *testing.T) {
 	now := utc.MustParse("2000-01-01T12:00:00Z")
 	t0 := now
-	dc := pacer.NewDiscardContext(5*duration.Second, 9*duration.Second, rtp.TicksToDuration)
+	dc := pacer.NewDiscardContext(5*duration.S, 9*duration.S, rtp.TicksToDuration)
 
 	for j := 0; j < 3; j++ {
 		for i := 0; i < 3; i++ {
@@ -108,7 +108,7 @@ func TestDiscardContext_ResetOnGapDuringDiscardPhase(t *testing.T) {
 func TestDiscardContext_ResetOnGapDuringNormalOperation(t *testing.T) {
 	now := utc.MustParse("2000-01-01T12:00:00Z")
 	t0 := now
-	dc := pacer.NewDiscardContext(5*duration.Second, 9*duration.Second, rtp.TicksToDuration)
+	dc := pacer.NewDiscardContext(5*duration.S, 9*duration.S, rtp.TicksToDuration)
 
 	for j := 0; j < 3; j++ {
 		for i := 0; i < 5; i++ {

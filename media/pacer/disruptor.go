@@ -28,21 +28,21 @@ const (
 	DefaultDeliveryMargin = 0
 
 	// DefaultMinSleepThreshold is the default minimum sleep threshold. Sleep durations shorter than this are skipped.
-	DefaultMinSleepThreshold = 5 * duration.Millisecond
+	DefaultMinSleepThreshold = 5 * duration.MS
 
 	// DefaultTickerPeriod is the default ticker period used to schedule packet delivery. A ticker avoids the
 	// per-packet timer allocation of time.After and supports prompt Shutdown interruption.
-	DefaultTickerPeriod = 5 * duration.Millisecond
+	DefaultTickerPeriod = 5 * duration.MS
 
 	// DefaultStatsInterval is the default interval for periodic stats logging.
-	DefaultStatsInterval = 5 * duration.Second
+	DefaultStatsInterval = 5 * duration.S
 
 	// DefaultOversleepMargin is the default DisruptorEngineConfig.OversleepMargin: the scheduling jitter tolerated on
 	// top of the unavoidable ticker quantization before a wake-up is recorded as an oversleep. The effective oversleep
 	// threshold is TickerPeriod + OversleepMargin: because the consumer wakes on ticker ticks, a wake can legitimately
 	// land up to one TickerPeriod past its target without any real scheduling overrun, so that quantization must not be
 	// counted as an oversleep.
-	DefaultOversleepMargin = 5 * duration.Millisecond
+	DefaultOversleepMargin = 5 * duration.MS
 )
 
 // PacketScheduler converts a raw packet into a scheduling decision. Implementations hold the protocol-specific timing
@@ -67,21 +67,21 @@ type DisruptorEngineConfig struct {
 	StatsLog elog.ILog `json:"-"` // StatsLog is the logger to use for stats logging. If nil, stats are not logged.
 	EventLog elog.ILog `json:"-"` // EventLog is the logger to use for event logging. If nil, events are not logged.
 
-	BufferCapacity    int           `json:"buffer_capacity"`     // ring buffer capacity (rounded up to next power of 2; 0 → DefaultDisruptorCapacity)
-	MinSleepThreshold duration.Spec `json:"min_sleep_threshold"` // sleep durations shorter than this are skipped (0 → DefaultMinSleepThreshold)
-	TickerPeriod      duration.Spec `json:"ticker_period"`       // ticker period for scheduling delivery (0 → DefaultTickerPeriod)
-	OversleepMargin   duration.Spec `json:"oversleep_margin"`    // jitter tolerated above TickerPeriod before a wake is counted as an oversleep (0 → DefaultOversleepMargin)
-	StatsInterval     duration.Spec `json:"stats_interval"`      // interval for periodic stats logging (0 → DefaultStatsInterval, -1 → disabled)
+	BufferCapacity    int               `json:"buffer_capacity"`     // ring buffer capacity (rounded up to next power of 2; 0 → DefaultDisruptorCapacity)
+	MinSleepThreshold duration.Duration `json:"min_sleep_threshold"` // sleep durations shorter than this are skipped (0 → DefaultMinSleepThreshold)
+	TickerPeriod      duration.Duration `json:"ticker_period"`       // ticker period for scheduling delivery (0 → DefaultTickerPeriod)
+	OversleepMargin   duration.Duration `json:"oversleep_margin"`    // jitter tolerated above TickerPeriod before a wake is counted as an oversleep (0 → DefaultOversleepMargin)
+	StatsInterval     duration.Duration `json:"stats_interval"`      // interval for periodic stats logging (0 → DefaultStatsInterval, -1 → disabled)
 
 	// SendAhead is how early the consumer dispatches a packet before its target time. The ticker loop wakes up when
 	// now >= targetTs - SendAhead, giving the "deliver" callback a lead-time window. 0 = dispatch at targetTs.
-	SendAhead duration.Spec `json:"send_ahead"`
+	SendAhead duration.Duration `json:"send_ahead"`
 
 	// DeliveryMargin is the minimum lead time guaranteed to the "deliver" callback:
 	//   sendAt = max(targetTs, now + DeliveryMargin)
 	// Packets that cannot satisfy this floor (targetTs already too close to now) are tracked as lateness. Should be ≤
 	// SendAhead so the floor is reliably reachable under normal conditions. 0 = disabled.
-	DeliveryMargin duration.Spec `json:"delivery_margin"`
+	DeliveryMargin duration.Duration `json:"delivery_margin"`
 }
 
 // InitDefaults sets all fields to their default values.
@@ -426,7 +426,7 @@ func (h *disruptorHandler) Handle(lower, upper int64) {
 		e.outStatsMu.Lock()
 		{
 			os.UpdateBufFill(now, bufFill)
-			if duration.Spec(overslept) > e.conf.TickerPeriod+e.conf.OversleepMargin {
+			if duration.Duration(overslept) > e.conf.TickerPeriod+e.conf.OversleepMargin {
 				os.UpdateOversleeps(now, overslept)
 			}
 			if lateness > 0 {

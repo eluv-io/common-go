@@ -28,7 +28,7 @@ func BenchmarkDiscardContext_ShouldDiscard_Complete(b *testing.B) {
 // BenchmarkDiscardContext_ShouldDiscard_Active measures ShouldDiscard during the active discard phase, where T0 is
 // stable and each call only needs to check whether the elapsed time has exceeded the discard period.
 func BenchmarkDiscardContext_ShouldDiscard_Active(b *testing.B) {
-	dc := pacer.NewDiscardContext(5*duration.Second, 10*duration.Second, rtp.TicksToDuration)
+	dc := pacer.NewDiscardContext(5*duration.S, 10*duration.S, rtp.TicksToDuration)
 	t0 := utc.MustParse("2000-01-01T12:00:00Z")
 	// Establish T0 baseline with the first packet.
 	_, _ = dc.ShouldDiscard(0, t0)

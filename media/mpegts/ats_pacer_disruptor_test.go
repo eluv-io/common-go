@@ -36,8 +36,8 @@ func defaultAtsTestConfig() AtsDisruptorPacerConfig {
 		EventLog:          elog.Noop,
 		StatsInterval:     -1, // disable stats logging in tests
 		BufferCapacity:    64,
-		MinSleepThreshold: duration.Spec(time.Millisecond),
-		TickerPeriod:      duration.Spec(time.Millisecond),
+		MinSleepThreshold: duration.MS,
+		TickerPeriod:      duration.MS,
 		Logic:             pacer.PacerLogicConfig{}, // DiscardPeriod=0, Delay=0
 	}
 }
@@ -94,7 +94,7 @@ func TestAtsDisruptorPacer_PacedDelivery(t *testing.T) {
 	const tolerance = 12 * time.Millisecond
 
 	conf := defaultAtsTestConfig()
-	conf.Logic.Delay = duration.Spec(50 * time.Millisecond) // jitter buffer so targets are in the future
+	conf.Logic.Delay = duration.Duration(50 * time.Millisecond) // jitter buffer so targets are in the future
 	p, err := NewAtsDisruptorPacer(conf)
 	require.NoError(t, err)
 
@@ -142,7 +142,7 @@ func TestAtsDisruptorPacer_Delay(t *testing.T) {
 	const tolerance = 20 * time.Millisecond
 
 	conf := defaultAtsTestConfig()
-	conf.Logic.Delay = duration.Spec(delay)
+	conf.Logic.Delay = duration.Duration(delay)
 	p, err := NewAtsDisruptorPacer(conf)
 	require.NoError(t, err)
 
@@ -180,7 +180,7 @@ func TestAtsDisruptorPacer_ShortPacket(t *testing.T) {
 // reset.
 func TestAtsDisruptorPacer_GapReset(t *testing.T) {
 	conf := defaultAtsTestConfig()
-	conf.GapThreshold = duration.Spec(500 * time.Millisecond)
+	conf.GapThreshold = duration.Duration(500 * time.Millisecond)
 	p, err := NewAtsDisruptorPacer(conf)
 	require.NoError(t, err)
 
@@ -204,7 +204,7 @@ func TestAtsDisruptorPacer_GapReset(t *testing.T) {
 // TestAtsDisruptorPacer_ShutdownInterruptsSleep verifies that Shutdown promptly wakes a sleeping consumer.
 func TestAtsDisruptorPacer_ShutdownInterruptsSleep(t *testing.T) {
 	conf := defaultAtsTestConfig()
-	conf.Logic.Delay = duration.Spec(30 * time.Second) // long delay so the consumer sleeps
+	conf.Logic.Delay = duration.Duration(30 * time.Second) // long delay so the consumer sleeps
 	p, err := NewAtsDisruptorPacer(conf)
 	require.NoError(t, err)
 
@@ -240,13 +240,13 @@ func TestAtsDisruptorPacer_Config(t *testing.T) {
 	t.Run("round-trip", func(t *testing.T) {
 		cfg := AtsDisruptorPacerConfig{
 			Logic:             *new(pacer.PacerLogicConfig).InitDefaults(),
-			GapThreshold:      duration.Minute,
+			GapThreshold:      duration.M,
 			BufferCapacity:    1024,
-			MinSleepThreshold: duration.Millisecond,
-			TickerPeriod:      duration.Millisecond,
-			StatsInterval:     duration.Minute,
-			SendAhead:         50 * duration.Millisecond,
-			DeliveryMargin:    25 * duration.Millisecond,
+			MinSleepThreshold: duration.MS,
+			TickerPeriod:      duration.MS,
+			StatsInterval:     duration.M,
+			SendAhead:         50 * duration.MS,
+			DeliveryMargin:    25 * duration.MS,
 		}
 		marshaled, err := json.Marshal(cfg)
 		require.NoError(t, err)

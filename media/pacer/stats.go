@@ -133,19 +133,22 @@ type OutStats struct {
 // NewOutStats returns an OutStats whose Periodic fields have ManualSwitch: true so that period transitions are
 // driven exclusively by logStats() rather than by packet arrival timing. period should be the configured
 // StatsInterval so that Statistics.Duration in each snapshot reflects the nominal period length.
-func NewOutStats(period duration.Spec) OutStats {
+func NewOutStats(period duration.Duration) OutStats {
 	return newOutStats(period)
 }
 
-func newOutStats(period duration.Spec) OutStats {
+func newOutStats(period duration.Duration) OutStats {
+	// Periodic.Period is fixed at type duration.Spec regardless of its value-type parameter (a shared statsutil
+	// type, out of scope for this migration) - convert once here rather than at every call site below.
+	specPeriod := duration.Spec(period)
 	return OutStats{
-		wait:       statsutil.Periodic[duration.Millis]{ManualSwitch: true, Period: period},
-		ipd:        statsutil.Periodic[duration.Millis]{ManualSwitch: true, Period: period},
-		jbd:        statsutil.Periodic[duration.Millis]{ManualSwitch: true, Period: period},
-		lateness:   statsutil.Periodic[duration.Millis]{ManualSwitch: true, Period: period},
-		sendAhead:  statsutil.Periodic[duration.Millis]{ManualSwitch: true, Period: period},
-		oversleeps: statsutil.Periodic[duration.Millis]{ManualSwitch: true, Period: period},
-		bufFill:    statsutil.Periodic[int32]{ManualSwitch: true, Period: period},
+		wait:       statsutil.Periodic[duration.Millis]{ManualSwitch: true, Period: specPeriod},
+		ipd:        statsutil.Periodic[duration.Millis]{ManualSwitch: true, Period: specPeriod},
+		jbd:        statsutil.Periodic[duration.Millis]{ManualSwitch: true, Period: specPeriod},
+		lateness:   statsutil.Periodic[duration.Millis]{ManualSwitch: true, Period: specPeriod},
+		sendAhead:  statsutil.Periodic[duration.Millis]{ManualSwitch: true, Period: specPeriod},
+		oversleeps: statsutil.Periodic[duration.Millis]{ManualSwitch: true, Period: specPeriod},
+		bufFill:    statsutil.Periodic[int32]{ManualSwitch: true, Period: specPeriod},
 	}
 }
 
