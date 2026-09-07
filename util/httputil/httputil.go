@@ -590,10 +590,7 @@ func ClientIP(r *http.Request, isTrustedProxy ...func(ip string) bool) string {
 	}
 
 	for _, headerName := range []string{"X-Forwarded-For", "X-Real-IP"} {
-		// a header name may legally appear as several separate header lines
-		// rather than one comma-joined line - http.Header.Get only returns the
-		// first of those and silently drops the rest, so all lines must be
-		// joined into one ordered list before splitting on commas.
+		// a header may appear as several separate header lines rather than one comma-joined line
 		// -> https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-For
 		lines := r.Header.Values(headerName)
 		if len(lines) == 0 {
