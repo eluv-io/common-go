@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -580,7 +581,7 @@ func GetSetContentDisposition(header http.Header, query url.Values, def string) 
 // If isTrustedProxy is omitted, these headers are trusted unconditionally -- do
 // not omit it for any security-sensitive use.
 func ClientIP(r *http.Request, isTrustedProxy ...func(ip string) bool) string {
-	peerIP := strings.Split(r.RemoteAddr, ":")[0]
+	peerIP := hostFromAddr(r.RemoteAddr)
 
 	var trusted func(ip string) bool
 	if len(isTrustedProxy) > 0 {
@@ -615,6 +616,14 @@ func ClientIP(r *http.Request, isTrustedProxy ...func(ip string) bool) string {
 		return vals[i]
 	}
 	return peerIP
+}
+
+func hostFromAddr(addr string) string {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return addr
+	}
+	return host
 }
 
 // ParseServerError tries parsing an error response from a fabric API call and

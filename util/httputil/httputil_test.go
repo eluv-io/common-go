@@ -343,6 +343,8 @@ func TestClientIP(t *testing.T) {
 		{r: req("9.9.9.9:80", "X-Forwarded-For", "7.7.7.7, 8.8.8.8"), mode: "trust", trusted: []string{"9.9.9.9", "8.8.8.8"}, want: "7.7.7.7"},
 		{r: req("9.9.9.9:80", "X-Forwarded-For", "8.8.8.8, 9.9.9.9"), mode: "trust", trusted: []string{"9.9.9.9", "8.8.8.8"}, want: "8.8.8.8"},
 		{r: req("1.1.1.1:80", "X-Forwarded-For", "9.9.9.9", "X-Forwarded-For", "2.2.2.2"), mode: "trust", trusted: []string{"1.1.1.1"}, want: "2.2.2.2"},
+		{r: req("[2001:db8::1]:1234"), want: "2001:db8::1"},
+		{r: req("[2001:db8::1]:1234", "X-Forwarded-For", "2.2.2.2"), mode: "trust", trusted: []string{"2001:db8::1"}, want: "2.2.2.2"},
 	}
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("[%v] %v %v", test.r.RemoteAddr, test.mode, test.r.Header), func(t *testing.T) {
