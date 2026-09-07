@@ -577,6 +577,8 @@ func GetSetContentDisposition(header http.Header, query url.Values, def string) 
 // request contains X-Forwarded-For or X-Real-IP headers (usually set by a
 // reverse-proxy in front of the HTTP server, e.g. nginx), then the client IP is
 // extracted from those headers based on isTrustedProxy.
+// If isTrustedProxy is omitted, these headers are trusted unconditionally -- do
+// not omit it for any security-sensitive use.
 func ClientIP(r *http.Request, isTrustedProxy ...func(ip string) bool) string {
 	peerIP := strings.Split(r.RemoteAddr, ":")[0]
 
