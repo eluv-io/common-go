@@ -323,7 +323,7 @@ func TestClientIP(t *testing.T) {
 	}
 	var tests = []struct {
 		r       *http.Request
-		mode    string // "" -> use trustedProxies(trusted...)
+		mode    string // "" -> call with no predicate arg, "nil" -> explicit nil, "trust" -> use trustedProxies(trusted...)
 		trusted []string
 		want    string
 	}{
@@ -339,20 +339,9 @@ func TestClientIP(t *testing.T) {
 		{r: req("1.1.1.1:80"), want: "1.1.1.1"},
 		{r: req("1.1.1.1:80", "X-Forwarded-For", "2.2.2.2"), mode: "trust", want: "1.1.1.1"},
 		{r: req("1.1.1.1:80", "X-Forwarded-For", "2.2.2.2"), mode: "trust", trusted: []string{"1.1.1.1"}, want: "2.2.2.2"},
-		// single trusted hop (nginx=1.1.1.1) in front: 3.3.3.3 was whatever the client
-		// originally claimed and is untrustworthy: the real client is the entry our
-		// trusted hop itself is attesting to (2.2.2.2), i.e. the last one
 		{r: req("1.1.1.1:80", "X-Forwarded-For", "  3.3.3.3, 2.2.2.2"), mode: "trust", trusted: []string{"1.1.1.1"}, want: "2.2.2.2"},
-		// two chained trusted hops (nginx=9.9.9.9, load balancer=8.8.8.8): naively
-		// taking the last entry would wrongly return the LB's own address (8.8.8.8);
-		// the real client (7.7.7.7) is recovered by peeling back both trusted hops
 		{r: req("9.9.9.9:80", "X-Forwarded-For", "7.7.7.7, 8.8.8.8"), mode: "trust", trusted: []string{"9.9.9.9", "8.8.8.8"}, want: "7.7.7.7"},
-		// every entry in the chain happens to be a trusted proxy (no client entry was
-		// ever recorded) - falls back to the leftmost (oldest) entry as best effort
 		{r: req("9.9.9.9:80", "X-Forwarded-For", "8.8.8.8, 9.9.9.9"), mode: "trust", trusted: []string{"9.9.9.9", "8.8.8.8"}, want: "8.8.8.8"},
-		// X-Forwarded-For may legally appear as several separate header lines instead
-		// of one comma-joined line - all lines must be joined into a single ordered
-		// list, not just the first line taken (which would silently drop 2.2.2.2 here)
 		{r: req("1.1.1.1:80", "X-Forwarded-For", "9.9.9.9", "X-Forwarded-For", "2.2.2.2"), mode: "trust", trusted: []string{"1.1.1.1"}, want: "2.2.2.2"},
 	}
 	for _, test := range tests {
