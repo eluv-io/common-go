@@ -81,9 +81,10 @@ func init() {
 }
 
 func randomQHash() types.QHash {
-	digest := ff.NewContentDigest(hash.Unencrypted, ff.GenerateQID())
+	digest := ff.NewContentPartDigest(hash.Unencrypted)
 	_, _ = digest.Write(byteutil.RandomBytes(10))
-	return digest.AsHash()
+	h, _ := digest.AsHash().AsContentHash(ff.GenerateQID())
+	return h
 }
 
 func randomQPHash() types.QPHash {

@@ -19,10 +19,12 @@ import (
 func TestContentDigest(t *testing.T) {
 	f := NewTestFactory(t)
 
-	d := f.NewContentDigest(hash.Unencrypted, f.GenerateQID())
+	d := f.NewContentPartDigest(hash.Unencrypted)
 	h := fill(t, d)
-	assert.NoError(t, h.AssertCode(hash.Q))
+	assert.NoError(t, h.AssertCode(hash.QPart))
 
+	h, err := h.AsContentHash(f.GenerateQID())
+	assert.NoError(t, err)
 	assert.Contains(t, h.String(), "hq__")
 }
 
@@ -84,7 +86,6 @@ func TestHashGenerators(t *testing.T) {
 		md     *hash.Digest
 		prefix string
 	}{
-		{"ContentDigest", f.NewContentDigest(hash.Unencrypted, f.GenerateQID()), "hq__"},
 		{"ContentPartDigest", f.NewContentPartDigest(hash.Unencrypted), "hqp_"},
 	}
 	for _, v := range tests {
