@@ -137,14 +137,11 @@ type fragMeta struct {
 // package-level ReadFragments for the contract.
 func (fr *FragmentReader) ReadFragments(r io.Reader, track *TrackInfo, fn SampleFunc) error {
 	fr.pos = 0
-	fragments := 0
 	for {
 		hdr, err := fr.readBoxHeader(r)
 		if err == io.EOF {
-			if fragments == 0 {
-				return errors.E("fmp4.ReadFragments", errors.K.Invalid, "reason", "no fragments in segment",
-					"track_id", track.TrackID)
-			}
+			// A segment with no fragment at all is not an error. A live transcode that is abandoned mid-part serves
+			// exactly that, and the caller has to move on to the next segment rather than end the period.
 			return nil
 		}
 		if err != nil {
@@ -155,7 +152,6 @@ func (fr *FragmentReader) ReadFragments(r io.Reader, track *TrackInfo, fn Sample
 			if err = fr.readFragment(r, hdr, track, fn); err != nil {
 				return err
 			}
-			fragments++
 		case typFtyp, typMoov:
 			return errors.E("fmp4.ReadFragments", errors.K.Invalid, "reason", "unexpected init segment in media segment",
 				"track_id", track.TrackID)

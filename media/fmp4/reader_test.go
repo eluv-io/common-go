@@ -424,6 +424,27 @@ func TestFragmentReader_SkipsUnknownBoxes(t *testing.T) {
 	requirePoolDrained(t, pool)
 }
 
+// TestFragmentReader_EmptySegmentIsNotAnError covers what a live transcode serves when it is abandoned in the middle
+// of a part: a segment with the leading boxes and no fragment. The caller has to be able to move on to the next
+// segment, so this is an empty read rather than a failure that would end its period.
+func TestFragmentReader_EmptySegmentIsNotAnError(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		seg  []byte
+	}{
+		{"nothing at all", nil},
+		{"styp only", box("styp", []byte("cmfs"))},
+		{"styp and sidx", append(box("styp", []byte("cmfs")), box("sidx", bytes.Repeat([]byte{0}, 40))...)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, pool, err := readSegment(t, tc.seg, videoTrack())
+			require.NoError(t, err)
+			require.Empty(t, got)
+			requirePoolDrained(t, pool)
+		})
+	}
+}
+
 func TestFragmentReader_Rejects(t *testing.T) {
 	good := tFrag{trafs: []tTraf{{trackID: 1, defaultBaseIsMoof: true,
 		truns: []tTrun{{version: 1, samples: []tSample{{data: nalu(NaluIDR, 20), dur: 3000}}}}}}}
@@ -433,7 +454,6 @@ func TestFragmentReader_Rejects(t *testing.T) {
 		seg     []byte
 		wantErr string
 	}{
-		{"empty segment", box("styp", []byte("cmfs")), "no fragments"},
 		{"mdat without moof", box("mdat", bytes.Repeat([]byte{0}, 16)), "mdat without a preceding moof"},
 		{"init segment", append(box("ftyp", []byte("isom")), box("moov")...), "unexpected init segment"},
 		{"box smaller than its header", append(be32(nil, 4), []byte("free")...), "box smaller than its header"},
