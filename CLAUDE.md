@@ -67,6 +67,9 @@ Media packetization, transport, and timing:
 - **`mpegts/`** — MPEG-TS packet handling, stream sync modes (modulo, once, continuous), PCR unwrapping
 - **`pacer/`** — Async packet pacing; two implementations: callback-based and disruptor-based (lock-free ring buffer)
 - **`pktpool/`** — Packet memory pooling to eliminate per-call heap allocations
+- **`fmp4/`** — Fragmented MP4 init and media segment parsing into H.264/AAC access units (mp4ff), plus a continuous
+  timeline across periods
+- **`samplepacer/`** — Real-time release of access units with a bounded jitter buffer, interleaving video and audio
 
 Key interfaces: `Packetizer`, `Pacer`, `AsyncPacer`, `CallbackPacer`, `Transformer`.
 
