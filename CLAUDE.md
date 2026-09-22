@@ -71,8 +71,9 @@ Media packetization, transport, and timing:
   across periods. Init segments go through mp4ff; media segments through an own streaming parser that reads each mdat
   into a reference-counted pooled fragment, so samples are views and a segment is parsed without allocating
 - **`samplepacer/`** — Real-time release of access units with a bounded jitter buffer, interleaving video and audio
-- **`rtmp/`** — RTMP/RTMPS publishing of H.264 and AAC access units (gortmplib message layer, own session so control
-  messages never race the media writer); `rtmptest/` is an in-process receiver for tests
+- **`rtmp/`** — RTMP/RTMPS publishing of H.264 and AAC access units. gortmplib handles the handshake, the control
+  messages and the sequence headers; media messages are chunked by an own writer that frames them straight into the
+  connection's buffer, so an access unit is not copied on the way out. `rtmptest/` is an in-process receiver for tests
 
 Key interfaces: `Packetizer`, `Pacer`, `AsyncPacer`, `CallbackPacer`, `Transformer`.
 
