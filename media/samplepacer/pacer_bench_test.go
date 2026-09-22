@@ -17,12 +17,9 @@ import (
 //	goarch: amd64
 //	pkg: github.com/eluv-io/common-go/media/samplepacer
 //	cpu: VirtualApple @ 2.50GHz
-//	BenchmarkItemHeap_PushPop-4   2000000    35.62 ns/op     0 B/op   0 allocs/op
-//	BenchmarkPacer_Push-4         2000000   159.5 ns/op    245 B/op   0 allocs/op
-//	BenchmarkPacer_Cycle-4        2000000   595.4 ns/op      0 B/op   0 allocs/op
-//
-// The B/op of Push is the heap's backing array growing to two million items over the run, amortized; the allocation
-// count is what the steady state cares about.
+//	BenchmarkItemHeap_PushPop-4   28384264    40.16 ns/op   0 B/op   0 allocs/op
+//	BenchmarkPacer_Push-4         18145071    65.82 ns/op   0 B/op   0 allocs/op
+//	BenchmarkPacer_Cycle-4         1798581   650.0 ns/op    0 B/op   0 allocs/op
 func BenchmarkItemHeap_PushPop(b *testing.B) {
 	// video and audio interleaved, so the heap actually reorders rather than staying sorted
 	h := make(itemHeap[int], 0, 64)
@@ -38,16 +35,40 @@ func BenchmarkItemHeap_PushPop(b *testing.B) {
 }
 
 // BenchmarkPacer_Push measures the producer side alone: a queue that never fills, so Push never waits.
+//
+// Nothing consumes here, so the queue is emptied every benchRound iterations with the timer stopped. Left to grow it
+// would reach b.N items, which makes the run allocate and page proportionally to an adaptive iteration count and
+// measures the heap growing rather than what a push costs.
 func BenchmarkPacer_Push(b *testing.B) {
 	p := New(Config[int]{Latency: time.Hour, MaxBuffered: 100 * time.Hour})
 	ctx := context.Background()
 	var dts time.Duration
+	queued := 0
 	b.ReportAllocs()
 	for b.Loop() {
 		if err := p.Push(ctx, Item[int]{Track: Video, DTS: dts}); err != nil {
 			b.Fatal(err)
 		}
 		dts += 40 * time.Millisecond
+		if queued++; queued == benchRound {
+			b.StopTimer()
+			p.emptyQueue()
+			queued = 0
+			b.StartTimer()
+		}
+	}
+}
+
+// benchRound is how many items the push benchmark queues before emptying. Large enough that the backing array reaches
+// its size in the first round and every later round reuses it, small enough to keep the queue out of the measurement.
+const benchRound = 4096
+
+// emptyQueue drops everything queued without going through the consumer, for the benchmark above.
+func (p *Pacer[P]) emptyQueue() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for len(p.queue) > 0 {
+		p.queue.pop()
 	}
 }
 
