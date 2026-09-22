@@ -70,6 +70,8 @@ Media packetization, transport, and timing:
 - **`fmp4/`** — Fragmented MP4 init and media segment parsing into H.264/AAC access units (mp4ff), plus a continuous
   timeline across periods
 - **`samplepacer/`** — Real-time release of access units with a bounded jitter buffer, interleaving video and audio
+- **`rtmp/`** — RTMP/RTMPS publishing of H.264 and AAC access units (gortmplib message layer, own session so control
+  messages never race the media writer); `rtmptest/` is an in-process receiver for tests
 
 Key interfaces: `Packetizer`, `Pacer`, `AsyncPacer`, `CallbackPacer`, `Transformer`.
 
