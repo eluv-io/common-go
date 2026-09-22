@@ -8,7 +8,10 @@ require (
 	github.com/HdrHistogram/hdrhistogram-go v1.2.0
 	github.com/PaesslerAG/gval v1.1.2
 	github.com/PaesslerAG/jsonpath v0.1.1
+	github.com/abema/go-mp4 v1.7.3
 	github.com/beevik/etree v1.1.0
+	github.com/bluenviron/gortmplib v1.0.3
+	github.com/bluenviron/mediacommon/v2 v2.9.5
 	github.com/datarhei/gosrt v0.9.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/djherbis/times v1.6.0
@@ -24,6 +27,7 @@ require (
 	github.com/gammazero/deque v0.1.0
 	github.com/ghodss/yaml v1.0.0
 	github.com/gin-gonic/gin v1.7.7
+	github.com/google/uuid v1.6.0
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
 	github.com/maruel/panicparse/v2 v2.3.1
 	github.com/mattn/go-runewidth v0.0.9
@@ -61,7 +65,6 @@ require (
 	github.com/go-playground/validator/v10 v10.4.1 // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/gopherjs/gopherjs v1.17.2 // indirect
 	github.com/json-iterator/go v1.1.9 // indirect
 	github.com/jtolds/gls v4.20.0+incompatible // indirect
