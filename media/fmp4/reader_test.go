@@ -3,6 +3,7 @@ package fmp4
 import (
 	"bytes"
 	"encoding/binary"
+	"math"
 	"testing"
 
 	"github.com/Eyevinn/mp4ff/mp4"
@@ -37,6 +38,7 @@ type tTrun struct {
 	noDuration       bool   // omit the per-sample durations, leaving them to the defaults
 	noSize           bool   // omit the per-sample sizes, leaving them to the defaults
 	noCto            bool   // omit the composition time offsets
+	sampleCount      uint32 // written instead of the sample count, for a trun that lies about its length
 }
 
 // tTraf is one synthesized track fragment.
@@ -147,7 +149,11 @@ func (r tTrun) trunBox(dataOffset int32) []byte {
 	}
 
 	body := be32(nil, uint32(r.version)<<24|flags)
-	body = be32(body, uint32(len(r.samples)))
+	count := uint32(len(r.samples))
+	if r.sampleCount != 0 {
+		count = r.sampleCount
+	}
+	body = be32(body, count)
 	if !r.noDataOffset {
 		body = be32(body, uint32(dataOffset))
 	}
@@ -497,6 +503,39 @@ func TestFragmentReader_Rejects(t *testing.T) {
 		requirePoolDrained(t, pool)
 	})
 
+	// A base data offset near the top of the range makes every sample offset derived from it huge. Bounds checked by
+	// adding the run's size to its start overflow there and pass, and the payload is then sliced out of range.
+	t.Run("base data offset at the top of the range", func(t *testing.T) {
+		for _, tc := range []struct {
+			name string
+			trun tTrun
+		}{
+			{"with a data offset", tTrun{version: 1, samples: []tSample{{data: nalu(NaluIDR, 20), dur: 3000}}}},
+			{"without one", tTrun{version: 1, noDataOffset: true,
+				samples: []tSample{{data: nalu(NaluIDR, 20), dur: 3000}}}},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				seg := segment(tFrag{trafs: []tTraf{{trackID: 1, baseDataOffset: math.MaxUint64,
+					truns: []tTrun{tc.trun}}}})
+				_, pool, err := readSegment(t, seg, videoTrack())
+				require.Error(t, err)
+				requirePoolDrained(t, pool)
+			})
+		}
+	})
+
+	// A trun that carries no per-sample field at all has no sample table whose length bounds its count, which is what
+	// otherwise keeps the count times the default sample size from spanning far past the mdat.
+	t.Run("sample count with nothing to bound it", func(t *testing.T) {
+		seg := segment(tFrag{trafs: []tTraf{{trackID: 1, defaultBaseIsMoof: true,
+			defaultSize: 1 << 20, defaultDuration: 3000,
+			truns: []tTrun{{version: 1, noDuration: true, noSize: true, noCto: true, sampleCount: math.MaxUint32,
+				samples: []tSample{{data: nalu(NaluIDR, 20)}}}}}}})
+		_, pool, err := readSegment(t, seg, videoTrack())
+		require.ErrorContains(t, err, "sample count is big but no sample data present")
+		requirePoolDrained(t, pool)
+	})
+
 	t.Run("moof without mdat", func(t *testing.T) {
 		seg := segment(good)
 		idx := bytes.Index(seg, []byte("mdat"))
@@ -776,6 +815,10 @@ func FuzzFragmentReader(f *testing.F) {
 	f.Add(segment(tFrag{trafs: []tTraf{{trackID: 9, defaultBaseIsMoof: true,
 		truns: []tTrun{{version: 1, samples: []tSample{{data: bytes.Repeat([]byte{3}, 16), dur: 3000}}}}}}}))
 	f.Add(box("styp", []byte("cmfs")))
+	// An explicit base data offset at the top of the range. Mutation alone is unlikely to reach that corner, and it is
+	// where sample offsets stop fitting the arithmetic that places them in the mdat.
+	f.Add(segment(tFrag{trafs: []tTraf{{trackID: 1, baseDataOffset: math.MaxUint64,
+		truns: []tTrun{{version: 1, samples: []tSample{{data: bytes.Repeat([]byte{4}, 16), dur: 3000}}}}}}}))
 
 	f.Fuzz(func(t *testing.T, seg []byte) {
 		// two track ids, so both the "traf found" and the "fragment skipped" paths are exercised
