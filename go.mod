@@ -4,6 +4,7 @@ go 1.26.0
 
 require (
 	github.com/Comcast/gots/v2 v2.2.1
+	github.com/Eyevinn/mp4ff v0.51.0
 	github.com/HdrHistogram/hdrhistogram-go v1.2.0
 	github.com/PaesslerAG/gval v1.1.2
 	github.com/PaesslerAG/jsonpath v0.1.1
