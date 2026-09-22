@@ -24,6 +24,10 @@ var ErrClosed = errors.Str("rtmp: connection closed")
 // DefaultEncoder is the encoder name announced in onMetaData when the configuration sets none.
 const DefaultEncoder = "eluvio content fabric"
 
+// maxPlausibleFrameRate bounds the frame rate taken from an SPS for onMetaData. Above it the VUI timing describes a
+// time base rather than a frame rate and is not announced.
+const maxPlausibleFrameRate = 240
+
 // Conn is one RTMP publishing session. It is created connected and announced (Dial) and ends when the server drops
 // it, a write fails, or Close is called; Done closes then and Err tells why. Writes are safe from one goroutine at a
 // time; the read loop answering the server's control messages runs concurrently and is serialized with them.
@@ -173,7 +177,12 @@ func (c *Conn) metadata(sps *h264.SPS, asc *mpeg4audio.AudioSpecificConfig) amf0
 		meta.Height = sps.Height()
 	}
 	if meta.FrameRate == 0 {
-		meta.FrameRate = sps.FPS()
+		// The VUI timing of an SPS is not always the frame rate: encoders that only know their time base write it
+		// there, and the quotient then comes out as the timescale (90000) rather than the rate. Only announce a
+		// value that can be one.
+		if fps := sps.FPS(); fps >= 1 && fps <= maxPlausibleFrameRate {
+			meta.FrameRate = fps
+		}
 	}
 	if meta.Encoder == "" {
 		meta.Encoder = DefaultEncoder
@@ -183,9 +192,11 @@ func (c *Conn) metadata(sps *h264.SPS, asc *mpeg4audio.AudioSpecificConfig) amf0
 		{Key: "width", Value: float64(meta.Width)},
 		{Key: "height", Value: float64(meta.Height)},
 		{Key: "videodatarate", Value: float64(meta.VideoBitrate) / 1000},
-		{Key: "framerate", Value: meta.FrameRate},
-		{Key: "videocodecid", Value: float64(message.CodecH264)},
 	}
+	if meta.FrameRate != 0 {
+		obj = append(obj, amf0.ObjectEntry{Key: "framerate", Value: meta.FrameRate})
+	}
+	obj = append(obj, amf0.ObjectEntry{Key: "videocodecid", Value: float64(message.CodecH264)})
 	if asc != nil {
 		channels := asc.ChannelCount
 		if channels == 0 {

@@ -143,6 +143,9 @@ func TestConn_PublishesTracksAndSamples(t *testing.T) {
 	require.EqualValues(t, params.Audio.SampleRate, s.Metadata["audiosamplerate"])
 	require.EqualValues(t, params.Audio.Channels, s.Metadata["audiochannels"])
 	require.Equal(t, DefaultEncoder, s.Metadata["encoder"])
+	// the fixture's SPS carries its time base in the VUI timing, which yields a rate in the tens of thousands, so no
+	// frame rate is announced unless the configuration names one
+	require.NotContains(t, s.Metadata, "framerate")
 
 	cs := c.Stats()
 	require.EqualValues(t, 1, cs.DroppedBeforeStart, "the frame before the first keyframe is dropped")
@@ -203,11 +206,14 @@ func TestConn_TLS(t *testing.T) {
 	cfg := testConfig(rcv)
 	require.True(t, cfg.Encrypted())
 	cfg.TLS = &tls.Config{RootCAs: pool}
+	cfg.Meta.FrameRate = 30
 	c, err := Dial(context.Background(), cfg, params)
 	require.NoError(t, err)
 	defer func() { _ = c.Close() }()
 	require.NoError(t, c.WriteVideo(video[0].NALUs, 0, 0, true))
-	require.True(t, rcv.WaitFor(func(s rtmptest.Stats) bool { return s.Connections == 1 }, 5*time.Second))
+	require.True(t, rcv.WaitFor(func(s rtmptest.Stats) bool { return s.Connections == 1 && s.Metadata != nil },
+		5*time.Second))
+	require.EqualValues(t, 30, rcv.Stats().Metadata["framerate"], "a configured frame rate is announced")
 
 	// a client that does not trust the server's certificate must fail the handshake
 	cfg.TLS = &tls.Config{RootCAs: x509.NewCertPool()}
