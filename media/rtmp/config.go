@@ -44,8 +44,9 @@ type Config struct {
 	ConnectTimeout time.Duration // 0 = DefaultConnectTimeout
 	WriteTimeout   time.Duration // 0 = DefaultWriteTimeout
 
-	// Meta is what the onMetaData message announces about the stream. Width, Height and FrameRate are filled from
-	// the video track's SPS when zero.
+	// Meta is what the onMetaData message announces about the stream. Width and Height are filled from the video
+	// track's SPS when zero. FrameRate is too, when the SPS timing yields a plausible rate; otherwise it is left out
+	// of the message.
 	Meta Metadata
 }
 
