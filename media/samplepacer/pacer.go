@@ -7,10 +7,14 @@
 // It differs from media/pacer in what it solves: media/pacer recovers the sender's clock from the arrival times of
 // opaque network packets. Here arrival is under our control and every sample carries its own timestamp, so the only
 // job is holding samples back to a target latency and keeping the latency bounded when the source falls behind.
+//
+// The payload type is a type parameter rather than an interface, so a pooled payload travels through the queue
+// without being boxed. Ownership follows the payload: an item the pacer accepted is owned by the pacer until it is
+// delivered, and every item it accepted but will not deliver goes to Config.OnDrop instead. Push returning an error
+// did not accept the item, so the caller keeps it.
 package samplepacer
 
 import (
-	"container/heap"
 	"context"
 	"sync"
 	"time"
@@ -28,17 +32,17 @@ const (
 )
 
 // Item is one sample to pace. DTS and PTS are on one continuous time axis shared by both tracks.
-type Item struct {
+type Item[P any] struct {
 	Track   Track
 	DTS     time.Duration
 	PTS     time.Duration
 	Sync    bool // a random access point (video keyframe); audio items are always sync
 	Size    int  // payload size in bytes, for statistics
-	Payload any
+	Payload P
 }
 
 // Config configures a Pacer. Zero values select the defaults.
-type Config struct {
+type Config[P any] struct {
 	// Latency is the target delay between a sample's decode time and its release, i.e. the jitter buffer.
 	Latency time.Duration
 	// MaxBuffered bounds the decode-time span held in the pacer. Push blocks beyond it, which throttles a producer
@@ -53,13 +57,18 @@ type Config struct {
 	// LateTolerance is the lateness up to which a sample is still released immediately (a burst). Beyond it the
 	// pacer skips forward to the next video keyframe and re-anchors, so the latency stays bounded. Default: Latency.
 	LateTolerance time.Duration
+	// OnDrop receives the payload of every item the pacer accepted but will not deliver: items skipped to catch up
+	// to a keyframe, and items still queued when Run returns early or when a pacer that was never run is closed. It
+	// is where a pooled payload is released. It runs under the pacer's lock and must not call back into the pacer.
+	OnDrop func(P)
 	// Now is the clock. Default: time.Now.
 	Now func() time.Time
-	// Sleep waits until t or until wake is signalled or ctx is done. Default: a timer. Tests inject a fake clock.
+	// Sleep waits until t or until wake is signalled or ctx is done. Default: a timer reused across waits. Tests
+	// inject a fake clock. It is only ever called from Run, so an implementation may keep state.
 	Sleep func(ctx context.Context, t time.Time, wake <-chan struct{})
 }
 
-func (c *Config) applyDefaults() {
+func (c *Config[P]) applyDefaults() {
 	if c.Latency <= 0 {
 		c.Latency = 500 * time.Millisecond
 	}
@@ -78,22 +87,30 @@ func (c *Config) applyDefaults() {
 	if c.Now == nil {
 		c.Now = time.Now
 	}
-	if c.Sleep == nil {
-		c.Sleep = timerSleep
-	}
 }
 
-func timerSleep(ctx context.Context, t time.Time, wake <-chan struct{}) {
-	d := time.Until(t)
+// timerSleeper waits with one timer reused across waits, rather than a new one per wait: Run waits once per released
+// sample. Reset and Stop are safe to use without draining the channel since Go 1.23.
+type timerSleeper struct {
+	t *time.Timer
+}
+
+func (s *timerSleeper) sleep(ctx context.Context, until time.Time, wake <-chan struct{}) {
+	d := time.Until(until)
 	if d <= 0 {
 		return
 	}
-	timer := time.NewTimer(d)
-	defer timer.Stop()
+	if s.t == nil {
+		s.t = time.NewTimer(d)
+	} else {
+		s.t.Reset(d)
+	}
 	select {
-	case <-timer.C:
+	case <-s.t.C:
 	case <-wake:
+		s.t.Stop()
 	case <-ctx.Done():
+		s.t.Stop()
 	}
 }
 
@@ -105,7 +122,7 @@ type Stats struct {
 	Delivered         uint64        `json:"delivered"`           // items handed to the consumer
 	Late              uint64        `json:"late"`                // items delivered after their due time, within tolerance
 	MaxLateness       time.Duration `json:"max_lateness"`        // largest lateness of a delivered item
-	Dropped           uint64        `json:"dropped"`             // items skipped to catch up to a keyframe
+	Dropped           uint64        `json:"dropped"`             // items accepted but not delivered (skipped or discarded)
 	Skips             uint64        `json:"skips"`               // catch-up events (each drops one or more items)
 	Underruns         uint64        `json:"underruns"`           // times the consumer found the queue empty at a due time
 	Anchored          bool          `json:"anchored"`
@@ -113,19 +130,22 @@ type Stats struct {
 	AnchorDTS         time.Duration `json:"anchor_dts,omitempty"`
 }
 
-// ErrClosed is returned by Push after Close.
+// ErrClosed is returned by Push after Close, and after Run returned: in both cases nothing will consume the queue
+// any more, so the caller keeps the item it tried to push.
 var ErrClosed = errors.Str("sample pacer closed")
 
 // Pacer holds samples and releases them in real time. Push may be called from several goroutines; Run must be called
-// exactly once and is the single consumer.
-type Pacer struct {
-	cfg Config
+// at most once and is the single consumer.
+type Pacer[P any] struct {
+	cfg Config[P]
 
 	mu       sync.Mutex
-	notFull  *sync.Cond // signalled when the held span drops below MaxBuffered
+	notFull  chan struct{} // holds a token when an item left the queue, so a blocked Push can retry
+	closedCh chan struct{} // closed once, to wake every blocked Push at once
 	wake     chan struct{}
-	queue    itemHeap
+	queue    itemHeap[P]
 	closed   bool
+	running  bool
 	maxDTS   time.Duration // largest DTS pushed
 	haveMax  bool
 	lastPush [numTracks]trackPush
@@ -143,38 +163,52 @@ type trackPush struct {
 }
 
 // New creates a Pacer.
-func New(cfg Config) *Pacer {
+func New[P any](cfg Config[P]) *Pacer[P] {
 	cfg.applyDefaults()
-	p := &Pacer{cfg: cfg, wake: make(chan struct{}, 1)}
-	p.notFull = sync.NewCond(&p.mu)
-	return p
+	if cfg.Sleep == nil {
+		cfg.Sleep = (&timerSleeper{}).sleep
+	}
+	return &Pacer[P]{
+		cfg:      cfg,
+		wake:     make(chan struct{}, 1),
+		notFull:  make(chan struct{}, 1),
+		closedCh: make(chan struct{}),
+	}
 }
 
 // Push queues an item. It blocks while the held decode-time span exceeds MaxBuffered, until ctx is done or the pacer
 // is closed. Items may arrive out of decode order across tracks; within a track they must be in decode order.
-func (p *Pacer) Push(ctx context.Context, it Item) error {
-	stop := context.AfterFunc(ctx, func() {
-		p.mu.Lock()
-		p.notFull.Broadcast()
-		p.mu.Unlock()
-	})
-	defer stop()
-
-	p.mu.Lock()
-	defer p.mu.Unlock()
+//
+// On success the pacer owns the item's payload. On error it does not: the caller still owns it.
+func (p *Pacer[P]) Push(ctx context.Context, it Item[P]) error {
 	for {
+		p.mu.Lock()
 		if p.closed {
+			p.mu.Unlock()
 			return ErrClosed
 		}
 		if err := ctx.Err(); err != nil {
+			p.mu.Unlock()
 			return err
 		}
 		if len(p.queue) == 0 || p.spanLocked() < p.cfg.MaxBuffered {
-			break
+			p.pushLocked(it)
+			p.mu.Unlock()
+			return nil
 		}
-		p.notFull.Wait()
+		p.mu.Unlock()
+
+		// The token is buffered, so a release between the unlock and the select is not missed.
+		select {
+		case <-p.notFull:
+		case <-p.closedCh:
+		case <-ctx.Done():
+		}
 	}
-	heap.Push(&p.queue, it)
+}
+
+func (p *Pacer[P]) pushLocked(it Item[P]) {
+	p.queue.push(it)
 	if !p.haveMax || it.DTS > p.maxDTS {
 		p.maxDTS = it.DTS
 		p.haveMax = true
@@ -186,44 +220,85 @@ func (p *Pacer) Push(ctx context.Context, it Item) error {
 		p.stats.MaxQueuedDuration = span
 	}
 	p.signalLocked()
-	return nil
 }
 
 // spanLocked returns the decode-time span currently held: the largest pushed DTS minus the head's DTS.
-func (p *Pacer) spanLocked() time.Duration {
+func (p *Pacer[P]) spanLocked() time.Duration {
 	if len(p.queue) == 0 {
 		return 0
 	}
 	return p.maxDTS - p.queue[0].DTS
 }
 
-func (p *Pacer) signalLocked() {
+func (p *Pacer[P]) signalLocked() {
 	select {
 	case p.wake <- struct{}{}:
 	default:
 	}
 }
 
+// releasedLocked reports that an item left the queue, so one blocked Push may retry.
+func (p *Pacer[P]) releasedLocked() {
+	select {
+	case p.notFull <- struct{}{}:
+	default:
+	}
+}
+
 // Discontinuity announces that the next items belong to a new timeline segment: the next released item re-anchors
 // the schedule instead of being judged against the previous anchor.
-func (p *Pacer) Discontinuity() {
+func (p *Pacer[P]) Discontinuity() {
 	p.mu.Lock()
 	p.pending = true
 	p.signalLocked()
 	p.mu.Unlock()
 }
 
-// Close stops the pacer: Push returns ErrClosed and Run returns once the queue has drained.
-func (p *Pacer) Close() {
+// Close stops the pacer: Push returns ErrClosed, and Run returns once the queue has drained to the consumer. What is
+// queued stays queued, so a Close before Run still delivers it.
+//
+// An owner that will not run the pacer at all must call Discard instead, or the payloads of the queued items are
+// never handed back.
+func (p *Pacer[P]) Close() {
 	p.mu.Lock()
-	p.closed = true
-	p.notFull.Broadcast()
-	p.signalLocked()
+	p.closeLocked()
 	p.mu.Unlock()
 }
 
+// Discard closes the pacer and hands every queued payload to OnDrop, for an owner that will not run it or whose Run
+// has already returned.
+func (p *Pacer[P]) Discard() {
+	p.mu.Lock()
+	p.closeLocked()
+	p.dropQueuedLocked()
+	p.mu.Unlock()
+}
+
+func (p *Pacer[P]) closeLocked() {
+	if !p.closed {
+		p.closed = true
+		close(p.closedCh)
+	}
+	p.signalLocked()
+}
+
+// dropQueuedLocked hands every queued payload to OnDrop and empties the queue.
+func (p *Pacer[P]) dropQueuedLocked() {
+	if len(p.queue) == 0 {
+		return
+	}
+	n := len(p.queue)
+	for len(p.queue) > 0 {
+		it := p.queue.pop()
+		if p.cfg.OnDrop != nil {
+			p.cfg.OnDrop(it.Payload)
+		}
+	}
+	p.stats.Dropped += uint64(n)
+}
+
 // Stats returns a snapshot of the counters.
-func (p *Pacer) Stats() Stats {
+func (p *Pacer[P]) Stats() Stats {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	s := p.stats
@@ -236,8 +311,24 @@ func (p *Pacer) Stats() Stats {
 }
 
 // Run releases items to deliver in real time until ctx is done or the pacer is closed and drained. An error from
-// deliver ends the run and is returned.
-func (p *Pacer) Run(ctx context.Context, deliver func(Item) error) error {
+// deliver ends the run and is returned. Whichever way it ends, the pacer is closed afterwards and anything still
+// queued goes to OnDrop, so no accepted item is left without an owner.
+func (p *Pacer[P]) Run(ctx context.Context, deliver func(Item[P]) error) error {
+	p.mu.Lock()
+	p.running = true
+	p.mu.Unlock()
+
+	err := p.run(ctx, deliver)
+
+	p.mu.Lock()
+	p.running = false
+	p.closeLocked()
+	p.dropQueuedLocked()
+	p.mu.Unlock()
+	return err
+}
+
+func (p *Pacer[P]) run(ctx context.Context, deliver func(Item[P]) error) error {
 	for {
 		p.mu.Lock()
 		if len(p.queue) == 0 {
@@ -290,7 +381,7 @@ func (p *Pacer) Run(ctx context.Context, deliver func(Item) error) error {
 			}
 		}
 
-		item := heap.Pop(&p.queue).(Item)
+		item := p.queue.pop()
 		p.stats.Delivered++
 		if late > 0 {
 			p.stats.Late++
@@ -298,7 +389,7 @@ func (p *Pacer) Run(ctx context.Context, deliver func(Item) error) error {
 				p.stats.MaxLateness = late
 			}
 		}
-		p.notFull.Broadcast()
+		p.releasedLocked()
 		p.mu.Unlock()
 
 		if err := deliver(item); err != nil {
@@ -308,7 +399,7 @@ func (p *Pacer) Run(ctx context.Context, deliver func(Item) error) error {
 }
 
 // anchorLocked fixes the schedule: the item with DTS ts is due at now + Latency.
-func (p *Pacer) anchorLocked(now time.Time, ts time.Duration) {
+func (p *Pacer[P]) anchorLocked(now time.Time, ts time.Duration) {
 	p.anchored = true
 	p.pending = false
 	p.anchorAt = now
@@ -318,7 +409,7 @@ func (p *Pacer) anchorLocked(now time.Time, ts time.Duration) {
 // skewWaitLocked reports whether head must wait for the other track to catch up, and until when at the latest. A
 // track that has never pushed does not gate the other for longer than StallTimeout from the first push of anything;
 // a track that stopped pushing stops gating after StallTimeout.
-func (p *Pacer) skewWaitLocked(head Item, now time.Time) (bool, time.Time) {
+func (p *Pacer[P]) skewWaitLocked(head Item[P], now time.Time) (bool, time.Time) {
 	if head.Track < 0 || head.Track >= numTracks {
 		return false, time.Time{}
 	}
@@ -351,7 +442,7 @@ func (p *Pacer) skewWaitLocked(head Item, now time.Time) (bool, time.Time) {
 // skipToKeyframeLocked drops queued items up to, but excluding, the next video keyframe and re-anchors the schedule
 // on it, so a source that fell behind resumes at the target latency instead of dragging the backlog along. Returns
 // false when there is no later keyframe to skip to, in which case the caller releases the head as a late item.
-func (p *Pacer) skipToKeyframeLocked(now time.Time) bool {
+func (p *Pacer[P]) skipToKeyframeLocked(now time.Time) bool {
 	// Look for a keyframe other than the head itself.
 	found := false
 	for i := range p.queue {
@@ -370,34 +461,16 @@ func (p *Pacer) skipToKeyframeLocked(now time.Time) bool {
 		if head.Track == Video && head.Sync && dropped > 0 {
 			break
 		}
-		heap.Pop(&p.queue)
+		it := p.queue.pop()
+		if p.cfg.OnDrop != nil {
+			p.cfg.OnDrop(it.Payload)
+		}
 		dropped++
 	}
 	p.stats.Dropped += uint64(dropped)
 	p.stats.Skips++
 	p.anchorLocked(now, p.queue[0].DTS)
 	log.Warn("sample pacer skipped to keyframe to bound latency", "dropped", dropped, "latency", p.cfg.Latency)
-	p.notFull.Broadcast()
+	p.releasedLocked()
 	return true
-}
-
-// itemHeap orders items by DTS, then video before audio at equal times.
-type itemHeap []Item
-
-func (h itemHeap) Len() int { return len(h) }
-func (h itemHeap) Less(i, j int) bool {
-	if h[i].DTS != h[j].DTS {
-		return h[i].DTS < h[j].DTS
-	}
-	return h[i].Track < h[j].Track
-}
-func (h itemHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
-func (h *itemHeap) Push(x any)   { *h = append(*h, x.(Item)) }
-func (h *itemHeap) Pop() any {
-	old := *h
-	n := len(old)
-	it := old[n-1]
-	old[n-1] = Item{}
-	*h = old[:n-1]
-	return it
 }
