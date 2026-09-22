@@ -3,9 +3,13 @@
 //
 // A Conn is one publishing session: it connects, announces the tracks, and writes access units with timestamps
 // rebased to start at zero at the first video keyframe. It does not reconnect; the caller opens a new Conn when
-// Done closes. The wire protocol is gortmplib's message layer, driven here rather than through gortmplib's Client so
-// that the control messages a server sends (pings, acknowledgements) can be answered from the read loop without
-// racing the media writer, which gortmplib's writer does not guard against.
+// Done closes.
+//
+// The handshake, the control messages and the sequence headers go through gortmplib's message layer, driven here
+// rather than through gortmplib's Client so that the control messages a server sends (pings, acknowledgements) can be
+// answered from the read loop without racing the media writer, which gortmplib's writer does not guard against.
+// Access units are framed by this package's own chunk writer instead, which writes them to the socket without an
+// intermediate copy; see chunkwriter.go.
 package rtmp
 
 import (

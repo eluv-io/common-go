@@ -41,11 +41,12 @@ type Conn struct {
 	params fmp4.CodecParams
 	s      *session
 
-	mu      sync.Mutex // guards the timeline state and stats; the session serializes the writes themselves
-	started bool
-	base    time.Duration
-	last    map[fmp4.Kind]time.Duration
-	stats   Stats
+	mu         sync.Mutex // guards the timeline state and stats; the session serializes the writes themselves
+	started    bool
+	base       time.Duration
+	videoClock trackClock
+	audioClock trackClock
+	stats      Stats
 
 	done     chan struct{}
 	failOnce sync.Once
@@ -89,15 +90,7 @@ func Dial(ctx context.Context, cfg Config, params fmp4.CodecParams) (*Conn, erro
 		return nil, e(err)
 	}
 
-	c := &Conn{
-		cfg:    cfg,
-		params: params,
-		s:      s,
-		last:   make(map[fmp4.Kind]time.Duration),
-		done:   make(chan struct{}),
-	}
-	c.stats.ConnectedAt = time.Now()
-	c.stats.RemoteAddr = s.nconn.RemoteAddr().String()
+	c := newConn(cfg, params, s)
 
 	if err = c.writeHeaders(); err != nil {
 		_ = s.close()
@@ -107,6 +100,20 @@ func Dial(ctx context.Context, cfg Config, params fmp4.CodecParams) (*Conn, erro
 	log.Info("rtmp connected", "destination", cfg.Redacted(), "remote", c.stats.RemoteAddr,
 		"video", params.Video.Codecs, "audio", audioCodecs(params.Audio))
 	return c, nil
+}
+
+// newConn wraps an established session. It neither announces the tracks nor starts the read loop, which is what
+// tests and benchmarks that drive the write path over a pipe want.
+func newConn(cfg Config, params fmp4.CodecParams, s *session) *Conn {
+	c := &Conn{
+		cfg:    cfg,
+		params: params,
+		s:      s,
+		done:   make(chan struct{}),
+	}
+	c.stats.ConnectedAt = time.Now()
+	c.stats.RemoteAddr = s.nconn.RemoteAddr().String()
+	return c
 }
 
 func audioCodecs(a *fmp4.AudioParams) string {
@@ -290,16 +297,15 @@ func (c *Conn) Err() error {
 
 // WriteVideo sends one H.264 access unit. nalus are the NAL units without length prefixes or start codes; keyframe
 // marks a random access point. dts and pts are on the caller's time axis; the connection rebases them.
+//
+// The NAL units are written to the socket before this returns and are not retained, so a caller that owns them may
+// reuse or release them afterwards.
 func (c *Conn) WriteVideo(nalus [][]byte, dts, pts time.Duration, keyframe bool) error {
 	if err := c.Err(); err != nil {
 		return err
 	}
 	if len(nalus) == 0 {
 		return nil
-	}
-	au, err := h264.AVCC(nalus).Marshal()
-	if err != nil {
-		return errors.E("rtmp.WriteVideo", errors.K.Invalid, err)
 	}
 	keyframe = keyframe || h264.IsRandomAccess(nalus)
 
@@ -313,7 +319,7 @@ func (c *Conn) WriteVideo(nalus [][]byte, dts, pts time.Duration, keyframe bool)
 		c.started = true
 		c.base = dts
 	}
-	ts := c.rebaseLocked(fmp4.KindVideo, dts)
+	ts := c.rebaseLocked(&c.videoClock, dts)
 	cts := pts - dts
 	if cts < 0 {
 		c.stats.NegativeCTS++
@@ -326,17 +332,13 @@ func (c *Conn) WriteVideo(nalus [][]byte, dts, pts time.Duration, keyframe bool)
 	c.stats.LastVideoTS = ts
 	c.mu.Unlock()
 
-	err = c.s.write(&message.Video{
-		ChunkStreamID:   message.VideoChunkStreamID,
-		MessageStreamID: publishStreamID,
-		Codec:           message.CodecH264,
-		IsKeyFrame:      keyframe,
-		Type:            message.VideoTypeAU,
-		AU:              au,
-		DTS:             ts,
-		PTSDelta:        cts,
-	})
-	return c.writeResult(err)
+	return c.writeResult(c.s.writeVideo(nalus, millis(ts), millis(cts), keyframe))
+}
+
+// millis converts a duration to the milliseconds an RTMP timestamp counts. The field is 32 bits and wraps after
+// about 49 days of stream time, which is what every RTMP implementation does with it.
+func millis(d time.Duration) uint32 {
+	return uint32(d / time.Millisecond)
 }
 
 // WriteAudio sends one AAC access unit (a raw frame, no ADTS header). Audio before the first video keyframe is
@@ -358,33 +360,29 @@ func (c *Conn) WriteAudio(au []byte, pts time.Duration) error {
 		c.mu.Unlock()
 		return nil
 	}
-	ts := c.rebaseLocked(fmp4.KindAudio, pts)
+	ts := c.rebaseLocked(&c.audioClock, pts)
 	c.stats.AudioFrames++
 	c.stats.LastAudioTS = ts
 	c.mu.Unlock()
 
-	err := c.s.write(&message.Audio{
-		ChunkStreamID:   message.AudioChunkStreamID,
-		MessageStreamID: publishStreamID,
-		Codec:           message.CodecMPEG4Audio,
-		Rate:            message.AudioRate44100,
-		Depth:           message.AudioDepth16,
-		IsStereo:        true,
-		AACType:         message.AudioAACTypeAU,
-		AU:              au,
-		DTS:             ts,
-	})
-	return c.writeResult(err)
+	return c.writeResult(c.s.writeAudio(au, millis(ts)))
+}
+
+// trackClock is what one track's timestamps were rebased to last.
+type trackClock struct {
+	ts  time.Duration
+	set bool
 }
 
 // rebaseLocked maps t onto the connection's time axis and keeps the track's timestamps non-decreasing.
-func (c *Conn) rebaseLocked(kind fmp4.Kind, t time.Duration) time.Duration {
+func (c *Conn) rebaseLocked(clock *trackClock, t time.Duration) time.Duration {
 	ts := t - c.base
-	if last, ok := c.last[kind]; ok && ts < last {
+	if clock.set && ts < clock.ts {
 		c.stats.ClampedTimestamps++
-		ts = last
+		ts = clock.ts
 	}
-	c.last[kind] = ts
+	clock.ts = ts
+	clock.set = true
 	return ts
 }
 
