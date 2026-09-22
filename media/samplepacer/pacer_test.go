@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/eluv-io/errors-go"
 )
 
 // fakeClock drives the pacer deterministically: Now returns the fake time and Sleep jumps it to the requested instant,
@@ -76,12 +78,15 @@ func (c *fakeClock) Sleep(ctx context.Context, t time.Time, wake <-chan struct{}
 	}
 }
 
+// payload is what the tests carry through the pacer: an id, so a dropped item can be identified.
+type payload int
+
 type release struct {
-	item Item
+	item Item[payload]
 	at   time.Time
 }
 
-func runPacer(t *testing.T, p *Pacer, clock *fakeClock, n int) []release {
+func runPacer(t *testing.T, p *Pacer[payload], clock *fakeClock, n int) []release {
 	t.Helper()
 	var mu sync.Mutex
 	var got []release
@@ -89,7 +94,7 @@ func runPacer(t *testing.T, p *Pacer, clock *fakeClock, n int) []release {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
-		_ = p.Run(ctx, func(it Item) error {
+		_ = p.Run(ctx, func(it Item[payload]) error {
 			mu.Lock()
 			got = append(got, release{item: it, at: clock.Now()})
 			if len(got) == n {
@@ -112,16 +117,17 @@ func runPacer(t *testing.T, p *Pacer, clock *fakeClock, n int) []release {
 
 func TestPacer_ReleasesAtLatency(t *testing.T) {
 	clock := newFakeClock()
-	p := New(Config{Latency: 500 * time.Millisecond, Now: clock.Now, Sleep: clock.Sleep})
+	p := New(Config[payload]{Latency: 500 * time.Millisecond, Now: clock.Now, Sleep: clock.Sleep})
 	start := clock.Now()
 	ctx := context.Background()
 
 	// a burst of one second of video at 25 fps and audio every 21.33 ms, pushed instantly
 	for i := 0; i < 25; i++ {
-		require.NoError(t, p.Push(ctx, Item{Track: Video, DTS: time.Duration(i) * 40 * time.Millisecond, Sync: i == 0}))
+		require.NoError(t, p.Push(ctx,
+			Item[payload]{Track: Video, DTS: time.Duration(i) * 40 * time.Millisecond, Sync: i == 0}))
 	}
 	for i := 0; i < 47; i++ {
-		require.NoError(t, p.Push(ctx, Item{Track: Audio, DTS: time.Duration(i) * 64 * time.Millisecond / 3}))
+		require.NoError(t, p.Push(ctx, Item[payload]{Track: Audio, DTS: time.Duration(i) * 64 * time.Millisecond / 3}))
 	}
 
 	got := runPacer(t, p, clock, 72)
@@ -142,24 +148,26 @@ func TestPacer_ReleasesAtLatency(t *testing.T) {
 func TestPacer_SkewHoldsVideoUntilAudioArrives(t *testing.T) {
 	clock := newFakeClock()
 	start := clock.Now()
-	p := New(Config{Latency: 100 * time.Millisecond, MaxSkew: 200 * time.Millisecond, StallTimeout: 3 * time.Second,
-		MaxBuffered: 10 * time.Second, Now: clock.Now, Sleep: clock.Sleep})
+	p := New(Config[payload]{Latency: 100 * time.Millisecond, MaxSkew: 200 * time.Millisecond,
+		StallTimeout: 3 * time.Second,
+		MaxBuffered:  10 * time.Second, Now: clock.Now, Sleep: clock.Sleep})
 	ctx := context.Background()
 
 	// video runs one second ahead of audio: only the first 200 ms of video may be released before audio shows up
 	for i := 0; i < 25; i++ {
-		require.NoError(t, p.Push(ctx, Item{Track: Video, DTS: time.Duration(i) * 40 * time.Millisecond, Sync: i == 0}))
+		require.NoError(t, p.Push(ctx,
+			Item[payload]{Track: Video, DTS: time.Duration(i) * 40 * time.Millisecond, Sync: i == 0}))
 	}
-	require.NoError(t, p.Push(ctx, Item{Track: Audio, DTS: 0}))
+	require.NoError(t, p.Push(ctx, Item[payload]{Track: Audio, DTS: 0}))
 	// the audio stall timeout must not expire on its own while the test inspects the held state
 	clock.SetHorizon(start.Add(time.Second))
 
 	var mu sync.Mutex
-	var got []Item
+	var got []Item[payload]
 	ctx2, cancel := context.WithCancel(ctx)
 	defer cancel()
 	go func() {
-		_ = p.Run(ctx2, func(it Item) error {
+		_ = p.Run(ctx2, func(it Item[payload]) error {
 			mu.Lock()
 			got = append(got, it)
 			mu.Unlock()
@@ -181,7 +189,7 @@ func TestPacer_SkewHoldsVideoUntilAudioArrives(t *testing.T) {
 	// audio catches up: the rest flows
 	clock.SetHorizon(start.Add(time.Hour))
 	for i := 1; i < 47; i++ {
-		require.NoError(t, p.Push(ctx, Item{Track: Audio, DTS: time.Duration(i) * 64 * time.Millisecond / 3}))
+		require.NoError(t, p.Push(ctx, Item[payload]{Track: Audio, DTS: time.Duration(i) * 64 * time.Millisecond / 3}))
 	}
 	require.Eventually(t, func() bool {
 		mu.Lock()
@@ -252,11 +260,12 @@ func TestPacer_FullQueueOverridesSkewGate(t *testing.T) {
 
 func TestPacer_StalledTrackStopsGating(t *testing.T) {
 	clock := newFakeClock()
-	p := New(Config{Latency: 100 * time.Millisecond, MaxSkew: 100 * time.Millisecond, StallTimeout: time.Second,
+	p := New(Config[payload]{Latency: 100 * time.Millisecond, MaxSkew: 100 * time.Millisecond, StallTimeout: time.Second,
 		Now: clock.Now, Sleep: clock.Sleep})
 	ctx := context.Background()
 	for i := 0; i < 50; i++ {
-		require.NoError(t, p.Push(ctx, Item{Track: Video, DTS: time.Duration(i) * 40 * time.Millisecond, Sync: i == 0}))
+		require.NoError(t, p.Push(ctx,
+			Item[payload]{Track: Video, DTS: time.Duration(i) * 40 * time.Millisecond, Sync: i == 0}))
 	}
 	// audio never arrives: after StallTimeout the video goes out alone
 	got := runPacer(t, p, clock, 50)
@@ -265,13 +274,15 @@ func TestPacer_StalledTrackStopsGating(t *testing.T) {
 
 func TestPacer_LateBurstAndSkipToKeyframe(t *testing.T) {
 	clock := newFakeClock()
-	p := New(Config{Latency: 200 * time.Millisecond, LateTolerance: 200 * time.Millisecond, StallTimeout: time.Millisecond,
-		MaxBuffered: 10 * time.Second, Now: clock.Now, Sleep: clock.Sleep})
+	p := New(Config[payload]{Latency: 200 * time.Millisecond, LateTolerance: 200 * time.Millisecond,
+		StallTimeout: time.Millisecond,
+		MaxBuffered:  10 * time.Second, Now: clock.Now, Sleep: clock.Sleep})
 	ctx := context.Background()
 
 	// GOPs of 500 ms (keyframe every 5 frames at 10 fps), 4 seconds of video
 	for i := 0; i < 40; i++ {
-		require.NoError(t, p.Push(ctx, Item{Track: Video, DTS: time.Duration(i) * 100 * time.Millisecond, Sync: i%5 == 0}))
+		require.NoError(t, p.Push(ctx,
+			Item[payload]{Track: Video, DTS: time.Duration(i) * 100 * time.Millisecond, Sync: i%5 == 0}))
 	}
 	// let audio gating expire immediately
 	clock.Advance(10 * time.Millisecond)
@@ -281,7 +292,7 @@ func TestPacer_LateBurstAndSkipToKeyframe(t *testing.T) {
 	ctx2, cancel := context.WithCancel(ctx)
 	defer cancel()
 	go func() {
-		_ = p.Run(ctx2, func(it Item) error {
+		_ = p.Run(ctx2, func(it Item[payload]) error {
 			mu.Lock()
 			got = append(got, release{item: it, at: clock.Now()})
 			mu.Unlock()
@@ -320,14 +331,15 @@ func TestPacer_LateBurstAndSkipToKeyframe(t *testing.T) {
 
 func TestPacer_PushBlocksWhenFull(t *testing.T) {
 	clock := newFakeClock()
-	p := New(Config{Latency: 100 * time.Millisecond, MaxBuffered: time.Second, Now: clock.Now, Sleep: clock.Sleep})
+	p := New(Config[payload]{Latency: 100 * time.Millisecond, MaxBuffered: time.Second,
+		Now: clock.Now, Sleep: clock.Sleep})
 	ctx := context.Background()
 	for i := 0; i <= 10; i++ {
-		require.NoError(t, p.Push(ctx, Item{Track: Video, DTS: time.Duration(i) * 100 * time.Millisecond}))
+		require.NoError(t, p.Push(ctx, Item[payload]{Track: Video, DTS: time.Duration(i) * 100 * time.Millisecond}))
 	}
 	pushed := make(chan error, 1)
 	go func() {
-		pushed <- p.Push(ctx, Item{Track: Video, DTS: 1100 * time.Millisecond})
+		pushed <- p.Push(ctx, Item[payload]{Track: Video, DTS: 1100 * time.Millisecond})
 	}()
 	select {
 	case err := <-pushed:
@@ -338,43 +350,217 @@ func TestPacer_PushBlocksWhenFull(t *testing.T) {
 	// cancelling the push context unblocks it
 	cctx, cancel := context.WithCancel(ctx)
 	cancel()
-	require.ErrorIs(t, p.Push(cctx, Item{Track: Video, DTS: 1200 * time.Millisecond}), context.Canceled)
+	require.ErrorIs(t, p.Push(cctx, Item[payload]{Track: Video, DTS: 1200 * time.Millisecond}), context.Canceled)
 
-	// the consumer draining makes room; with the fake clock it drains more than one item before it is stopped
-	got := runPacer(t, p, clock, 1)
-	require.NotEmpty(t, got)
-	require.NoError(t, <-pushed)
+	// the consumer draining makes room, and the blocked push goes through
+	runCtx, stop := context.WithCancel(ctx)
+	defer stop()
+	go func() { _ = p.Run(runCtx, func(Item[payload]) error { return nil }) }()
+	select {
+	case err := <-pushed:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("the blocked push must go through once the consumer drains")
+	}
 }
 
 func TestPacer_CloseDrainsAndRejectsPush(t *testing.T) {
 	clock := newFakeClock()
-	p := New(Config{Latency: 100 * time.Millisecond, StallTimeout: time.Millisecond, Now: clock.Now, Sleep: clock.Sleep})
+	p := New(Config[payload]{Latency: 100 * time.Millisecond, StallTimeout: time.Millisecond,
+		Now: clock.Now, Sleep: clock.Sleep})
 	ctx := context.Background()
-	require.NoError(t, p.Push(ctx, Item{Track: Video, DTS: 0}))
-	require.NoError(t, p.Push(ctx, Item{Track: Video, DTS: 40 * time.Millisecond}))
+	require.NoError(t, p.Push(ctx, Item[payload]{Track: Video, DTS: 0}))
+	require.NoError(t, p.Push(ctx, Item[payload]{Track: Video, DTS: 40 * time.Millisecond}))
 	clock.Advance(10 * time.Millisecond)
 	p.Close()
-	require.ErrorIs(t, p.Push(ctx, Item{Track: Video, DTS: 80 * time.Millisecond}), ErrClosed)
+	require.ErrorIs(t, p.Push(ctx, Item[payload]{Track: Video, DTS: 80 * time.Millisecond}), ErrClosed)
 
 	n := 0
-	err := p.Run(ctx, func(Item) error { n++; return nil })
+	err := p.Run(ctx, func(Item[payload]) error { n++; return nil })
 	require.NoError(t, err)
 	require.Equal(t, 2, n, "queued items are drained before Run returns")
 }
 
+// dropRecorder collects the payloads the pacer hands back, which is where a pooled payload would be released.
+type dropRecorder struct {
+	mu      sync.Mutex
+	dropped []payload
+}
+
+func (d *dropRecorder) onDrop(p payload) {
+	d.mu.Lock()
+	d.dropped = append(d.dropped, p)
+	d.mu.Unlock()
+}
+
+func (d *dropRecorder) list() []payload {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return append([]payload(nil), d.dropped...)
+}
+
+// TestPacer_DropsSkippedItems pins that the items a catch-up skip discards are handed back, one call per item.
+func TestPacer_DropsSkippedItems(t *testing.T) {
+	clock := newFakeClock()
+	drops := &dropRecorder{}
+	p := New(Config[payload]{Latency: 200 * time.Millisecond, LateTolerance: 200 * time.Millisecond,
+		StallTimeout: time.Millisecond, MaxBuffered: 10 * time.Second, OnDrop: drops.onDrop,
+		Now: clock.Now, Sleep: clock.Sleep})
+	ctx := context.Background()
+	for i := 0; i < 40; i++ {
+		require.NoError(t, p.Push(ctx, Item[payload]{Track: Video, DTS: time.Duration(i) * 100 * time.Millisecond,
+			Sync: i%5 == 0, Payload: payload(i)}))
+	}
+	clock.Advance(10 * time.Millisecond)
+
+	var mu sync.Mutex
+	n := 0
+	ctx2, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		_ = p.Run(ctx2, func(Item[payload]) error {
+			mu.Lock()
+			n++
+			stall := n == 1
+			mu.Unlock()
+			if stall {
+				clock.Advance(1500 * time.Millisecond)
+			}
+			return nil
+		})
+	}()
+	require.Eventually(t, func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return n >= 30
+	}, 5*time.Second, time.Millisecond)
+
+	require.Equal(t, []payload{1, 2, 3, 4}, drops.list(), "the frames between the head and the next keyframe")
+	require.EqualValues(t, 4, p.Stats().Dropped)
+}
+
+// TestPacer_RunExitDropsQueued pins that nothing is left without an owner when the consumer stops early, and that a
+// later push is refused rather than accepted into a queue nobody reads.
+func TestPacer_RunExitDropsQueued(t *testing.T) {
+	clock := newFakeClock()
+	drops := &dropRecorder{}
+	p := New(Config[payload]{Latency: time.Hour, MaxBuffered: time.Hour, StallTimeout: time.Millisecond,
+		OnDrop: drops.onDrop, Now: clock.Now, Sleep: clock.Sleep})
+	ctx := context.Background()
+	for i := 0; i < 5; i++ {
+		require.NoError(t, p.Push(ctx, Item[payload]{Track: Video, DTS: time.Duration(i) * 40 * time.Millisecond,
+			Payload: payload(i)}))
+	}
+
+	// the consumer's context is cancelled with everything still held back by the one hour latency
+	runCtx, cancel := context.WithCancel(ctx)
+	cancel()
+	require.ErrorIs(t, p.Run(runCtx, func(Item[payload]) error { return nil }), context.Canceled)
+
+	require.ElementsMatch(t, []payload{0, 1, 2, 3, 4}, drops.list())
+	require.ErrorIs(t, p.Push(ctx, Item[payload]{Track: Video, DTS: time.Second}), ErrClosed,
+		"a pacer whose consumer has gone does not accept more items")
+	require.Len(t, drops.list(), 5, "a refused push is not dropped: its caller still owns it")
+}
+
+// TestPacer_DeliverErrorDropsQueued covers the other early exit of Run.
+func TestPacer_DeliverErrorDropsQueued(t *testing.T) {
+	clock := newFakeClock()
+	drops := &dropRecorder{}
+	p := New(Config[payload]{Latency: 0, StallTimeout: time.Millisecond, OnDrop: drops.onDrop,
+		Now: clock.Now, Sleep: clock.Sleep})
+	ctx := context.Background()
+	for i := 0; i < 4; i++ {
+		require.NoError(t, p.Push(ctx, Item[payload]{Track: Video, DTS: time.Duration(i) * 40 * time.Millisecond,
+			Payload: payload(i)}))
+	}
+	clock.Advance(time.Second)
+
+	boom := errors.Str("consumer failed")
+	err := p.Run(ctx, func(Item[payload]) error { return boom })
+	require.ErrorIs(t, err, boom)
+	require.ElementsMatch(t, []payload{1, 2, 3}, drops.list(), "the item handed to deliver is the consumer's")
+}
+
+// TestPacer_DiscardDropsQueued covers the owner that never runs the pacer.
+func TestPacer_DiscardDropsQueued(t *testing.T) {
+	clock := newFakeClock()
+	drops := &dropRecorder{}
+	p := New(Config[payload]{Latency: time.Second, OnDrop: drops.onDrop, Now: clock.Now, Sleep: clock.Sleep})
+	ctx := context.Background()
+	require.NoError(t, p.Push(ctx, Item[payload]{Track: Video, DTS: 0, Payload: 1}))
+	require.NoError(t, p.Push(ctx, Item[payload]{Track: Audio, DTS: 0, Payload: 2}))
+
+	p.Discard()
+	require.ElementsMatch(t, []payload{1, 2}, drops.list())
+	require.ErrorIs(t, p.Push(ctx, Item[payload]{Track: Video, DTS: time.Second}), ErrClosed)
+	require.EqualValues(t, 2, p.Stats().Dropped)
+}
+
+// TestPacer_PushUnblocksOnClose pins that closing wakes every blocked producer, not just one.
+func TestPacer_PushUnblocksOnClose(t *testing.T) {
+	clock := newFakeClock()
+	p := New(Config[payload]{Latency: time.Second, MaxBuffered: 100 * time.Millisecond, Now: clock.Now,
+		Sleep: clock.Sleep})
+	ctx := context.Background()
+	require.NoError(t, p.Push(ctx, Item[payload]{Track: Video, DTS: 0}))
+	require.NoError(t, p.Push(ctx, Item[payload]{Track: Video, DTS: time.Second}))
+
+	pushed := make(chan error, 2)
+	for i := 0; i < 2; i++ {
+		go func() { pushed <- p.Push(ctx, Item[payload]{Track: Audio, DTS: 2 * time.Second}) }()
+	}
+	time.Sleep(20 * time.Millisecond)
+	p.Close()
+	for i := 0; i < 2; i++ {
+		select {
+		case err := <-pushed:
+			require.ErrorIs(t, err, ErrClosed)
+		case <-time.After(time.Second):
+			t.Fatal("a blocked push must be woken by Close")
+		}
+	}
+}
+
 func TestPacer_DiscontinuityReanchors(t *testing.T) {
 	clock := newFakeClock()
-	p := New(Config{Latency: 100 * time.Millisecond, StallTimeout: time.Millisecond, Now: clock.Now, Sleep: clock.Sleep})
+	p := New(Config[payload]{Latency: 100 * time.Millisecond, StallTimeout: time.Millisecond,
+		Now: clock.Now, Sleep: clock.Sleep})
 	ctx := context.Background()
-	require.NoError(t, p.Push(ctx, Item{Track: Video, DTS: 10 * time.Second, Sync: true}))
+
+	// one consumer for the whole test: a Run that returns closes the pacer, since nothing would consume afterwards
+	var mu sync.Mutex
+	var got []release
+	runCtx, stop := context.WithCancel(ctx)
+	defer stop()
+	go func() {
+		_ = p.Run(runCtx, func(it Item[payload]) error {
+			mu.Lock()
+			got = append(got, release{item: it, at: clock.Now()})
+			mu.Unlock()
+			return nil
+		})
+	}()
+	released := func(n int) []release {
+		t.Helper()
+		require.Eventually(t, func() bool {
+			mu.Lock()
+			defer mu.Unlock()
+			return len(got) >= n
+		}, 5*time.Second, time.Millisecond)
+		mu.Lock()
+		defer mu.Unlock()
+		return append([]release(nil), got...)
+	}
+
+	require.NoError(t, p.Push(ctx, Item[payload]{Track: Video, DTS: 10 * time.Second, Sync: true}))
 	clock.Advance(10 * time.Millisecond)
-	got := runPacer(t, p, clock, 1)
-	first := got[0].at
+	first := released(1)[0].at
 
 	// the source restarts at time zero: without a discontinuity this would be judged 10 s early and wait
 	p.Discontinuity()
-	require.NoError(t, p.Push(ctx, Item{Track: Video, DTS: 0, Sync: true}))
+	require.NoError(t, p.Push(ctx, Item[payload]{Track: Video, DTS: 0, Sync: true}))
 	clock.Advance(10 * time.Millisecond)
-	got = runPacer(t, p, clock, 1)
-	require.Equal(t, first.Add(110*time.Millisecond), got[0].at, "re-anchored: released one latency after now")
+	second := released(2)[1]
+	require.Equal(t, first.Add(110*time.Millisecond), second.at, "re-anchored: released one latency after now")
 }
