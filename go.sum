@@ -62,6 +62,8 @@ github.com/eluv-io/log-go v1.0.10 h1:/fjLjiBXwy5ocJXuzneRVzvUalIeTPSH6jAdFiaWN+Y
 github.com/eluv-io/log-go v1.0.10/go.mod h1:TvBaLIOvcrBpmgMaewgyZQSVY056WIfdCIliuGou+iw=
 github.com/eluv-io/mapstructure v1.5.1 h1:yxilnJ5GN6K2Kn1tEEuWJcVmONEMNso1uNJkJYIWQbQ=
 github.com/eluv-io/mapstructure v1.5.1/go.mod h1:HGl3bHmRju3DIQnCWotnLvMLhiTrYCLR9fOKtK8W5uQ=
+github.com/eluv-io/mp4ff v0.47.1-0.20260603013458-2403cac8f06c h1:MuqTJa23RhKhk8GFFfjU6vR5zD7j0Fe9x6A9n6WDogg=
+github.com/eluv-io/mp4ff v0.47.1-0.20260603013458-2403cac8f06c/go.mod h1:hJNUUqOBryLAzUW9wpCJyw2HaI+TCd2rUPhafoS5lgg=
 github.com/eluv-io/stack v1.8.2 h1:yocCvAcPy9vW5iBdNnig5Tem8LgOTT8JrOLvDcacnEQ=
 github.com/eluv-io/stack v1.8.2/go.mod h1:MIN/UfmiJlJUFpglnJCj+7DR5sDBUuvQRTENHm1F310=
 github.com/eluv-io/utc-go v1.0.1 h1:bFE8CFQT+ln8A8QK5SDBdUKtUfeOFnPF50c+Npz3pv0=
@@ -93,6 +95,8 @@ github.com/go-playground/validator/v10 v10.4.1/go.mod h1:nlOn6nFhuKACm19sB/8EGNn
 github.com/go-stack/stack v1.8.0 h1:5SgMzNM5HxrEjV0ww2lTmX6E2Izsfxas4+YHWRs3Lsk=
 github.com/go-stack/stack v1.8.0/go.mod h1:v0f6uXyyMGvRgIKkXu+yp6POWl0qKG85gN/melR3HDY=
 github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0/go.mod h1:fyg7847qk6SyHyPtNmDHnmrv/HOrqktSC+C9fM+CJOE=
+github.com/go-test/deep v1.1.0 h1:WOcxcdHcvdgThNXjw0t76K42FXTU7HpNQWHpA2HHNlg=
+github.com/go-test/deep v1.1.0/go.mod h1:5C2ZWiW0ErCdrYzpqxLbTX7MG14M9iiw8DgHncVwcsE=
 github.com/golang/protobuf v1.2.0/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
 github.com/golang/protobuf v1.3.1/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
 github.com/golang/protobuf v1.3.3/go.mod h1:vzj43D7+SQXF/4pzW/hwtAqwc6iTitCiVSaWz5lYuqw=
