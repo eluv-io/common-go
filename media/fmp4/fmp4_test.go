@@ -100,14 +100,26 @@ func TestTrackInfo_CodecEqual(t *testing.T) {
 	require.False(t, videoOnly.Equal(CodecParams{Video: v.VideoParams(), Audio: a.AudioParams()}))
 }
 
+// readAll reads a whole segment and returns copies of its samples: a sample handed to the callback views a pooled
+// fragment and is only valid until it is released, so a test that keeps samples around takes copies.
 func readAll(t *testing.T, r io.Reader, track *TrackInfo) []*Sample {
 	t.Helper()
+	pool := NewFragmentPool(FragmentPoolConfig{})
 	var samples []*Sample
-	require.NoError(t, ReadFragments(r, track, func(s *Sample) error {
-		samples = append(samples, s)
+	require.NoError(t, ReadFragments(r, track, pool, func(s *Sample) error {
+		samples = append(samples, s.Clone())
+		s.Release()
 		return nil
 	}))
+	requirePoolDrained(t, pool)
 	return samples
+}
+
+// requirePoolDrained asserts that every fragment the pool handed out came back, i.e. that no reference leaked.
+func requirePoolDrained(t *testing.T, p *FragmentPool) {
+	t.Helper()
+	st := p.Stats()
+	require.Equal(t, st.Borrowed, st.Returned, "every borrowed fragment must be released")
 }
 
 func TestReadFragments_Video(t *testing.T) {
@@ -221,7 +233,7 @@ func TestReadFragments_BlockingReader(t *testing.T) {
 	got := make(chan int, 1)
 	go func() {
 		n := 0
-		_ = ReadFragments(r, v, func(*Sample) error { n++; return nil })
+		_ = ReadFragments(r, v, nil, func(s *Sample) error { n++; s.Release(); return nil })
 		got <- n
 	}()
 	select {
@@ -236,44 +248,27 @@ func TestReadFragments_BlockingReader(t *testing.T) {
 func TestReadFragments_Errors(t *testing.T) {
 	v := parseFixtureInit(t, "vinit-stream0.m4s").Track(KindVideo)
 
+	release := func(s *Sample) error { s.Release(); return nil }
+
 	t.Run("truncated segment", func(t *testing.T) {
 		seg := fixture(t, "vchunk-stream0-00001.m4s")
-		err := ReadFragments(bytes.NewReader(seg[:len(seg)/2]), v, func(*Sample) error { return nil })
-		require.Error(t, err)
+		pool := NewFragmentPool(FragmentPoolConfig{})
+		err := ReadFragments(bytes.NewReader(seg[:len(seg)/2]), v, pool, release)
+		require.ErrorContains(t, err, "truncated fragment")
+		requirePoolDrained(t, pool)
 	})
 
 	t.Run("init segment instead of media segment", func(t *testing.T) {
-		err := ReadFragments(bytes.NewReader(fixture(t, "vinit-stream0.m4s")), v, func(*Sample) error { return nil })
+		err := ReadFragments(bytes.NewReader(fixture(t, "vinit-stream0.m4s")), v, nil, release)
 		require.ErrorContains(t, err, "unexpected init segment")
 	})
 
 	t.Run("callback error is returned as is", func(t *testing.T) {
 		boom := errors.E("test", errors.K.Cancelled, "reason", "stop")
-		err := ReadFragments(bytes.NewReader(fixture(t, "vchunk-stream0-00001.m4s")), v, func(*Sample) error { return boom })
+		pool := NewFragmentPool(FragmentPoolConfig{})
+		err := ReadFragments(bytes.NewReader(fixture(t, "vchunk-stream0-00001.m4s")), v, pool,
+			func(s *Sample) error { s.Release(); return boom })
 		require.Same(t, boom, err)
+		requirePoolDrained(t, pool)
 	})
-}
-
-func BenchmarkReadFragments_Video(b *testing.B) {
-	init, err := ParseInit(bytes.NewReader(mustRead(b, "vinit-stream0.m4s")))
-	if err != nil {
-		b.Fatal(err)
-	}
-	v := init.Track(KindVideo)
-	seg := mustRead(b, "vchunk-stream0-00001.m4s")
-	b.ReportAllocs()
-	b.SetBytes(int64(len(seg)))
-	for b.Loop() {
-		if err := ReadFragments(bytes.NewReader(seg), v, func(*Sample) error { return nil }); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
-func mustRead(b *testing.B, name string) []byte {
-	bts, err := os.ReadFile(filepath.Join("testdata", name))
-	if err != nil {
-		b.Fatal(err)
-	}
-	return bts
 }

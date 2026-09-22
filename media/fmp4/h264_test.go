@@ -55,16 +55,51 @@ func TestInspectAccessUnit(t *testing.T) {
 	aud := []byte{0x09, 0xf0}
 	filler := []byte{0x0c, 0xff}
 
-	au := inspectAccessUnit([][]byte{aud, sps, pps, idr, filler}, [][]byte{sps}, [][]byte{pps})
-	require.Equal(t, [][]byte{sps, pps, idr}, au.nalus, "AUD and filler dropped, parameter sets kept")
-	require.True(t, au.idr)
-	require.False(t, au.paramSetChange)
+	kept, idrFlag, changed := inspectAccessUnit([][]byte{aud, sps, pps, idr, filler}, [][]byte{sps}, [][]byte{pps})
+	require.Equal(t, [][]byte{sps, pps, idr}, kept, "AUD and filler dropped, parameter sets kept")
+	require.True(t, idrFlag)
+	require.False(t, changed)
 
-	au = inspectAccessUnit([][]byte{nonIdr}, [][]byte{sps}, [][]byte{pps})
-	require.False(t, au.idr)
-	require.False(t, au.paramSetChange)
+	_, idrFlag, changed = inspectAccessUnit([][]byte{nonIdr}, [][]byte{sps}, [][]byte{pps})
+	require.False(t, idrFlag)
+	require.False(t, changed)
 
 	changedSps := []byte{0x67, 1, 2, 4}
-	au = inspectAccessUnit([][]byte{changedSps, pps, idr}, [][]byte{sps}, [][]byte{pps})
-	require.True(t, au.paramSetChange)
+	_, _, changed = inspectAccessUnit([][]byte{changedSps, pps, idr}, [][]byte{sps}, [][]byte{pps})
+	require.True(t, changed)
+}
+
+// TestInspectAccessUnit_CompactsInPlace pins the aliasing the fragment arena relies on: the kept NAL units are the
+// prefix of the slice handed in, so a sample's views need no slice of their own.
+func TestInspectAccessUnit_CompactsInPlace(t *testing.T) {
+	sps := []byte{0x67, 1}
+	idr := []byte{0x65, 2}
+	aud := []byte{0x09, 0xf0}
+
+	in := [][]byte{aud, sps, aud, idr}
+	kept, _, _ := inspectAccessUnit(in, [][]byte{sps}, nil)
+	require.Len(t, kept, 2)
+	require.Equal(t, &in[0][0], &kept[0][0], "the kept units are moved to the front of the input slice")
+	require.Equal(t, [][]byte{sps, idr}, kept)
+}
+
+func TestAppendNALUs(t *testing.T) {
+	idr := []byte{0x65, 5, 6}
+	sps := []byte{0x67, 1}
+
+	dst := make([][]byte, 0, 4)
+	dst, err := appendNALUs(dst, avcc(sps, idr), 4)
+	require.NoError(t, err)
+	require.Equal(t, [][]byte{sps, idr}, dst)
+
+	// a second sample appends to the same arena
+	dst, err = appendNALUs(dst, avcc(idr), 4)
+	require.NoError(t, err)
+	require.Len(t, dst, 3)
+
+	// a failed split leaves the arena as it was
+	before := len(dst)
+	dst, err = appendNALUs(dst, []byte{0, 0, 0, 9, 1}, 4)
+	require.Error(t, err)
+	require.Len(t, dst, before)
 }
