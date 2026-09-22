@@ -322,6 +322,13 @@ func (p *Pacer) skewWaitLocked(head Item, now time.Time) (bool, time.Time) {
 	if head.Track < 0 || head.Track >= numTracks {
 		return false, time.Time{}
 	}
+	if p.spanLocked() >= p.cfg.MaxBuffered {
+		// The queue holds its bound, so Push is blocking both producers and the track we would wait for cannot send
+		// anything until something leaves. Waiting would stall every track for StallTimeout, release the backlog in a
+		// burst and stall again, so the release rate collapses to one burst per StallTimeout. Releasing now is what
+		// lets the track we are waiting for catch up.
+		return false, time.Time{}
+	}
 	other := p.lastPush[1-head.Track]
 	self := p.lastPush[head.Track]
 	if !other.seen {
