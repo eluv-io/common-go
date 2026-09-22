@@ -38,33 +38,39 @@ func WithAuth(user, pass string) Option {
 }
 
 // Stats is what the receiver has seen so far.
+//
+// The JSON tags are there for logging: rendered with %v the struct spells every sequence header and the whole first
+// access unit out as decimal byte arrays, which buries the counters a reader is after. Log it as JSON instead, e.g.
+// with jsonutil.Stringer. The media bytes are left out of that rendering entirely; the byte counts describe them.
 type Stats struct {
-	Connections int // publisher connections accepted
-	Active      int // publisher connections currently open
-	Disconnects int // publisher connections that ended
+	Connections int `json:"connections"` // publisher connections accepted
+	Active      int `json:"active"`      // publisher connections currently open
+	Disconnects int `json:"disconnects"` // publisher connections that ended
 
 	// Of the latest publish.
-	App       string
-	StreamKey string
-	Metadata  map[string]any // the onMetaData object, if one was received
-	SPS, PPS  []byte
-	ASC       []byte
+	App       string         `json:"app,omitempty"`
+	StreamKey string         `json:"stream_key,omitempty"`
+	Metadata  map[string]any `json:"metadata,omitempty"` // the onMetaData object, if one was received
+	SPS       []byte         `json:"sps,omitempty"`
+	PPS       []byte         `json:"pps,omitempty"`
+	ASC       []byte         `json:"asc,omitempty"`
 
-	VideoFrames   int
-	Keyframes     int
-	AudioFrames   int
-	VideoBytes    int
-	AudioBytes    int
-	FirstVideoDTS time.Duration
-	LastVideoDTS  time.Duration
-	FirstAudioPTS time.Duration
-	LastAudioPTS  time.Duration
+	VideoFrames   int           `json:"video_frames"`
+	Keyframes     int           `json:"keyframes"`
+	AudioFrames   int           `json:"audio_frames"`
+	VideoBytes    int           `json:"video_bytes"`
+	AudioBytes    int           `json:"audio_bytes"`
+	FirstVideoDTS time.Duration `json:"first_video_dts"`
+	LastVideoDTS  time.Duration `json:"last_video_dts"`
+	FirstAudioPTS time.Duration `json:"first_audio_pts"`
+	LastAudioPTS  time.Duration `json:"last_audio_pts"`
 	// VideoMonotonic and AudioMonotonic report whether every timestamp received so far was at or after the previous
 	// one of its track. Reset per connection.
-	VideoMonotonic bool
-	AudioMonotonic bool
-	// FirstNALUs are the NAL units of the first video access unit received on the latest connection.
-	FirstNALUs [][]byte
+	VideoMonotonic bool `json:"video_monotonic"`
+	AudioMonotonic bool `json:"audio_monotonic"`
+	// FirstNALUs are the NAL units of the first video access unit received on the latest connection. It is a whole
+	// picture, so it stays out of the JSON rendering.
+	FirstNALUs [][]byte `json:"-"`
 }
 
 // Receiver is the in-process server. Listen starts it; Close stops it.
