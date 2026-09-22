@@ -2,6 +2,7 @@ package fmp4
 
 import (
 	"io"
+	"math"
 
 	"github.com/Eyevinn/mp4ff/mp4"
 
@@ -48,6 +49,12 @@ var defaultPool = NewFragmentPool(FragmentPoolConfig{})
 // The parser reuses mp4ff's flag constants and sample flag helpers and is shaped like its DecodeXxxSR decoders, so
 // the code can move into the mp4ff fork as a zero-copy fragment API later; only the init segment goes through mp4ff
 // itself (ParseInit).
+//
+// It reads the CMAF profile of fragmented MP4 rather than every representation ISO/IEC 14496-12 allows. The one
+// restriction a valid file can run into: a second or later traf that sets neither base-data-offset-present nor
+// default-base-is-moof, whose data the spec places after the preceding track fragment's, is refused instead of
+// resolved. Everything else a general file may do, including several truns, explicit base data offsets, negative
+// composition offsets and both trun versions, is read.
 type FragmentReader struct {
 	pool   *FragmentPool
 	limits Limits
@@ -526,21 +533,33 @@ func (fr *FragmentReader) resolveRuns(meta *fragMeta, moofStart, mdatPayloadStar
 	case meta.tfhd.flags&mp4.TfhdBaseDataOffsetPresentFlag != 0:
 		base = meta.tfhd.baseDataOffset
 	case meta.tfhd.flags&mp4.TfhdDefaultBaseIsMoofFlag == 0 && meta.trafIndex > 0:
-		// the spec places this traf's data after the previous traf's, which is not tracked here
+		// ISO/IEC 14496-12 puts this traf's data at the end of the preceding track fragment's, which would mean
+		// resolving every run of every traf before it rather than only the requested track's. No encoder in the fabric
+		// writes this: CMAF requires default-base-is-moof, and everything that reaches this reader is CMAF. It is
+		// refused rather than guessed at, so a file that does use it fails loudly instead of decoding to noise.
 		return 0, e("reason", "traf without default-base-is-moof after another traf")
 	}
 
+	// Every bound below is checked by subtraction against mdatSize rather than by adding sizes up and comparing. The
+	// offsets come from the file: a base_data_offset near the top of the range, or a sample count times a default
+	// size, overflows uint64 on the way and would otherwise pass a comparison that adds first.
 	end := base // where the previous run's data ended, the start of a run without a data offset
 	for i := range fr.runs {
 		run := &fr.runs[i]
 		start := end
 		if run.has(mp4.TrunDataOffsetPresentFlag) {
-			start = uint64(int64(base) + int64(run.dataOffset))
+			if start, err = addOffset(base, run.dataOffset); err != nil {
+				return 0, e(err, "base", base, "data_offset", run.dataOffset)
+			}
 		}
 		if start < mdatPayloadStart {
 			return 0, e("reason", "sample data before the mdat payload", "start", start, "mdat", mdatPayloadStart)
 		}
 		run.relStart = start - mdatPayloadStart
+		if run.relStart > mdatSize {
+			return 0, e("reason", "sample data beyond the mdat", "start", run.relStart, "mdat_size", mdatSize)
+		}
+		avail := mdatSize - run.relStart
 
 		total := uint64(0)
 		if run.has(mp4.TrunSampleSizePresentFlag) {
@@ -551,7 +570,11 @@ func (fr *FragmentReader) resolveRuns(meta *fragMeta, moofStart, mdatPayloadStar
 			}
 			for j := uint32(0); j < run.sampleCount; j++ {
 				rows.SkipBytes(sizeOff)
-				total += uint64(rows.ReadUint32())
+				size := uint64(rows.ReadUint32())
+				if size > avail-total {
+					return 0, e("reason", "sample data beyond the mdat", "start", run.relStart, "mdat_size", mdatSize)
+				}
+				total += size
 				rows.SkipBytes(run.rowSize - sizeOff - 4)
 			}
 			if err = rows.AccError(); err != nil {
@@ -561,18 +584,33 @@ func (fr *FragmentReader) resolveRuns(meta *fragMeta, moofStart, mdatPayloadStar
 			if !defaults.hasSize {
 				return 0, e("reason", "sample sizes neither in the trun nor in tfhd or trex defaults")
 			}
+			if defaults.size > 0 && uint64(run.sampleCount) > avail/uint64(defaults.size) {
+				return 0, e("reason", "sample data beyond the mdat", "start", run.relStart, "samples", run.sampleCount,
+					"sample_size", defaults.size, "mdat_size", mdatSize)
+			}
 			total = uint64(run.sampleCount) * uint64(defaults.size)
 		}
 		end = start + total
-		if run.relStart+total > mdatSize {
-			return 0, e("reason", "sample data beyond the mdat", "start", run.relStart, "size", total,
-				"mdat_size", mdatSize)
-		}
 		if run.relStart+total > need {
 			need = run.relStart + total
 		}
 	}
 	return need, nil
+}
+
+// addOffset applies a trun's signed data offset to the base offset, refusing a sum that leaves the file's range.
+func addOffset(base uint64, offset int32) (uint64, error) {
+	if offset >= 0 {
+		if uint64(offset) > math.MaxUint64-base {
+			return 0, errors.NoTrace("addOffset", errors.K.Invalid, "reason", "data offset overflows the base offset")
+		}
+		return base + uint64(offset), nil
+	}
+	neg := uint64(-int64(offset))
+	if neg > base {
+		return 0, errors.NoTrace("addOffset", errors.K.Invalid, "reason", "data offset precedes the file start")
+	}
+	return base - neg, nil
 }
 
 // fillSamples builds the fragment's samples from the trun rows, with the payload already read.
