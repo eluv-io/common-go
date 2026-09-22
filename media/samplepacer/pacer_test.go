@@ -206,7 +206,7 @@ func TestPacer_SkewHoldsVideoUntilAudioArrives(t *testing.T) {
 func TestPacer_FullQueueOverridesSkewGate(t *testing.T) {
 	clock := newFakeClock()
 	start := clock.Now()
-	p := New(Config{
+	p := New(Config[payload]{
 		Latency:      0,
 		MaxSkew:      200 * time.Millisecond,
 		StallTimeout: time.Hour,
@@ -218,13 +218,13 @@ func TestPacer_FullQueueOverridesSkewGate(t *testing.T) {
 
 	const audioItems = 200
 	// One video sample, then audio racing four seconds ahead of it.
-	require.NoError(t, p.Push(ctx, Item{Track: Video, DTS: 0, Sync: true}))
+	require.NoError(t, p.Push(ctx, Item[payload]{Track: Video, DTS: 0, Sync: true}))
 	clock.SetHorizon(start.Add(time.Minute)) // enough for the release schedule, far short of StallTimeout
 
 	pushed := make(chan error, 1)
 	go func() {
 		for i := 1; i <= audioItems; i++ {
-			it := Item{Track: Audio, DTS: time.Duration(i) * 20 * time.Millisecond, Payload: i}
+			it := Item[payload]{Track: Audio, DTS: time.Duration(i) * 20 * time.Millisecond, Payload: payload(i)}
 			if err := p.Push(ctx, it); err != nil {
 				pushed <- err
 				return
@@ -238,7 +238,7 @@ func TestPacer_FullQueueOverridesSkewGate(t *testing.T) {
 	ctx2, cancel := context.WithCancel(ctx)
 	defer cancel()
 	go func() {
-		_ = p.Run(ctx2, func(Item) error {
+		_ = p.Run(ctx2, func(Item[payload]) error {
 			mu.Lock()
 			released++
 			mu.Unlock()
