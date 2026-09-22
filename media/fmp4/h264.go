@@ -29,15 +29,22 @@ func NaluType(nalu []byte) byte {
 // into its NAL units. The returned slices alias sample. A truncated or zero-length prefix is an error, since a sample
 // that does not parse would otherwise be forwarded as garbage.
 func SplitAVCC(sample []byte, lengthSize int) ([][]byte, error) {
-	e := errors.TemplateNoTrace("SplitAVCC", errors.K.Invalid.Default(), "length_size", lengthSize)
+	return appendNALUs(nil, sample, lengthSize)
+}
+
+// appendNALUs appends the NAL units of an AVCC-formatted access unit to dst, as views into sample. On error dst is
+// returned unchanged. Errors are built without a stack trace: a bad sample on a live stream is a per-event condition.
+func appendNALUs(dst [][]byte, sample []byte, lengthSize int) ([][]byte, error) {
 	if lengthSize < 1 || lengthSize > 4 {
-		return nil, e("reason", "unsupported NALU length size")
+		return dst, errors.NoTrace("SplitAVCC", errors.K.Invalid, "reason", "unsupported NALU length size",
+			"length_size", lengthSize)
 	}
-	var nalus [][]byte
+	start := len(dst)
 	pos := 0
 	for pos < len(sample) {
 		if len(sample)-pos < lengthSize {
-			return nil, e("reason", "truncated NALU length prefix", "offset", pos, "sample_size", len(sample))
+			return dst[:start], errors.NoTrace("SplitAVCC", errors.K.Invalid, "reason", "truncated NALU length prefix",
+				"offset", pos, "sample_size", len(sample))
 		}
 		var n int
 		switch lengthSize {
@@ -52,47 +59,42 @@ func SplitAVCC(sample []byte, lengthSize int) ([][]byte, error) {
 		}
 		pos += lengthSize
 		if n == 0 {
-			return nil, e("reason", "zero-length NALU", "offset", pos)
+			return dst[:start], errors.NoTrace("SplitAVCC", errors.K.Invalid, "reason", "zero-length NALU", "offset", pos)
 		}
 		if n > len(sample)-pos {
-			return nil, e("reason", "truncated NALU", "offset", pos, "nalu_size", n, "sample_size", len(sample))
+			return dst[:start], errors.NoTrace("SplitAVCC", errors.K.Invalid, "reason", "truncated NALU",
+				"offset", pos, "nalu_size", n, "sample_size", len(sample))
 		}
-		nalus = append(nalus, sample[pos:pos+n])
+		dst = append(dst, sample[pos:pos+n])
 		pos += n
 	}
-	return nalus, nil
-}
-
-// accessUnit is the result of inspecting the NAL units of one H.264 sample for remuxing.
-type accessUnit struct {
-	nalus          [][]byte // the sample's NAL units minus access unit delimiters and filler data
-	idr            bool     // the sample contains an IDR slice
-	paramSetChange bool     // the sample carries an SPS or PPS that differs from the track's
+	return dst, nil
 }
 
 // inspectAccessUnit drops the NAL units an RTMP receiver does not want (AUD, filler), flags IDR pictures and detects
-// in-band parameter sets that differ from those of the init segment. In-band SPS/PPS are kept in the returned NAL
-// units: a receiver decodes them like any other, and a changed set is what triggers a re-announcement upstream.
-func inspectAccessUnit(nalus [][]byte, sps, pps [][]byte) accessUnit {
-	au := accessUnit{nalus: make([][]byte, 0, len(nalus))}
+// in-band parameter sets that differ from those of the init segment. In-band SPS/PPS are kept: a receiver decodes
+// them like any other, and a changed set is what triggers a re-announcement upstream. The kept NAL units are
+// compacted in place at the front of nalus and returned as its prefix.
+func inspectAccessUnit(nalus [][]byte, sps, pps [][]byte) (kept [][]byte, idr, paramSetChange bool) {
+	kept = nalus[:0]
 	for _, nalu := range nalus {
 		switch NaluType(nalu) {
 		case NaluAUD, NaluFIL:
 			continue
 		case NaluIDR:
-			au.idr = true
+			idr = true
 		case NaluSPS:
 			if !containsNalu(sps, nalu) {
-				au.paramSetChange = true
+				paramSetChange = true
 			}
 		case NaluPPS:
 			if !containsNalu(pps, nalu) {
-				au.paramSetChange = true
+				paramSetChange = true
 			}
 		}
-		au.nalus = append(au.nalus, nalu)
+		kept = append(kept, nalu)
 	}
-	return au
+	return kept, idr, paramSetChange
 }
 
 func containsNalu(set [][]byte, nalu []byte) bool {
