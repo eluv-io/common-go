@@ -190,6 +190,66 @@ func TestPacer_SkewHoldsVideoUntilAudioArrives(t *testing.T) {
 	}, 2*time.Second, time.Millisecond)
 }
 
+// TestPacer_FullQueueOverridesSkewGate covers the deadlock between the two backpressure mechanisms. One track runs
+// ahead and fills the queue to its bound, which blocks both producers in Push. The head is then beyond MaxSkew of the
+// track that is behind, and that track cannot push anything until something is released, so waiting for it only
+// stalls everything until StallTimeout expires. The clock's horizon here forbids a jump of that size, so a pacer that
+// waits never finishes the test.
+func TestPacer_FullQueueOverridesSkewGate(t *testing.T) {
+	clock := newFakeClock()
+	start := clock.Now()
+	p := New(Config{
+		Latency:      0,
+		MaxSkew:      200 * time.Millisecond,
+		StallTimeout: time.Hour,
+		MaxBuffered:  time.Second,
+		Now:          clock.Now,
+		Sleep:        clock.Sleep,
+	})
+	ctx := context.Background()
+
+	const audioItems = 200
+	// One video sample, then audio racing four seconds ahead of it.
+	require.NoError(t, p.Push(ctx, Item{Track: Video, DTS: 0, Sync: true}))
+	clock.SetHorizon(start.Add(time.Minute)) // enough for the release schedule, far short of StallTimeout
+
+	pushed := make(chan error, 1)
+	go func() {
+		for i := 1; i <= audioItems; i++ {
+			it := Item{Track: Audio, DTS: time.Duration(i) * 20 * time.Millisecond, Payload: i}
+			if err := p.Push(ctx, it); err != nil {
+				pushed <- err
+				return
+			}
+		}
+		pushed <- nil
+	}()
+
+	var mu sync.Mutex
+	released := 0
+	ctx2, cancel := context.WithCancel(ctx)
+	defer cancel()
+	go func() {
+		_ = p.Run(ctx2, func(Item) error {
+			mu.Lock()
+			released++
+			mu.Unlock()
+			return nil
+		})
+	}()
+
+	select {
+	case err := <-pushed:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		require.Fail(t, "the producer never finished: the pacer held its queue at the bound instead of releasing")
+	}
+	require.Less(t, clock.Now().Sub(start), time.Minute, "no wait of StallTimeout length was taken")
+	mu.Lock()
+	defer mu.Unlock()
+	require.Greater(t, released, audioItems/2, "releases kept pace with the producer")
+}
+
 func TestPacer_StalledTrackStopsGating(t *testing.T) {
 	clock := newFakeClock()
 	p := New(Config{Latency: 100 * time.Millisecond, MaxSkew: 100 * time.Millisecond, StallTimeout: time.Second,
