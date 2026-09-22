@@ -21,6 +21,8 @@ const (
 	KindUnknown Kind = iota
 	KindVideo
 	KindAudio
+
+	numKinds = int(KindAudio) + 1 // for per-kind arrays
 )
 
 func (k Kind) String() string {

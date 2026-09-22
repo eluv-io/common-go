@@ -35,10 +35,12 @@ func fixtureTracks(t *testing.T) (params fmp4.CodecParams, video, audio []*fmp4.
 	v, a := vinit.Track(fmp4.KindVideo), ainit.Track(fmp4.KindAudio)
 	params = fmp4.CodecParams{Video: v.VideoParams(), Audio: a.AudioParams()}
 
+	// the samples outlive the read, so the test keeps copies rather than references to pooled fragments
 	collect := func(name string, track *fmp4.TrackInfo) []*fmp4.Sample {
 		var samples []*fmp4.Sample
-		err := fmp4.ReadFragments(bytes.NewReader(fixture(t, name)), track, func(s *fmp4.Sample) error {
-			samples = append(samples, s)
+		err := fmp4.ReadFragments(bytes.NewReader(fixture(t, name)), track, nil, func(s *fmp4.Sample) error {
+			samples = append(samples, s.Clone())
+			s.Release()
 			return nil
 		})
 		require.NoError(t, err)
