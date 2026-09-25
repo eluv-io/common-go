@@ -1,13 +1,17 @@
 module github.com/eluv-io/common-go
 
-go 1.26
+go 1.26.0
 
 require (
 	github.com/Comcast/gots/v2 v2.2.1
+	github.com/Eyevinn/mp4ff v0.51.0
 	github.com/HdrHistogram/hdrhistogram-go v1.2.0
 	github.com/PaesslerAG/gval v1.1.2
 	github.com/PaesslerAG/jsonpath v0.1.1
+	github.com/abema/go-mp4 v1.7.3
 	github.com/beevik/etree v1.1.0
+	github.com/bluenviron/gortmplib v1.0.3
+	github.com/bluenviron/mediacommon/v2 v2.9.5
 	github.com/datarhei/gosrt v0.9.0
 	github.com/davecgh/go-spew v1.1.1
 	github.com/djherbis/times v1.6.0
@@ -23,6 +27,7 @@ require (
 	github.com/gammazero/deque v0.1.0
 	github.com/ghodss/yaml v1.0.0
 	github.com/gin-gonic/gin v1.7.7
+	github.com/google/uuid v1.6.0
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
 	github.com/maruel/panicparse/v2 v2.3.1
 	github.com/mattn/go-runewidth v0.0.9
@@ -36,7 +41,7 @@ require (
 	github.com/smarty/go-disruptor v0.5.0
 	github.com/smartystreets/goconvey v1.8.1
 	github.com/spf13/afero v1.3.2
-	github.com/stretchr/testify v1.11.1
+	github.com/stretchr/testify v1.12.1
 	github.com/ugorji/go/codec v1.1.7
 	go.uber.org/atomic v1.9.0
 	golang.org/x/exp v0.0.0-20220426173459-3bcf042a4bf5
@@ -60,7 +65,6 @@ require (
 	github.com/go-playground/validator/v10 v10.4.1 // indirect
 	github.com/go-stack/stack v1.8.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
-	github.com/google/uuid v1.4.0 // indirect
 	github.com/gopherjs/gopherjs v1.17.2 // indirect
 	github.com/json-iterator/go v1.1.9 // indirect
 	github.com/jtolds/gls v4.20.0+incompatible // indirect
@@ -76,11 +80,11 @@ require (
 	github.com/tklauser/go-sysconf v0.3.5 // indirect
 	github.com/tklauser/numcpus v0.2.2 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/crypto v0.33.0 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 replace (
@@ -88,3 +92,5 @@ replace (
 	github.com/modern-go/gls => github.com/eluv-io/gls v1.0.0-elv1
 	github.com/spf13/afero => github.com/eluv-io/afero v1.11.1-0.20240924184135-9fbf4dcfd6f0
 )
+
+replace github.com/Eyevinn/mp4ff => github.com/eluv-io/mp4ff v0.47.1-0.20260603013458-2403cac8f06c

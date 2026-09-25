@@ -94,6 +94,16 @@ func PcrToDuration(diff uint64) time.Duration {
 	return time.Duration(q)*time.Microsecond + time.Duration(r)*time.Microsecond/27
 }
 
+// PcrDeltaToDuration converts a signed difference of unwrapped PCR values to a time.Duration. A negative delta, a
+// packet whose PCR is behind a reference packet's, yields a negative duration. Converting such a delta through
+// PcrToDuration(uint64(delta)) instead yields about 2^64/27 microseconds, 21 years.
+func PcrDeltaToDuration(delta int64) time.Duration {
+	if delta < 0 {
+		return -PcrToDuration(uint64(-delta))
+	}
+	return PcrToDuration(uint64(delta))
+}
+
 // DurationToPcr converts a time.Duration to PCR ticks (27 MHz clock).
 // Inverse of PcrToDuration: t = d * 27 / µs.
 //

@@ -1,8 +1,6 @@
 package mpegts
 
 import (
-	"time"
-
 	"github.com/Comcast/gots/v2/packet"
 
 	"github.com/eluv-io/common-go/format/duration"
@@ -131,7 +129,10 @@ func NewTsDisruptorPacer(conf TsDisruptorPacerConfig) (*TsDisruptorPacer, error)
 		conf.Logic.Stream = conf.Stream
 	}
 	// Override ToDuration to PCR 27 MHz clock; callers cannot change this.
-	conf.Logic.ToDuration = func(ts int64) time.Duration { return PcrToDuration(uint64(ts)) }
+	// The logic passes deltas as well as absolute unwrapped values, and a delta is negative for a packet whose PCR is
+	// behind the baseline packet's, as happens right after a source restart when the recorder hands over a slightly
+	// earlier PCR. Converted unsigned, that packet would be scheduled 21 years ahead and block the queue behind it.
+	conf.Logic.ToDuration = PcrDeltaToDuration
 	if conf.PcrGapThreshold == 0 {
 		conf.PcrGapThreshold = DefaultPcrGapThreshold
 	}
