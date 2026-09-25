@@ -21,7 +21,8 @@ type Timeline struct {
 	epoch     int
 	anchored  bool          // the current epoch's offset has been fixed
 	offset    time.Duration // added to every mapped time of the current epoch
-	lastOut   map[Kind]time.Duration
+	lastOut   [numKinds]time.Duration
+	hasOut    [numKinds]bool
 	anyOut    bool
 	gap       time.Duration // spacing inserted between epochs
 	jump      time.Duration // an input discontinuity larger than this starts a new epoch
@@ -45,9 +46,8 @@ func WithJumpThreshold(jump time.Duration) TimelineOption {
 // five seconds or any backward jump of more than one frame starts a new epoch.
 func NewTimeline(opts ...TimelineOption) *Timeline {
 	t := &Timeline{
-		lastOut: make(map[Kind]time.Duration),
-		gap:     time.Second / 30,
-		jump:    5 * time.Second,
+		gap:  time.Second / 30,
+		jump: 5 * time.Second,
 	}
 	for _, opt := range opts {
 		opt(t)
@@ -71,11 +71,16 @@ func (t *Timeline) Map(track *TrackInfo, dts, pts int64) (outDTS, outPTS time.Du
 	inDTS := TicksToDuration(dts, track.Timescale)
 	inPTS := TicksToDuration(pts, track.Timescale)
 
+	kind := track.Kind
+	if int(kind) >= numKinds {
+		kind = KindUnknown
+	}
+
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	if t.anchored && t.jump > 0 {
-		if last, ok := t.lastOut[track.Kind]; ok {
+		if last := t.lastOut[kind]; t.hasOut[kind] {
 			candidate := inDTS + t.offset
 			if candidate < last-t.gap || candidate > last+t.jump {
 				log.Info("timeline discontinuity - starting new epoch",
@@ -89,8 +94,8 @@ func (t *Timeline) Map(track *TrackInfo, dts, pts int64) (outDTS, outPTS time.Du
 		t.offset = 0
 		if t.anyOut {
 			latest := time.Duration(0)
-			for _, v := range t.lastOut {
-				if v > latest {
+			for k, v := range t.lastOut {
+				if t.hasOut[k] && v > latest {
 					latest = v
 				}
 			}
@@ -101,7 +106,8 @@ func (t *Timeline) Map(track *TrackInfo, dts, pts int64) (outDTS, outPTS time.Du
 
 	outDTS = inDTS + t.offset
 	outPTS = inPTS + t.offset
-	t.lastOut[track.Kind] = outDTS
+	t.lastOut[kind] = outDTS
+	t.hasOut[kind] = true
 	t.anyOut = true
 	return outDTS, outPTS
 }

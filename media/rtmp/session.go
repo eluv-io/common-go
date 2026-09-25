@@ -49,9 +49,25 @@ type session struct {
 	bc           *bytecounter.ReadWriter
 	r            *message.Reader
 	w            *message.Writer
+	cw           *chunkWriter
 	writeTimeout time.Duration
 
 	wmu sync.Mutex
+}
+
+// newSession wraps an established connection in the message and chunk writers. The handshake is the caller's job;
+// tests and benchmarks use this to build a session over a pipe or a discarding connection.
+func newSession(nconn net.Conn, writeTimeout time.Duration) *session {
+	s := &session{nconn: nconn, writeTimeout: writeTimeout}
+	s.bc = bytecounter.NewReadWriter(nconn)
+	s.w = message.NewWriter(s.bc, s.bc.Writer, false)
+	s.r = message.NewReader(s.bc, s.bc.Reader, func(count uint32) error {
+		return s.write(&message.Acknowledge{Value: count})
+	})
+	// Both writers buffer their output and flush it before releasing wmu, so whole messages reach the byte counter
+	// in lock order and the counter sees everything either of them sends.
+	s.cw = newChunkWriter(s.bc.Writer)
+	return s
 }
 
 // dialSession connects to u and completes the publish handshake, redoing it with the next authentication step when
@@ -117,16 +133,11 @@ func connectSession(
 	if deadline, ok := ctx.Deadline(); ok {
 		_ = nconn.SetDeadline(deadline)
 	}
-	s := &session{nconn: nconn, writeTimeout: writeTimeout}
-	s.bc = bytecounter.NewReadWriter(nconn)
+	s := newSession(nconn, writeTimeout)
 	if _, _, err = handshake.DoClient(s.bc, false, false); err != nil {
 		_ = nconn.Close()
 		return nil, e(err, "reason", "rtmp handshake failed")
 	}
-	s.w = message.NewWriter(s.bc, s.bc.Writer, false)
-	s.r = message.NewReader(s.bc, s.bc.Reader, func(count uint32) error {
-		return s.write(&message.Acknowledge{Value: count})
-	})
 
 	if err = s.publish(u, authState, salt, challenge); err != nil {
 		_ = nconn.Close()
@@ -278,14 +289,46 @@ func (s *session) checkConnectResult(res *message.CommandAMF0, u *url.URL) error
 	}
 }
 
-// write sends one message, bounded by the write timeout. It is the only path onto the message writer.
+// write sends one message through gortmplib's writer, bounded by the write timeout: the handshake commands, the
+// sequence headers and the replies the read loop owes the server.
+//
+// Media messages go through writeVideo and writeAudio instead, and once one of those has written on a chunk stream
+// this path must not touch it again: the two writers keep their own idea of what the receiver was told about each
+// chunk stream, and a message from the wrong one would be decoded against the other's state.
 func (s *session) write(msg message.Message) error {
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
+	switch msg.(type) {
+	case *message.Video, *message.Audio:
+		if s.cw.started() {
+			return errors.NoTrace("rtmp.write", errors.K.Invalid,
+				"reason", "media message on the message writer after the chunk writer took over the stream")
+		}
+	}
+	if s.writeTimeout > 0 {
+		_ = s.nconn.SetWriteDeadline(time.Now().Add(s.writeTimeout))
+	}
+	return s.w.Write(msg)
+}
+
+// writeVideo sends one H.264 access unit, and writeAudio one AAC frame, on the media chunk streams. They hold the
+// same lock as write, so a control message the read loop answers lands between two media messages, never inside one.
+func (s *session) writeVideo(nalus [][]byte, ts, cts uint32, keyframe bool) error {
 	s.wmu.Lock()
 	defer s.wmu.Unlock()
 	if s.writeTimeout > 0 {
 		_ = s.nconn.SetWriteDeadline(time.Now().Add(s.writeTimeout))
 	}
-	return s.w.Write(msg)
+	return s.cw.writeVideo(nalus, ts, cts, keyframe)
+}
+
+func (s *session) writeAudio(au []byte, ts uint32) error {
+	s.wmu.Lock()
+	defer s.wmu.Unlock()
+	if s.writeTimeout > 0 {
+		_ = s.nconn.SetWriteDeadline(time.Now().Add(s.writeTimeout))
+	}
+	return s.cw.writeAudio(au, ts)
 }
 
 // read returns the next message from the server, after answering the control messages that need no caller: a ping
