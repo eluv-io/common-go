@@ -3,7 +3,8 @@
 //
 // A Conn is one publishing session: it connects, announces the tracks, and writes access units with timestamps
 // rebased to start at zero at the first video keyframe. It does not reconnect; the caller opens a new Conn when
-// Done closes.
+// Done closes. When the source stalls, Conn.Fill keeps the video going with frames that repeat the last picture, so
+// the server goes on receiving a live stream.
 //
 // The handshake, the control messages and the sequence headers go through gortmplib's message layer, driven here
 // rather than through gortmplib's Client so that the control messages a server sends (pings, acknowledgements) can be
@@ -27,6 +28,10 @@ const (
 	// DefaultWriteTimeout bounds a single message write. A peer that stops reading fills the socket buffers within
 	// seconds at video bitrates, so a write that takes this long means the connection is dead.
 	DefaultWriteTimeout = 10 * time.Second
+	// DefaultFillAfter is how long the video may stop before Conn.Fill starts filling in for it. A pacer upstream has
+	// already spent its jitter buffer by the time a gap reaches the connection, so the server sees every gap that
+	// gets here; filling makes the source resume at its next IDR, though, which turns a brief hiccup into a freeze.
+	DefaultFillAfter = time.Second
 
 	defaultRtmpPort  = "1935"
 	defaultRtmpsPort = "443"
@@ -47,6 +52,7 @@ type Config struct {
 
 	ConnectTimeout time.Duration // 0 = DefaultConnectTimeout
 	WriteTimeout   time.Duration // 0 = DefaultWriteTimeout
+	FillAfter      time.Duration // 0 = DefaultFillAfter; see Conn.Fill
 
 	// Meta is what the onMetaData message announces about the stream. Width and Height are filled from the video
 	// track's SPS when zero. FrameRate is too, when the SPS timing yields a plausible rate; otherwise it is left out
@@ -100,6 +106,13 @@ func (c *Config) writeTimeout() time.Duration {
 		return c.WriteTimeout
 	}
 	return DefaultWriteTimeout
+}
+
+func (c *Config) fillAfter() time.Duration {
+	if c.FillAfter > 0 {
+		return c.FillAfter
+	}
+	return DefaultFillAfter
 }
 
 // publishURL validates the configuration and returns the URL the session connects to: scheme, host with an

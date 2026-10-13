@@ -1,5 +1,7 @@
 github.com/Comcast/gots/v2 v2.2.1 h1:LU/SRg7p2KQqVkNqInV7I4MOQKAqvWQP/PSSLtygP2s=
 github.com/Comcast/gots/v2 v2.2.1/go.mod h1:firJ11on3eUiGHAhbY5cZNqG0OqhQ1+nSZHfsEEzVVU=
+github.com/Eyevinn/hi264 v0.12.0 h1:IBoTt+34K5cw1aPS9hPtRGRKm2W7Dt6crtm3t/RDsrk=
+github.com/Eyevinn/hi264 v0.12.0/go.mod h1:uxrA9I30T+YxhyFEIoYva4U/SAamqljgZEPhWzlNMCk=
 github.com/Eyevinn/mp4ff v0.60.0 h1:gtxm4/NTTZ0805f0+nHKIdyps6txbjywsgTjwXbnJ6M=
 github.com/Eyevinn/mp4ff v0.60.0/go.mod h1:97zsDIJUiDTYqKpqq/b1K9foamxXmvsgE4GdPrPK3ks=
 github.com/HdrHistogram/hdrhistogram-go v1.2.0 h1:XMJkDWuz6bM9Fzy7zORuVFKH7ZJY41G2q8KWhVGkNiY=
