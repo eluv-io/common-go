@@ -1,0 +1,23 @@
+goos: linux
+goarch: amd64
+pkg: github.com/eluv-io/common-go/util/lru
+cpu: VirtualApple @ 2.50GHz
+impl: simplelru
+BenchmarkTypedCacheDecoupledMiss-4   	  543574	       440.8 ns/op	     112 B/op	       4 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  554042	       450.7 ns/op	     112 B/op	       4 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  551533	       439.4 ns/op	     112 B/op	       4 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  563683	       432.5 ns/op	     112 B/op	       4 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  547808	       428.7 ns/op	     112 B/op	       4 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  542223	       492.2 ns/op	     112 B/op	       4 allocs/op
+BenchmarkTypedCacheGet-4             	 2678491	        89.55 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 2673060	        88.59 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 2706717	        88.03 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 2736862	        87.94 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 2696359	        87.82 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 2765530	        89.69 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1237171	       187.6 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1222062	       188.1 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1237320	       196.5 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1000000	       208.6 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1241270	       210.2 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1209344	       195.1 ns/op	      96 B/op	       3 allocs/op
