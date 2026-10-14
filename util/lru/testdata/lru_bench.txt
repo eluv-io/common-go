@@ -21,3 +21,22 @@ BenchmarkTypedCacheAddEvict-4        	 1237320	       196.5 ns/op	      96 B/op	
 BenchmarkTypedCacheAddEvict-4        	 1000000	       208.6 ns/op	      96 B/op	       3 allocs/op
 BenchmarkTypedCacheAddEvict-4        	 1241270	       210.2 ns/op	      96 B/op	       3 allocs/op
 BenchmarkTypedCacheAddEvict-4        	 1209344	       195.1 ns/op	      96 B/op	       3 allocs/op
+impl: simplelru-keyedlocks
+BenchmarkTypedCacheDecoupledMiss-4   	  608679	       383.7 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  604788	       376.4 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  627007	       379.4 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  628903	       387.9 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  663030	       383.7 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  647606	       375.3 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheGet-4             	 3073015	        77.66 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3084745	        78.17 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3069529	        78.06 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3066489	        78.64 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3070826	        77.46 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3098806	        77.66 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1285476	       187.6 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1231795	       199.4 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1258076	       195.8 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1213051	       186.1 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1000000	       202.6 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1232092	       200.7 ns/op	      96 B/op	       3 allocs/op

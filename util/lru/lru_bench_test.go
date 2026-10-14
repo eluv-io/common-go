@@ -5,9 +5,13 @@ import (
 	"testing"
 )
 
-// testdata/lru_bench.txt holds the results of a run on a 4-core VM, in the output format of go test, labelled "impl:
-// simplelru" for the cache on hashicorp's simplelru with NamedLocks. Show them with benchstat (go install
-// golang.org/x/perf/cmd/benchstat@latest), and compare them with a new run from the repository root:
+// testdata/lru_bench.txt holds the results of runs on a 4-core VM, in the output format of go test, one for each
+// commit that changed the cache:
+//   - "impl: simplelru" is the cache on hashicorp's simplelru, locking keys with NamedLocks.
+//   - "impl: simplelru-keyedlocks" locks keys with KeyedLocks[K].
+//
+// Show them side by side with benchstat (go install golang.org/x/perf/cmd/benchstat@latest), and compare them with a
+// new run from the repository root:
 //
 //	benchstat -col impl util/lru/testdata/lru_bench.txt
 //	echo 'impl: new' > new.txt
@@ -27,7 +31,8 @@ var benchCacheKeyNames = func() []string {
 }()
 
 // BenchmarkTypedCacheDecoupledMiss removes a string key and gets it again from a cache in decoupled mode, so every
-// GetOrCreate misses and constructs the value under the key's lock.
+// GetOrCreate misses and constructs the value under the key's lock. The lock allocates nothing with KeyedLocks[K],
+// while NamedLocks boxed the key of each lock.
 func BenchmarkTypedCacheDecoupledMiss(b *testing.B) {
 	c := NewTyped[string, int](benchCacheKeys).WithMode(Modes.Decoupled)
 	construct := func() (int, error) { return 1, nil }

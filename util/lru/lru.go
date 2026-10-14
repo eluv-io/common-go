@@ -49,11 +49,11 @@ var Modes = struct {
 type Cache = TypedCache[any, any]
 
 // TypedCache is a thread-safe fixed size LRU cache.
-type TypedCache[K any, V any] struct {
+type TypedCache[K comparable, V any] struct {
 	lru          *simplelru.LRU
 	lock         sync.RWMutex
 	Mode         ConstructionMode // defaults to Blocking...
-	namedLocks   syncutil.NamedLocks
+	keyLocks     syncutil.KeyedLocks[K]
 	metrics      Metrics
 	evictHandler func(key K, value V) // the external evict handler function
 }
@@ -64,7 +64,7 @@ func Nil() *Cache {
 }
 
 // TypedNil creates a typed cache that doesn't cache anything at all.
-func TypedNil[K any, V any]() *TypedCache[K, V] {
+func TypedNil[K comparable, V any]() *TypedCache[K, V] {
 	return nil
 }
 
@@ -74,7 +74,7 @@ func New(size int) *Cache {
 }
 
 // NewTyped creates a typed LRU cache of the given size. The size is set to 1 if <= 0
-func NewTyped[K any, V any](size int) *TypedCache[K, V] {
+func NewTyped[K comparable, V any](size int) *TypedCache[K, V] {
 	return NewTypedWithEvict[K, V](size, nil)
 }
 
@@ -84,7 +84,7 @@ func NewWithEvict(size int, onEvicted func(key any, value any)) *Cache {
 }
 
 // NewTypedWithEvict constructs a typed, fixed size cache with the given eviction callback.
-func NewTypedWithEvict[K any, V any](size int, onEvicted func(key K, value V)) *TypedCache[K, V] {
+func NewTypedWithEvict[K comparable, V any](size int, onEvicted func(key K, value V)) *TypedCache[K, V] {
 	if size <= 0 {
 		return TypedNil[K, V]()
 	}
@@ -92,7 +92,7 @@ func NewTypedWithEvict[K any, V any](size int, onEvicted func(key K, value V)) *
 		evictHandler: onEvicted,
 		metrics:      MakeMetrics(),
 		// One shard: caches are often short-lived, and a cache rarely sees parallel constructions of many keys.
-		namedLocks: syncutil.NamedLocks{Shards: 1},
+		keyLocks: syncutil.KeyedLocks[K]{Shards: 1},
 	}
 	c.lru, _ = simplelru.NewLRU(size, c.onEvict)
 	c.metrics.Config.MaxItems = size
@@ -336,7 +336,7 @@ func (c *TypedCache[K, V]) getOrCreateDecoupled(
 	}
 
 	// get the creation mutex for this key
-	keyMutex := c.namedLocks.Lock(key)
+	keyMutex := c.keyLocks.Lock(key)
 	defer keyMutex.Unlock()
 
 	// try getting the value again - it might have been created in the meantime
