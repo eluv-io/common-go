@@ -91,6 +91,8 @@ func NewTypedWithEvict[K any, V any](size int, onEvicted func(key K, value V)) *
 	c := &TypedCache[K, V]{
 		evictHandler: onEvicted,
 		metrics:      MakeMetrics(),
+		// One shard: caches are often short-lived, and a cache rarely sees parallel constructions of many keys.
+		namedLocks: syncutil.NamedLocks{Shards: 1},
 	}
 	c.lru, _ = simplelru.NewLRU(size, c.onEvict)
 	c.metrics.Config.MaxItems = size
