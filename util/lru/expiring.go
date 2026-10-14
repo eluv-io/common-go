@@ -371,9 +371,8 @@ func (c *TypedExpiringCache[K, V]) Entries() (entries []ExpiringEntry[V]) {
 		keys := c.cache.lru.Keys()
 		entries = make([]ExpiringEntry[V], len(keys))
 		for idx, key := range keys {
-			val, ok := c.cache.lru.Get(key)
+			ee, ok := c.cache.lru.Peek(key)
 			if ok {
-				ee := val.(*expiringEntry[V])
 				clone := *ee
 				entries[idx] = &clone
 			}
@@ -399,7 +398,7 @@ func (c *TypedExpiringCache[K, V]) evictExpired(now utc.UTC) {
 		if !ok {
 			return
 		}
-		if c.isExpired(val.(*expiringEntry[V]), now) {
+		if c.isExpired(val, now) {
 			c.cache.lru.RemoveOldest()
 		} else {
 			return

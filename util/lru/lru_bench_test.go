@@ -9,6 +9,7 @@ import (
 // commit that changed the cache:
 //   - "impl: simplelru" is the cache on hashicorp's simplelru, locking keys with NamedLocks.
 //   - "impl: simplelru-keyedlocks" locks keys with KeyedLocks[K].
+//   - "impl: generic" keeps the entries in the generic simpleLRU of this package.
 //
 // Show them side by side with benchstat (go install golang.org/x/perf/cmd/benchstat@latest), and compare them with a
 // new run from the repository root:
@@ -32,7 +33,8 @@ var benchCacheKeyNames = func() []string {
 
 // BenchmarkTypedCacheDecoupledMiss removes a string key and gets it again from a cache in decoupled mode, so every
 // GetOrCreate misses and constructs the value under the key's lock. The lock allocates nothing with KeyedLocks[K],
-// while NamedLocks boxed the key of each lock.
+// while NamedLocks boxed the key of each lock. The entry allocates nothing with simpleLRU, which reuses the removed
+// one. hashicorp's simplelru allocated the entry and its list element and boxed the key.
 func BenchmarkTypedCacheDecoupledMiss(b *testing.B) {
 	c := NewTyped[string, int](benchCacheKeys).WithMode(Modes.Decoupled)
 	construct := func() (int, error) { return 1, nil }
@@ -63,7 +65,7 @@ func BenchmarkTypedCacheGet(b *testing.B) {
 }
 
 // BenchmarkTypedCacheAddEvict adds string keys to a full cache of half their number, so every Add evicts the oldest
-// key.
+// key. simpleLRU reuses the evicted entry for the next Add.
 func BenchmarkTypedCacheAddEvict(b *testing.B) {
 	c := NewTyped[string, int](benchCacheKeys / 2)
 

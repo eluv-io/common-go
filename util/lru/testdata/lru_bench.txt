@@ -40,3 +40,22 @@ BenchmarkTypedCacheAddEvict-4        	 1258076	       195.8 ns/op	      96 B/op	
 BenchmarkTypedCacheAddEvict-4        	 1213051	       186.1 ns/op	      96 B/op	       3 allocs/op
 BenchmarkTypedCacheAddEvict-4        	 1000000	       202.6 ns/op	      96 B/op	       3 allocs/op
 BenchmarkTypedCacheAddEvict-4        	 1232092	       200.7 ns/op	      96 B/op	       3 allocs/op
+impl: generic
+BenchmarkTypedCacheDecoupledMiss-4   	  825820	       276.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  851721	       276.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  868467	       273.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  868690	       277.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  884769	       273.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  815554	       278.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3454554	        68.38 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3507578	        69.43 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3401745	        74.51 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3372026	        69.70 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3456974	        68.39 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3513585	        69.05 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 2438241	       110.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 2288016	        97.94 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 2542506	       100.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 2364798	        97.80 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 2319019	       102.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 2459544	        94.43 ns/op	       0 B/op	       0 allocs/op

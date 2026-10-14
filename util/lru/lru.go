@@ -1,13 +1,12 @@
 // Package lru provides a simple LRU cache. It is a small adaption of the
 // LRU implementation of github.com/hashicorp/golang-lru/lru.go that adds the
 // function GetOrCreate() to atomically get a cached value or create it if it
-// does not yet exist in the cache.
+// does not yet exist in the cache. The caches keep their entries in simpleLRU,
+// a generic LRU of this package.
 package lru
 
 import (
 	"sync"
-
-	"github.com/hashicorp/golang-lru/simplelru"
 
 	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/util/jsonutil"
@@ -50,7 +49,7 @@ type Cache = TypedCache[any, any]
 
 // TypedCache is a thread-safe fixed size LRU cache.
 type TypedCache[K comparable, V any] struct {
-	lru          *simplelru.LRU
+	lru          *simpleLRU[K, V]
 	lock         sync.RWMutex
 	Mode         ConstructionMode // defaults to Blocking...
 	keyLocks     syncutil.KeyedLocks[K]
@@ -94,7 +93,7 @@ func NewTypedWithEvict[K comparable, V any](size int, onEvicted func(key K, valu
 		// One shard: caches are often short-lived, and a cache rarely sees parallel constructions of many keys.
 		keyLocks: syncutil.KeyedLocks[K]{Shards: 1},
 	}
-	c.lru, _ = simplelru.NewLRU(size, c.onEvict)
+	c.lru = newSimpleLRU[K, V](size, c.onEvict)
 	c.metrics.Config.MaxItems = size
 	c.WithMode(Modes.Blocking)
 	return c
@@ -238,8 +237,9 @@ func (c *TypedCache[K, V]) initTrace(span trace.Span, key K) {
 
 func (c *TypedCache[K, V]) get(key K) (V, bool) {
 	res, found := c.lru.Get(key)
-	if found && res != nil {
-		return res.(V), true
+	// A nil interface counts as not found, as it did when simplelru stored the values as interfaces.
+	if found && any(res) != nil {
+		return res, true
 	}
 	var zero V
 	return zero, false
@@ -415,12 +415,7 @@ func (c *TypedCache[K, V]) Peek(key K) (V, bool) {
 }
 
 func (c *TypedCache[K, V]) peek(key K) (V, bool) {
-	val, ok := c.lru.Peek(key)
-	if !ok {
-		var zero V
-		return zero, ok
-	}
-	return val.(V), ok
+	return c.lru.Peek(key)
 }
 
 // ContainsOrAdd checks if a key is in the cache without updating the
@@ -472,16 +467,7 @@ func (c *TypedCache[K, V]) Keys() (keys []K) {
 	c.lock.RLock()
 	defer c.lock.RUnlock()
 
-	return c.keys()
-}
-
-func (c *TypedCache[K, V]) keys() (keys []K) {
-	ikeys := c.lru.Keys()
-	keys = make([]K, 0, len(ikeys))
-	for _, k := range ikeys {
-		keys = append(keys, k.(K))
-	}
-	return keys
+	return c.lru.Keys()
 }
 
 // Len returns the number of items in the cache.
@@ -510,10 +496,10 @@ func (c *TypedCache[K, V]) CollectMetrics() jsonutil.GenericMarshaler {
 
 // onEvict is the evict handler registered with the simple LRU and is used to
 // update the item count. Relays to the external evict handler if present.
-func (c *TypedCache[K, V]) onEvict(key interface{}, value interface{}) {
+func (c *TypedCache[K, V]) onEvict(key K, value V) {
 	c.metrics.Remove()
 	if c.evictHandler != nil {
-		c.evictHandler(key.(K), value.(V))
+		c.evictHandler(key, value)
 	}
 }
 
