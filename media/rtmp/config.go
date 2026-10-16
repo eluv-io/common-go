@@ -3,8 +3,8 @@
 //
 // A Conn is one publishing session: it connects, announces the tracks, and writes access units with timestamps
 // rebased to start at zero at the first video keyframe. It does not reconnect; the caller opens a new Conn when
-// Done closes. When the source stalls, Conn.Fill keeps the video going with frames that repeat the last picture, so
-// the server goes on receiving a live stream.
+// Done closes. When the source stalls, Conn.Fill keeps the stream going with video frames that repeat the last picture
+// and silent audio, so the server goes on receiving a live stream.
 //
 // The handshake, the control messages and the sequence headers go through gortmplib's message layer, driven here
 // rather than through gortmplib's Client so that the control messages a server sends (pings, acknowledgements) can be
@@ -28,9 +28,10 @@ const (
 	// DefaultWriteTimeout bounds a single message write. A peer that stops reading fills the socket buffers within
 	// seconds at video bitrates, so a write that takes this long means the connection is dead.
 	DefaultWriteTimeout = 10 * time.Second
-	// DefaultFillAfter is how long the video may stop before Conn.Fill starts filling in for it. A pacer upstream has
+	// DefaultFillAfter is how long a track may stop before Conn.Fill starts filling in for it. A pacer upstream has
 	// already spent its jitter buffer by the time a gap reaches the connection, so the server sees every gap that
-	// gets here; filling makes the source resume at its next IDR, though, which turns a brief hiccup into a freeze.
+	// gets here; filling video makes the source resume at its next IDR, though, which turns a brief hiccup into a
+	// freeze.
 	DefaultFillAfter = time.Second
 
 	defaultRtmpPort  = "1935"

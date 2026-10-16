@@ -99,16 +99,17 @@ func (f *videoFiller) observe(nalus [][]byte, dts, pts time.Duration, idr bool, 
 	f.lastAt = now
 }
 
-// nextDue returns the timestamp of the next filler frame if one is due at now, starting to fill once no real frame
-// has been written for the configured time. A frame is due when as much time has passed since the last real frame
-// was written as lies between their timestamps, so the filler continues at the pace the source was sent at. The
-// first one follows the highest presentation time rather than the last decode time: with B frames the two differ by
-// the reorder delay, and a frame placed between them would be displayed out of order.
-func (f *videoFiller) nextDue(now time.Time) (time.Duration, bool) {
-	next := f.nextTS
-	if f.stopped {
+// due returns the timestamp of the next filler frame if one is due at now, starting to fill once no real frame has
+// been written for the configured time. A frame is due when as much time has passed since the last real frame was
+// written as lies between their timestamps, so the filler continues at the pace the source was sent at. The first one
+// follows the highest presentation time rather than the last decode time: with B frames the two differ by the reorder
+// delay, and a frame placed between them would be displayed out of order. Writing the frame is up to the caller, who
+// then calls take.
+func (f *videoFiller) due(now time.Time) (time.Duration, bool) {
+	if f == nil || f.stopped {
 		return 0, false
 	}
+	next := f.nextTS
 	if !f.filling {
 		if !f.have || !f.synced || now.Sub(f.lastAt) < f.after {
 			return 0, false
@@ -118,65 +119,94 @@ func (f *videoFiller) nextDue(now time.Time) (time.Duration, bool) {
 	if f.lastAt.Add(next - f.lastDTS).After(now) {
 		return 0, false
 	}
-	f.filling = true
-	f.nextTS = next + f.frameDur
 	return next, true
 }
 
-// Fill keeps the video going while the source is starved, so the server goes on receiving a live stream instead of
-// timing it out. Once no video has been written for Config.FillAfter, each call writes the frames that are due by
-// now: P_Skip frames that repeat the last picture, spaced at the source's frame duration and paced as the source was.
-// When the source returns, its frames are dropped until an IDR, which the stream continues from; if its timestamps
-// fell behind the inserted frames meanwhile, everything written from then on is shifted to follow them.
+// take records that the frame due at ts is being written.
+func (f *videoFiller) take(ts time.Duration) {
+	f.filling = true
+	f.nextTS = ts + f.frameDur
+}
+
+// active reports whether filler frames were written and the source has not resumed at an IDR yet.
+func (f *videoFiller) active() bool {
+	return f != nil && f.filling
+}
+
+// Fill keeps the stream going while the source is starved, so the server goes on receiving a live stream instead of
+// timing it out. Once a track has had no frames written for Config.FillAfter, each call writes the frames that are due
+// by now, spaced at the track's frame duration and paced as the source was, video and audio interleaved by timestamp.
 //
-// Audio is not filled: while video is filled, whatever audio the caller writes goes out as it is.
+// Video is continued with P_Skip frames that repeat the last picture. When the source returns, its frames are dropped
+// until an IDR, which the stream continues from; if its timestamps fell behind the inserted frames meanwhile,
+// everything written from then on is shifted to follow them.
 //
-// Fill is a write: call it from the goroutine that calls WriteVideo, e.g. on a ticker in the loop that waits for
-// samples. It does nothing before the first keyframe has been written, while video arrives, or for a stream the
-// filler cannot continue.
+// Audio is continued with silent frames, for AAC-LC mono and stereo. When the source returns, it takes over at the
+// first frame that does not fall behind the silence already sent. Frames that do are dropped. While the video waits
+// for an IDR, the silence goes on, since the shift at the IDR may still move the source's audio ahead of it; otherwise
+// it stops, so that the source catches up with where it ended.
+//
+// Fill is a write: call it from the goroutine that calls WriteVideo and WriteAudio, e.g. on a ticker in the loop that
+// waits for samples. It does nothing before the first keyframe has been written, for a track that is being written
+// to, or for a track the fillers cannot continue.
 func (c *Conn) Fill() error {
 	if err := c.Err(); err != nil {
 		return err
 	}
 	for {
 		c.mu.Lock()
-		f := c.videoFill
-		if f == nil || !c.started {
+		if !c.started {
 			c.mu.Unlock()
 			return nil
 		}
-		starting := !f.filling
-		ts, due := f.nextDue(c.now())
-		if !due {
+		now := c.now()
+		vts, video := c.videoFill.due(now)
+		ats, audio := c.audioFill.due(now)
+		var err error
+		switch {
+		case video && (!audio || vts <= ats):
+			nalus := c.fillVideoLocked(vts)
+			c.mu.Unlock()
+			if nalus != nil {
+				err = c.writeResult(c.s.writeVideo(nalus, millis(vts), 0, false))
+			}
+		case audio:
+			frame := c.fillAudioLocked(ats)
+			c.mu.Unlock()
+			err = c.writeResult(c.s.writeAudio(frame, millis(ats)))
+		default:
 			c.mu.Unlock()
 			return nil
 		}
-		if starting {
-			c.stats.VideoFills++
-			log.Info("rtmp video starved, filling", "destination", c.cfg.Redacted(), "after", f.after)
-		}
-		slice, err := f.ext.NextSlice()
 		if err != nil {
-			// The source switched to parameter sets the filler cannot continue. Stop filling on this connection rather
-			// than failing it, since the stream itself is fine. Frames already filled still make the source resume at
-			// an IDR.
-			f.stopped = true
-			f.filling = !starting
-			c.mu.Unlock()
-			log.Warn("rtmp filler stopped", err, "destination", c.cfg.Redacted())
-			return nil
-		}
-		f.nalus[0] = stripStartCode(slice)
-		c.videoClock.ts, c.videoClock.set = ts, true
-		c.stats.VideoFrames++
-		c.stats.FilledVideoFrames++
-		c.stats.LastVideoTS = ts
-		c.mu.Unlock()
-
-		if err = c.writeResult(c.s.writeVideo(f.nalus[:], millis(ts), 0, false)); err != nil {
 			return err
 		}
 	}
+}
+
+// fillVideoLocked takes the filler frame due at ts and returns its NAL units, or nil if hi264 cannot build one.
+func (c *Conn) fillVideoLocked(ts time.Duration) [][]byte {
+	f := c.videoFill
+	slice, err := f.ext.NextSlice()
+	if err != nil {
+		// The source switched to parameter sets the filler cannot continue. Stop filling on this connection rather
+		// than failing it, since the stream itself is fine. Frames already filled still make the source resume at an
+		// IDR.
+		f.stopped = true
+		log.Warn("rtmp video filler stopped", err, "destination", c.cfg.Redacted())
+		return nil
+	}
+	if !f.filling {
+		c.stats.VideoFills++
+		log.Info("rtmp video starved, filling", "destination", c.cfg.Redacted(), "after", f.after)
+	}
+	f.take(ts)
+	f.nalus[0] = stripStartCode(slice)
+	c.videoClock.ts, c.videoClock.set = ts, true
+	c.stats.VideoFrames++
+	c.stats.FilledVideoFrames++
+	c.stats.LastVideoTS = ts
+	return f.nalus[:]
 }
 
 // resumeLocked ends filling for an IDR from the source with decode time dts on the caller's axis. If the source's
