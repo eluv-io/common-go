@@ -4,7 +4,8 @@ go 1.26.0
 
 require (
 	github.com/Comcast/gots/v2 v2.2.1
-	github.com/Eyevinn/mp4ff v0.51.0
+	github.com/Eyevinn/hi264 v0.12.0
+	github.com/Eyevinn/mp4ff v0.60.0
 	github.com/HdrHistogram/hdrhistogram-go v1.2.0
 	github.com/PaesslerAG/gval v1.1.2
 	github.com/PaesslerAG/jsonpath v0.1.1
@@ -91,5 +92,3 @@ replace (
 	github.com/modern-go/gls => github.com/eluv-io/gls v1.0.0-elv1
 	github.com/spf13/afero => github.com/eluv-io/afero v1.11.1-0.20240924184135-9fbf4dcfd6f0
 )
-
-replace github.com/Eyevinn/mp4ff => github.com/eluv-io/mp4ff v0.47.1-0.20260603013458-2403cac8f06c
