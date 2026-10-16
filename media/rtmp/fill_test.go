@@ -34,13 +34,14 @@ type fillHarness struct {
 	out    *captureConn
 	params fmp4.CodecParams
 	video  []*fmp4.Sample
+	audio  []*fmp4.Sample
 	now    time.Time
 	t0     time.Time
 }
 
 func newFillHarness(t *testing.T, cfg Config) *fillHarness {
-	params, video, _ := fixtureTracks(t)
-	h := &fillHarness{t: t, out: &captureConn{}, params: params, video: video, t0: time.Unix(1000, 0)}
+	params, video, audio := fixtureTracks(t)
+	h := &fillHarness{t: t, out: &captureConn{}, params: params, video: video, audio: audio, t0: time.Unix(1000, 0)}
 	h.now = h.t0
 	h.c = newConn(cfg, params, newSession(h.out, 0))
 	h.c.now = func() time.Time { return h.now }

@@ -74,7 +74,8 @@ Media packetization, transport, and timing:
 - **`rtmp/`** — RTMP/RTMPS publishing of H.264 and AAC access units. gortmplib handles the handshake, the control
   messages and the sequence headers; media messages are chunked by an own writer that frames them straight into the
   connection's buffer, so an access unit is not copied on the way out. `Conn.Fill` continues a starved video track with
-  P_Skip frames that hi264 builds from the stream's own SPS and PPS. `rtmptest/` is an in-process receiver for tests
+  P_Skip frames that hi264 builds from the stream's own SPS and PPS, and a starved AAC-LC track with silent frames.
+  `rtmptest/` is an in-process receiver for tests
 
 Key interfaces: `Packetizer`, `Pacer`, `AsyncPacer`, `CallbackPacer`, `Transformer`.
 
