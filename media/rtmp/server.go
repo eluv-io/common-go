@@ -2,6 +2,7 @@ package rtmp
 
 import (
 	"context"
+	"crypto/tls"
 	"net"
 	"strings"
 	"time"
@@ -58,6 +59,8 @@ type Player struct {
 	TcURL string
 	// StreamName is the stream the player asked to play, as it sent it. It may carry a secret.
 	StreamName string
+	// Encrypted reports whether the player connected over rtmps, i.e. Accept was handed a TLS connection.
+	Encrypted bool
 
 	s       *session
 	play    *message.CommandAMF0
@@ -104,7 +107,8 @@ func acceptPlay(nconn net.Conn, cfg ServerConfig) (*Player, error) {
 		return nil, errors.E("rtmp.handshake", errors.K.Invalid, "reason", "encrypted rtmp (rtmpe) is not supported")
 	}
 
-	p := &Player{s: s}
+	_, encrypted := nconn.(*tls.Conn)
+	p := &Player{s: s, Encrypted: encrypted}
 	if err = p.acceptConnect(); err != nil {
 		return nil, err
 	}
