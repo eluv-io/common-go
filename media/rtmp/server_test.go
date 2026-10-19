@@ -94,6 +94,7 @@ func TestServer_PlaysTracksAndSamples(t *testing.T) {
 	require.Equal(t, "live-out.iq__abc-out1.token", ar.p.StreamName)
 	require.Equal(t, "rtmp://"+addr+"/live", ar.p.TcURL)
 	require.Equal(t, "live/live-out.iq__abc-out1.token", ar.p.Path())
+	require.False(t, ar.p.Encrypted)
 
 	c, err := ar.p.Start(params, Metadata{VideoBitrate: 2_000_000})
 	require.NoError(t, err)
@@ -298,6 +299,7 @@ func TestServer_TLS(t *testing.T) {
 
 	ar := waitAccept(t, accepted)
 	require.NoError(t, ar.err)
+	require.True(t, ar.p.Encrypted)
 	c, err := ar.p.Start(params, Metadata{})
 	require.NoError(t, err)
 	defer func() { _ = c.Close() }()
