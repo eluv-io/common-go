@@ -1,4 +1,4 @@
-# CLAUDE.md
+# REPO.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -71,9 +71,10 @@ Media packetization, transport, and timing:
   across periods. Init segments go through mp4ff; media segments through an own streaming parser that reads each mdat
   into a reference-counted pooled fragment, so samples are views and a segment is parsed without allocating
 - **`samplepacer/`** — Real-time release of access units with a bounded jitter buffer, interleaving video and audio
-- **`rtmp/`** — RTMP/RTMPS publishing of H.264 and AAC access units. gortmplib handles the handshake, the control
-  messages and the sequence headers; media messages are chunked by an own writer that frames them straight into the
-  connection's buffer, so an access unit is not copied on the way out. `rtmptest/` is an in-process receiver for tests
+- **`rtmp/`** — RTMP/RTMPS carriage of H.264 and AAC access units, published to a server (`Dial`) or served to a
+  player that connected (`Accept`). gortmplib handles the handshake, the control messages and the sequence headers;
+  media messages are chunked by an own writer that frames them straight into the connection's buffer, so an access
+  unit is not copied on the way out. `rtmptest/` is an in-process receiver and a player for tests
 
 Key interfaces: `Packetizer`, `Pacer`, `AsyncPacer`, `CallbackPacer`, `Transformer`.
 
