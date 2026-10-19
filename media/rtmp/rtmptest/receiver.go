@@ -1,5 +1,6 @@
 // Package rtmptest provides an in-process RTMP server that accepts one publisher at a time and records what it
-// receives, for tests of RTMP publishing code.
+// receives, for tests of RTMP publishing code, and a player that records what it plays from a server, for tests of
+// RTMP serving code.
 package rtmptest
 
 import (
@@ -74,16 +75,44 @@ type Stats struct {
 	FirstNALUs [][]byte `json:"-"`
 }
 
+// recorder keeps the Stats of the stream a Receiver or a Player gets. Its mutex also guards the fields of the type
+// that embeds it.
+type recorder struct {
+	mu    sync.Mutex
+	stats Stats
+}
+
+// Stats returns a snapshot.
+func (r *recorder) Stats() Stats {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.stats
+}
+
+// WaitFor polls until cond holds for the stats or timeout elapses, and reports which.
+func (r *recorder) WaitFor(cond func(Stats) bool, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		if cond(r.Stats()) {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 // Receiver is the in-process server. Listen starts it; Close stops it.
 type Receiver struct {
+	recorder
+
 	ln     net.Listener
 	tlsCfg *tls.Config
 	user   string
 	pass   string
 
-	mu     sync.Mutex
 	conns  map[net.Conn]struct{}
-	stats  Stats
 	closed bool
 }
 
@@ -139,27 +168,6 @@ func (r *Receiver) Kill() {
 	r.mu.Unlock()
 	for _, c := range conns {
 		_ = c.Close()
-	}
-}
-
-// Stats returns a snapshot.
-func (r *Receiver) Stats() Stats {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.stats
-}
-
-// WaitFor polls until cond holds for the stats or timeout elapses, and reports which.
-func (r *Receiver) WaitFor(cond func(Stats) bool, timeout time.Duration) bool {
-	deadline := time.Now().Add(timeout)
-	for {
-		if cond(r.Stats()) {
-			return true
-		}
-		if time.Now().After(deadline) {
-			return false
-		}
-		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -237,10 +245,23 @@ func (r *Receiver) serve(conn net.Conn) error {
 	if err = sc.AcceptAction(); err != nil {
 		return err
 	}
-	tap := &tapConn{Conn: sc, r: r}
-	rd := &gortmplib.Reader{Conn: tap}
-	if err = rd.Initialize(); err != nil {
+	rd, err := r.newReader(sc)
+	if err != nil {
 		return err
+	}
+	_ = conn.SetReadDeadline(time.Time{})
+	for {
+		if err = rd.Read(); err != nil {
+			return err
+		}
+	}
+}
+
+// newReader reads the stream's tracks from conn and installs the callbacks that record its samples.
+func (r *recorder) newReader(conn gortmplib.Conn) (*gortmplib.Reader, error) {
+	rd := &gortmplib.Reader{Conn: &tapConn{Conn: conn, r: r}}
+	if err := rd.Initialize(); err != nil {
+		return nil, err
 	}
 	for _, track := range rd.Tracks() {
 		switch codec := track.Codec.(type) {
@@ -257,15 +278,10 @@ func (r *Receiver) serve(conn net.Conn) error {
 			rd.OnDataMPEG4Audio(track, r.onAudio)
 		}
 	}
-	_ = conn.SetReadDeadline(time.Time{})
-	for {
-		if err = rd.Read(); err != nil {
-			return err
-		}
-	}
+	return rd, nil
 }
 
-func (r *Receiver) resetStreamLocked() {
+func (r *recorder) resetStreamLocked() {
 	r.stats.Metadata = nil
 	r.stats.SPS, r.stats.PPS, r.stats.ASC = nil, nil, nil
 	r.stats.VideoFrames, r.stats.Keyframes, r.stats.AudioFrames = 0, 0, 0
@@ -275,7 +291,7 @@ func (r *Receiver) resetStreamLocked() {
 	r.stats.FirstNALUs = nil
 }
 
-func (r *Receiver) onVideo(pts, dts time.Duration, au [][]byte) {
+func (r *recorder) onVideo(pts, dts time.Duration, au [][]byte) {
 	if isParameterSets(au) {
 		// the reader reports the sequence header as an access unit of SPS and PPS; not a frame
 		return
@@ -299,7 +315,7 @@ func (r *Receiver) onVideo(pts, dts time.Duration, au [][]byte) {
 	_ = pts
 }
 
-func (r *Receiver) onAudio(pts time.Duration, au []byte) {
+func (r *recorder) onAudio(pts time.Duration, au []byte) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.stats.AudioFrames == 0 {
@@ -341,7 +357,7 @@ func lastSlash(s string) int {
 // tapConn records the onMetaData message on its way to the reader.
 type tapConn struct {
 	gortmplib.Conn
-	r *Receiver
+	r *recorder
 }
 
 func (t *tapConn) Read() (message.Message, error) {
@@ -355,7 +371,7 @@ func (t *tapConn) Read() (message.Message, error) {
 	return msg, nil
 }
 
-func (r *Receiver) recordMetadata(data *message.DataAMF0) {
+func (r *recorder) recordMetadata(data *message.DataAMF0) {
 	for i, item := range data.Payload {
 		if name, ok := item.(string); ok && name == "onMetaData" && i+1 < len(data.Payload) {
 			var obj amf0.Object
