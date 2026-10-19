@@ -41,9 +41,9 @@ const (
 // on a fresh connection with the next authentication step.
 var errNeedAuth = errors.Str("rtmp: authentication step required")
 
-// session is an established RTMP publishing connection at the message level: the handshake and the connect/publish
-// exchange are done, and media messages can be written. All writes go through write, which serializes them: the
-// read loop answers the server's pings and acknowledgements on the same message writer the media goes out on.
+// session is an established RTMP connection at the message level: the handshake and the command exchange up to
+// publish or play are done, and media messages can be written. All writes go through write, which serializes them.
+// The read loop answers the peer's pings and acknowledgements on the same message writer the media goes out on.
 type session struct {
 	nconn        net.Conn
 	bc           *bytecounter.ReadWriter
@@ -349,6 +349,19 @@ func (s *session) read() (message.Message, error) {
 		}
 	}
 	return msg, nil
+}
+
+// readCommand reads until the next command arrives.
+func (s *session) readCommand() (*message.CommandAMF0, error) {
+	for {
+		msg, err := s.read()
+		if err != nil {
+			return nil, err
+		}
+		if cmd, ok := msg.(*message.CommandAMF0); ok {
+			return cmd, nil
+		}
+	}
 }
 
 // readCommandResult reads until the result or error of command commandID arrives.

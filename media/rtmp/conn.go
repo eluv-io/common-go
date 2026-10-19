@@ -21,6 +21,9 @@ import (
 // ErrClosed is the error a Conn reports after Close.
 var ErrClosed = errors.Str("rtmp: connection closed")
 
+// ErrStopped is the error a played Conn reports after the player deleted or closed its stream.
+var ErrStopped = errors.Str("rtmp: player stopped the stream")
+
 // DefaultEncoder is the encoder name announced in onMetaData when the configuration sets none.
 const DefaultEncoder = "eluvio content fabric"
 
@@ -28,16 +31,17 @@ const DefaultEncoder = "eluvio content fabric"
 // time base rather than a frame rate and is not announced.
 const maxPlausibleFrameRate = 240
 
-// Conn is one RTMP publishing session. It is created connected and announced (Dial) and ends when the server drops
-// it, a write fails, or Close is called; Done closes then and Err tells why. Writes are safe from one goroutine at a
-// time; the read loop answering the server's control messages runs concurrently and is serialized with them.
+// Conn is one RTMP session that carries a stream to its peer. A publishing Conn is created connected and announced by
+// Dial, a played one by Player.Start. It ends when the peer drops it, a write fails, or Close is called. Done closes
+// then and Err tells why. Writes are safe from one goroutine at a time. The read loop answering the peer's control
+// messages runs concurrently and is serialized with them.
 //
 // Timestamps are rebased per connection: the first video keyframe written defines time zero, and everything written
 // before it is dropped, since a decoder can only start at a keyframe and the sequence headers sent at connect must be
 // followed by one. Per track the timestamps sent are non-decreasing, which the strictest ingest servers require; a
 // sample that would go backwards is clamped to the previous timestamp and counted.
 type Conn struct {
-	cfg    Config
+	ep     endpoint
 	params fmp4.CodecParams
 	s      *session
 
@@ -90,7 +94,7 @@ func Dial(ctx context.Context, cfg Config, params fmp4.CodecParams) (*Conn, erro
 		return nil, e(err)
 	}
 
-	c := newConn(cfg, params, s)
+	c := newConn(publishEndpoint(&cfg), params, s)
 
 	if err = c.writeHeaders(); err != nil {
 		_ = s.close()
@@ -102,11 +106,24 @@ func Dial(ctx context.Context, cfg Config, params fmp4.CodecParams) (*Conn, erro
 	return c, nil
 }
 
+// endpoint is what a Conn knows about its peer beyond the session: how logs and errors name it, what onMetaData
+// announces, and whether the peer publishes to it or plays from it.
+type endpoint struct {
+	key  string // the log and error field naming the peer: "destination" or "player"
+	name string // its value, free of secrets
+	meta Metadata
+	play bool
+}
+
+func publishEndpoint(cfg *Config) endpoint {
+	return endpoint{key: "destination", name: cfg.Redacted(), meta: cfg.Meta}
+}
+
 // newConn wraps an established session. It neither announces the tracks nor starts the read loop, which is what
 // tests and benchmarks that drive the write path over a pipe want.
-func newConn(cfg Config, params fmp4.CodecParams, s *session) *Conn {
+func newConn(ep endpoint, params fmp4.CodecParams, s *session) *Conn {
 	c := &Conn{
-		cfg:    cfg,
+		ep:     ep,
 		params: params,
 		s:      s,
 		done:   make(chan struct{}),
@@ -176,7 +193,7 @@ func (c *Conn) writeHeaders() error {
 // metadata builds the onMetaData object. The FLV audio header hard-codes 44.1 kHz stereo for AAC by convention, so
 // the real sample rate and channel count only reach the server through this object and the AudioSpecificConfig.
 func (c *Conn) metadata(sps *h264.SPS, asc *mpeg4audio.AudioSpecificConfig) amf0.Object {
-	meta := c.cfg.Meta
+	meta := c.ep.meta
 	if meta.Width == 0 {
 		meta.Width = sps.Width()
 	}
@@ -240,25 +257,34 @@ func avcDecoderConfiguration(sps *h264.SPS, spsNalu, ppsNalu []byte) *mp4.AVCDec
 	}
 }
 
-// readLoop drains the server's messages until the connection ends. Pings and acknowledgements are answered inside
-// session.read; an onStatus with level "error" ends the connection with its description, since servers report a
-// rejected or stopped publish that way rather than by closing.
+// readLoop drains the peer's messages until the connection ends. Pings and acknowledgements are answered inside
+// session.read.
+//
+// A server reports a rejected or stopped publish with an onStatus of level "error" rather than by closing, so that
+// ends a publishing connection with its description. A player ends its stream with deleteStream or closeStream, which
+// ends a played connection with ErrStopped. Its other commands, such as pause, mean nothing for a live stream and are
+// only logged.
 func (c *Conn) readLoop() {
 	for {
 		msg, err := c.s.read()
 		if err != nil {
-			c.fail(errors.E("rtmp.read", errors.K.IO, err, "destination", c.cfg.Redacted()))
+			c.fail(errors.E("rtmp.read", errors.K.IO, err, c.ep.key, c.ep.name))
 			return
 		}
-		if cmd, ok := msg.(*message.CommandAMF0); ok {
-			if cmd.Name == "onStatus" && !statusIsOK(cmd) {
-				c.fail(errors.E("rtmp.status", errors.K.IO,
-					"reason", "server reported an error", "status", describeCommand(cmd),
-					"destination", c.cfg.Redacted()))
-				return
-			}
-			log.Debug("rtmp server command", "command", describeCommand(cmd), "destination", c.cfg.Redacted())
+		cmd, ok := msg.(*message.CommandAMF0)
+		if !ok {
+			continue
 		}
+		switch {
+		case c.ep.play && (cmd.Name == "deleteStream" || cmd.Name == "closeStream"):
+			c.fail(ErrStopped)
+			return
+		case !c.ep.play && cmd.Name == "onStatus" && !statusIsOK(cmd):
+			c.fail(errors.E("rtmp.status", errors.K.IO,
+				"reason", "server reported an error", "status", describeCommand(cmd), c.ep.key, c.ep.name))
+			return
+		}
+		log.Debug("rtmp peer command", "command", describeCommand(cmd), c.ep.key, c.ep.name)
 	}
 }
 
@@ -391,7 +417,7 @@ func (c *Conn) writeResult(err error) error {
 	if err == nil {
 		return nil
 	}
-	err = errors.E("rtmp.write", errors.K.IO, err, "destination", c.cfg.Redacted())
+	err = errors.E("rtmp.write", errors.K.IO, err, c.ep.key, c.ep.name)
 	c.fail(err)
 	return c.Err()
 }
@@ -413,7 +439,7 @@ func (c *Conn) ConnStats(into *mio.ConnStats, _ bool) {
 	*into = mio.ConnStats{RemoteAddr: c.stats.RemoteAddr, LocalAddr: c.s.nconn.LocalAddr().String()}
 }
 
-// RemoteAddr returns the server's address.
+// RemoteAddr returns the peer's address: the server's for a publishing Conn, the player's for a played one.
 func (c *Conn) RemoteAddr() net.Addr {
 	return c.s.nconn.RemoteAddr()
 }
