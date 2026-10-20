@@ -245,6 +245,27 @@ func TestConn_Auth(t *testing.T) {
 	require.Equal(t, "rtmp://alice:***@"+rcv.Addr().String()+"/live/***", cfg.Redacted())
 }
 
+// TestConn_StreamKeyWithQuery publishes with a stream key that carries a query, the way Facebook hands them out: the
+// whole key is the published stream name, and it stays out of the redacted destination.
+func TestConn_StreamKeyWithQuery(t *testing.T) {
+	rcv, err := rtmptest.Listen("127.0.0.1:0")
+	require.NoError(t, err)
+	defer func() { _ = rcv.Close() }()
+	params, _, _ := fixtureTracks(t)
+
+	cfg := testConfig(rcv)
+	cfg.StreamKey = "1234?s_bl=1&s_vt=api-pc&a=secret"
+	c, err := Dial(context.Background(), cfg, params)
+	require.NoError(t, err)
+	defer func() { _ = c.Close() }()
+
+	require.True(t, rcv.WaitFor(func(s rtmptest.Stats) bool { return s.Connections == 1 }, 5*time.Second))
+	s := rcv.Stats()
+	require.Equal(t, "1234", s.StreamKey)
+	require.Equal(t, "s_bl=1&s_vt=api-pc&a=secret", s.StreamQuery)
+	require.NotContains(t, cfg.Redacted(), "secret")
+}
+
 func TestConn_ExtendedTimestampsAndClamping(t *testing.T) {
 	rcv, err := rtmptest.Listen("127.0.0.1:0")
 	require.NoError(t, err)
@@ -293,6 +314,11 @@ func TestConfig_PublishURL(t *testing.T) {
 	require.Equal(t, "rtmps://u:p@live-api-s.facebook.com:443/rtmp#FB-123", u.String())
 	require.True(t, secure.Encrypted())
 	require.Equal(t, "rtmps://u:***@live-api-s.facebook.com:443/rtmp//***", secure.Redacted())
+
+	facebook := Config{URL: "rtmps://rtmp-pc.facebook.com:443/rtmp/", StreamKey: "1234?s_bl=1&a=secret"}
+	u, err = facebook.publishURL()
+	require.NoError(t, err)
+	require.Equal(t, "1234?s_bl=1&a=secret", u.Fragment, "a query in the key is kept")
 
 	defaultTLSPort := Config{URL: "rtmps://x.example.com/app", StreamKey: "k"}
 	u, err = defaultTLSPort.publishURL()

@@ -33,7 +33,8 @@ type Config struct {
 	// URL is the server and application: rtmp://host[:port]/app[/instance] or rtmps://... . It must carry no user
 	// info and no fragment; the stream key and the credentials have fields of their own.
 	URL string
-	// StreamKey is the stream name published under URL's application. Servers hand it out as a secret.
+	// StreamKey is the stream name published under URL's application. Servers hand it out as a secret. It may carry a
+	// query, as Facebook's does ("<id>?s_bl=1&...&a=<auth>"), which is published as part of the stream name.
 	StreamKey string
 	// Username and Password authenticate with a server that requires Adobe-style RTMP authentication. Both or none.
 	Username string
@@ -128,8 +129,9 @@ func (c *Config) publishURL() (*url.URL, error) {
 	if c.StreamKey == "" {
 		return nil, e("reason", "stream key is required")
 	}
-	if strings.ContainsAny(c.StreamKey, "/#?") {
-		return nil, e("reason", "stream key must not contain '/', '#' or '?'")
+	// A query is fine: the key travels as a field to the publish command and is never parsed as part of a URL.
+	if strings.ContainsAny(c.StreamKey, "/#") {
+		return nil, e("reason", "stream key must not contain '/' or '#'")
 	}
 	if (c.Username == "") != (c.Password == "") {
 		return nil, e("reason", "username and password must be set together")
