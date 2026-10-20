@@ -2,6 +2,7 @@ package rtp
 
 import (
 	"math"
+	"runtime"
 	"testing"
 	"time"
 
@@ -469,4 +470,51 @@ func TestReorderBuffer_MaxWindowClamped(t *testing.T) {
 
 	out, _ = b.Push(at(2), 101, 101, nil)
 	require.Equal(t, []int{101, 102}, out, "reordering still works correctly with the clamped values")
+}
+
+// TestReorderBuffer_Reset verifies that Reset rebases on any next sequence number, close to the old position or not,
+// and that it keeps the cumulative stats.
+func TestReorderBuffer_Reset(t *testing.T) {
+	maxWait := 20 * time.Millisecond
+	b := NewReorderBuffer[int](0, maxWait, 0)
+
+	out, _ := b.Push(at(0), 100, 100, nil)
+	require.Equal(t, []int{100}, out)
+	out, _ = b.Push(at(1), 102, 102, nil)
+	require.Empty(t, out, "102 is held for the missing 101")
+	out = b.Expire(at(1).Add(maxWait), nil)
+	require.Equal(t, []int{102}, out)
+	out, _ = b.Push(at(30), 104, 104, nil)
+	require.Empty(t, out, "104 is held for the missing 103")
+	_, armed := b.Deadline()
+	require.True(t, armed)
+
+	b.Reset()
+	_, armed = b.Deadline()
+	require.False(t, armed, "nothing held, nothing to time out")
+	require.Zero(t, b.Stats().CurrentOccupancy, "held items are dropped")
+	require.EqualValues(t, 1, b.Stats().LostAfterTimeout, "the stats are kept")
+
+	// 101 is behind the old position and within any jump threshold. A buffer that was not reset would drop it as late.
+	out, _ = b.Push(at(31), 101, 101, nil)
+	require.Equal(t, []int{101}, out, "the first packet after a reset seeds the buffer afresh")
+	out, _ = b.Push(at(32), 102, 102, nil)
+	require.Equal(t, []int{102}, out)
+	require.Zero(t, b.Stats().LateDropped)
+	require.Zero(t, b.Stats().Resyncs, "a reset is not a resync")
+}
+
+// TestReorderBuffer_NoUpfrontAllocation pins that a large window does not cost memory before anything is held. A
+// window of 4096 used to pre-size the slots map for 4096 items.
+func TestReorderBuffer_NoUpfrontAllocation(t *testing.T) {
+	allocated := func(maxWindow int) uint64 {
+		var before, after runtime.MemStats
+		runtime.GC()
+		runtime.ReadMemStats(&before)
+		b := NewReorderBuffer[[64]byte](maxWindow, 0, 0)
+		runtime.ReadMemStats(&after)
+		runtime.KeepAlive(b)
+		return after.TotalAlloc - before.TotalAlloc
+	}
+	require.Less(t, allocated(4096), uint64(4096), "a window of 4096 must not pre-allocate per-slot storage")
 }
