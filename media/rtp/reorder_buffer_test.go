@@ -504,6 +504,30 @@ func TestReorderBuffer_Reset(t *testing.T) {
 	require.Zero(t, b.Stats().Resyncs, "a reset is not a resync")
 }
 
+// TestReorderBuffer_FlushDoesNotAllocate pins that flushing held items, and resetting after the flush, reuse the
+// buffer's own storage. A caller that restarts its stream with a hole open flushes every time. It holds 64 items, more
+// than the compiler would place on the stack for a temporary sort slice.
+func TestReorderBuffer_FlushDoesNotAllocate(t *testing.T) {
+	const held = 64
+	b := NewReorderBuffer[int](held+1, 0, 0)
+	out := make([]int, 0, held)
+	seq := uint16(0)
+	round := func() {
+		out, _ = b.Push(at(0), seq, 0, out[:0]) // seeds the buffer
+		for i := 2; i < held+2; i++ {
+			out, _ = b.Push(at(0), seq+uint16(i), i, out[:0]) // held behind the hole at seq+1
+		}
+		out = b.Flush(out[:0])
+		b.Reset()
+		seq += 1000
+	}
+	round() // grows the map and the scratch once
+	require.Len(t, out, held)
+	require.Equal(t, 2, out[0], "the flush releases the held items in order")
+	require.Equal(t, held+1, out[held-1])
+	require.Zero(t, testing.AllocsPerRun(100, round))
+}
+
 // TestReorderBuffer_NoUpfrontAllocation pins that a large window does not cost memory before anything is held. A
 // window of 4096 used to pre-size the slots map for 4096 items.
 func TestReorderBuffer_NoUpfrontAllocation(t *testing.T) {
