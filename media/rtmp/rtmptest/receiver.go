@@ -48,12 +48,13 @@ type Stats struct {
 	Disconnects int `json:"disconnects"` // publisher connections that ended
 
 	// Of the latest publish.
-	App       string         `json:"app,omitempty"`
-	StreamKey string         `json:"stream_key,omitempty"`
-	Metadata  map[string]any `json:"metadata,omitempty"` // the onMetaData object, if one was received
-	SPS       []byte         `json:"sps,omitempty"`
-	PPS       []byte         `json:"pps,omitempty"`
-	ASC       []byte         `json:"asc,omitempty"`
+	App         string         `json:"app,omitempty"`
+	StreamKey   string         `json:"stream_key,omitempty"`
+	StreamQuery string         `json:"stream_query,omitempty"` // the query the stream name carried, if any
+	Metadata    map[string]any `json:"metadata,omitempty"`     // the onMetaData object, if one was received
+	SPS         []byte         `json:"sps,omitempty"`
+	PPS         []byte         `json:"pps,omitempty"`
+	ASC         []byte         `json:"asc,omitempty"`
 
 	VideoFrames   int           `json:"video_frames"`
 	Keyframes     int           `json:"keyframes"`
@@ -220,6 +221,8 @@ func (r *Receiver) serve(conn net.Conn) error {
 	r.stats.Active++
 	r.stats.App = sc.URL.Path
 	r.stats.StreamKey = ""
+	// gortmplib joins the tcUrl and the published stream name into one URL, so a query on the name is its query
+	r.stats.StreamQuery = sc.URL.RawQuery
 	if sc.URL.Path != "" {
 		if i := lastSlash(sc.URL.Path); i >= 0 {
 			r.stats.App = sc.URL.Path[:i]
