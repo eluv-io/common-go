@@ -93,6 +93,9 @@ type ReorderBuffer[T any] struct {
 	// should be treated as lost - the value Deadline reports and Expire compares now against. The zero value means
 	// no gap is currently pending (slots is empty), so no timer is needed.
 	gapDeadline time.Time
+	// flushSeqs is flush's scratch for sorting the held sequence numbers, kept so that a flush does not allocate once
+	// it has grown to the largest number of items ever held.
+	flushSeqs []uint16
 
 	// stats accumulates the buffer's cumulative counters; Stats returns a snapshot with CurrentOccupancy filled in
 	// from len(slots) at read time, since occupancy is a gauge rather than something tracked incrementally here.
@@ -355,16 +358,18 @@ func (b *ReorderBuffer[T]) flush(out []T) []T {
 	if len(b.slots) == 0 {
 		return out
 	}
-	seqs := make([]uint16, 0, len(b.slots))
+	seqs := b.flushSeqs[:0]
 	for s := range b.slots {
 		seqs = append(seqs, s)
 	}
+	next := b.nextExpected
 	slices.SortFunc(seqs, func(x, y uint16) int {
-		return cmp.Compare(int16(x-b.nextExpected), int16(y-b.nextExpected))
+		return cmp.Compare(int16(x-next), int16(y-next))
 	})
 	for _, s := range seqs {
 		out = append(out, b.slots[s])
 	}
+	b.flushSeqs = seqs[:0]
 	clear(b.slots)
 	b.gapDeadline = time.Time{}
 	return out
