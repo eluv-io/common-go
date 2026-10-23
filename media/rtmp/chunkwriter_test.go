@@ -321,7 +321,7 @@ func TestConn_WriteAllocs(t *testing.T) {
 		Video: &fmp4.VideoParams{Codecs: "avc1.640028"},
 		Audio: &fmp4.AudioParams{Codecs: "mp4a.40.2"},
 	}
-	c := newConn(Config{}, params, newSession(discardConn{}, 0))
+	c := newConn(endpoint{}, params, newSession(discardConn{}, 0))
 
 	small := [][]byte{nalOf(5, 40), nalOf(1, 20<<10)}
 	big := [][]byte{nalOf(5, 40), nalOf(1, 200<<10)} // several chunks

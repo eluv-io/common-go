@@ -1,9 +1,10 @@
-// Package rtmp publishes H.264 and AAC access units to an RTMP or RTMPS server, as a live stream contribution to
-// services such as YouTube or Facebook.
+// Package rtmp carries H.264 and AAC access units over RTMP or RTMPS in either direction of the connection. Dial
+// publishes them to a server, as a live stream contribution to services such as YouTube or Facebook. Accept serves
+// them to a player that connected to the caller's listener.
 //
-// A Conn is one publishing session: it connects, announces the tracks, and writes access units with timestamps
-// rebased to start at zero at the first video keyframe. It does not reconnect; the caller opens a new Conn when
-// Done closes.
+// A Conn is one session: it announces the tracks and writes access units with timestamps rebased to start at zero at
+// the first video keyframe. It does not reconnect. A publisher opens a new Conn when Done closes, and a player
+// reconnects on its own.
 //
 // The handshake, the control messages and the sequence headers go through gortmplib's message layer, driven here
 // rather than through gortmplib's Client so that the control messages a server sends (pings, acknowledgements) can be
