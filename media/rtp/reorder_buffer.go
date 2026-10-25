@@ -93,6 +93,9 @@ type ReorderBuffer[T any] struct {
 	// should be treated as lost - the value Deadline reports and Expire compares now against. The zero value means
 	// no gap is currently pending (slots is empty), so no timer is needed.
 	gapDeadline time.Time
+	// flushSeqs is flush's scratch for sorting the held sequence numbers, kept so that a flush does not allocate once
+	// it has grown to the largest number of items ever held.
+	flushSeqs []uint16
 
 	// stats accumulates the buffer's cumulative counters; Stats returns a snapshot with CurrentOccupancy filled in
 	// from len(slots) at read time, since occupancy is a gauge rather than something tracked incrementally here.
@@ -102,9 +105,8 @@ type ReorderBuffer[T any] struct {
 // maxSequenceWindow is the largest value Push's delta (signed 16-bit sequence-distance arithmetic) can ever take
 // on the positive side: the true reachable ceiling for maxWindow. A maxWindow configured above this can never
 // actually bind - delta can never exceed it, so the window-full check would never fire - while still being used
-// as the slots map's allocation-size hint and as an input to the maxJump fallback below (4 * maxWindow), so
-// NewReorderBuffer clamps to it before either of those, guarding against excessive/failed allocation for the
-// former and integer overflow for the latter (an unclamped maxWindow near the top of int's range makes
+// as an input to the maxJump fallback below (4 * maxWindow), so NewReorderBuffer clamps to it first, guarding
+// against integer overflow (an unclamped maxWindow near the top of int's range makes
 // 4*maxWindow wrap negative, which would then silently bypass maxJump's own ceiling check just below, since a
 // negative maxJump is never greater than a positive ceiling - leaving Push's abs(delta) >= maxJump check
 // permanently true and misreading every single packet as a discontinuity).
@@ -129,8 +131,11 @@ const maxSequenceJump = maxSequenceWindow + 1
 // package's Default* constants; a maxJump at or below the (possibly just-defaulted) effective maxWindow falls back
 // to 4 times it instead - not a fixed constant, so it stays proportional to whatever window is actually in effect.
 // maxWindow is clamped to maxSequenceWindow and maxJump to maxSequenceJump, since larger values could never bind
-// (see those constants' doc comments) - maxWindow is clamped first, since it both sizes the slots map and feeds
-// the 4x maxJump fallback above, so an unclamped maxWindow could make that fallback overflow.
+// (see those constants' doc comments) - maxWindow is clamped first, since it feeds the 4x maxJump fallback above,
+// so an unclamped maxWindow could make that fallback overflow.
+//
+// The slots map is not sized to maxWindow up front. It grows with what is actually held, which for short-range
+// reordering is a handful of items, so a large window costs memory only while a large gap is open.
 func NewReorderBuffer[T any](maxWindow int, maxWait time.Duration, maxJump int) *ReorderBuffer[T] {
 	if maxWindow <= 0 {
 		maxWindow = DefaultReorderMaxWindow
@@ -151,8 +156,20 @@ func NewReorderBuffer[T any](maxWindow int, maxWait time.Duration, maxJump int) 
 		maxWindow: maxWindow,
 		maxWait:   maxWait,
 		maxJump:   maxJump,
-		slots:     make(map[uint16]T, maxWindow),
+		slots:     make(map[uint16]T),
 	}
+}
+
+// Reset returns the buffer to the state of a new one: nothing held, and the next Push seeds nextExpected afresh. It is
+// for a caller that knows the stream restarted, e.g. after a discontinuity it detected itself. Held items are dropped
+// without being returned, so a caller holding pooled items calls Flush first to dispose of them. The slots map keeps
+// the capacity it has grown to, so a reset does not allocate. The cumulative stats are kept as well: they describe the
+// buffer's whole life, not one stream.
+func (b *ReorderBuffer[T]) Reset() {
+	clear(b.slots)
+	b.hasNext = false
+	b.nextExpected = 0
+	b.gapDeadline = time.Time{}
 }
 
 // MaxWindow returns the configured window size, e.g. for a caller sizing its own reusable scratch slice for the
@@ -341,16 +358,18 @@ func (b *ReorderBuffer[T]) flush(out []T) []T {
 	if len(b.slots) == 0 {
 		return out
 	}
-	seqs := make([]uint16, 0, len(b.slots))
+	seqs := b.flushSeqs[:0]
 	for s := range b.slots {
 		seqs = append(seqs, s)
 	}
+	next := b.nextExpected
 	slices.SortFunc(seqs, func(x, y uint16) int {
-		return cmp.Compare(int16(x-b.nextExpected), int16(y-b.nextExpected))
+		return cmp.Compare(int16(x-next), int16(y-next))
 	})
 	for _, s := range seqs {
 		out = append(out, b.slots[s])
 	}
+	b.flushSeqs = seqs[:0]
 	clear(b.slots)
 	b.gapDeadline = time.Time{}
 	return out
