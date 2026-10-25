@@ -16,7 +16,7 @@ func NewExpiringCache(maxSize int, maxAge duration.Spec) *ExpiringCache {
 }
 
 // NewTypedExpiringCache creates a new TypedExpiringCache.
-func NewTypedExpiringCache[K any, V any](maxSize int, maxAge duration.Spec) *TypedExpiringCache[K, V] {
+func NewTypedExpiringCache[K comparable, V any](maxSize int, maxAge duration.Spec) *TypedExpiringCache[K, V] {
 	cache := TypedNil[K, *expiringEntry[V]]()
 	if maxSize > 0 && maxAge > 0 {
 		cache = NewTyped[K, *expiringEntry[V]](maxSize)
@@ -39,7 +39,7 @@ type ExpiringCache = TypedExpiringCache[any, any]
 // Expired entries are evicted lazily, and hence not garbage collected otherwise. Eviction occurs when
 //   - requesting an expired entry through Get, GetOrCreate, Remove
 //   - calling Len or Entries
-type TypedExpiringCache[K any, V any] struct {
+type TypedExpiringCache[K comparable, V any] struct {
 	cache                   *TypedCache[K, *expiringEntry[V]]
 	maxAge                  time.Duration
 	resetAgeOnAccess        bool // if true, resets the entries age to 0 on access
@@ -371,9 +371,8 @@ func (c *TypedExpiringCache[K, V]) Entries() (entries []ExpiringEntry[V]) {
 		keys := c.cache.lru.Keys()
 		entries = make([]ExpiringEntry[V], len(keys))
 		for idx, key := range keys {
-			val, ok := c.cache.lru.Get(key)
+			ee, ok := c.cache.lru.Peek(key)
 			if ok {
-				ee := val.(*expiringEntry[V])
 				clone := *ee
 				entries[idx] = &clone
 			}
@@ -399,7 +398,7 @@ func (c *TypedExpiringCache[K, V]) evictExpired(now utc.UTC) {
 		if !ok {
 			return
 		}
-		if c.isExpired(val.(*expiringEntry[V]), now) {
+		if c.isExpired(val, now) {
 			c.cache.lru.RemoveOldest()
 		} else {
 			return
