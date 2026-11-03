@@ -16,7 +16,11 @@ The `Resolve` function is a more flexible version of `Get` that allows customize
 
 `Visit` traverses a generic data structure in depth-first order and calls the visitor function with each encountered element.
 
-`Replace` is a variant of `Visit` that allows replacing elements in the data structure during traversal.
+`Replace` is a variant of `Visit` that allows replacing elements in the data structure during traversal. A replacement wrapped with `VisitReplacement` is visited as well.
+
+### Copy-on-write (set.go, delete.go, merge.go, visit.go)
+
+`Set`, `Delete`, `Merge` and `Replace` modify the target structure in place. Their copy-on-write variants `SetCopy`, `DeleteCopy`, `MergeCopy` and `ReplaceCopy` leave it unchanged and copy only the maps and slices that change, together with their ancestors. All other elements are shared between the target and the result. They allow working on data that must not be modified, like a cache of decoded structures, without copying it entirely first.
 
 ### Merge (merge.go)
 
