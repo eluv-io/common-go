@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"runtime/debug"
 	"sync"
+	"unsafe"
 
 	"github.com/eluv-io/common-go/util/goutil"
 	"github.com/eluv-io/common-go/util/traceutil/trace"
@@ -12,7 +13,7 @@ import (
 
 // NewStack creates a new ContextStack.
 func NewStack() ContextStack {
-	return &contextStack{stacks: map[int64]*entry{}}
+	return &contextStack{}
 }
 
 // ContextStack provides access to a stack of context.Context values individually managed per goroutine. It is
@@ -104,62 +105,139 @@ type ContextStack interface {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+// stackShards is the number of shards of a contextStack, a power of two.
+const stackShards = 64
+
+// stackShardSize is the size of a shard, the cache line size of most CPUs.
+const stackShardSize = 64
+
+// contextStack keeps the stacks of its goroutines in shards, picked by goroutine ID. Each shard has its own mutex and
+// map, so goroutines rarely contend on the same mutex. The shards take 4 KiB. Their maps are created on first use and
+// add up to about 12 KiB once all are in use.
 type contextStack struct {
+	shards [stackShards]stackShard
+}
+
+// stackShard holds the stacks of the goroutines whose ID maps to it. It is padded to 64 bytes, so that the mutexes of
+// neighbouring shards never share a 64-byte line.
+type stackShard struct {
+	stackShardFields
+	// _ pads the shard to 64 bytes. The build fails if the fields outgrow that.
+	_ [stackShardSize - unsafe.Sizeof(stackShardFields{})]byte
+}
+
+// stackShardFields are the fields of a stackShard, embedded so that its padding follows from their size.
+type stackShardFields struct {
+	// mu guards stacks and seq. The entries of the shard are modified under it, too.
+	mu sync.Mutex
+	// stacks maps a goroutine ID to the entry holding its stack. It is created on first use. An entry is removed when
+	// its stack becomes empty.
 	stacks map[int64]*entry
-	mutex  sync.Mutex // guards access to stacks map
+	// seq is the sequence number of the last frame pushed in this shard. The monotonic sequence is shared by all
+	// goroutines of the shard, so a goroutine will likely not get contiguous numbers for its frames. A goroutine always
+	// uses the same shard, so the numbers of its frames are unique, even across the entries it gets from the pool.
+	//
+	// A release finds its frame by this number. That detects a release of a frame that was already popped, such as a
+	// second release, and releases that were skipped, whose frames lie above it. A release from another goroutine is
+	// detected by the goroutine ID the release keeps along with the number.
+	seq uint64
+}
+
+// shard returns the shard of the given goroutine. Goroutine IDs are sequential, so their low bits spread evenly over
+// the shards without a hash.
+func (c *contextStack) shard(gid int64) *stackShard {
+	return &c.shards[uint64(gid)&(stackShards-1)]
+}
+
+// len returns the number of goroutines with a non-empty stack.
+func (c *contextStack) len() int {
+	var ret int
+	for i := range c.shards {
+		s := &c.shards[i]
+		s.mu.Lock()
+		ret += len(s.stacks)
+		s.mu.Unlock()
+	}
+	return ret
 }
 
 func (c *contextStack) Ctx() context.Context {
-	e := c.entry(false)
+	e := c.entry(goutil.GoID())
 	if e == nil {
 		return context.Background()
 	}
-	return e.stack.ctx
+	return e.ctx
 }
 
 func (c *contextStack) Push(ctx context.Context) func() {
-	se := c.entry(true)
-	// modification of stack entry requires no locking, since the entry is unique for each goroutine.
-	s := &stack{
-		ctx:    ctx,
-		parent: se.stack,
+	gid := goutil.GoID()
+	sh := c.shard(gid)
+
+	sh.mu.Lock()
+	e, ok := sh.stacks[gid]
+	if !ok {
+		if sh.stacks == nil {
+			sh.stacks = map[int64]*entry{}
+		}
+		e = entryPool.Get().(*entry)
+		sh.stacks[gid] = e
 	}
-	se.stack = s
+	sh.seq++
+	seq := sh.seq
+	e.frames = append(e.frames, frame{ctx: ctx, seq: seq})
+	e.ctx = ctx
+	sh.mu.Unlock()
+
+	// The closure is the only allocation of a Push. It identifies its frame by goroutine and sequence number.
 	return func() {
-		c.pop(s)
+		c.pop(gid, seq)
 	}
 }
 
-// pop removes the context at the top of the stack for the current goroutine and removes the stack altogether if it
-// becomes empty.
-func (c *contextStack) pop(expect *stack) {
+// pop removes the frame with the given sequence number and all frames above it from the stack of the current goroutine,
+// which must be the goroutine that pushed it. It removes the stack altogether if it becomes empty.
+func (c *contextStack) pop(pushGid int64, seq uint64) {
 	gid := goutil.GoID()
+	if gid != pushGid {
+		log.Warn(
+			"ContextStack: release called from different goroutine! Ignoring call.",
+			"pushing_gid", pushGid,
+			"releasing_gid", gid,
+			"~at",
+			"\n"+string(debug.Stack()),
+		)
+		return
+	}
+	sh := c.shard(gid)
 
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	sh.mu.Lock()
+	defer sh.mu.Unlock()
 
-	e, ok := c.stacks[gid]
+	e, ok := sh.stacks[gid]
 	if !ok {
 		log.Warn("ContextStack: release called on empty stack!", "~at", "\n"+string(debug.Stack()))
 		return
 	}
-	invalidCount := 0
-	s := e.stack
-	for expect != s {
-		invalidCount++
-		s = s.parent
-		if s == nil {
-			log.Warn("ContextStack: released stack not found!", "remaining", invalidCount, "~at", "\n"+string(debug.Stack()))
-			return
-		}
+	i := len(e.frames) - 1
+	for i >= 0 && e.frames[i].seq != seq {
+		i--
 	}
-	if invalidCount > 0 {
-		log.Warn("ContextStack: missing release calls detected!", "missing", invalidCount, "~at", "\n"+string(debug.Stack()))
+	if i < 0 {
+		log.Warn("ContextStack: released stack not found!", "remaining", len(e.frames), "~at", "\n"+string(debug.Stack()))
+		return
 	}
-	if s.parent == nil {
-		delete(c.stacks, gid)
+	if missing := len(e.frames) - 1 - i; missing > 0 {
+		log.Warn("ContextStack: missing release calls detected!", "missing", missing, "~at", "\n"+string(debug.Stack()))
 	}
-	e.stack = s.parent
+	clear(e.frames[i:]) // do not keep the popped contexts alive
+	e.frames = e.frames[:i]
+	if i == 0 {
+		e.ctx = nil
+		delete(sh.stacks, gid)
+		entryPool.Put(e)
+		return
+	}
+	e.ctx = e.frames[i-1].ctx
 }
 
 func (c *contextStack) Go(fn func()) {
@@ -228,35 +306,32 @@ func (c *contextStack) WithValue(key interface{}, val interface{}) func() {
 	return c.Push(context.WithValue(c.Ctx(), key, val))
 }
 
-// entry returns the entry for the current goroutine. Creates an new entry if necessary and "create" is true.
-func (c *contextStack) entry(create bool) *entry {
-	gid := goutil.GoID()
+// entry returns the entry for the given goroutine, or nil if its stack is empty.
+func (c *contextStack) entry(gid int64) *entry {
+	sh := c.shard(gid)
 
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
-
-	e, ok := c.stacks[gid]
-	if !ok && create {
-		e = &entry{}
-		c.stacks[gid] = e
-	}
+	sh.mu.Lock()
+	e := sh.stacks[gid]
+	sh.mu.Unlock()
 	return e
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
-// entry is the struct stored in the stacks map - one per goroutine.
+// entryPool recycles the entries of emptied stacks, together with the capacity of their frames.
+var entryPool = sync.Pool{New: func() any { return &entry{} }}
+
+// entry is the stack of contexts of one goroutine, stored in the stacks map. It is removed from the map when its stack
+// becomes empty. It is modified under the shard's mutex. Only its goroutine reads it without the mutex.
 type entry struct {
-	stack *stack
+	ctx    context.Context // the current context, the one of the last frame
+	frames []frame         // the stack, with the current context last
 }
 
-////////////////////////////////////////////////////////////////////////////////
-
-// stack is the stack of contexts (for a given goroutine). It is not directly stored in the stacks map, so that it can
-// be modified without modifying the map (which would require locking...)
-type stack struct {
-	ctx    context.Context
-	parent *stack
+// frame is one context on a stack.
+type frame struct {
+	ctx context.Context
+	seq uint64
 }
 
 ////////////////////////////////////////////////////////////////////////////////
