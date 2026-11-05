@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"runtime/debug"
 	"sync"
+	"unsafe"
 
 	"github.com/eluv-io/common-go/util/goutil"
 	"github.com/eluv-io/common-go/util/traceutil/trace"
@@ -12,7 +13,7 @@ import (
 
 // NewStack creates a new ContextStack.
 func NewStack() ContextStack {
-	return &contextStack{stacks: map[int64]*entry{}}
+	return &contextStack{}
 }
 
 // ContextStack provides access to a stack of context.Context values individually managed per goroutine. It is
@@ -104,9 +105,46 @@ type ContextStack interface {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+// stackShards is the number of shards of a contextStack, a power of two.
+const stackShards = 64
+
+// stackShardSize is the size of a shard, the cache line size of most CPUs.
+const stackShardSize = 64
+
+// contextStack keeps the stacks of its goroutines in shards, picked by goroutine ID. Each shard has its own mutex and
+// map, so goroutines rarely contend on the same mutex. The shards take 4 KiB. Their maps are created on first use and
+// add up to about 12 KiB once all are in use.
 type contextStack struct {
-	stacks map[int64]*entry
-	mutex  sync.Mutex // guards access to stacks map
+	shards [stackShards]stackShard
+}
+
+// stackShard holds the stacks of the goroutines whose ID maps to it. It is padded to 64 bytes, so that the mutexes of
+// neighbouring shards never share a 64-byte line.
+type stackShard struct {
+	mu     sync.Mutex
+	stacks map[int64]*entry // created lazily, guarded by mu
+	_      [stackShardSize - unsafe.Sizeof(sync.Mutex{}) - unsafe.Sizeof(map[int64]*entry(nil))]byte
+}
+
+// The build fails if a shard is not 64 bytes, for example when the padding of stackShard misses a field.
+var _ = [1]struct{}{}[unsafe.Sizeof(stackShard{})-stackShardSize]
+
+// shard returns the shard of the given goroutine. Goroutine IDs are sequential, so their low bits spread evenly over
+// the shards without a hash.
+func (c *contextStack) shard(gid int64) *stackShard {
+	return &c.shards[uint64(gid)&(stackShards-1)]
+}
+
+// len returns the number of goroutines with a non-empty stack.
+func (c *contextStack) len() int {
+	var ret int
+	for i := range c.shards {
+		s := &c.shards[i]
+		s.mu.Lock()
+		ret += len(s.stacks)
+		s.mu.Unlock()
+	}
+	return ret
 }
 
 func (c *contextStack) Ctx() context.Context {
@@ -134,11 +172,12 @@ func (c *contextStack) Push(ctx context.Context) func() {
 // becomes empty.
 func (c *contextStack) pop(expect *stack) {
 	gid := goutil.GoID()
+	sh := c.shard(gid)
 
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	sh.mu.Lock()
+	defer sh.mu.Unlock()
 
-	e, ok := c.stacks[gid]
+	e, ok := sh.stacks[gid]
 	if !ok {
 		log.Warn("ContextStack: release called on empty stack!", "~at", "\n"+string(debug.Stack()))
 		return
@@ -157,7 +196,7 @@ func (c *contextStack) pop(expect *stack) {
 		log.Warn("ContextStack: missing release calls detected!", "missing", invalidCount, "~at", "\n"+string(debug.Stack()))
 	}
 	if s.parent == nil {
-		delete(c.stacks, gid)
+		delete(sh.stacks, gid)
 	}
 	e.stack = s.parent
 }
@@ -231,14 +270,18 @@ func (c *contextStack) WithValue(key interface{}, val interface{}) func() {
 // entry returns the entry for the current goroutine. Creates an new entry if necessary and "create" is true.
 func (c *contextStack) entry(create bool) *entry {
 	gid := goutil.GoID()
+	sh := c.shard(gid)
 
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	sh.mu.Lock()
+	defer sh.mu.Unlock()
 
-	e, ok := c.stacks[gid]
+	e, ok := sh.stacks[gid]
 	if !ok && create {
+		if sh.stacks == nil {
+			sh.stacks = map[int64]*entry{}
+		}
 		e = &entry{}
-		c.stacks[gid] = e
+		sh.stacks[gid] = e
 	}
 	return e
 }
