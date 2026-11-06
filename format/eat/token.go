@@ -451,6 +451,39 @@ func (t *Token) Validate() (err error) {
 		// additional signed link requirements are checked in auth provider
 		return e.IfNotNil(validator.err)
 
+	case Types.Output():
+		// require
+		validator.require("qid", t.QID)
+		validator.require("issued at", t.IssuedAt)
+		// the expiry is optional: without one, the token does not expire
+		if !t.Expires.IsZero() && t.Expires.Before(t.IssuedAt) {
+			validator.errorReason("expires before issued at",
+				"expires", t.Expires,
+				"issued_at", t.IssuedAt)
+		}
+		elv := structured.Wrap(t.Ctx).Get("elv")
+		out := elv.Get("out").String()
+		if validator.require("ctx/elv/out", out) {
+			if _, err2 := id.Q.FromString(out); err2 != nil {
+				validator.errorReason("ctx/elv/out invalid", err2)
+			}
+		}
+		if len(t.Ctx) != 1 || len(elv.Map()) != 1 {
+			validator.errorReason("ctx may hold elv/out only")
+		}
+
+		// refuse: the token names no user and grants nothing beyond reading qid
+		validator.refuse("lib", t.LID)
+		validator.refuse("subject", t.Subject)
+		validator.refuse("grant", t.Grant)
+		validator.refuse("tx-hash", t.EthTxHash)
+		validator.refuse("qp-hash", t.QPHash)
+		validator.refuse("afgh", t.AFGHPublicKey)
+		validator.refuse("confirmation", t.Confirmation)
+
+		// the signer and the outputs object are checked in the auth provider
+		return e.IfNotNil(validator.err)
+
 	case Types.ClientSigned():
 		if len(t.Ctx) > 0 && t.Ctx[ElvDelegationId] != nil {
 			validator.refuse("ctx/delegation_id", t.Ctx[ElvDelegationId])
@@ -1235,6 +1268,27 @@ func (t *Token) VerifySignedLink(srcQID, linkPath string) error {
 	lnk := elv.Get("lnk").String()
 	if lnk != linkPath {
 		return e("reason", "link path differs", "expected", lnk, "actual", linkPath)
+	}
+
+	return nil
+}
+
+// VerifyOutput verifies that the token is an output token for the given outputs object, and checks its signature.
+func (t *Token) VerifyOutput(outputsQID types.QID) error {
+	e := errors.Template("verify output token", errors.K.Permission)
+
+	if t.Type != Types.Output() {
+		return e("reason", "not an output token", "type", t.Type)
+	}
+
+	err := t.VerifySignature()
+	if err != nil {
+		return e(err)
+	}
+
+	out := structured.Wrap(t.Ctx).Get("elv", "out").String()
+	if outputsQID == nil || out != outputsQID.String() {
+		return e("reason", "outputs object differs", "expected", out, "actual", outputsQID)
 	}
 
 	return nil

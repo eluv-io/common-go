@@ -49,6 +49,7 @@ defines the different types of the auth tokens.
 | ano    | node          | true              | sid, qp-hash                                                                  | -               | server|token for node-to-node communication|
 | asl    | signed-link   | true              | sid, lid, qid, subject, grant, iat, exp, ctx/elv/lnk, ctx/elv/src=qid         | apk             | client|token for signed-links|
 | acs    | client-signed | true              | sid, lid, qid, subject, grant, iat, exp                                       | ctx             | client|   client-signed token|
+| aou    | output        | true              | sid, qid, iat, ctx/elv/out=outputs qid                                        | exp             | editor or admin of qid|input token of live outputs, valid only in the outputs object it names|
 ### Token SigType:
 defines the different signature types of auth tokens
 
