@@ -23,7 +23,8 @@ var (
 	GobCodec    = makeGobCodec()
 	JsonCodec   = makeJsonCodec()
 	CborV1Codec = makeCborV1Codec()
-	CborV2Codec = makeCborV2Codec()
+	// cborV2DecMode holds the decoding options of CborV2Codec, see CborV2Unmarshal.
+	CborV2Codec, cborV2DecMode = makeCborV2Codec()
 
 	GobMultiCodecPath    = "/gob"
 	JsonMultiCodecPath   = "/json"
@@ -77,6 +78,13 @@ func CborEncode(w io.Writer, v interface{}) error {
 // to have a MultiCodec header.
 func CborDecode(r io.Reader, v interface{}) error {
 	return NewCborCodec().Decoder(r).Decode(v)
+}
+
+// CborV2Unmarshal decodes the CBOR data item in b into v, with the decoding options of CborV2Codec. b must hold exactly
+// one data item and no MultiCodec header. A decoder of CborV2Codec copies its input into a buffer of its own, growing
+// it as it reads. CborV2Unmarshal decodes b in place instead, which avoids that allocation for data already in memory.
+func CborV2Unmarshal(b []byte, v any) error {
+	return cborV2DecMode.Unmarshal(b, v)
 }
 
 func makeGobCodec() Codec {
@@ -161,7 +169,7 @@ var cborConverters = []cborConverter{
 // nanoseconds, not seconds), so reverting the generic-decode type here doesn't reopen it.
 type durationSpecRevert int64
 
-func makeCborV2Codec() Codec {
+func makeCborV2Codec() (Codec, cbor.DecMode) {
 	var err error
 	tagSet := cbor.NewTagSet()
 	options := cbor.TagOptions{
@@ -213,5 +221,5 @@ func makeCborV2Codec() Codec {
 			return enc.NewEncoder(w)
 		}, func(r io.Reader) Decoder {
 			return dec.NewDecoder(r)
-		})
+		}), dec
 }
