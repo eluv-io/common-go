@@ -43,6 +43,7 @@ var allTypes = []TokenType{
 	{"asl", "signed-link", true, false},   // 8
 	{"acs", "client-signed", true, true},  // 9
 	{"acc", "confirmation", true, false},  // 10
+	{"aou", "output", true, false},        // 11
 }
 
 type enumType int
@@ -62,6 +63,7 @@ func (enumType) Node() TokenType               { return allTypes[7] }  // token 
 func (enumType) SignedLink() TokenType         { return allTypes[8] }  // token for signed-links (https://github.com/qluvio/proj-mgm/issues/14#issuecomment-724867064)
 func (enumType) ClientSigned() TokenType       { return allTypes[9] }  // client-signed token
 func (enumType) ClientConfirmation() TokenType { return allTypes[10] } // client-confirmation token (can be required by client-signed or editor-signed)
+func (enumType) Output() TokenType             { return allTypes[11] } // input token of live outputs, bound to one outputs object
 
 var prefixToType = map[string]*tokenType{}
 
