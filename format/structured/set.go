@@ -15,6 +15,17 @@ func Set(target interface{}, path Path, data interface{}) (interface{}, error) {
 	return sub.Root(), nil
 }
 
+// SetCopy is like Set, but leaves the target structure unchanged. Only the maps and slices on the path to the element
+// are copied, all other elements are shared between the target and the returned structure.
+func SetCopy(target any, path Path, data any) (any, error) {
+	sub, err := resolveSub(path, target, true, true)
+	if err != nil {
+		return nil, err
+	}
+	sub.Set(dereference(data), false)
+	return sub.Root(), nil
+}
+
 // Set inserts or replaces the element of the target data structure at the given
 // path with the provided data. Any path elements that do not exist are created
 // as objects (maps). Unlike Set(), this function will set the element at path
