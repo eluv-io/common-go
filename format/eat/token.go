@@ -568,15 +568,14 @@ func (t *Token) ValidateConfirmation(confirmation *Token, maxValidity, timeSkew 
 		"sig_type", t.SigType,
 		"format", t.Format)
 
-	if t.Type.MayRequireConfirmation {
-		if t.Confirmation.RequiresConfirmation() && confirmation == nil {
-			return e("reason", "a confirmation token is required")
-		}
-	} else if confirmation != nil {
+	if !t.Type.MayRequireConfirmation && confirmation != nil {
 		return e("reason", "unexpected confirmation token")
 	}
 
 	if t.Confirmation.RequiresConfirmation() {
+		if confirmation == nil {
+			return e("reason", "a confirmation token is required")
+		}
 		if confirmation.Type != Types.ClientConfirmation() {
 			return e("reason", "invalid confirmation authorization type", "type", confirmation.Type)
 		}

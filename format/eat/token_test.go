@@ -914,6 +914,16 @@ func TestClientSignedWithClientConfirm(t *testing.T) {
 	}
 }
 
+// TestConfirmationRequiredByOtherType tests that a token of a type that never requires a confirmation, but carries
+// one, is refused without a confirmation token instead of panicking.
+func TestConfirmationRequiredByOtherType(t *testing.T) {
+	token := eat.NewPlain(sid, lid).Sign(clientSK).MustToken()
+	token.Confirmation = eat.ClientConfirmation{AddrOfEphemeralKey: clientAddr.String()}
+
+	err := token.ValidateConfirmation(nil, time.Hour, time.Minute)
+	require.ErrorContains(t, err, "a confirmation token is required")
+}
+
 // TestXSignedAndConfirm tests using client-signed and editor-signed tokens with
 // confirmation. Also checks confirmation fails with other types of tokens.
 func TestXSignedAndConfirm(t *testing.T) {
