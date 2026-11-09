@@ -46,7 +46,10 @@ type Conn struct {
 	base       time.Duration
 	videoClock trackClock
 	audioClock trackClock
+	videoFill  *videoFiller // continues starved video, see Fill; nil for a stream it cannot continue
+	audioFill  *audioFiller // continues starved audio with silence; nil for a track it has no silent frame for
 	stats      Stats
+	now        func() time.Time
 
 	done     chan struct{}
 	failOnce sync.Once
@@ -67,6 +70,15 @@ type Stats struct {
 	NegativeCTS        uint64        `json:"negative_cts"`         // video samples with PTS < DTS, sent with CTS 0
 	LastVideoTS        time.Duration `json:"last_video_ts"`        // as sent, i.e. rebased
 	LastAudioTS        time.Duration `json:"last_audio_ts"`
+
+	// Filling a starved source, see Conn.Fill. VideoFrames and AudioFrames include the filled frames.
+	VideoFills               uint64 `json:"video_fills"`                 // times the video starved and filling started
+	FilledVideoFrames        uint64 `json:"filled_video_frames"`         // P_Skip frames written in place of the source's
+	DroppedVideoWhileFilling uint64 `json:"dropped_video_while_filling"` // source frames dropped until an IDR
+	Rebases                  uint64 `json:"rebases"`                     // times the timeline moved after filled frames
+	AudioFills               uint64 `json:"audio_fills"`                 // times the audio starved and filling started
+	FilledAudioFrames        uint64 `json:"filled_audio_frames"`         // silent frames written in place of the source's
+	DroppedAudioWhileFilling uint64 `json:"dropped_audio_while_filling"` // source frames dropped behind the silence
 }
 
 // Dial connects to the server named by cfg, completes the publish handshake and announces the tracks in params:
@@ -110,9 +122,24 @@ func newConn(cfg Config, params fmp4.CodecParams, s *session) *Conn {
 		params: params,
 		s:      s,
 		done:   make(chan struct{}),
+		now:    time.Now,
 	}
 	c.stats.ConnectedAt = time.Now()
 	c.stats.RemoteAddr = s.nconn.RemoteAddr().String()
+	if params.Video != nil && len(params.Video.SPS) > 0 {
+		f, err := newVideoFiller(params.Video, cfg.fillAfter(), cfg.Meta.FrameRate)
+		if err != nil {
+			log.Info("rtmp video cannot be filled when its source starves", err, "destination", cfg.Redacted())
+		}
+		c.videoFill = f
+	}
+	if params.Audio != nil {
+		f, err := newAudioFiller(params.Audio, cfg.fillAfter())
+		if err != nil {
+			log.Info("rtmp audio cannot be filled when its source starves", err, "destination", cfg.Redacted())
+		}
+		c.audioFill = f
+	}
 	return c
 }
 
@@ -319,6 +346,14 @@ func (c *Conn) WriteVideo(nalus [][]byte, dts, pts time.Duration, keyframe bool)
 		c.started = true
 		c.base = dts
 	}
+	if c.videoFill != nil && c.videoFill.filling {
+		if !isIDR(nalus) {
+			c.stats.DroppedVideoWhileFilling++
+			c.mu.Unlock()
+			return nil
+		}
+		c.resumeLocked(dts)
+	}
 	ts := c.rebaseLocked(&c.videoClock, dts)
 	cts := pts - dts
 	if cts < 0 {
@@ -330,6 +365,9 @@ func (c *Conn) WriteVideo(nalus [][]byte, dts, pts time.Duration, keyframe bool)
 		c.stats.Keyframes++
 	}
 	c.stats.LastVideoTS = ts
+	if c.videoFill != nil {
+		c.videoFill.observe(nalus, ts, ts+cts, isIDR(nalus), c.now())
+	}
 	c.mu.Unlock()
 
 	return c.writeResult(c.s.writeVideo(nalus, millis(ts), millis(cts), keyframe))
@@ -360,9 +398,16 @@ func (c *Conn) WriteAudio(au []byte, pts time.Duration) error {
 		c.mu.Unlock()
 		return nil
 	}
+	if c.audioFill != nil && c.audioFill.filling && c.audioResumeLocked(pts-c.base) {
+		c.mu.Unlock()
+		return nil
+	}
 	ts := c.rebaseLocked(&c.audioClock, pts)
 	c.stats.AudioFrames++
 	c.stats.LastAudioTS = ts
+	if c.audioFill != nil {
+		c.audioFill.observe(ts, c.now())
+	}
 	c.mu.Unlock()
 
 	return c.writeResult(c.s.writeAudio(au, millis(ts)))
