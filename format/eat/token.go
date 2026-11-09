@@ -127,6 +127,19 @@ func Parse(s string) (*Token, error) {
 	return t, nil
 }
 
+// HasTokenPrefix reports whether s starts with a token prefix: a known type, signature type and format. It tells an
+// invalid token apart from a string that is not meant as a token at all, such as a space ID. Legacy tokens have no
+// prefix and are not recognized.
+func HasTokenPrefix(s string) bool {
+	if len(s) < prefixLen {
+		return false
+	}
+	_, typFound := prefixToType[s[:3]]
+	_, sigFound := prefixToSignature[s[3:4]]
+	_, fmtFound := prefixToFormat[s[4:prefixLen]]
+	return typFound && sigFound && fmtFound
+}
+
 // parse parses a token from the given string and returns both the parsed token and any parsing/validation error. In
 // case of errors, the token is still returned: it will be invalid and probably only partially decoded.
 func parse(s string) (*Token, error) {
@@ -451,6 +464,39 @@ func (t *Token) Validate() (err error) {
 		// additional signed link requirements are checked in auth provider
 		return e.IfNotNil(validator.err)
 
+	case Types.Output():
+		// require
+		validator.require("qid", t.QID)
+		validator.require("issued at", t.IssuedAt)
+		// the expiry is optional: without one, the token does not expire
+		if !t.Expires.IsZero() && t.Expires.Before(t.IssuedAt) {
+			validator.errorReason("expires before issued at",
+				"expires", t.Expires,
+				"issued_at", t.IssuedAt)
+		}
+		elv := structured.Wrap(t.Ctx).Get("elv")
+		out := elv.Get("out").String()
+		if validator.require("ctx/elv/out", out) {
+			if _, err2 := id.Q.FromString(out); err2 != nil {
+				validator.errorReason("ctx/elv/out invalid", err2)
+			}
+		}
+		if len(t.Ctx) != 1 || len(elv.Map()) != 1 {
+			validator.errorReason("ctx may hold elv/out only")
+		}
+
+		// refuse: the token names no user and grants nothing beyond reading qid
+		validator.refuse("lib", t.LID)
+		validator.refuse("subject", t.Subject)
+		validator.refuse("grant", t.Grant)
+		validator.refuse("tx-hash", t.EthTxHash)
+		validator.refuse("qp-hash", t.QPHash)
+		validator.refuse("afgh", t.AFGHPublicKey)
+		validator.refuse("confirmation", t.Confirmation)
+
+		// the signer and the outputs object are checked in the auth provider
+		return e.IfNotNil(validator.err)
+
 	case Types.ClientSigned():
 		if len(t.Ctx) > 0 && t.Ctx[ElvDelegationId] != nil {
 			validator.refuse("ctx/delegation_id", t.Ctx[ElvDelegationId])
@@ -535,15 +581,14 @@ func (t *Token) ValidateConfirmation(confirmation *Token, maxValidity, timeSkew 
 		"sig_type", t.SigType,
 		"format", t.Format)
 
-	if t.Type.MayRequireConfirmation {
-		if t.Confirmation.RequiresConfirmation() && confirmation == nil {
-			return e("reason", "a confirmation token is required")
-		}
-	} else if confirmation != nil {
+	if !t.Type.MayRequireConfirmation && confirmation != nil {
 		return e("reason", "unexpected confirmation token")
 	}
 
 	if t.Confirmation.RequiresConfirmation() {
+		if confirmation == nil {
+			return e("reason", "a confirmation token is required")
+		}
 		if confirmation.Type != Types.ClientConfirmation() {
 			return e("reason", "invalid confirmation authorization type", "type", confirmation.Type)
 		}
@@ -1235,6 +1280,27 @@ func (t *Token) VerifySignedLink(srcQID, linkPath string) error {
 	lnk := elv.Get("lnk").String()
 	if lnk != linkPath {
 		return e("reason", "link path differs", "expected", lnk, "actual", linkPath)
+	}
+
+	return nil
+}
+
+// VerifyOutput verifies that the token is an output token for the given outputs object, and checks its signature.
+func (t *Token) VerifyOutput(outputsQID types.QID) error {
+	e := errors.Template("verify output token", errors.K.Permission)
+
+	if t.Type != Types.Output() {
+		return e("reason", "not an output token", "type", t.Type)
+	}
+
+	err := t.VerifySignature()
+	if err != nil {
+		return e(err)
+	}
+
+	out := structured.Wrap(t.Ctx).Get("elv", "out").String()
+	if outputsQID == nil || out != outputsQID.String() {
+		return e("reason", "outputs object differs", "expected", out, "actual", outputsQID)
 	}
 
 	return nil

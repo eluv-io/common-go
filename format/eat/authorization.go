@@ -80,6 +80,8 @@ func (a *Authorization) UserId() types.UserID {
 			uid = ethutil.AddressToID(a.EthAddr, id.User)
 		}
 	case Types.Anonymous():
+	case Types.Output():
+		// no user: the signer vouches for reading one object, and lends no rights of its own
 	default:
 	}
 	return uid
