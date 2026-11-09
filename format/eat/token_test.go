@@ -1105,6 +1105,19 @@ func TestXSignedAndConfirm(t *testing.T) {
 	}
 }
 
+func TestHasTokenPrefix(t *testing.T) {
+	bearer, err := eat.NewOutput(sid, qid, id.Generate(id.Q)).Sign(clientSK).Encode()
+	require.NoError(t, err)
+
+	require.True(t, eat.HasTokenPrefix(bearer))
+	require.True(t, eat.HasTokenPrefix("acs"+bearer[3:]))  // re-prefixed: invalid, but still a token
+	require.True(t, eat.HasTokenPrefix(bearer[:7]+"0OIl")) // not base58: invalid, but still a token
+	require.False(t, eat.HasTokenPrefix(sid.String()))
+	require.False(t, eat.HasTokenPrefix("demov3"))
+	require.False(t, eat.HasTokenPrefix("aou"))
+	require.False(t, eat.HasTokenPrefix(""))
+}
+
 func TestOutputToken(t *testing.T) {
 	now := utc.Now().Truncate(time.Second)
 	defer utc.MockNow(now)()

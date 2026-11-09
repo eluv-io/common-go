@@ -127,6 +127,19 @@ func Parse(s string) (*Token, error) {
 	return t, nil
 }
 
+// HasTokenPrefix reports whether s starts with a token prefix: a known type, signature type and format. It tells an
+// invalid token apart from a string that is not meant as a token at all, such as a space ID. Legacy tokens have no
+// prefix and are not recognized.
+func HasTokenPrefix(s string) bool {
+	if len(s) < prefixLen {
+		return false
+	}
+	_, typFound := prefixToType[s[:3]]
+	_, sigFound := prefixToSignature[s[3:4]]
+	_, fmtFound := prefixToFormat[s[4:prefixLen]]
+	return typFound && sigFound && fmtFound
+}
+
 // parse parses a token from the given string and returns both the parsed token and any parsing/validation error. In
 // case of errors, the token is still returned: it will be invalid and probably only partially decoded.
 func parse(s string) (*Token, error) {
