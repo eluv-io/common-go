@@ -1147,6 +1147,44 @@ func TestOutputToken(t *testing.T) {
 		require.Error(t, tok.VerifyOutput(outputsQID))
 	})
 
+	// the type prefix is outside the payload: the signature must still bind the type
+	t.Run("re-prefixed", func(t *testing.T) {
+		builder := func() *eat.OutputBuilder {
+			return eat.NewOutput(sid, qid, outputsQID).WithExpires(now.Add(time.Hour))
+		}
+		signed := map[string]eat.Encoder{
+			"es256k": builder().Sign(clientSK),
+			"eip191": builder().SignEIP912Personal(clientSK),
+		}
+		for name, enc := range signed {
+			t.Run(name+" output as client-signed", func(t *testing.T) {
+				bearer, err := enc.Encode()
+				require.NoError(t, err)
+				_, err = eat.Parse(bearer)
+				require.NoError(t, err)
+
+				require.Equal(t, "aou", bearer[:3])
+				_, err = eat.Parse("acs" + bearer[3:])
+				require.ErrorContains(t, err, "tampered")
+			})
+		}
+
+		// the payload of a valid output token, signed as client-signed
+		t.Run("client-signed as output", func(t *testing.T) {
+			tok := builder().Token()
+			tok.Type = eat.Types.ClientSigned()
+			require.NoError(t, tok.SignWith(clientSK))
+			bearer, err := tok.Encode()
+			require.NoError(t, err)
+			_, err = eat.Parse(bearer)
+			require.NoError(t, err)
+
+			require.Equal(t, "acs", bearer[:3])
+			_, err = eat.Parse("aou" + bearer[3:])
+			require.ErrorContains(t, err, "tampered")
+		})
+	})
+
 	// each case breaks one rule of the type: Validate must name it, not just the broken signature
 	tests := []struct {
 		name   string
