@@ -29,7 +29,6 @@ TOKENDATA: proper token data encoded according to Format
 * cbor-compressed: deflate(cbor)
 ```
 
-
 ### Token Type:
 
 defines the different types of the auth tokens.
@@ -37,51 +36,69 @@ defines the different types of the auth tokens.
 * 3 bytes of prefix
 * `a` stands for `auth token`
 
-| Prefix | Name          | SignatureRequired | Fields required                                                               | Fields optional | Signed by| Description |
-|:-------|:--------------|:------------------|:--------------|:------------------------------------------------------------------------------|:----------------|:--------|
-| aun    | unknown       | false             |||||
-| aan    | anonymous     | false             | sid, lid                                                                      | qid             | -|a vanilla, unsigned token without tx|
-| atx    | tx            | true              | sid, lid, txh                                                                 | apk             | client| based on a blockchain transaction - aka EthAuthToken|
-| asc    | state-channel | true              | sid, lid, qid, grant, iat, exp, ctx/sub                                       | apk             | Server |based on deferred blockchain tx - aka ElvAuthToken|
-| acl    | client        | false             | embedded token signed by client                                               | apk             |-|a state channel token embedded in a client token - aka ElvClientToken|
-| apl    | plain         | true              | sid, lid                                                                      | qid             | client|       a vanilla (signed) token without tx ==> blockchain-based permissions via HasAccess()|                                                   
-| aes    | editor-signed | true              | sid, lib, qid, sub = clientID (not required now), grant, iat, exp             | apk, ctx        | client with editor access|a token signed by a user who has edit access to the target content in the token|
-| ano    | node          | true              | sid, qp-hash                                                                  | -               | server|token for node-to-node communication|
-| asl    | signed-link   | true              | sid, lid, qid, subject, grant, iat, exp, ctx/elv/lnk, ctx/elv/src=qid         | apk             | client|token for signed-links|
-| acs    | client-signed | true              | sid, lid, qid, subject, grant, iat, exp                                       | ctx             | client|   client-signed token|
-| aou    | output        | true              | sid, qid, iat, ctx/elv/out=outputs qid                                        | exp             | editor or admin of qid|input token of live outputs, valid only in the outputs object it names|
+| Prefix | Name          | SignatureRequired | Fields required                                                       | Fields optional | Signed by                 | Description                                                                                  |
+|:-------|:--------------|:------------------|:----------------------------------------------------------------------|:----------------|:--------------------------|:---------------------------------------------------------------------------------------------|
+| aun    | unknown       | false             |                                                                       |                 |                           |                                                                                              |
+| aan    | anonymous     | false             | sid, lid                                                              | qid             | -                         | a vanilla, unsigned token without tx                                                         |
+| atx    | tx            | true              | sid, lid, txh                                                         | apk             | client                    | based on a blockchain transaction - aka EthAuthToken                                         |
+| asc    | state-channel | true              | sid, lid, qid, grant, iat, exp, ctx/sub                               | apk             | Server                    | based on deferred blockchain tx - aka ElvAuthToken                                           |
+| acl    | client        | false             | embedded token signed by client                                       | apk             | -                         | a state channel token embedded in a client token - aka ElvClientToken                        |
+| apl    | plain         | true              | sid, lid                                                              | qid             | client                    | a vanilla (signed) token without tx ==> blockchain-based permissions via HasAccess()         |                                                   
+| aes    | editor-signed | true              | sid, lib, qid, sub = clientID (not required now), grant, iat, exp     | apk, ctx        | client with editor access | a token signed by a user who has edit access to the target content in the token              |
+| ano    | node          | true              | sid, qp-hash                                                          | -               | server                    | token for node-to-node communication                                                         |
+| asl    | signed-link   | true              | sid, lid, qid, subject, grant, iat, exp, ctx/elv/lnk, ctx/elv/src=qid | apk             | client                    | token for signed-links                                                                       |
+| acs    | client-signed | true              | sid, lid, qid, subject, grant, iat, exp                               | ctx             | client                    | client-signed token                                                                          |
+| aou    | output        | true              | sid, qid, iat, ctx/elv/out=outputs qid                                | exp             | editor or admin of qid    | input token of live outputs, valid only in the outputs object it names; type-bound signature |
+
+The type prefix is not part of the signed data. A token re-prefixed as another type keeps a valid signature, and only
+the field validation of the other type can refuse it. An output token therefore binds its type into the signature, see
+below.
+
 ### Token SigType:
+
 defines the different signature types of auth tokens
 
 * 1 byte of prefix
 
-| Prefix 	| Name 	| Code 	|
-|:---:	|:---:	|:---:	|
-| _ 	| unknown 	| sign.UNKNOWN 	|
-| u 	| unsigned 	| sign.UNKNOWN 	|
-| s 	| E256K 	| sign.E256K 	|
-| p 	| EIP191Personal 	| sign.EIP191Personal 	|
+| Prefix 	 |      Name 	      |        Code 	         |
+|:-------:|:---------------:|:--------------------:|
+|   _ 	    |    unknown 	     |    sign.UNKNOWN 	     |
+|   u 	    |    unsigned 	    |    sign.UNKNOWN 	     |
+|   s 	    |     E256K 	      |     sign.E256K 	      |
+|   p 	    | EIP191Personal 	 | sign.EIP191Personal 	 |
+
+The signed data is the same for all types but output tokens:
+
+| SigType        | Other types                                                 | Output (aou)                                                      |
+|:---------------|:------------------------------------------------------------|:------------------------------------------------------------------|
+| ES256K         | `keccak256(payload)`                                        | `keccak256("Eluvio Content Fabric Output Token 1.0\n" + payload)` |
+| EIP191Personal | `eip191("Eluvio Content Fabric Access Token 1.0\n" + JSON)` | `eip191("Eluvio Content Fabric Output Token 1.0\n" + JSON)`       |
+
+`eip191` is the Ethereum personal signature scheme, which prefixes the data with
+`"\x19Ethereum Signed Message:\n" + len(data)` before signing. The output token prefix is a domain separation to avoid
+replaying an output token as a normal access token.
 
 ### Token Format:
+
 defines the available encoding formats for auth tokens
 
 * 2 bytes of prefix
 
-| Index | Prefix | Name |
-|:---:|:---:|---|
-| 0 | nk | unknown |
-| 1 | __ | legacy |
-| 2 | __ | legacy-signed |
-| 3 | j_ | json |
-| 4 | jc | json-compressed |
-| 5 | c_ | cbor |
-| 6 | cc | cbor-compressed |
-| 7 | b_ | custom |
+| Index | Prefix | Name            |
+|:-----:|:------:|-----------------|
+|   0   |   nk   | unknown         |
+|   1   |   __   | legacy          |
+|   2   |   __   | legacy-signed   |
+|   3   |   j_   | json            |
+|   4   |   jc   | json-compressed |
+|   5   |   c_   | cbor            |
+|   6   |   cc   | cbor-compressed |
+|   7   |   b_   | custom          |
 
 ### Client Tokens with Embedded Server Token
 
-Client tokens ("ac") contain an embedded state channel token created by elvmaster. That embedded token is encoded
-within the client token PAYLOAD as follows:
+Client tokens ("ac") contain an embedded state channel token created by elvmaster. That embedded token is encoded within
+the client token PAYLOAD as follows:
 
 ```
 PAYLOAD: EMBEDDED_TOKEN + CLIENT_TOKENDATA
@@ -103,8 +120,8 @@ ascsccHwDuvRPCBr6NMxQHTF57Qh9VrtQuak2jt6qEFaX36A7rkmmWNujbS8PUuaDzxUqo3JeY6R95xT
 
 ### OTP-Backwards-Compatible State-Channel-Token
 
-Scenario: old clients expect the token to be a JSON struct with a "qid" key.
-Solution: wrap new token format inside small JSON struct as follows:
+Scenario: old clients expect the token to be a JSON struct with a "qid" key. Solution: wrap new token format inside
+small JSON struct as follows:
 
 ```json
 {
@@ -122,10 +139,10 @@ eyJxaWQiOiJpcV9fM1Jpd2lQN1VKSmlIeEZMYmtMNDZCb1ZmS1dyQiIsInRvayI6ImFzY3NjY0h3RHV2
 ### Client or Editor Signed tokens requiring client confirmation
 
 The objective is to implement a simple 'app lock' to avoid users copying playout URLs
- 
+
 * Client creates ephemeral private/public key (Ethereum SECP)
 * Client creates a 'client-signed token' including the address corresponding to the public key of the ephemeral key
-* Client signs the token as usual 
+* Client signs the token as usual
 
 The client-signed token has a `cnf` element with `aek` field allowing to specify the address corresponding to the public
 key of the ephemeral key.
@@ -147,9 +164,11 @@ key of the ephemeral key.
 For each resource access the client needs to provide the following:
 
 * authorization header/query parameter using the client signed access token (which includes `cnf/aek`)
-* separate header or query parameter specifying the confirmation (aka 'proof' of possession) - which is a confirmation token, like below
-  * Header: `Authorization: confirmation accsjcoBtHrLNoym...DRsk`
-  * Query parameter: `authorization=accsjcoBtHrLNoym...DRsk` (`authorization=confirmation accsjcoBtHrLNoym...DRsk` also works)
+* separate header or query parameter specifying the confirmation (aka 'proof' of possession) - which is a confirmation
+  token, like below
+    * Header: `Authorization: confirmation accsjcoBtHrLNoym...DRsk`
+    * Query parameter: `authorization=accsjcoBtHrLNoym...DRsk` (`authorization=confirmation accsjcoBtHrLNoym...DRsk`
+      also works)
 * the confirmation token is signed using the ephemeral key created at the first step
 * fields `iat` (issuedAt) and `exp` (expires) are mandatory
 * prefix for the token type is `acc`
@@ -166,7 +185,6 @@ token string
 ````
 
 **Note**: multiple `Bearer` tokens are not permitted when using client/editor signed token with confirmation.
-
 
 ### Brainstorming notes
 

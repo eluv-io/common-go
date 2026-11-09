@@ -113,16 +113,20 @@ func (t *Token) sign(
 
 func (t *Token) hashToken(sigType *TokenSigType) (hsh []byte, err error) {
 	var encoded []byte
+	domain := t.Type.sigDomain
 	switch sigType {
 	case SigTypes.ES256K():
 		encoded, err = t.getPayload()
 		if err == nil {
-			hsh = crypto.Keccak256(encoded)
+			hsh = crypto.Keccak256([]byte(domain), encoded)
 		}
 	case SigTypes.EIP191Personal():
+		if domain == "" {
+			domain = "Eluvio Content Fabric Access Token 1.0\n"
+		}
 		encoded, err = t.getUncompressedTokenData()
 		if err == nil {
-			hsh = sign.HashEIP191Personal(append([]byte("Eluvio Content Fabric Access Token 1.0\n"), encoded...))
+			hsh = sign.HashEIP191Personal(append([]byte(domain), encoded...))
 		}
 	default:
 		return nil, errors.E("hashToken", "reason", "invalid signature type", "sig_type", t.SigType)

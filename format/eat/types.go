@@ -14,6 +14,10 @@ type tokenType struct {
 	Name                   string `json:"name"`
 	SignatureRequired      bool   `json:"-"`
 	MayRequireConfirmation bool   `json:"-"`
+	// sigDomain binds the type into the signature: it is prepended to the signed data. The type prefix is not signed
+	// otherwise, and a token re-prefixed as another type would keep a valid signature. Empty for the types that predate
+	// it, which keep their digest.
+	sigDomain string
 }
 
 func (t *tokenType) String() string {
@@ -32,18 +36,18 @@ func (t *tokenType) Validate() error {
 }
 
 var allTypes = []TokenType{
-	{"aun", "unknown", false, false},      // 0
-	{"aan", "anonymous", false, false},    // 1
-	{"atx", "tx", true, false},            // 2
-	{"asc", "state-channel", true, false}, // 3
-	{"acl", "client", false, false},       // 4
-	{"apl", "plain", true, false},         // 5
-	{"aes", "editor-signed", true, true},  // 6
-	{"ano", "node", true, false},          // 7
-	{"asl", "signed-link", true, false},   // 8
-	{"acs", "client-signed", true, true},  // 9
-	{"acc", "confirmation", true, false},  // 10
-	{"aou", "output", true, false},        // 11
+	{"aun", "unknown", false, false, ""},                                       // 0
+	{"aan", "anonymous", false, false, ""},                                     // 1
+	{"atx", "tx", true, false, ""},                                             // 2
+	{"asc", "state-channel", true, false, ""},                                  // 3
+	{"acl", "client", false, false, ""},                                        // 4
+	{"apl", "plain", true, false, ""},                                          // 5
+	{"aes", "editor-signed", true, true, ""},                                   // 6
+	{"ano", "node", true, false, ""},                                           // 7
+	{"asl", "signed-link", true, false, ""},                                    // 8
+	{"acs", "client-signed", true, true, ""},                                   // 9
+	{"acc", "confirmation", true, false, ""},                                   // 10
+	{"aou", "output", true, false, "Eluvio Content Fabric Output Token 1.0\n"}, // 11
 }
 
 type enumType int
