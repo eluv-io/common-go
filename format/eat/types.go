@@ -36,17 +36,18 @@ func (t *tokenType) Validate() error {
 }
 
 var allTypes = []TokenType{
-	{"aun", "unknown", false, false, ""},      // 0
-	{"aan", "anonymous", false, false, ""},    // 1
-	{"atx", "tx", true, false, ""},            // 2
-	{"asc", "state-channel", true, false, ""}, // 3
-	{"acl", "client", false, false, ""},       // 4
-	{"apl", "plain", true, false, ""},         // 5
-	{"aes", "editor-signed", true, true, ""},  // 6
-	{"ano", "node", true, false, ""},          // 7
-	{"asl", "signed-link", true, false, ""},   // 8
-	{"acs", "client-signed", true, true, ""},  // 9
-	{"acc", "confirmation", true, false, ""},  // 10
+	{"aun", "unknown", false, false, ""},                                                       // 0
+	{"aan", "anonymous", false, false, ""},                                                     // 1
+	{"atx", "tx", true, false, ""},                                                             // 2
+	{"asc", "state-channel", true, false, ""},                                                  // 3
+	{"acl", "client", false, false, ""},                                                        // 4
+	{"apl", "plain", true, false, ""},                                                          // 5
+	{"aes", "editor-signed", true, true, ""},                                                   // 6
+	{"ano", "node", true, false, ""},                                                           // 7
+	{"asl", "signed-link", true, false, ""},                                                    // 8
+	{"acs", "client-signed", true, true, ""},                                                   // 9
+	{"acc", "confirmation", true, false, ""},                                                   // 10
+	{"anc", "node-confirmation", true, false, "Eluvio Content Fabric Node Confirmation 1.0\n"}, // 11
 }
 
 type enumType int
@@ -66,6 +67,7 @@ func (enumType) Node() TokenType               { return allTypes[7] }  // token 
 func (enumType) SignedLink() TokenType         { return allTypes[8] }  // token for signed-links (https://github.com/qluvio/proj-mgm/issues/14#issuecomment-724867064)
 func (enumType) ClientSigned() TokenType       { return allTypes[9] }  // client-signed token
 func (enumType) ClientConfirmation() TokenType { return allTypes[10] } // client-confirmation token (can be required by client-signed or editor-signed)
+func (enumType) NodeConfirmation() TokenType   { return allTypes[11] } // a node's confirmation of a bearer token it forwards
 
 var prefixToType = map[string]*tokenType{}
 
