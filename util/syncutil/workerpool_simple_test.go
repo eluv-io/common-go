@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const max = 20
+const maxWorkers = 20
 
 func TestExample(t *testing.T) {
 	wp := NewSimpleWorkerPool(2, 5*time.Second)
@@ -45,13 +45,13 @@ func TestMinMaxWorkers(t *testing.T) {
 
 func TestMaxWorkers(t *testing.T) {
 	t.Parallel()
-	wp := NewSimpleWorkerPool(max, 5*time.Second)
+	wp := NewSimpleWorkerPool(maxWorkers, 5*time.Second)
 
-	started := make(chan struct{}, max)
+	started := make(chan struct{}, maxWorkers)
 	stop := make(chan struct{})
 
 	// Start workers, and have them all wait on a channel before completing.
-	for i := 0; i < max; i++ {
+	for i := 0; i < maxWorkers; i++ {
 		wp.Submit(func() {
 			started <- struct{}{}
 			<-stop
@@ -60,7 +60,7 @@ func TestMaxWorkers(t *testing.T) {
 
 	// wait until the're all started
 	timeout := time.After(1 * time.Second)
-	for startCount := 0; startCount < max; {
+	for startCount := 0; startCount < maxWorkers; {
 		select {
 		case <-started:
 			startCount++
@@ -93,7 +93,7 @@ func TestMaxWorkers(t *testing.T) {
 	}
 
 	// we should be running with the max number of workers
-	require.EqualValues(t, max, wp.workerCount.Load())
+	require.EqualValues(t, maxWorkers, wp.workerCount.Load())
 
 	// Release current workers.
 	close(stop)
@@ -121,13 +121,13 @@ func TestReuseWorkers(t *testing.T) {
 func TestWorkerTimeout(t *testing.T) {
 	t.Parallel()
 
-	wp := NewSimpleWorkerPool(max, time.Second)
+	wp := NewSimpleWorkerPool(maxWorkers, time.Second)
 
 	stop := make(chan struct{})
-	rdv := make(chan string, max)
+	rdv := make(chan string, maxWorkers)
 	// Cause workers to be created.  Workers wait on channel, keeping them busy
 	// and causing the worker pool to create more.
-	for i := 0; i < max; i++ {
+	for i := 0; i < maxWorkers; i++ {
 		wp.Submit(func() {
 			rdv <- "started"
 			<-stop
@@ -135,20 +135,20 @@ func TestWorkerTimeout(t *testing.T) {
 	}
 
 	// Wait for tasks to start.
-	for i := 0; i < max; i++ {
+	for i := 0; i < maxWorkers; i++ {
 		require.Equal(t, "started", <-rdv)
 	}
 
 	// ensure no idle workers
 	require.EqualValues(t, 0, wp.workerIdle.Load())
-	require.EqualValues(t, max, wp.workerCount.Load())
+	require.EqualValues(t, maxWorkers, wp.workerCount.Load())
 
 	// Release workers.
 	close(stop)
 
 	// ensure all workers now idle
 	time.Sleep(10 * time.Millisecond)
-	require.EqualValues(t, max, wp.workerIdle.Load())
+	require.EqualValues(t, maxWorkers, wp.workerIdle.Load())
 
 	// wait for workers to timeout
 	time.Sleep(time.Second)

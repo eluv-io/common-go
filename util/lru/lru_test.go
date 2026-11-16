@@ -499,3 +499,19 @@ func (c *ctor) constructor(key string, sleep time.Duration) func() (interface{},
 		}, nil
 	}
 }
+
+// TestNilValues: Get reports a stored nil interface as not found, but a typed nil pointer as found, as it did when
+// the values were stored as interfaces.
+func TestNilValues(t *testing.T) {
+	untyped := New(2)
+	untyped.Add("a", nil)
+	_, found := untyped.Get("a")
+	require.False(t, found)
+	require.True(t, untyped.Contains("a"))
+
+	typed := NewTyped[string, *testResource](2)
+	typed.Add("a", nil)
+	val, found := typed.Get("a")
+	require.True(t, found)
+	require.Nil(t, val)
+}
