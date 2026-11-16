@@ -7,6 +7,8 @@ import (
 	"sync"
 	"unsafe"
 
+	"golang.org/x/sys/cpu"
+
 	"github.com/eluv-io/common-go/util/goutil"
 	"github.com/eluv-io/common-go/util/traceutil/trace"
 )
@@ -108,21 +110,29 @@ type ContextStack interface {
 // stackShards is the number of shards of a contextStack, a power of two.
 const stackShards = 64
 
-// stackShardSize is the size of a shard, the cache line size of most CPUs.
-const stackShardSize = 64
+// stackShardSize is the size of a shard. It is the cache line size of the target architecture as known to
+// golang.org/x/sys/cpu, but at least 64 bytes, since x/sys/cpu gives 0 for wasm.
+const stackShardSize = max(unsafe.Sizeof(cpu.CacheLinePad{}), 64)
 
 // contextStack keeps the stacks of its goroutines in shards, picked by goroutine ID. Each shard has its own mutex and
-// map, so goroutines rarely contend on the same mutex. The shards take 4 KiB. Their maps are created on first use and
-// add up to about 12 KiB once all are in use.
+// map, so goroutines rarely contend on the same mutex. The shards take 4 KiB, or 8 KiB on arm64 with its 128-byte
+// cache lines. Their maps are created on first use and add up to about 12 KiB once all are in use.
 type contextStack struct {
 	shards [stackShards]stackShard
 }
 
-// stackShard holds the stacks of the goroutines whose ID maps to it. It is padded to 64 bytes, so that the mutexes of
-// neighbouring shards never share a 64-byte line.
+// stackShard holds the stacks of the goroutines whose ID maps to it.
+//
+// The shards sit next to each other in one array. A CPU core loads memory one cache line at a time, and cores that
+// write to the same line take turns owning it, even when they write different fields. Without padding, several shard
+// mutexes would share a line. Goroutines of neighbouring shards would then contend in hardware, although their mutexes
+// differ. This is called false sharing. The padding makes each shard exactly stackShardSize bytes, so neighbouring
+// mutexes are a full cache line apart. The array need not start on a line boundary. A shard may therefore straddle
+// two lines, but no line ever holds two mutexes.
 type stackShard struct {
 	stackShardFields
-	// _ pads the shard to 64 bytes. The build fails if the fields outgrow that.
+	// _ pads the shard to stackShardSize. Its length is a compile-time constant. If the fields outgrew a shard, the
+	// length would go negative and the build would fail.
 	_ [stackShardSize - unsafe.Sizeof(stackShardFields{})]byte
 }
 
