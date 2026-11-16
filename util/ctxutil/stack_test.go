@@ -118,6 +118,29 @@ func TestContextStackReleaseReordering(t *testing.T) {
 	release1()
 	require.Equal(t, "ContextStack: release called on empty stack!", handler.Entries[0].Message)
 
+	// a release from another goroutine is ignored
+	release4 := cs.Push(context.WithValue(context.Background(), "key", "val"))
+	handler.Entries = nil // clear previous entries
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		release4()
+	}()
+	<-done
+	require.Equal(t, "ContextStack: release called from different goroutine! Ignoring call.", handler.Entries[0].Message)
+	require.Equal(t, "val", cs.Ctx().Value("key"))
+	release4()
+	require.Nil(t, cs.Ctx().Value("key"))
+
+	// a second release does not pop a later push, although the emptied stack's entry may have been reused
+	release5 := cs.Push(context.Background())
+	release5()
+	release6 := cs.Push(context.WithValue(context.Background(), "key", "val"))
+	handler.Entries = nil // clear previous entries
+	release5()
+	require.Equal(t, "ContextStack: released stack not found!", handler.Entries[0].Message)
+	require.Equal(t, "val", cs.Ctx().Value("key"))
+	release6()
 }
 
 func TestContextStackSpanWrapping(t *testing.T) {
