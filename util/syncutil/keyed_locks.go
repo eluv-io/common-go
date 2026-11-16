@@ -5,14 +5,17 @@ import (
 	"sync"
 	"sync/atomic"
 	"unsafe"
+
+	"golang.org/x/sys/cpu"
 )
 
 // DefaultKeyedLockShards is the number of shards of a KeyedLocks whose Shards field is zero. Each shard has its own
 // mutex and map, so goroutines that lock different keys rarely contend on the same shard.
 const DefaultKeyedLockShards = 32
 
-// keyedLockShardSize is the size of a shard, the cache line size of most CPUs.
-const keyedLockShardSize = 64
+// keyedLockShardSize is the size of a shard. It is the cache line size of the target architecture as known to
+// golang.org/x/sys/cpu, but at least 64 bytes, since x/sys/cpu gives 0 for wasm.
+const keyedLockShardSize = max(unsafe.Sizeof(cpu.CacheLinePad{}), 64)
 
 // keyedLockSeed seeds the hash that picks a key's shard. A zero maphash.Seed is invalid, so the zero value of
 // KeyedLocks relies on this package-level seed.
@@ -25,8 +28,8 @@ var keyedLockSeed = maphash.MakeSeed()
 //
 // Each shard keeps its released locks for reuse, as many as it held at once. Locking and unlocking then allocate
 // nothing in a steady state, unless more keys than ever before are locked at once. The shards are allocated on the
-// first Lock, at 64 bytes each, so an unused KeyedLocks costs only its own two words. A short-lived instance that sees
-// little parallel locking should set Shards to 1.
+// first Lock, at a cache line each, so an unused KeyedLocks costs only its own two words. A short-lived instance that
+// sees little parallel locking should set Shards to 1.
 //
 // The zero value for KeyedLocks is ready to use. A KeyedLocks must not be copied after first use.
 //
@@ -45,25 +48,34 @@ type KeyedLocks[K comparable] struct {
 	shards atomic.Pointer[[]keyedLockShard[K]]
 }
 
-// keyedLockShard holds the locks of the keys that hash to it. It is padded to 64 bytes. The shards need not start at a
-// cache line, but the mutexes of neighbouring shards are then still 64 bytes apart and never share a 64-byte line.
+// keyedLockShard holds the locks of the keys that hash to it.
+//
+// The shards sit next to each other in one slice. A CPU core loads memory one cache line at a time, and cores that
+// write to the same line take turns owning it, even when they write different fields. Without padding, several shard
+// mutexes would share a line. Goroutines locking keys of neighbouring shards would then contend in hardware, although
+// their mutexes differ. This is called false sharing. The padding makes each shard exactly keyedLockShardSize bytes,
+// so neighbouring mutexes are a full cache line apart. The slice need not start on a line boundary. A shard may
+// therefore straddle two lines, but no line ever holds two mutexes.
 type keyedLockShard[K comparable] struct {
 	mu    sync.Mutex
 	named map[K]*keyedLock[K]
 	// free is a list of released locks for reuse, linked through their next field.
 	free *keyedLock[K]
-	_    [keyedLockShardSize - unsafe.Sizeof(keyedLockShardFields{})]byte
+	// _ pads the shard to keyedLockShardSize. Its length is a compile-time constant, taken from the non-generic
+	// keyedLockShardFields. If the fields outgrew a shard, the length would go negative and the build would fail.
+	_ [keyedLockShardSize - unsafe.Sizeof(keyedLockShardFields{})]byte
 }
 
 // keyedLockShardFields has the layout of the fields of keyedLockShard, whose size is not a constant since it is
-// generic. It gives the padding that makes a shard 64 bytes on 32-bit and 64-bit platforms.
+// generic. It gives the padding that makes a shard keyedLockShardSize bytes on 32-bit and 64-bit platforms.
 type keyedLockShardFields struct {
 	mu    sync.Mutex
 	named map[int]*int
 	free  *int
 }
 
-// The build fails if a shard is not 64 bytes, for example when keyedLockShardFields misses a field of keyedLockShard.
+// The build fails if a shard is not keyedLockShardSize bytes, for example when keyedLockShardFields misses a field of
+// keyedLockShard.
 var _ = [1]struct{}{}[unsafe.Sizeof(keyedLockShard[string]{})-keyedLockShardSize]
 
 // keyedLock is the lock of one key. Its fields other than mutex are guarded by its shard's mutex.

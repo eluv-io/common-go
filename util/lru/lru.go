@@ -1,8 +1,6 @@
-// Package lru provides a simple LRU cache. It is a small adaption of the
-// LRU implementation of github.com/hashicorp/golang-lru/lru.go that adds the
-// function GetOrCreate() to atomically get a cached value or create it if it
-// does not yet exist in the cache. The caches keep their entries in simpleLRU,
-// a generic LRU of this package.
+// Package lru provides thread-safe, fixed-size LRU caches. GetOrCreate()
+// atomically gets a cached value or creates it if it is not yet in the cache.
+// The caches keep their entries in simpleLRU, a generic LRU of this package.
 package lru
 
 import (

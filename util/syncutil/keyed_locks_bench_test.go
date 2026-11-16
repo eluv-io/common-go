@@ -71,8 +71,8 @@ var benchLockers = []struct {
 }
 
 // BenchmarkKeyedLocksFirstLock creates an instance and locks and unlocks one key in it, which shows what a short-lived
-// instance costs, such as the one of a short-lived lru cache. named takes 2648 bytes, most of them for its 32 shards of
-// 64 bytes. named-1shard takes 408 bytes, legacy 344.
+// instance costs, such as the one of a short-lived lru cache. On amd64, named takes 2648 bytes, most of them for its 32
+// shards of 64 bytes. named-1shard takes 408 bytes, legacy 344.
 func BenchmarkKeyedLocksFirstLock(b *testing.B) {
 	b.Run("impl=legacy", func(b *testing.B) {
 		b.ReportAllocs()
