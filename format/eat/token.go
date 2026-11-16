@@ -350,7 +350,7 @@ func (t *Token) Validate() (err error) {
 		validator.refuse("address", t.EthAddr)
 	}
 
-	if t.Type != Types.ClientConfirmation() {
+	if t.Type != Types.ClientConfirmation() && t.Type != Types.NodeConfirmation() {
 		validator.require("space id", t.SID)
 	}
 
@@ -471,6 +471,22 @@ func (t *Token) Validate() (err error) {
 
 		validator.require("issued at", t.IssuedAt)
 		validator.require("expires", t.Expires)
+		return e.IfNotNil(validator.err)
+
+	case Types.NodeConfirmation():
+		validator.refuse("spc", t.SID)
+		validator.refuse("qid", t.QID)
+		validator.refuse("lib", t.LID)
+		validator.refuse("subject", t.Subject)
+		validator.refuse("grant", t.Grant)
+		validator.refuse("tx-hash", t.EthTxHash)
+		validator.refuse("qp-hash", t.QPHash)
+		validator.refuse("afgh", t.AFGHPublicKey)
+		validator.refuse("confirmation", t.Confirmation)
+
+		validator.require("issued at", t.IssuedAt)
+		validator.require("expires", t.Expires)
+		validator.require("ctx/elv/bearer", structured.Wrap(t.Ctx).Get("elv", "bearer").String())
 		return e.IfNotNil(validator.err)
 
 	case Types.Node():

@@ -49,6 +49,19 @@ defines the different types of the auth tokens.
 | ano    | node          | true              | sid, qp-hash                                                                  | -               | server|token for node-to-node communication|
 | asl    | signed-link   | true              | sid, lid, qid, subject, grant, iat, exp, ctx/elv/lnk, ctx/elv/src=qid         | apk             | client|token for signed-links|
 | acs    | client-signed | true              | sid, lid, qid, subject, grant, iat, exp                                       | ctx             | client|   client-signed token|
+| acc    | confirmation  | true              | iat, exp                                                                      | ctx             | client's ephemeral key|proof of possession of the key in another token's `cnf`|
+| anc    | node-confirmation | true          | iat, exp, ctx/elv/bearer                                                      | -               | node|a node's confirmation of a bearer token it forwards, see below|
+
+### Signature domain
+
+The type prefix is not part of the signed data. A type may therefore declare a signature domain, a line prepended to
+the signed data, which binds the type into the signature. A token of such a type re-prefixed as another type no longer
+verifies, and the other way around. The types that predate it have none and keep their digest.
+
+| Prefix | Signature domain                                 |
+|:-------|:-------------------------------------------------|
+| anc    | `Eluvio Content Fabric Node Confirmation 1.0\n`  |
+
 ### Token SigType:
 defines the different signature types of auth tokens
 
@@ -165,6 +178,30 @@ token string
 ````
 
 **Note**: multiple `Bearer` tokens are not permitted when using client/editor signed token with confirmation.
+
+### Node confirmations
+
+A node that forwards a request on a client's behalf can vouch for the bearer token it forwards. It signs a node
+confirmation (`anc`) with its own key (`NewNodeConfirmation`). The confirmation is bound to the bearer token by the
+SHA-256 of its encoded string, in `ctx/elv/bearer` (`NodeConfirmationBearerHash`), and is valid for a short time.
+
+The receiver verifies it with `Token.ValidateNodeConfirmation` on the bearer token: the type, the validity times, the
+binding, and the signer, through a callback that decides whether the signer's address is an active node. Which bearer
+tokens need a node confirmation, and how it is transported, is up to the receiver. Unlike a client confirmation, it does
+not use the bearer token's `cnf`.
+
+```
+{
+  "adr": "0x57549293ae2aed940aa5e2414a09ab74b4ad7381",
+  "iat": "2026-11-11T10:00:00.000Z",
+  "exp": "2026-11-11T10:00:30.000Z",
+  "ctx": {
+    "elv": {
+      "bearer": "5f2c...e1a0"
+    }
+  }
+}
+```
 
 
 ### Brainstorming notes
