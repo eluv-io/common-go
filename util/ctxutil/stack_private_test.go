@@ -1,9 +1,11 @@
 package ctxutil
 
 import (
+	"context"
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/eluv-io/common-go/util/traceutil/trace"
@@ -33,9 +35,35 @@ func TestCleanup(t *testing.T) {
 	wg.Wait()
 
 	root.End()
-	require.Empty(t, Current().(*contextStack).stacks)
+	require.Zero(t, Current().(*contextStack).len())
 
 	root.Log()
+}
+
+func TestConcurrentStacks(t *testing.T) {
+	type key struct{}
+	cs := NewStack().(*contextStack)
+
+	wg := sync.WaitGroup{}
+	for i := 0; i < 200; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				release := cs.Push(context.WithValue(cs.Ctx(), key{}, j))
+				inner := cs.WithValue(key{}, -j)
+				// assert, since require must not fail the test from another goroutine
+				assert.Equal(t, -j, cs.Ctx().Value(key{}))
+				inner()
+				assert.Equal(t, j, cs.Ctx().Value(key{}))
+				release()
+				assert.Nil(t, cs.Ctx().Value(key{}))
+			}
+		}()
+	}
+	wg.Wait()
+
+	require.Zero(t, cs.len())
 }
 
 func newLogSpan(span trace.Span) *logSpan {

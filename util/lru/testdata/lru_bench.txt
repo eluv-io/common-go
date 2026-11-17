@@ -1,0 +1,61 @@
+goos: linux
+goarch: amd64
+pkg: github.com/eluv-io/common-go/util/lru
+cpu: VirtualApple @ 2.50GHz
+impl: simplelru
+BenchmarkTypedCacheDecoupledMiss-4   	  543574	       440.8 ns/op	     112 B/op	       4 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  554042	       450.7 ns/op	     112 B/op	       4 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  551533	       439.4 ns/op	     112 B/op	       4 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  563683	       432.5 ns/op	     112 B/op	       4 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  547808	       428.7 ns/op	     112 B/op	       4 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  542223	       492.2 ns/op	     112 B/op	       4 allocs/op
+BenchmarkTypedCacheGet-4             	 2678491	        89.55 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 2673060	        88.59 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 2706717	        88.03 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 2736862	        87.94 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 2696359	        87.82 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 2765530	        89.69 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1237171	       187.6 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1222062	       188.1 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1237320	       196.5 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1000000	       208.6 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1241270	       210.2 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1209344	       195.1 ns/op	      96 B/op	       3 allocs/op
+impl: simplelru-keyedlocks
+BenchmarkTypedCacheDecoupledMiss-4   	  608679	       383.7 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  604788	       376.4 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  627007	       379.4 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  628903	       387.9 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  663030	       383.7 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  647606	       375.3 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheGet-4             	 3073015	        77.66 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3084745	        78.17 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3069529	        78.06 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3066489	        78.64 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3070826	        77.46 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3098806	        77.66 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1285476	       187.6 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1231795	       199.4 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1258076	       195.8 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1213051	       186.1 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1000000	       202.6 ns/op	      96 B/op	       3 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 1232092	       200.7 ns/op	      96 B/op	       3 allocs/op
+impl: generic
+BenchmarkTypedCacheDecoupledMiss-4   	  825820	       276.6 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  851721	       276.1 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  868467	       273.7 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  868690	       277.0 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  884769	       273.5 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheDecoupledMiss-4   	  815554	       278.3 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3454554	        68.38 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3507578	        69.43 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3401745	        74.51 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3372026	        69.70 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3456974	        68.39 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheGet-4             	 3513585	        69.05 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 2438241	       110.8 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 2288016	        97.94 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 2542506	       100.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 2364798	        97.80 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 2319019	       102.9 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTypedCacheAddEvict-4        	 2459544	        94.43 ns/op	       0 B/op	       0 allocs/op

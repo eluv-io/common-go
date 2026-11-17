@@ -4,8 +4,6 @@ import (
 	"io"
 	"sync"
 
-	"github.com/hashicorp/golang-lru/simplelru"
-
 	"github.com/eluv-io/common-go/util/jsonutil"
 	"github.com/eluv-io/common-go/util/stringutil"
 	"github.com/eluv-io/common-go/util/traceutil"
@@ -36,7 +34,7 @@ func NewTypedRefCache[K comparable, V io.Closer](
 		metrics:  MakeMetrics(),
 	}
 	if maxSize > 0 {
-		c.lru, _ = simplelru.NewLRU(maxSize, c.onEvict)
+		c.lru = newSimpleLRU[K, *entry[V]](maxSize, c.closeEntry)
 	}
 	c.metrics.Config.MaxItems = maxSize
 	return c
@@ -76,9 +74,9 @@ type RefCache = TypedRefCache[string, io.Closer]
 // and closed with a call to their Close() function (resources must implement
 // the io.Closer interface).
 type TypedRefCache[K comparable, V io.Closer] struct {
-	active   map[K]*entry[V] // all active entries
-	lru      *simplelru.LRU  // the LRU cache for inactive entries
-	mutex    sync.Mutex      // mutex for access to active map
+	active   map[K]*entry[V]          // all active entries
+	lru      *simpleLRU[K, *entry[V]] // the LRU cache for inactive entries
+	mutex    sync.Mutex               // mutex for access to active map
 	callback Callback
 	metrics  Metrics
 }
@@ -101,7 +99,6 @@ func (c *TypedRefCache[K, V]) WithName(name string) {
 }
 
 func (c *TypedRefCache[K, V]) GetOrCreate(key K, constructor Constructor[V]) (V, error) {
-	var val interface{}
 	var ent *entry[V]
 	var exists bool
 	var err error
@@ -130,11 +127,10 @@ func (c *TypedRefCache[K, V]) GetOrCreate(key K, constructor Constructor[V]) (V,
 			ent.refCount++
 		} else {
 			if c.lru != nil {
-				val, exists = c.lru.Get(key)
+				ent, exists = c.lru.Get(key)
 			}
 			if exists {
 				// it's a cached resource in the LRU
-				ent = val.(*entry[V])
 				ent.refCount = 1
 				// add it back to the active map
 				c.active[key] = ent
@@ -279,10 +275,6 @@ func (c *TypedRefCache[K, V]) Metrics() Metrics {
 func (c *TypedRefCache[K, V]) CollectMetrics() jsonutil.GenericMarshaler {
 	m := c.Metrics()
 	return &m
-}
-
-func (c *TypedRefCache[K, V]) onEvict(key interface{}, val interface{}) {
-	c.closeEntry(key.(K), val.(*entry[V]))
 }
 
 func (c *TypedRefCache[K, V]) closeEntry(key K, ent *entry[V]) {
