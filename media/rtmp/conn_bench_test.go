@@ -84,5 +84,5 @@ func benchConn(b *testing.B) *Conn {
 		Video: &fmp4.VideoParams{Codecs: "avc1.640028"},
 		Audio: &fmp4.AudioParams{Codecs: "mp4a.40.2"},
 	}
-	return newConn(Config{}, params, newSession(discardConn{}, 0))
+	return newConn(endpoint{}, params, newSession(discardConn{}, 0))
 }
