@@ -3,12 +3,15 @@ package ioutil
 import (
 	"encoding/json"
 	"io"
+	"math"
+	"slices"
 	"sync"
 	"time"
 
 	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/util/statsutil"
 	"github.com/eluv-io/common-go/util/timeutil"
+	"github.com/eluv-io/errors-go"
 	"github.com/eluv-io/utc-go"
 )
 
@@ -27,6 +30,13 @@ const (
 // collects the event along with the time, offset, and result of the last Read/Write/Seek call before the event.
 //
 // Read, Write, Seek, Close may not be called concurrently, but Record may be called concurrently with any other.
+//
+// Calling Read, Write, or Seek when the wrapped value does not implement the respective interface returns an error. A
+// nil limitFn means that no operation is ever reported as slow, and a nil statsLog or slowsLog discards the respective
+// log.
+//
+// Read, Write, and Seek may still be called after Close and pass through to the wrapped value, but they are no longer
+// reflected in the logged stats, events, and slow operations.
 func NewStatsLogger(
 	rwsc interface{}, // Accepts any Reader, Writer, Seeker, Closer
 	statsLog func(msg string, fields ...interface{}),
@@ -36,6 +46,17 @@ func NewStatsLogger(
 	op string,
 	fields ...interface{},
 ) *StatsLogger {
+	noLog := func(string, ...interface{}) {}
+	if statsLog == nil {
+		statsLog = noLog
+	}
+	if slowsLog == nil {
+		slowsLog = noLog
+	}
+	if limitFn == nil {
+		// no limit: no operation is ever reported as slow
+		limitFn = func(int, int64) time.Duration { return math.MaxInt64 }
+	}
 	l := &StatsLogger{statsLog: statsLog, slowsLog: slowsLog, start: start, limitFn: limitFn, op: op, fields: fields}
 	if r, ok := rwsc.(io.Reader); ok {
 		l.r = r
@@ -74,68 +95,67 @@ type StatsLogger struct {
 	stats    *statistics
 	events   []*statsEvent
 	slows    []*statsEvent
-	mutex    sync.Mutex
 	once     sync.Once
+
+	// mutex guards lastT, lastOff, lastN, events, slows and closed, which are shared between Record and the other
+	// methods. It is never held while calling the wrapped reader/writer/seeker/closer or the log functions.
+	mutex  sync.Mutex
+	closed bool
 }
 
 func (l *StatsLogger) Read(p []byte) (int, error) {
 	if l.r == nil {
-		panic(l.op + ": StatsLogger.Read called but missing reader")
+		return 0, errors.E("StatsLogger.Read", errors.K.Invalid,
+			"reason", "wrapped value is not an io.Reader", "logger", l.op)
 	}
 	limit := l.limitFn(ReadFn, l.off)
 	l.watch.Reset()
 	n, err := l.r.Read(p)
 	l.watch.Stop()
 	if n > 0 || err != io.EOF || l.watch.Duration() > limit { // Ignore empty reads at EOF, unless slow
-		l.lastT = l.watch.StopTime()
-		l.lastN = int64(n)
-		l.lastOff = l.off
-		l.off += l.lastN
-		l.stats.update(l.lastT, ReadFn, l.watch.Duration(), int64(n))
-		if l.watch.Duration() > limit {
-			l.record(true, l.watch.StopTime(), "read", limit, l.watch.Duration(), nil)
-		}
+		off := l.off
+		l.off += int64(n)
+		l.stats.update(l.watch.StopTime(), ReadFn, l.watch.Duration(), int64(n))
+		l.setLast("read", off, int64(n), limit)
 	}
 	return n, err
 }
 
 func (l *StatsLogger) Write(p []byte) (int, error) {
 	if l.w == nil {
-		panic(l.op + ": StatsLogger.Write called but missing writer")
+		return 0, errors.E("StatsLogger.Write", errors.K.Invalid,
+			"reason", "wrapped value is not an io.Writer", "logger", l.op)
 	}
 	limit := l.limitFn(WriteFn, l.off)
 	l.watch.Reset()
 	n, err := l.w.Write(p)
 	l.watch.Stop()
 	if n > 0 || l.watch.Duration() > limit { // Ignore empty writes, unless slow
-		l.lastT = l.watch.StopTime()
-		l.lastN = int64(n)
-		l.lastOff = l.off
-		l.off += l.lastN
-		l.stats.update(l.lastT, WriteFn, l.watch.Duration(), int64(n))
-		if l.watch.Duration() > limit {
-			l.record(true, l.watch.StopTime(), "write", limit, l.watch.Duration(), nil)
-		}
+		off := l.off
+		l.off += int64(n)
+		l.stats.update(l.watch.StopTime(), WriteFn, l.watch.Duration(), int64(n))
+		l.setLast("write", off, int64(n), limit)
 	}
 	return n, err
 }
 
 func (l *StatsLogger) Seek(offset int64, whence int) (int64, error) {
 	if l.s == nil {
-		panic(l.op + ": StatsLogger.Seek called but missing seeker")
+		return 0, errors.E("StatsLogger.Seek", errors.K.Invalid,
+			"reason", "wrapped value is not an io.Seeker", "logger", l.op)
 	}
 	limit := l.limitFn(SeekFn, l.off)
 	l.watch.Reset()
 	n, err := l.s.Seek(offset, whence)
 	l.watch.Stop()
-	l.lastT = l.watch.StopTime()
-	l.lastN = n
-	l.lastOff = l.off
-	l.off = l.lastN
-	l.stats.update(l.lastT, SeekFn, l.watch.Duration(), n)
-	if l.watch.Duration() > limit {
-		l.record(true, l.watch.StopTime(), "seek", limit, l.watch.Duration(), nil)
+	pos := n
+	if err != nil {
+		pos = l.off // a failed seek doesn't move the position, and n is unspecified
 	}
+	off := l.off
+	l.off = pos
+	l.stats.update(l.watch.StopTime(), SeekFn, l.watch.Duration(), pos)
+	l.setLast("seek", off, pos, limit)
 	return n, err
 }
 
@@ -145,19 +165,29 @@ func (l *StatsLogger) Close() error {
 		err = l.c.Close()
 	}
 	l.once.Do(func() {
-		l.stats.Start = l.start
-		l.stats.Duration = duration.Spec(utc.Since(l.start))
-		op, limit := l.normalize()
+		// log a snapshot: Read/Write/Seek calls after Close must not modify what was handed to the logger
+		stats := *l.stats
+		stats.Start = l.start
+		stats.Duration = duration.Spec(utc.Since(l.start))
+
+		// take ownership of the events: Record calls after this point are dropped
+		l.mutex.Lock()
+		l.closed = true
+		events, slows := l.events, l.slows
+		l.events, l.slows = nil, nil
+		l.mutex.Unlock()
+
+		op, limit := l.normalize(slows)
 		msg := op + " stats"
-		fields := append(l.fields, "stats", l.stats, "events", l.events)
+		fields := append(slices.Clone(l.fields), "stats", &stats, "events", events)
 		l.statsLog(msg, fields...)
-		if len(l.slows) > 0 {
+		if len(slows) > 0 {
 			msg := op + " slow operations"
-			fields := l.fields
+			fields := slices.Clone(l.fields)
 			if limit > 0 {
 				fields = append(fields, "limit", limit)
 			}
-			fields = append(fields, "ops", l.slows)
+			fields = append(fields, "ops", slows)
 			l.slowsLog(msg, fields...)
 		}
 	})
@@ -166,22 +196,45 @@ func (l *StatsLogger) Close() error {
 
 // Record accepts a custom now timestamp for the recorded event time; otherwise, the event time will be the timestamp
 // of the last Read/Write/Seek call result.
+//
+// Record may be called concurrently with any other method. Events recorded after Close are dropped.
 func (l *StatsLogger) Record(name string, data interface{}, now ...utc.UTC) {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	if l.closed {
+		return
+	}
 	t := l.lastT
 	if len(now) > 0 {
 		t = now[0]
 	}
-	l.record(false, t, name, 0, t.Sub(l.start), data)
+	l.events = append(l.events, &statsEvent{
+		T:    t,
+		Name: name,
+		Dur:  duration.Spec(t.Sub(l.start)),
+		Off:  l.lastOff,
+		N:    l.lastN,
+		Data: data,
+	})
 }
 
-func (l *StatsLogger) record(slow bool, t utc.UTC, name string, limit time.Duration, dur time.Duration, data interface{}) {
-	s := &statsEvent{T: t, Name: name, Limit: duration.Spec(limit), Dur: duration.Spec(dur), Off: l.lastOff, N: l.lastN, Data: data}
+// setLast stores the result of the latest Read/Write/Seek, which is attached to events passed to Record. If the call
+// exceeded the given limit, it also records a slow event. Everything happens under a single lock, so Record always
+// sees the time, offset and result of one and the same call.
+func (l *StatsLogger) setLast(name string, off int64, n int64, limit time.Duration) {
+	t, dur := l.watch.StopTime(), l.watch.Duration()
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	if slow {
-		l.slows = append(l.slows, s)
-	} else {
-		l.events = append(l.events, s)
+	l.lastT, l.lastOff, l.lastN = t, off, n
+	if dur > limit && !l.closed {
+		l.slows = append(l.slows, &statsEvent{
+			T:     t,
+			Name:  name,
+			Limit: duration.Spec(limit),
+			Dur:   duration.Spec(dur),
+			Off:   off,
+			N:     n,
+		})
 	}
 }
 
@@ -237,7 +290,7 @@ func (e *statsEvent) String() string {
 // normalize determines if all calls made through StatsLogger were the same and, if so, removes all slow event names.
 // Additionally, if a majority of slow event limits are the same, it clears all limits equal to the majority limit.
 // Returns "OP.NAME" (if all calls were the same; otherwise "OP") and the majority limit (if applicable).
-func (l *StatsLogger) normalize() (string, duration.Spec) {
+func (l *StatsLogger) normalize(slows []*statsEvent) (string, duration.Spec) {
 	var name string
 	if l.stats.Reads > 0 && l.stats.Writes == 0 && l.stats.Seeks == 0 {
 		name = "Read"
@@ -249,18 +302,18 @@ func (l *StatsLogger) normalize() (string, duration.Spec) {
 
 	var limit duration.Spec
 	limits := make(map[duration.Spec]int)
-	for _, s := range l.slows {
+	for _, s := range slows {
 		limits[s.Limit]++
 		if limit == 0 || limits[s.Limit] > limits[limit] {
 			limit = s.Limit
 		}
 	}
-	if limits[limit] <= len(l.slows)/2 {
+	if limits[limit] <= len(slows)/2 {
 		limit = 0
 	}
 
 	if name != "" || limit > 0 {
-		for _, s := range l.slows {
+		for _, s := range slows {
 			if name != "" {
 				s.Name = ""
 			}
