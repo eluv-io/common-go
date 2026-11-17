@@ -914,6 +914,16 @@ func TestClientSignedWithClientConfirm(t *testing.T) {
 	}
 }
 
+// TestConfirmationRequiredByOtherType tests that a token of a type that never requires a confirmation, but carries
+// one, is refused without a confirmation token instead of panicking.
+func TestConfirmationRequiredByOtherType(t *testing.T) {
+	token := eat.NewPlain(sid, lid).Sign(clientSK).MustToken()
+	token.Confirmation = eat.ClientConfirmation{AddrOfEphemeralKey: clientAddr.String()}
+
+	err := token.ValidateConfirmation(nil, time.Hour, time.Minute)
+	require.ErrorContains(t, err, "a confirmation token is required")
+}
+
 // TestXSignedAndConfirm tests using client-signed and editor-signed tokens with
 // confirmation. Also checks confirmation fails with other types of tokens.
 func TestXSignedAndConfirm(t *testing.T) {
@@ -1095,6 +1105,131 @@ func TestXSignedAndConfirm(t *testing.T) {
 	}
 }
 
+func TestHasTokenPrefix(t *testing.T) {
+	bearer, err := eat.NewOutput(sid, qid, id.Generate(id.Q)).Sign(clientSK).Encode()
+	require.NoError(t, err)
+
+	require.True(t, eat.HasTokenPrefix(bearer))
+	require.True(t, eat.HasTokenPrefix("acs"+bearer[3:]))  // re-prefixed: invalid, but still a token
+	require.True(t, eat.HasTokenPrefix(bearer[:7]+"0OIl")) // not base58: invalid, but still a token
+	require.False(t, eat.HasTokenPrefix(sid.String()))
+	require.False(t, eat.HasTokenPrefix("demov3"))
+	require.False(t, eat.HasTokenPrefix("aou"))
+	require.False(t, eat.HasTokenPrefix(""))
+}
+
+func TestOutputToken(t *testing.T) {
+	now := utc.Now().Truncate(time.Second)
+	defer utc.MockNow(now)()
+	outputsQID := id.Generate(id.Q)
+
+	newToken := func() *eat.Token {
+		return eat.NewOutput(sid, qid, outputsQID).Sign(clientSK).MustToken()
+	}
+
+	t.Run("no expiry", func(t *testing.T) {
+		tok := newToken()
+		require.NoError(t, tok.Validate())
+		require.NoError(t, tok.VerifyOutput(outputsQID))
+		require.Error(t, tok.VerifyOutput(id.Generate(id.Q)))
+		require.Error(t, tok.VerifyOutput(nil))
+	})
+
+	t.Run("optional expiry", func(t *testing.T) {
+		t.Run("not expired", func(t *testing.T) {
+			tok := eat.NewOutput(sid, qid, outputsQID).
+				WithExpires(now.Add(time.Hour)).
+				Sign(clientSK).MustToken()
+			require.NoError(t, tok.Validate())
+			require.NoError(t, tok.VerifyTimes(-1, 0))
+			require.NoError(t, tok.VerifyTimes(24*time.Hour, time.Minute))
+		})
+		t.Run("expired", func(t *testing.T) {
+			tok := eat.NewOutput(sid, qid, outputsQID).
+				WithIssuedAt(now.Add(-2 * time.Hour)).
+				WithExpires(now.Add(-time.Hour)).
+				Sign(clientSK).MustToken()
+			require.NoError(t, tok.Validate())
+			require.ErrorContains(t, tok.VerifyTimes(-1, 0), "expired")
+			require.ErrorContains(t, tok.VerifyTimes(24*time.Hour, time.Minute), "expired")
+		})
+	})
+
+	t.Run("not an output token", func(t *testing.T) {
+		tok := eat.NewSignedLink(sid, lid, qid, "./meta/x", outputsQID).Sign(clientSK).MustToken()
+		require.Error(t, tok.VerifyOutput(outputsQID))
+	})
+
+	// the type prefix is outside the payload: the signature must still bind the type
+	t.Run("re-prefixed", func(t *testing.T) {
+		builder := func() *eat.OutputBuilder {
+			return eat.NewOutput(sid, qid, outputsQID).WithExpires(now.Add(time.Hour))
+		}
+		signed := map[string]eat.Encoder{
+			"es256k": builder().Sign(clientSK),
+			"eip191": builder().SignEIP912Personal(clientSK),
+		}
+		for name, enc := range signed {
+			t.Run(name+" output as client-signed", func(t *testing.T) {
+				bearer, err := enc.Encode()
+				require.NoError(t, err)
+				_, err = eat.Parse(bearer)
+				require.NoError(t, err)
+
+				require.Equal(t, "aou", bearer[:3])
+				_, err = eat.Parse("acs" + bearer[3:])
+				require.ErrorContains(t, err, "tampered")
+			})
+		}
+
+		// the payload of a valid output token, signed as client-signed
+		t.Run("client-signed as output", func(t *testing.T) {
+			tok := builder().Token()
+			tok.Type = eat.Types.ClientSigned()
+			require.NoError(t, tok.SignWith(clientSK))
+			bearer, err := tok.Encode()
+			require.NoError(t, err)
+			_, err = eat.Parse(bearer)
+			require.NoError(t, err)
+
+			require.Equal(t, "acs", bearer[:3])
+			_, err = eat.Parse("aou" + bearer[3:])
+			require.ErrorContains(t, err, "tampered")
+		})
+	})
+
+	// each case breaks one rule of the type: Validate must name it, not just the broken signature
+	tests := []struct {
+		name   string
+		modify func(tok *eat.Token)
+		reason string
+	}{
+		{"lib", func(tok *eat.Token) { tok.LID = lid }, "lib not allowed"},
+		{"subject", func(tok *eat.Token) { tok.Subject = "someone" }, "subject not allowed"},
+		{"grant", func(tok *eat.Token) { tok.Grant = eat.Grants.Read }, "grant not allowed"},
+		{"afgh", func(tok *eat.Token) { tok.AFGHPublicKey = "afgh-pk" }, "afgh not allowed"},
+		{"no qid", func(tok *eat.Token) { tok.QID = nil }, "qid missing"},
+		{"no outputs object", func(tok *eat.Token) {
+			tok.Ctx = map[string]interface{}{"elv": map[string]interface{}{}}
+		}, "ctx/elv/out missing"},
+		{"invalid outputs object", func(tok *eat.Token) {
+			tok.Ctx = map[string]interface{}{"elv": map[string]interface{}{"out": "not-an-id"}}
+		}, "ctx/elv/out invalid"},
+		{"other ctx", func(tok *eat.Token) { tok.Ctx["other"] = "value" }, "ctx may hold elv/out only"},
+		{"expires before issued", func(tok *eat.Token) { tok.Expires = now.Add(-time.Hour) },
+			"expires before issued at"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			tok := newToken()
+			test.modify(tok)
+			err := tok.Validate()
+			require.Error(t, err)
+			require.Contains(t, err.Error(), test.reason)
+		})
+	}
+}
+
 func TestNodeToken(t *testing.T) {
 	now := utc.Now()
 	defer utc.MockNow(now)()
@@ -1112,7 +1247,7 @@ func TestNodeToken(t *testing.T) {
 
 	ret, err := tok.Encode()
 	require.NoError(t, err)
-	//fmt.Println("tok", tok.Explain())
+	// fmt.Println("tok", tok.Explain())
 
 	err = tok.Validate()
 	require.NoError(t, err)

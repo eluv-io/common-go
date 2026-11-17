@@ -432,6 +432,37 @@ func (b *SignedLinkBuilder) SignEIP912Personal(pk *ecdsa.PrivateKey) Encoder {
 
 // -----------------------------------------------------------------------------
 
+type OutputBuilder struct {
+	*signer
+}
+
+// NewOutput creates a builder for an output token. The token authorizes reading the input object inputQID, in any
+// version, for the outputs of the outputs object outputsQID only. It has no expiry unless set with WithExpires.
+func NewOutput(sid types.QSpaceID, inputQID types.QID, outputsQID types.QID) *OutputBuilder {
+	token := New(Types.Output(), defaultFormat)
+	token.SID = sid
+	token.QID = inputQID
+	token.IssuedAt = utc.Now()
+	token.Ctx = map[string]interface{}{
+		"elv": map[string]interface{}{
+			"out": outputsQID.String(),
+		},
+	}
+	return &OutputBuilder{newSigner(token)}
+}
+
+func (b *OutputBuilder) WithIssuedAt(issuedAt utc.UTC) *OutputBuilder {
+	b.enc.token.IssuedAt = issuedAt
+	return b
+}
+
+func (b *OutputBuilder) WithExpires(expiresAt utc.UTC) *OutputBuilder {
+	b.enc.token.Expires = expiresAt
+	return b
+}
+
+// -----------------------------------------------------------------------------
+
 // PENDING(LUK): review offered methods on ClientSignedBuilder
 
 type ClientSignedBuilder struct {

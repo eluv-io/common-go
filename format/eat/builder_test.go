@@ -162,6 +162,26 @@ func TestTokenBuilders(t *testing.T) {
 					},
 				},
 				{
+					encoder:  sign(eat.NewOutput(sid, qid, srcQID), clientSK),
+					wantType: eat.Types.Output(),
+					validate: func(t *testing.T, token *eat.Token) {
+						outputDefault(t, token)
+						require.True(t, token.Expires.IsZero())
+					},
+				},
+				{
+					encoder: sign(eat.NewOutput(sid, qid, srcQID).
+						WithIssuedAt(anHourAgo).
+						WithExpires(anHourFromNow),
+						clientSK),
+					wantType: eat.Types.Output(),
+					validate: func(t *testing.T, token *eat.Token) {
+						outputDefault(t, token)
+						require.Equal(t, anHourAgo, token.IssuedAt)
+						require.Equal(t, anHourFromNow, token.Expires)
+					},
+				},
+				{
 					token: eat.Must(
 						eat.NewClientToken(
 							sign(
@@ -274,6 +294,20 @@ func signedLinkDefault(t *testing.T, token *eat.Token) {
 	require.NotZero(t, ctx.At("src").String())
 	require.NotEqual(t, utc.Zero, token.IssuedAt)
 	assertAuthorization(t, token, clientID.String(), clientID)
+}
+
+func outputDefault(t *testing.T, token *eat.Token) {
+	require.Equal(t, sid, token.SID)
+	require.Nil(t, token.LID)
+	require.Equal(t, qid, token.QID)
+	require.Empty(t, token.Subject)
+	require.Empty(t, token.Grant)
+	require.Equal(t, srcQID.String(), structured.Wrap(token.Ctx).At("elv/out").String())
+	require.NotEqual(t, utc.Zero, token.IssuedAt)
+	require.NoError(t, token.VerifyOutput(srcQID))
+	require.Error(t, token.VerifyOutput(qid))
+	// the signer lends no rights: the token has no user
+	assertAuthorization(t, token, "", nil)
 }
 
 func clientDefault(t *testing.T, token *eat.Token) {
