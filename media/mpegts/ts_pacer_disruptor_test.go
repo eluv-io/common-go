@@ -200,6 +200,35 @@ func TestTsDisruptorPacer_PacedDelivery(t *testing.T) {
 	<-done
 }
 
+// TestTsDisruptorPacer_PcrBehindBaseline verifies that a batch whose PCR is behind the baseline packet's is delivered
+// at once and does not hold up the batches after it. The delta of such a packet is negative, and converting it as an
+// unsigned tick count scheduled it 21 years ahead, which blocked the queue for the rest of the stream. This happened
+// after a source restart, where the recorder handed the publisher a PCR slightly behind the one it had just anchored
+// its timing baseline on.
+func TestTsDisruptorPacer_PcrBehindBaseline(t *testing.T) {
+	const pid = 100
+	conf := defaultTestConfig(0)
+	conf.Logic.Delay = duration.Duration(50 * time.Millisecond)
+	pacer, err := NewTsDisruptorPacer(conf)
+	require.NoError(t, err)
+	delivered, done := runPacer(t, pacer)
+
+	// the first batch is discarded (T0 initialization), the second anchors the baseline at PCR 1 s, the third is
+	// 200 ms behind it, and the fourth is ahead again
+	base := DurationToPcr(time.Second)
+	require.NoError(t, pacer.Push(makeTsBatch(pid, base, 7)))
+	require.NoError(t, pacer.Push(makeTsBatch(pid, base, 7)))
+	require.NoError(t, pacer.Push(makeTsBatch(pid, base-DurationToPcr(200*time.Millisecond), 7)))
+	require.NoError(t, pacer.Push(makeTsBatch(pid, base+DurationToPcr(20*time.Millisecond), 7)))
+
+	// without the signed conversion the third batch never comes out, and the fourth waits behind it
+	batches := waitDelivered(t, delivered, 3, 2*time.Second)
+	require.Len(t, batches, 3, "the batch behind the baseline is delivered late rather than 21 years ahead")
+
+	pacer.Shutdown()
+	<-done
+}
+
 // TestTsDisruptorPacer_Delay verifies that the first delivered batch respects the configured Delay.
 func TestTsDisruptorPacer_Delay(t *testing.T) {
 	const pid = 100

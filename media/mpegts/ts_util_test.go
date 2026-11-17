@@ -42,6 +42,13 @@ func TestPcrToDuration_RoundTrip(t *testing.T) {
 	})
 }
 
+func TestPcrDeltaToDuration(t *testing.T) {
+	require.Equal(t, time.Second, PcrDeltaToDuration(27_000_000))
+	require.Equal(t, -time.Second, PcrDeltaToDuration(-27_000_000))
+	require.Equal(t, -time.Microsecond/27, PcrDeltaToDuration(-1))
+	require.Zero(t, PcrDeltaToDuration(0))
+}
+
 // TestPcrToDuration_NoOverflow is a regression test for an int64 overflow in PcrToDuration's old implementation
 // (time.Duration(diff) * time.Microsecond / 27), which multiplied before dividing: the intermediate diff*1000
 // overflowed once diff exceeded math.MaxInt64/1000 (~9.22e15 ticks, ~10.8 years of continuous 27MHz PCR ticks) - a
