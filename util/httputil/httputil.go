@@ -30,7 +30,6 @@ import (
 const (
 	DecryptModeHeader            = "X-Content-Fabric-Decryption-Mode"         // HTTP header for specifying mode for decryption
 	SetContentDispositionHeader  = "X-Content-Fabric-Set-Content-Disposition" // HTTP header for directive to return a Content-Disposition header
-	FailoverNodeHeader           = "X-Content-Fabric-Failover-Node"           // HTTP header for noting that the request failed over from another node
 	customHeaderPrefix           = "X-Content-Fabric-"
 	customHeaderMultiCodecPrefix = "X-Content-Fabric-Mc-"
 	customQueryPrefix            = "header-x_"
@@ -595,13 +594,6 @@ func GetSetContentDisposition(header http.Header, query url.Values, def string) 
 	}
 
 	return res[0], nil
-}
-
-// GetFailoverNode returns the failover node for the given HTTP request. The
-// returned result is only non-empty when another node forwarded the request
-// during a failover and the node's nginx sets the failover-node header.
-func GetFailoverNode(header http.Header) string {
-	return header.Get(FailoverNodeHeader)
 }
 
 // ClientIP returns the client IP address for the given HTTP request. By default
