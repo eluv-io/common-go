@@ -18,6 +18,7 @@ import (
 	"golang.org/x/text/encoding/charmap"
 
 	"github.com/eluv-io/common-go/format/codecs"
+	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/format/hash"
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/types"
@@ -338,6 +339,28 @@ func UnmarshalTo(reqBody io.Reader, reqHeader http.Header, target interface{}, r
 		return errors.E("unmarshal request", errors.K.Invalid, err, "content_type", ct)
 	}
 	return nil
+}
+
+func GetTimeout(headers http.Header) (duration.Duration, error) {
+	timeoutStr, err := GetCustomHeader(headers, "Timeout")
+	if err != nil {
+		return 0, errors.E("invalid timeout", errors.K.Invalid, err)
+	} else if timeoutStr == "" {
+		return 0, nil
+	}
+
+	timeout, err := duration.DurationFromString(timeoutStr)
+	if err != nil {
+		return 0, errors.E("invalid timeout", errors.K.Invalid, err, "timeout", timeoutStr)
+	}
+
+	return timeout, nil
+}
+
+func SetTimeout(headers http.Header, timeout duration.Duration) {
+	if timeout > 0 {
+		SetCustomHeader(headers, "Timeout", timeout.String())
+	}
 }
 
 func getNodes(headers http.Header, key string) (map[string]bool, error) {

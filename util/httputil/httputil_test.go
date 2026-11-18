@@ -13,6 +13,7 @@ import (
 
 	"github.com/eluv-io/errors-go"
 
+	"github.com/eluv-io/common-go/format/duration"
 	"github.com/eluv-io/common-go/format/hash"
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/util/httputil"
@@ -229,6 +230,17 @@ func TestGetSetContentDisposition(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, tcase.expect, ct)
 	}
+}
+
+func TestGetSetTimeout(t *testing.T) {
+	timeout, err := duration.DurationFromString("1h2m3s")
+	require.NoError(t, err)
+	headers := make(http.Header)
+	httputil.SetTimeout(headers, timeout)
+	require.Len(t, headers["X-Content-Fabric-Timeout"], 1)
+	to, err := httputil.GetTimeout(headers)
+	require.NoError(t, err)
+	require.Equal(t, timeout, to)
 }
 
 func TestGetSetReqNodes(t *testing.T) {
