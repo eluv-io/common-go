@@ -13,6 +13,7 @@ import (
 	"github.com/eluv-io/common-go/format/encryption"
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/token"
+	"github.com/eluv-io/utc-go"
 )
 
 var (
@@ -58,6 +59,37 @@ func TestConversion(t *testing.T) {
 	testConversion(t, token.Generate(token.QPartWriteV1), token.QPartWriteV1, "tqpw")
 	testConversion(t, lrot, token.LRO, "tlro")
 	testConversion(t, jobt, token.Job, "tjob")
+	testConversion(t, token.Generate(token.Command), token.Command, "tcmd")
+}
+
+func TestCommand(t *testing.T) {
+	created := utc.UnixMilli(1763600000123)
+	tok, err := token.NewCommand(nid, created)
+	require.NoError(t, err)
+	require.Equal(t, created, tok.Created())
+	require.True(t, tok.NID.Equal(nid))
+
+	other, err := token.NewCommand(nid, created)
+	require.NoError(t, err)
+	require.False(t, tok.Equal(other), "random bytes must differ")
+
+	decoded, err := token.Command.FromString(tok.String())
+	require.NoError(t, err)
+	require.Equal(t, created, decoded.Created())
+	require.True(t, decoded.NID.Equal(nid))
+
+	require.Equal(t, utc.Zero, lrot.Created())
+
+	_, err = token.NewCommand(id.Generate(id.Q), created)
+	require.Error(t, err)
+	_, err = token.NewCommand(nid, utc.Zero)
+	require.Error(t, err)
+
+	// a command token with bytes of the wrong length is refused
+	short, err := token.NewLRO(token.LRO, nid, 1, 2, 3)
+	require.NoError(t, err)
+	_, err = token.Parse("tcmd" + short.String()[4:])
+	require.Error(t, err)
 }
 
 func testConversion(t *testing.T, tok *token.Token, code token.Code, prefix string) {
@@ -266,6 +298,24 @@ func ExampleToken_Describe_localFile() {
 	// bytes:  0x9cd9260a25a7013e0e9a48f7a83a5937
 	// qid:    iq__99d4kp14eSDEP7HWfjU4W6qmqDw
 	// nid:    inod3Sa5p3czRyYi8GnVGnh8gBDLaqJr
+}
+
+func ExampleToken_Describe_command() {
+	tok := &token.Token{
+		Code:  token.Command,
+		NID:   nid,
+		Bytes: []byte{0, 0, 1, 0x9a, 0x9e, 0x2b, 0x5c, 0x7b, 1, 2, 3, 4, 5, 6, 7, 8},
+	}
+	tok.MakeString()
+	tok, _ = token.FromString(tok.String())
+	fmt.Println(tok.Describe())
+
+	// Output:
+	//
+	// type:   command
+	// bytes:  0x0000019a9e2b5c7b0102030405060708
+	// nid:    inod3Sa5p3czRyYi8GnVGnh8gBDLaqJr
+	// time:   2025-11-19T22:10:33.211Z
 }
 
 func ExampleToken_Describe_job() {

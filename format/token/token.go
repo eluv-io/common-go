@@ -19,6 +19,7 @@ import (
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/util/byteutil"
 	"github.com/eluv-io/errors-go"
+	"github.com/eluv-io/utc-go"
 )
 
 func NewObject(code Code, qid id.ID, nid id.ID, bytes ...byte) (*Token, error) {
@@ -134,6 +135,41 @@ func NewJob(nid id.ID, allocationID id.ID, index int) (*Token, error) {
 	return res, nil
 }
 
+// commandBytesLen is the length of a command token's bytes: an 8-byte creation time followed by 8 random bytes.
+const commandBytesLen = 16
+
+// NewCommand creates a command token for a command sent to the node with the given ID. Its bytes hold the creation
+// time, in milliseconds since the Unix epoch, followed by random bytes. The creation time lets a receiver recognize a
+// command ID that is too old to be accepted, even after it has forgotten the ID itself.
+func NewCommand(nid id.ID, created utc.UTC) (*Token, error) {
+	e := errors.Template("init command token", errors.K.Invalid)
+	if nid.AssertCode(id.QNode) != nil {
+		return nil, e("reason", "invalid nid", "nid", nid)
+	}
+	if created.IsZero() {
+		return nil, e("reason", "creation time missing")
+	}
+	bts := make([]byte, commandBytesLen)
+	binary.BigEndian.PutUint64(bts, uint64(created.UnixMilli()))
+	copy(bts[8:], byteutil.RandomBytes(commandBytesLen-8))
+	res := &Token{
+		Code:  Command,
+		Bytes: bts,
+		NID:   nid,
+	}
+	res.MakeString()
+	return res, nil
+}
+
+// Created returns the creation time of a command token, with millisecond precision. It returns the zero time for any
+// other token type.
+func (t *Token) Created() utc.UTC {
+	if t == nil || t.Code != Command || len(t.Bytes) != commandBytesLen {
+		return utc.Zero
+	}
+	return utc.UnixMilli(int64(binary.BigEndian.Uint64(t.Bytes)))
+}
+
 // Code is the type of a Token
 type Code uint8
 
@@ -181,6 +217,7 @@ const (
 	LRO               // node ID, random bytes
 	LocalFile         // node ID, content ID, bytes = hash(offering + presentation + format + start + end)
 	Job               // node ID, allocation ID, bytes = index
+	Command           // node ID, bytes = creation time (8 bytes, ms) + random bytes
 )
 
 const prefixLen = 4
@@ -195,6 +232,7 @@ var prefixToCode = map[string]Code{
 	"tlro": LRO,
 	"tlf_": LocalFile,
 	"tjob": Job,
+	"tcmd": Command,
 }
 var codeToName = map[Code]string{
 	UNKNOWN:      "unknown",
@@ -205,6 +243,7 @@ var codeToName = map[Code]string{
 	LRO:          "bitcode LRO handle",
 	LocalFile:    "local file",
 	Job:          "allocated job",
+	Command:      "command",
 }
 
 // NOTE: 5 char prefix - 2 underscores!
@@ -294,7 +333,7 @@ func (t *Token) MakeString() string {
 	case QWriteV1, QPartWriteV1:
 		b = make([]byte, len(t.Bytes))
 		copy(b, t.Bytes)
-	case QWrite, LRO, LocalFile:
+	case QWrite, LRO, LocalFile, Command:
 		// prefix + base58(uvarint(len(QID) | QID |
 		//                 uvarint(len(NID) | NID |
 		//                 uvarint(len(RAND_BYTES) | RAND_BYTES)
@@ -452,8 +491,11 @@ func (t *Token) Describe() string {
 	if t.Code == Job {
 		add("alloc:  " + t.AllocationID.String())
 	}
-	if t.Code == QWrite || t.Code == LRO || t.Code == LocalFile || t.Code == Job {
+	if t.Code == QWrite || t.Code == LRO || t.Code == LocalFile || t.Code == Job || t.Code == Command {
 		add("nid:    " + t.NID.String())
+	}
+	if t.Code == Command {
+		add("time:   " + t.Created().String())
 	}
 	if t.Code == QPartWrite {
 		add("scheme: " + t.Scheme.String())
@@ -482,12 +524,21 @@ func (t *Token) Validate() (err error) {
 		}
 		return nil
 
+	case Command:
+		if err = t.NID.AssertCode(id.QNode); err != nil {
+			return e("reason", "invalid node id", "err", err)
+		}
+		if len(t.Bytes) != commandBytesLen {
+			return e("reason", "invalid bytes length", "expected", commandBytesLen, "actual", len(t.Bytes))
+		}
+		return nil
+
 	default:
 	}
 	if t.Code == QWrite {
 		err = t.QID.AssertCode(id.Q)
 	}
-	if err == nil && (t.Code == QWrite || t.Code == LRO) {
+	if err == nil && (t.Code == QWrite || t.Code == LRO || t.Code == Command) {
 		err = t.NID.AssertCode(id.QNode)
 	}
 	if err == nil && t.Code == QPartWrite {
@@ -516,6 +567,8 @@ func Generate(code Code) *Token {
 		t, _ = NewLRO(code, id.Generate(id.QNode))
 	case Job:
 		t, _ = NewJob(id.Generate(id.QNode), id.Generate(id.Allocation), rand.Int())
+	case Command:
+		t, _ = NewCommand(id.Generate(id.QNode), utc.Now())
 	}
 	return t
 }
@@ -570,7 +623,7 @@ func Parse(s string) (*Token, error) {
 	switch code {
 	case QWriteV1, QPartWriteV1:
 		return &Token{Code: code, Bytes: dec, s: s}, nil
-	case QWrite, LRO, LocalFile, Job:
+	case QWrite, LRO, LocalFile, Job, Command:
 		// prefix + base58(uvarint(len(QID) | QID |
 		//                 uvarint(len(NID) | NID |
 		//                 uvarint(len(RAND_BYTES) | RAND_BYTES)
