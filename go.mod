@@ -17,7 +17,7 @@ require (
 	github.com/eluv-io/inject-go v1.0.2
 	github.com/eluv-io/log-go v1.0.10
 	github.com/eluv-io/mapstructure v1.5.1
-	github.com/eluv-io/utc-go v1.0.2-0.20261120140210-35b4d95d7a91
+	github.com/eluv-io/utc-go v1.0.2
 	github.com/ethereum/go-ethereum v1.10.19
 	github.com/fxamacker/cbor/v2 v2.8.0
 	github.com/gammazero/deque v0.1.0
