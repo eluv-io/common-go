@@ -63,7 +63,7 @@ func TestConversion(t *testing.T) {
 }
 
 func TestCommand(t *testing.T) {
-	created := utc.UnixMilli(1763600000123)
+	created := utc.MustParse("2025-11-19T12:01:02.345Z")
 	tok, err := token.NewCommand(nid, created)
 	require.NoError(t, err)
 	require.Equal(t, created, tok.Created())
