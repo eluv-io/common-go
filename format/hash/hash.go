@@ -31,10 +31,17 @@ const (
 	QPart                   // regular part hash
 	QPartLive               // live part that generates a regular part upon finalization for vod
 	QPartLiveTransient      // live part that doesn't generate a regular part upon finalization
+	QPartLog                // live part holding a part of a draft's log; doesn't generate a regular part
 )
 
 func (c Code) IsLive() bool {
-	return c == QPartLive || c == QPartLiveTransient
+	return c == QPartLive || c == QPartLiveTransient || c == QPartLog
+}
+
+// PersistsOnFinalize returns whether finalizing a live part of this code also creates a regular part with the same
+// content. Only QPartLive does: transient and log parts end when they are finalized.
+func (c Code) PersistsOnFinalize() bool {
+	return c == QPartLive
 }
 
 // FromString parses the given string and returns the hash.
@@ -110,6 +117,8 @@ func (t Type) Describe() string {
 		c = "live content part"
 	case QPartLiveTransient:
 		c = "transient live content part"
+	case QPartLog:
+		c = "draft log part"
 	}
 	switch t.Format {
 	case Unencrypted:
@@ -132,6 +141,8 @@ var prefixToType = map[string]Type{
 	"hqle": Type{QPartLive, AES128AFGH},
 	"hqt_": Type{QPartLiveTransient, Unencrypted},
 	"hqte": Type{QPartLiveTransient, AES128AFGH},
+	"hqg_": Type{QPartLog, Unencrypted},
+	"hqge": Type{QPartLog, AES128AFGH},
 }
 
 func init() {

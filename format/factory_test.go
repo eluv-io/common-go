@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,6 +15,7 @@ import (
 	"github.com/eluv-io/common-go/format/hash"
 	"github.com/eluv-io/common-go/format/id"
 	"github.com/eluv-io/common-go/format/token"
+	"github.com/eluv-io/utc-go"
 )
 
 func TestContentDigest(t *testing.T) {
@@ -34,6 +36,33 @@ func TestContentPartDigest(t *testing.T) {
 	assert.NoError(t, h.AssertCode(hash.QPart))
 
 	assert.Contains(t, h.String(), "hqp_")
+}
+
+func TestParsePartHashes(t *testing.T) {
+	f := NewTestFactory(t)
+	digest := make([]byte, 32)
+	expiration := utc.Now().Add(time.Hour)
+
+	for _, code := range []hash.Code{hash.QPartLive, hash.QPartLiveTransient, hash.QPartLog} {
+		h, err := hash.NewLive(hash.Type{Code: code, Format: hash.Unencrypted}, digest, expiration)
+		require.NoError(t, err)
+		parsed, err := f.ParseQPHash(h.String())
+		require.NoError(t, err, "code %d", code)
+		require.Equal(t, h.String(), parsed.String())
+		parsed, err = f.ParseQPLHash(h.String())
+		require.NoError(t, err, "code %d", code)
+		require.Equal(t, h.String(), parsed.String())
+	}
+
+	part := fill(t, f.NewContentPartDigest(hash.Unencrypted))
+	_, err := f.ParseQPHash(part.String())
+	require.NoError(t, err)
+	_, err = f.ParseQPLHash(part.String())
+	require.ErrorContains(t, err, "hash not live")
+
+	content := fill(t, f.NewContentDigest(hash.Unencrypted, f.GenerateQID()))
+	_, err = f.ParseQPHash(content.String())
+	require.ErrorContains(t, err, "invalid code")
 }
 
 func TestIDGenerators(t *testing.T) {
