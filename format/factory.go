@@ -237,12 +237,10 @@ func (f *factory) ParseQPHash(s string) (QPHash, error) {
 	} else if h.IsNil() {
 		return nil, nil
 	}
-	switch h.Type.Code {
-	case hash.QPart, hash.QPartLive, hash.QPartLiveTransient:
+	if h.Type.Code == hash.QPart || h.IsLive() {
 		return h, nil
-	default:
-		return nil, errors.E("parse hash", errors.K.Invalid, "reason", "invalid code", "hash", s)
 	}
+	return nil, errors.E("parse hash", errors.K.Invalid, "reason", "invalid code", "hash", s)
 }
 
 // ParseQPLHash parses the given string as live content part hash
@@ -253,10 +251,10 @@ func (f *factory) ParseQPLHash(s string) (QPHash, error) {
 	} else if h.IsNil() {
 		return nil, nil
 	}
-	switch h.Type.Code {
-	case hash.QPartLive, hash.QPartLiveTransient:
+	switch {
+	case h.IsLive():
 		return h, nil
-	case hash.QPart:
+	case h.Type.Code == hash.QPart:
 		return nil, errors.E("parse live hash", errors.K.Invalid, "reason", "hash not live", "hash", s)
 	default:
 		return nil, errors.E("parse live hash", errors.K.Invalid, "reason", "invalid code", "hash", s)
