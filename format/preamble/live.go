@@ -54,12 +54,17 @@ func (t *LiveTimeouts) IsZero() bool {
 }
 
 // EncodeLive returns the preamble data and format of a live part with the given timeouts and the part writer's own
-// preamble. Without timeouts, it returns the writer's preamble unchanged, so parts without settings keep their format.
+// preamble. Without timeouts, it returns the writer's preamble as is, so parts without settings keep their format. The
+// writer's format is normalized and validated as by Write in both cases.
 func EncodeLive(timeouts *LiveTimeouts, data []byte, format string) ([]byte, string, error) {
+	e := errors.Template("preamble.EncodeLive", errors.K.Invalid)
+	format, err := normalizeFormat(format)
+	if err != nil {
+		return nil, "", e(err)
+	}
 	if timeouts.IsZero() {
 		return data, format, nil
 	}
-	e := errors.Template("preamble.EncodeLive", errors.K.Invalid)
 	if timeouts.Init < 0 || timeouts.Idle < 0 || timeouts.Transfer < 0 {
 		return nil, "", e("reason", "negative timeout", "timeouts", *timeouts)
 	}

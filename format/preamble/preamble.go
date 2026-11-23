@@ -23,15 +23,11 @@ import (
 func Write(w io.Writer, preambleData []byte, preambleFormat ...string) (int64, error) {
 	preambleFmt := ""
 	if len(preambleFormat) > 0 {
-		preambleFmt = strings.TrimSpace(preambleFormat[0])
+		preambleFmt = preambleFormat[0]
 	}
-	if preambleFmt == "" {
-		preambleFmt = "/raw"
-	} else if !strings.HasPrefix(preambleFmt, "/") {
-		preambleFmt = "/" + preambleFmt
-	}
-	if !isFormat(preambleFmt) {
-		return 0, errors.E("preamble write", errors.K.Invalid, "reason", "invalid preamble format", "format", preambleFmt)
+	preambleFmt, err := normalizeFormat(preambleFmt)
+	if err != nil {
+		return 0, errors.E("preamble write", err)
 	}
 	hdr := header.New(preambleFmt)
 	sz := make([]byte, binary.MaxVarintLen64)
@@ -210,6 +206,21 @@ func (s *Sizer) Size() (int64, error) {
 ///////////////////////////////////////////////////////////////////////////////
 
 const formatSymbols = "abcdefghijklmnopqrstuvwxyz1234567890-_"
+
+// normalizeFormat returns the preamble format f as it is written: trimmed, "/raw" if empty, with a leading "/". It
+// returns an error if the result is not a valid format.
+func normalizeFormat(f string) (string, error) {
+	f = strings.TrimSpace(f)
+	if f == "" {
+		f = defaultFormat
+	} else if !strings.HasPrefix(f, "/") {
+		f = "/" + f
+	}
+	if !isFormat(f) {
+		return "", errors.E("preamble format", errors.K.Invalid, "reason", "invalid preamble format", "format", f)
+	}
+	return f, nil
+}
 
 func isFormat(s string) bool {
 	return len(s) > 1 && strings.HasPrefix(s, "/") &&

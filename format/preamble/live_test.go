@@ -70,6 +70,20 @@ func TestLiveUnknownFields(t *testing.T) {
 	require.Equal(t, []byte("user"), l.Data)
 }
 
+func TestLiveFormatNormalized(t *testing.T) {
+	for _, timeouts := range []*LiveTimeouts{nil, {Idle: time.Second}} {
+		data, format, err := EncodeLive(timeouts, []byte("user"), " writer ")
+		require.NoError(t, err)
+		l, err := DecodeLive(data, format)
+		require.NoError(t, err)
+		require.Equal(t, "/writer", l.Format)
+	}
+	for _, timeouts := range []*LiveTimeouts{nil, {Idle: time.Second}} {
+		_, _, err := EncodeLive(timeouts, nil, "/Not Valid")
+		require.Error(t, err)
+	}
+}
+
 func TestLiveInvalid(t *testing.T) {
 	_, _, err := EncodeLive(&LiveTimeouts{Idle: -time.Second}, nil, "")
 	require.Error(t, err)
