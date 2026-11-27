@@ -23,7 +23,21 @@ func Delete(target interface{}, path Path) (interface{}, bool) {
 		// cannot delete anything from nil...
 		return nil, false
 	}
-	sub, err := resolveSub(path, target, false, false)
+	return doDelete(target, path, false)
+}
+
+// DeleteCopy is like Delete, but leaves the target structure unchanged. Only the maps and slices on the path to the
+// element are copied, all other elements are shared between the target and the returned structure. If the path does
+// not exist, the target is returned as is.
+func DeleteCopy(target any, path Path) (any, bool) {
+	if dereference(target) == nil {
+		return nil, false
+	}
+	return doDelete(target, path, true)
+}
+
+func doDelete(target any, path Path, copyStruct bool) (any, bool) {
+	sub, err := resolveSub(path, target, false, copyStruct)
 	if err != nil {
 		// the path does not exist, so there is nothing to delete...
 		return target, false
