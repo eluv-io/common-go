@@ -21,6 +21,7 @@ type Metrics struct {
 	Errors    *atomic.Int64 // Number of errors when trying to load/create a cache entry
 	Added     *atomic.Int64 // Added - Removed = Current Size
 	Removed   *atomic.Int64 // see Added
+	Weight    *atomic.Int64 // Total weight of the cached entries (weighted caches only)
 }
 
 func MakeMetrics() Metrics {
@@ -31,23 +32,26 @@ func MakeMetrics() Metrics {
 		Errors:    &atomic.Int64{},
 		Added:     &atomic.Int64{},
 		Removed:   &atomic.Int64{},
+		Weight:    &atomic.Int64{},
 	}
 }
 
 // config is the static configuration of Metrics
 type config struct {
-	MaxItems int
-	MaxAge   duration.Spec
-	Mode     string
+	MaxItems  int
+	MaxWeight uint64 // weighted caches only
+	MaxAge    duration.Spec
+	Mode      string
 }
 
 func (c *Metrics) Copy() Metrics {
 	ret := MakeMetrics()
 	ret.Name = c.Name
 	ret.Config = config{
-		MaxItems: c.Config.MaxItems,
-		MaxAge:   c.Config.MaxAge,
-		Mode:     c.Config.Mode,
+		MaxItems:  c.Config.MaxItems,
+		MaxWeight: c.Config.MaxWeight,
+		MaxAge:    c.Config.MaxAge,
+		Mode:      c.Config.Mode,
 	}
 	ret.Hits.Store(c.Hits.Load())
 	ret.Misses.Store(c.Misses.Load())
@@ -55,6 +59,7 @@ func (c *Metrics) Copy() Metrics {
 	ret.Errors.Store(c.Errors.Load())
 	ret.Added.Store(c.Added.Load())
 	ret.Removed.Store(c.Removed.Load())
+	ret.Weight.Store(c.Weight.Load())
 
 	return ret
 }
@@ -119,6 +124,10 @@ func (c *Metrics) MarshalGeneric() interface{} {
 	}
 	if c.Config.Mode != "" {
 		conf["mode"] = c.Config.Mode
+	}
+	if c.Config.MaxWeight > 0 {
+		conf["max_weight"] = c.Config.MaxWeight
+		m["weight"] = c.Weight.Load()
 	}
 	if c.Config.MaxAge != 0 {
 		m["max_age"] = c.Config.MaxAge

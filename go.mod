@@ -25,6 +25,7 @@ require (
 	github.com/gin-gonic/gin v1.7.7
 	github.com/maruel/panicparse/v2 v2.3.1
 	github.com/mattn/go-runewidth v0.0.9
+	github.com/maypok86/otter/v2 v2.3.0
 	github.com/modern-go/gls v0.0.0-20220109145502-612d0167dce5
 	github.com/mr-tron/base58 v1.2.0
 	github.com/multiformats/go-varint v0.0.6
