@@ -280,7 +280,8 @@ func TestExpiringCacheServeStaleDuringRefresh(t *testing.T) {
 				"total_wait", cl.waitTotal)
 			require.Less(t, avgWait, 10*time.Millisecond)
 			require.Equal(t, 1, cl.longWaits)
-			require.InDelta(t, time.Second, cl.waitTotal, float64(20*time.Millisecond))
+			// the only long wait is the initial construction. The short waits add up to tens of ms on a slow machine.
+			require.InDelta(t, time.Second, cl.longWaitTotal, float64(20*time.Millisecond))
 			require.InDelta(t, 450, cl.invocations, float64(50)) // 5.5s - 1s initial wait
 			require.InDelta(t, 6, cl.previousVal, float64(1))    // shared sequence (so last val has to be 5 or 6
 		}
@@ -471,10 +472,11 @@ type client struct {
 	cstr    func() (int32, error)
 	collect *testutil.CollectT
 
-	previousVal int32
-	invocations int
-	longWaits   int
-	waitTotal   time.Duration
+	previousVal   int32
+	invocations   int
+	longWaits     int
+	longWaitTotal time.Duration
+	waitTotal     time.Duration
 }
 
 func (c *client) assert(t *testing.T) {
@@ -504,6 +506,7 @@ func (c *client) run(start chan struct{}, stop chan struct{}) {
 			watch.Stop()
 			if watch.Duration() > 10*time.Millisecond {
 				c.longWaits++
+				c.longWaitTotal += watch.Duration()
 				log.Info("long wait", "client", c.name, "iteration", j, "duration", watch.Duration(), "count", c.longWaits)
 			}
 			c.invocations++
